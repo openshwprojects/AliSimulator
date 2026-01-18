@@ -92,6 +92,8 @@ class AliMipsSimulator:
     def log(self, msg):
         if self.log_callback:
             self.log_callback(msg)
+        else:
+            print(msg)
 
     def _uart_log(self, value):
         if self.uart_callback:
