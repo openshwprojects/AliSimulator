@@ -19,9 +19,21 @@ class AliMipsSimulator:
         self.stop_instr = None
         self.break_on_printf = False
         self.max_instructions = 10000000
+        self.is_syncing = False
 
         self._init_unicorn()
         self._init_capstone()
+
+        self.gpr_map = [
+            UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0, UC_MIPS_REG_V1,
+            UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
+            UC_MIPS_REG_T0, UC_MIPS_REG_T1, UC_MIPS_REG_T2, UC_MIPS_REG_T3,
+            UC_MIPS_REG_T4, UC_MIPS_REG_T5, UC_MIPS_REG_T6, UC_MIPS_REG_T7,
+            UC_MIPS_REG_S0, UC_MIPS_REG_S1, UC_MIPS_REG_S2, UC_MIPS_REG_S3,
+            UC_MIPS_REG_S4, UC_MIPS_REG_S5, UC_MIPS_REG_S6, UC_MIPS_REG_S7,
+            UC_MIPS_REG_T8, UC_MIPS_REG_T9, UC_MIPS_REG_K0, UC_MIPS_REG_K1,
+            UC_MIPS_REG_GP, UC_MIPS_REG_SP, UC_MIPS_REG_FP, UC_MIPS_REG_RA
+        ]
 
     def _init_unicorn(self):
         # Initialize Unicorn (MIPS32 + Little Endian)
@@ -35,13 +47,16 @@ class AliMipsSimulator:
         self.log(f"Mapping mirror at 0x0FC00000")
         self.mu.mem_map(0x0FC00000, self.rom_size)
         
-        # Map RAM
-        self.log(f"Mapping RAM at 0x80000000")
-        self.mu.mem_map(0x80000000, self.ram_size)
-        self.log(f"Mapping RAM mirror at 0xA0000000")
-        self.mu.mem_map(0xA0000000, self.ram_size)
-        self.log(f"Mapping RAM at 0x00000000")
-        self.mu.mem_map(0x00000000, self.ram_size)
+        # Shared RAM Buffer
+        import ctypes
+        self.ram_buffer = ctypes.create_string_buffer(self.ram_size)
+        ram_ptr = ctypes.addressof(self.ram_buffer)
+        
+        # Map RAM aliases to same buffer
+        self.log(f"Mapping Shared RAM at 0x80000000, 0xA0000000, 0x00000000")
+        self.mu.mem_map_ptr(0x80000000, self.ram_size, UC_PROT_ALL, ram_ptr)
+        self.mu.mem_map_ptr(0xA0000000, self.ram_size, UC_PROT_ALL, ram_ptr)
+        self.mu.mem_map_ptr(0x00000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         
         # Map MMIO
         MMIO_SIZE = 0x01000000
@@ -62,14 +77,29 @@ class AliMipsSimulator:
         # Set UART LSR
         try:
             self.mu.mem_write(0xb8018305, b'\x20')
-            self.log("Initialized UART LSR at 0xb8018305 to 0x20")
+            # Mirror LSR to Physical and KSEG0 to avoid polling loops
+            self.mu.mem_write(0x18018305, b'\x20')
+            self.mu.mem_write(0x98018305, b'\x20')
+            self.log("Initialized UART LSR at 0xb8018305 (and mirrors) to 0x20")
         except Exception as e:
             self.log(f"Failed to init UART LSR: {e}")
 
         # Hooks
         self.mu.hook_add(UC_HOOK_MEM_INVALID, self._hook_mem_invalid)
         self.mu.hook_add(UC_HOOK_CODE, self._hook_instruction_fix)
+        # Memory Sync Hook (KSEG0 <-> KSEG1)
+        # KSEG0: 0x80000000, KSEG1: 0xA0000000
+        # We hook both regions to sync writes
+        kseg0_end = 0x80000000 + self.ram_size - 1
+        kseg1_end = 0xA0000000 + self.ram_size - 1
+        phys_end = self.ram_size - 1
+        # RAM Sync Hooks REMOVED (Handled by mem_map_ptr)
+
+        # UART Hooks (Aliased)
+        self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x18018300, end=0x18018305)
+        self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
+
         self.mu.hook_add(UC_HOOK_CODE, self._hook_code)
         
         # CP0 Status configuration
@@ -128,7 +158,13 @@ class AliMipsSimulator:
 
     def _hook_uart_write(self, uc, access, address, size, value, user_data):
         # 0xb8018300 is base, store happens at offset 0 usually
-        self._uart_log(value)
+        # Check all aliases: 0x18018300, 0x98018300, 0xB8018300
+        if (address & 0xFFFFF) == 0x18300:
+            self._uart_log(value)
+
+
+
+
 
     def _hook_code(self, uc, address, size, user_data):
         # Track visit count
@@ -138,10 +174,12 @@ class AliMipsSimulator:
         
         if self.trace_instructions:
             code_bytes = uc.mem_read(address, size)
-            for i in self.md.disasm(code_bytes, address):
-                bytes_str = ' '.join(f'{b:02x}' for b in i.bytes)
-                loop_str = f" [LOOP {self.visit_counts[address]}]" if self.visit_counts[address] > 1 else ""
-                self.log(f"0x{i.address:08X}: {bytes_str:<15} {i.mnemonic}\t{i.op_str}{loop_str}")
+            try:
+                for i in self.md.disasm(code_bytes, address):
+                    bytes_str = ' '.join(f'{b:02x}' for b in i.bytes)
+                    loop_str = f" [LOOP {self.visit_counts[address]}]" if self.visit_counts[address] > 1 else ""
+                    self.log(f"0x{i.address:08X}: {bytes_str:<15} {i.mnemonic}\t{i.op_str}{loop_str}")
+            except: pass
 
         if self.stop_instr is not None and address == self.stop_instr:
             self.log(f"\n[STOP] Reached stop address: 0x{address:08X}")
@@ -172,7 +210,7 @@ class AliMipsSimulator:
                 uc.emu_stop()
                 return
 
-            base = uc.reg_read(UC_MIPS_REG_ZERO + rs)
+            base = uc.reg_read(self.gpr_map[rs])
             target = base + imm
             
             # Check MMIO
@@ -182,27 +220,32 @@ class AliMipsSimulator:
                (0xB8000000 <= target < 0xB9000000):
                 is_mmio = True
                 
+            # FORCE MANUAL EMULATION FOR ALL STORES TO ENSURE SYNC
             if not is_mmio:
                 return
 
             val = 0
             
             if opcode == 0x28: # SB
-                val = uc.reg_read(UC_MIPS_REG_ZERO + rt) & 0xFF
-                uc.mem_write(target, val.to_bytes(1, byteorder='little'))
+                val = uc.reg_read(self.gpr_map[rt]) & 0xFF
+                val_bytes = val.to_bytes(1, byteorder='little')
+                uc.mem_write(target, val_bytes)
+                # If target is UART, hook will handle it via uc.mem_write
                 if target == 0xb8018300:
                     self._uart_log(val)
                     self.mu.mem_write(0xb8018305, b'\x20') 
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x29: # SH
-                val = uc.reg_read(UC_MIPS_REG_ZERO + rt) & 0xFFFF
-                uc.mem_write(target, val.to_bytes(2, byteorder='little'))
+                val = uc.reg_read(self.gpr_map[rt]) & 0xFFFF
+                val_bytes = val.to_bytes(2, byteorder='little')
+                uc.mem_write(target, val_bytes)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x2B: # SW
-                val = uc.reg_read(UC_MIPS_REG_ZERO + rt)
-                uc.mem_write(target, val.to_bytes(4, byteorder='little'))
+                val = uc.reg_read(self.gpr_map[rt])
+                val_bytes = val.to_bytes(4, byteorder='little')
+                uc.mem_write(target, val_bytes)
                 if target <= 0xb8018300 < target + 4:
                     offset = 0xb8018300 - target
                     byte_val = (val >> (offset * 8)) & 0xFF
@@ -212,31 +255,31 @@ class AliMipsSimulator:
             elif opcode == 0x23: # LW
                 data = uc.mem_read(target, 4)
                 val = int.from_bytes(data, byteorder='little', signed=False)
-                uc.reg_write(UC_MIPS_REG_ZERO + rt, val)
+                uc.reg_write(self.gpr_map[rt], val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x20: # LB
                 data = uc.mem_read(target, 1)
                 val = int.from_bytes(data, byteorder='little', signed=True)
-                uc.reg_write(UC_MIPS_REG_ZERO + rt, val)
+                uc.reg_write(self.gpr_map[rt], val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x24: # LBU
                 data = uc.mem_read(target, 1)
                 val = int.from_bytes(data, byteorder='little', signed=False)
-                uc.reg_write(UC_MIPS_REG_ZERO + rt, val)
+                uc.reg_write(self.gpr_map[rt], val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
                 
             elif opcode == 0x21: # LH
                 data = uc.mem_read(target, 2)
                 val = int.from_bytes(data, byteorder='little', signed=True)
-                uc.reg_write(UC_MIPS_REG_ZERO + rt, val)
+                uc.reg_write(self.gpr_map[rt], val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x25: # LHU
                 data = uc.mem_read(target, 2)
                 val = int.from_bytes(data, byteorder='little', signed=False)
-                uc.reg_write(UC_MIPS_REG_ZERO + rt, val)
+                uc.reg_write(self.gpr_map[rt], val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
         except Exception as e:
@@ -253,8 +296,12 @@ class AliMipsSimulator:
                  imm = insn & 0xFFFF
                  val = imm << 16
                  
-                 self.mu.reg_write(UC_MIPS_REG_ZERO + rt, val)
-             except: pass
+                 # print(f"DEBUG: Manual LUI at {hex(self.last_lui_addr)}: rt={rt}, val={hex(val)}")
+                 # print(f"DEBUG: Manual LUI at {hex(self.last_lui_addr)}: rt={rt}, val={hex(val)}")
+                 self.mu.reg_write(self.gpr_map[rt], val)
+             except Exception as e: 
+                 # print(f"DEBUG: LUI fix error: {e}")
+                 pass
              
              self.last_lui_addr = None
 

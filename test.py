@@ -82,7 +82,8 @@ def main():
     verifier = RealTimeVerifier(EXPECTED_OUTPUT)
     
     # Silence internal logs
-    sim = AliMipsSimulator(log_handler=lambda x: None)
+    # sim = AliMipsSimulator(log_handler=lambda x: None)
+    sim = AliMipsSimulator() # Default logs to print
     sim.setUartHandler(verifier.on_uart)
     
     sim.loadFile("ali_sdk.bin")

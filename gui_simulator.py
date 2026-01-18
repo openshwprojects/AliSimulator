@@ -29,6 +29,9 @@ class MIPSSimulatorGUI:
         
         # Temp breakpoints for stepping
         self.temp_breakpoints = set()
+        
+        # Address to ignore (for stepping over BPs)
+        self.ignore_bp_addr = None
 
         # Load persistent data
         self.load_breakpoints()
@@ -39,6 +42,15 @@ class MIPSSimulatorGUI:
         
         # Initialize Emulator
         self.init_emulator()
+
+    def _step_over_breakpoint(self):
+        """Helper to step exactly one instruction ignoring any breakpoint at current PC"""
+        pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
+        self.ignore_bp_addr = pc
+        try:
+            self.sim.runStep()
+        finally:
+            self.ignore_bp_addr = None
         
     def log(self, message):
         """Add message to log"""
@@ -92,7 +104,12 @@ class MIPSSimulatorGUI:
     # -------------------------------------------------------------------------
     def hook_breakpoints(self, uc, address, size, user_data):
         # Check user breakpoints
+        # Check user breakpoints
         if address in self.breakpoints:
+             if self.ignore_bp_addr is not None and address == self.ignore_bp_addr:
+                 # Skip this breakpoint once
+                 return
+
              # Standard behavior: Stop.
              self.log(f"Breakpoint hit at 0x{address:08X}")
              uc.emu_stop()
@@ -125,7 +142,13 @@ class MIPSSimulatorGUI:
     def execute_single_instruction(self):
         """Execute one instruction using the backend"""
         try:
-            self.sim.runStep()
+            pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
+            if pc in self.breakpoints:
+                # Use special step helper
+                self._step_over_breakpoint()
+            else:
+                self.sim.runStep()
+                
             self.check_watches()
             # Update UI immediately for single step
             self.update_ui_safe()
@@ -199,7 +222,7 @@ class MIPSSimulatorGUI:
                 # If currently on a breakpoint, step once to move off it
                 current_pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
                 if current_pc in self.breakpoints:
-                     self.sim.runStep()
+                     self._step_over_breakpoint()
                 
                 while self.is_running and not self.paused:
                     # 1. Apply manual fixes (LUI etc) needed by the backend
