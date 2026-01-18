@@ -14,7 +14,7 @@ class MIPSSimulatorGUI:
         self.root.title("MIPS Simulator - GUI Debugger (New Engine)")
         self.root.geometry("1400x900")
         
-        self.BINARY_FILE = "ali_sdk.bin"
+        self.BINARY_FILE = "dump.bin"
         
         # Simulator instance
         self.sim = None
@@ -340,7 +340,12 @@ class MIPSSimulatorGUI:
                 else: self.instr_text.tag_add("next", start_idx, end_idx)
                 
                 if instr['loop_count'] > 1: self.instr_text.tag_add("loop", start_idx, end_idx)
-                if instr['is_breakpoint']: self.instr_text.insert(tk.END, " [BP]")
+                if instr['is_breakpoint']:
+                    name = self.breakpoints.get(instr['address'])
+                    if name and name != "User":
+                        self.instr_text.insert(tk.END, f" [BP: {name}]")
+                    else:
+                        self.instr_text.insert(tk.END, " [BP]")
                 
                 self.instr_text.insert(tk.END, "\n")
                 
@@ -432,6 +437,9 @@ class MIPSSimulatorGUI:
         self.instr_text.tag_config("next", foreground="#A0A0A0")
         self.instr_text.tag_config("loop", foreground="#FFD700")
 
+        # Context Menu for Breakpoints
+        self.instr_text.bind("<Button-3>", self.show_context_menu)
+
         # Right Panel
         right_frame = tk.Frame(main_paned)
         main_paned.add(right_frame, width=600)
@@ -494,8 +502,15 @@ class MIPSSimulatorGUI:
         # UART
         uart_frame = tk.LabelFrame(bottom_container, text="UART Output", padx=5, pady=5)
         uart_frame.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
-        self.uart_text = tk.Text(uart_frame, wrap=tk.WORD, height=8, width=40, font=("Courier New", 9), bg="black", fg="#00FF00")
+        
+        uart_scroll = tk.Scrollbar(uart_frame)
+        uart_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.uart_text = tk.Text(uart_frame, wrap=tk.WORD, height=8, width=40, font=("Courier New", 9), 
+                                 bg="black", fg="#00FF00", yscrollcommand=uart_scroll.set)
         self.uart_text.pack(fill=tk.BOTH, expand=True)
+        
+        uart_scroll.config(command=self.uart_text.yview)
         
         # Status Bar
         status_frame = tk.Frame(self.root, relief=tk.SUNKEN, bd=1)
@@ -506,6 +521,58 @@ class MIPSSimulatorGUI:
     # -------------------------------------------------------------------------
     # Breakpoint/Watch Management (Boilerplate)
     # -------------------------------------------------------------------------
+    def show_context_menu(self, event):
+        try:
+            # Find which line was clicked
+            index = self.instr_text.index(f"@{event.x},{event.y}")
+            line_text = self.instr_text.get(index + " linestart", index + " lineend")
+            
+            # Parse address from line "0xXXXXXXXX: ..."
+            if line_text.strip().startswith("0x"):
+                parts = line_text.strip().split(":")
+                if len(parts) > 0:
+                    addr_str = parts[0]
+                    try:
+                        address = int(addr_str, 16)
+                    except ValueError:
+                        return
+
+                    # Create context menu
+                    menu = tk.Menu(self.root, tearoff=0)
+                    if address in self.breakpoints:
+                        menu.add_command(label=f"Remove Breakpoint (0x{address:08X})", 
+                                         command=lambda: self.toggle_breakpoint(address))
+                    else:
+                        menu.add_command(label=f"Add Breakpoint (0x{address:08X})", 
+                                         command=lambda: self.toggle_breakpoint(address))
+                        menu.add_command(label=f"Add Named Breakpoint...", 
+                                         command=lambda: self.add_named_breakpoint_at(address))
+                    
+                    menu.tk_popup(event.x_root, event.y_root)
+        except Exception as e:
+            self.log(f"Context menu error: {e}")
+
+    def toggle_breakpoint(self, address):
+        if address in self.breakpoints:
+            del self.breakpoints[address]
+            self.log(f"Breakpoint removed at 0x{address:08X}")
+        else:
+            self.breakpoints[address] = "User"
+            self.log(f"Breakpoint added at 0x{address:08X}")
+            
+        self.save_breakpoints()
+        self.update_breakpoint_list()
+        self.update_instruction_display()
+
+    def add_named_breakpoint_at(self, address):
+        name = simpledialog.askstring("Add BP", f"Name for 0x{address:08X}:")
+        if name is not None:
+            self.breakpoints[address] = name
+            self.log(f"Breakpoint added at 0x{address:08X}")
+            self.save_breakpoints()
+            self.update_breakpoint_list()
+            self.update_instruction_display()
+
     def add_breakpoint(self):
         addr_str = simpledialog.askstring("Add BP", "Address (hex):")
         if addr_str:
