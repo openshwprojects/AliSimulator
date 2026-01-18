@@ -109,6 +109,9 @@ class AliMipsSimulator:
         self.mu.mem_write(self.base_addr, code)
         self.mu.mem_write(0x0FC00000, code)
         
+        # Set PC to start address
+        self.mu.reg_write(UC_MIPS_REG_PC, self.base_addr)
+        
         # Re-initialize globals if re-running
         self.instruction_count = 0
         self.visit_counts = {}
@@ -240,6 +243,27 @@ class AliMipsSimulator:
             # self.log(f"Error in manual instruction at {hex(address)}: {e}")
             pass
 
+    def apply_manual_fixes(self):
+        if self.last_lui_addr is not None:
+             try:
+                 # Manual LUI fix
+                 insn_bytes = self.mu.mem_read(self.last_lui_addr, 4)
+                 insn = int.from_bytes(insn_bytes, byteorder='little')
+                 rt = (insn >> 16) & 0x1F
+                 imm = insn & 0xFFFF
+                 val = imm << 16
+                 
+                 self.mu.reg_write(UC_MIPS_REG_ZERO + rt, val)
+             except: pass
+             
+             self.last_lui_addr = None
+
+    def invalidate_jit(self, address):
+         try:
+              insn_data = self.mu.mem_read(address, 4)
+              self.mu.mem_write(address, insn_data)
+         except: pass
+
     def run(self, max_instructions=None):
         self.log(f"Starting emulation at {hex(self.base_addr)}...")
         
@@ -251,25 +275,8 @@ class AliMipsSimulator:
         
         try:
             while cur_pc < end_addr:
-                if self.last_lui_addr is not None:
-                     try:
-                         # Manual LUI fix
-                         insn_bytes = self.mu.mem_read(self.last_lui_addr, 4)
-                         insn = int.from_bytes(insn_bytes, byteorder='little')
-                         rt = (insn >> 16) & 0x1F
-                         imm = insn & 0xFFFF
-                         val = imm << 16
-                         
-                         self.mu.reg_write(UC_MIPS_REG_ZERO + rt, val)
-                     except: pass
-                     
-                     self.last_lui_addr = None
-
-                # Invalidate JIT cache (instruction flush)
-                try:
-                     insn_data = self.mu.mem_read(cur_pc, 4)
-                     self.mu.mem_write(cur_pc, insn_data)
-                except: pass
+                self.apply_manual_fixes()
+                self.invalidate_jit(cur_pc)
                 
                 # Check for max instruction count stop
                 if self.max_instructions and self.instruction_count >= self.max_instructions:
@@ -287,31 +294,15 @@ class AliMipsSimulator:
             self.log(f"Status at error: {hex(self.mu.reg_read(UC_MIPS_REG_CP0_STATUS))}")
         except Exception as e:
             self.log(f"Error: {e}")
+
     def runStep(self):
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
         end_addr = self.base_addr + self.rom_size
         
         try:
-             if self.last_lui_addr is not None:
-                 try:
-                     # Manual LUI fix
-                     insn_bytes = self.mu.mem_read(self.last_lui_addr, 4)
-                     insn = int.from_bytes(insn_bytes, byteorder='little')
-                     rt = (insn >> 16) & 0x1F
-                     imm = insn & 0xFFFF
-                     val = imm << 16
-                     
-                     self.mu.reg_write(UC_MIPS_REG_ZERO + rt, val)
-                 except: pass
-                 
-                 self.last_lui_addr = None
-
-             # Invalidate JIT cache (instruction flush)
-             try:
-                  insn_data = self.mu.mem_read(cur_pc, 4)
-                  self.mu.mem_write(cur_pc, insn_data)
-             except: pass
-             
+             self.apply_manual_fixes()
+             self.invalidate_jit(cur_pc)
+              
              # Run 1 instruction
              self.mu.emu_start(cur_pc, end_addr, count=1)
              
