@@ -387,7 +387,12 @@ class MIPSSimulatorGUI:
                     # 4. If we're in a MIPS16 region (and no execution history says otherwise), assume MIPS16
                     if not is_mips16 and in_mips16_region and known_size != 4:
                         is_mips16 = True
-                        print(f"[DEBUG] 0x{curr:08X} is MIPS16 from region continuation")
+                        # print(f"[DEBUG] 0x{curr:08X} is MIPS16 from region continuation")
+
+                    # 5. Check Simulator Heuristic (New)
+                    if not is_mips16 and self.sim.is_mips16_addr(curr):
+                        is_mips16 = True
+                        in_mips16_region = True
 
                     if is_mips16:
                         # It's MIPS16! Decode it properly

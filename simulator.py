@@ -347,6 +347,15 @@ class AliMipsSimulator:
               self.mu.mem_write(address, insn_data)
          except: pass
 
+    def is_mips16_addr(self, address):
+        """Heuristic to check if address is in known MIPS16 region"""
+        # Main firmware body seems to be below 0x81E8E000
+        # Loader/Trigger at 0x81E8E1B8 is MIPS32
+        if (address & 0xFFE00000) == 0x81E00000:
+             if address < 0x81E8E000:
+                 return True
+        return False
+
     def run(self, max_instructions=None):
         self.log(f"Starting emulation at {hex(self.base_addr)}...")
         
@@ -364,9 +373,14 @@ class AliMipsSimulator:
                 # Check for max instruction count stop
                 if self.max_instructions and self.instruction_count >= self.max_instructions:
                     break
+                
+                # MIPS16 Mode Force
+                start_pc = cur_pc
+                if self.is_mips16_addr(start_pc):
+                    start_pc |= 1
 
                 # Run!
-                self.mu.emu_start(cur_pc, end_addr)
+                self.mu.emu_start(start_pc, end_addr)
                 
                 # If we stopped, update PC and loop
                 cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
@@ -386,8 +400,13 @@ class AliMipsSimulator:
              self.apply_manual_fixes()
              self.invalidate_jit(cur_pc)
               
+             # MIPS16 Fix: If in MIPS16 region, force Thumb/MIPS16 mode by setting LSB
+             start_pc = cur_pc
+             if self.is_mips16_addr(start_pc):
+                 start_pc |= 1
+                 
              # Run 1 instruction
-             self.mu.emu_start(cur_pc, end_addr, count=1)
+             self.mu.emu_start(start_pc, end_addr, count=1)
              
         except UcError as e:
             self.log(f"Unicorn Error: {e}")

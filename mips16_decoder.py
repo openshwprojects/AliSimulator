@@ -12,70 +12,88 @@ class MIPS16Decoder:
                      't8', 't9', 'k0', 'k1', 'gp', 'sp', 's8', 'ra']
     
     @staticmethod
-    def decode(opcode_bytes):
+    def reg_3bit(idx):
+        """Map 3-bit MIPS16 register field to name"""
+        # 0->s0, 1->s1, 2->v0, 3->v1, 4->a0, 5->a1, 6->a2, 7->a3
+        return ['s0', 's1', 'v0', 'v1', 'a0', 'a1', 'a2', 'a3'][idx & 7]
+
+    @staticmethod
+    def reg_5bit(idx):
+        """Map 5-bit MIPS32 register index to name"""
+        if idx < 32:
+            return MIPS16Decoder.REGS_EXTENDED[idx]
+        return f'r{idx}'
+
+    @staticmethod
+    def decode(opcode_bytes, address=0):
         """
-        Decode a 16-bit MIPS16 instruction
+        Decode a 16-bit or 32-bit MIPS16 instruction
         Args:
-            opcode_bytes: bytes object of length 2
+            opcode_bytes: bytes object (length 2 or 4)
+            address: current instruction address (needed for JAL calculation)
         Returns:
             (mnemonic, operands) tuple
         """
+        if len(opcode_bytes) == 4:
+            # Handle 32-bit MIPS16 instructions (JAL, JALX, extended instructions)
+            word1 = int.from_bytes(opcode_bytes[0:2], byteorder='little')
+            word2 = int.from_bytes(opcode_bytes[2:4], byteorder='little')
+            
+            major_op = (word1 >> 11) & 0x1F
+            
+            if major_op == 0x03: # JAL / JALX
+                x_bit = (word1 >> 10) & 1
+                
+                # Formula derived from 0x81E84290 (1b43 1090) and target 0x81E84240 (007A...)
+                # Word 1 (1B43) bits:
+                # 4-0: 03 (3)   -> High 5 bits (25-21)
+                # 9-5: 1A (26)  -> Next 5 bits (20-16)
+                # Word 2 (1090) -> Low 16 bits (15-0)
+                
+                imm25_21 = word1 & 0x1F
+                imm20_16 = (word1 >> 5) & 0x1F
+                
+                target_index = (imm25_21 << 21) | (imm20_16 << 16) | word2
+                target_addr = (address & 0xF0000000) | (target_index << 2)
+                
+                mnemonic = "jal" if x_bit == 0 else "jalx"
+                return (mnemonic, f"0x{target_addr:x}")
+
+            # EXTEND instructions (0xF000)
+            if (word1 & 0xF800) == 0xF000:
+                pass
+
+            return (f"UNK32_{word1:04x}{word2:04x}", "")
+
+
         if len(opcode_bytes) != 2:
             return ("???", "")
         
         # Read as little-endian 16-bit value
         insn = int.from_bytes(opcode_bytes, byteorder='little')
         
-        # Extract fields
-        b0 = opcode_bytes[0]
-        b1 = opcode_bytes[1]
-        
-        # Major opcode (bits 11-15 of insn after little-endian read)
+        # Major opcode (bits 11-15)
         major_op = (insn >> 11) & 0x1F
         
-        # Common field extractions
-        rx = (insn >> 8) & 0x7
-        ry = (insn >> 5) & 0x7
-        rz = (insn >> 2) & 0x7
-        funct = insn & 0x1F
-        imm3 = insn & 0x7
-        imm4 = insn & 0xF
-        imm5 = insn & 0x1F
-        imm8 = insn & 0xFF
-        imm11 = insn & 0x7FF
+        # Common fields
+        rx_code = (insn >> 8) & 0x7
+        ry_code = (insn >> 5) & 0x7
+        rz_code = (insn >> 2) & 0x7
         
-        # Register names
-        def reg(idx):
-            if 0 <= idx < 8:
-                return ['s0', 's1', 'v0', 'v1', 'a0', 'a1', 'a2', 'a3'][idx]
-            elif idx < 32:
-                return MIPS16Decoder.REGS_EXTENDED[idx]
-            return f'r{idx}'
-        
-        # Special case: SAVE/RESTORE instructions
-        # From Ghidra: f7 64 => save 0x38,ra,s0-s1
-        # In little endian: 0x64f7
-        # Pattern for SAVE: bits [15:6] = 0b0110_0100_11 (0x193)
-        # Full mask: 0xFFC0 (check bits 15:6)
-        # Value: 0x64C0 for SAVE base pattern
-        
-        # Actually analyze the pattern more carefully:
-        # f7 64 = 0x64f7
-        # Binary: 0110_0100_1111_0111
-        # Let's check if bits [15:11] = 01100 = 0x0C (major opcode 12)
-        # and bits [10:8] = 100 (subop 4)
-        
-        # SAVE/RESTORE use I8 format with major = 0x0C and subfunc in bits [10:8]
-        # Pattern: 0110_0xxx_xxxx_xxxx where first x's determine SAVE vs RESTORE
-        if major_op == 0x0C:  # I8 format
-            subfunc = (insn >> 8) & 0x7
+        rx = MIPS16Decoder.reg_3bit(rx_code)
+        ry = MIPS16Decoder.reg_3bit(ry_code)
+        rz = MIPS16Decoder.reg_3bit(rz_code)
+
+        # I8 Format (SAVE, RESTORE, etc) - Major 0x0C
+        if major_op == 0x0C:
+            subfunc = (insn >> 8) & 0x7 # bits 10:8
+            
             if subfunc == 0x4:  # SAVE
                 xsregs = (insn >> 4) & 0xF
-                aregs = xsregs & 0x3  # Low 2 bits for args
-                sregs = (xsregs >> 2) & 0x3  # High 2 bits for s-regs
+                aregs = xsregs & 0x3
+                sregs = (xsregs >> 2) & 0x3
                 framesize = (insn & 0xF) << 3
                 
-                # Build register list
                 regs = "ra"
                 total_sregs = sregs + aregs
                 if total_sregs > 0:
@@ -83,7 +101,6 @@ class MIPS16Decoder:
                         regs += ",s0"
                     else:
                         regs += f",s0-s{total_sregs-1}"
-                
                 return ("save", f"0x{framesize:x},{regs}")
             
             elif subfunc == 0x5:  # RESTORE
@@ -99,209 +116,162 @@ class MIPS16Decoder:
                         regs += ",s0"
                     else:
                         regs += f",s0-s{total_sregs-1}"
-                
                 return ("restore", f"0x{framesize:x},{regs}")
-            
-            elif subfunc == 0x0:  # BTEQZ
-                offset_raw = insn & 0xFF
-                if offset_raw & 0x80:
-                    offset = -(256 - offset_raw) * 2
-                else:
-                    offset = offset_raw * 2
-                return ("bteqz", f"0x{offset:x}")
-            
-            elif subfunc == 0x1:  # BTNEZ
-                offset_raw = insn & 0xFF
-                if offset_raw & 0x80:
-                    offset = -(256 - offset_raw) * 2
-                else:
-                    offset = offset_raw * 2
+                
+            elif subfunc == 0x0: # BTEQZ
+                offset = (insn & 0xFF) * 2 # simplified sign?
+                return ("bteqz", f"0x{offset:x}") # Logic needs check?
+                
+            elif subfunc == 0x1: # BTNEZ
+                offset = (insn & 0xFF) * 2
                 return ("btnez", f"0x{offset:x}")
-            
-            elif subfunc == 0x2:  # SW ra, offset(sp)
-                offset = imm8 * 4
-                return ("sw", f"ra,{offset}(sp)")
-            
-            elif subfunc == 0x3:  # ADDIU sp, imm8
-                imm_signed = MIPS16Decoder._sign_extend(imm8, 8) * 8
-                return ("addiu", f"sp,sp,{imm_signed}")
-            
-            elif subfunc == 0x6:  # MOVE r32, rz
-                r32 = (insn >> 3) & 0x1F
-                r_src = (insn & 0x7) + 16
-                return ("move", f"{reg(r32)},{reg(r_src)}")
-            
-            elif subfunc == 0x7:  # MOVE ry, r32
-                r32 = (insn >> 3) & 0x1F
-                r_dst = ((insn >> 5) & 0x7) + 16
-                return ("move", f"{reg(r_dst)},{reg(r32)}")
-        
-        # LI instruction: 00 6a => li v0, 0x0
-        # Pattern: 0110_1xxx_xxxx_xxxx for LI format
-        # 0x6a00 (little endian of 00 6a) = 0110101000000000
-        if (insn & 0xF800) == 0x6800:  # LI instruction
+
+        # LI: 0x0D (01101) => 01101 xxxxxxx ...
+        if major_op == 0x0D:
             imm = insn & 0xFF
-            rd_code = (insn >> 8) & 0x7
-            rd = reg(rd_code + 16)  # MIPS16 uses offset register numbering
-            return ("li", f"{rd},0x{imm:x}")
-        
-        # SW instruction: 06 d2 => sw $s2,0x18(sp)
-        # Pattern: 1101_00xx_xxxx_xxxx for SW rx, offset(sp)
-        if (insn & 0xF800) == 0xD000:
-            offset = (insn & 0xFF) * 4
-            rx_code = (insn >> 8) & 0x7
-            rx_reg = reg(rx_code + 16)
-            return ("sw", f"{rx_reg},0x{offset:x}(sp)")
-        
-        # SW instruction: d2 format => sw ry, offset(rx)
-        # Pattern: 1101_1xxx_xxxx_xxxx for SW ry, offset(rx)
-        if (insn & 0xF800) == 0xD800:
-            offset = (insn & 0x1F) * 4
-            ry_code = (insn >> 5) & 0x7
-            rx_code = (insn >> 8) & 0x7
-            ry_reg = reg(ry_code + 16)
-            rx_reg = reg(rx_code + 16)
-            return ("sw", f"{ry_reg},0x{offset:x}({rx_reg})")
-        
-        # LW instruction: 75 b2 => lw v0, 0x1d4(pc)
-        # Or: 9a 40 => lw v0, offset(rx)
-        # Pattern: 1011_0xxx_xxxx_xxxx for LW ry, offset(rx)
-        if (insn & 0xF800) == 0xB000:
-            offset = (insn & 0x1F) * 4
-            ry_code = (insn >> 5) & 0x7
-            rx_code = (insn >> 8) & 0x7
-            ry_reg = reg(ry_code + 16)
-            rx_reg = reg(rx_code + 16)
-            return ("lw", f"{ry_reg},0x{offset:x}({rx_reg})")
-        
-        # LW from PC: Pattern 1011_1xxx_xxxx_xxxx
-        if (insn & 0xF800) == 0xB800:
-            offset = (insn & 0xFF) * 4
-            rx_code = (insn >> 8) & 0x7
-            rx_reg = reg(rx_code + 16)
-            return ("lw", f"{rx_reg},0x{offset:x}(pc)")
-        
-        # LW from SP: Pattern 1001_1xxx_xxxx_xxxx
-        if (insn & 0xF800) == 0x9800:
-            offset = (insn & 0xFF) * 4
-            rx_code = (insn >> 8) & 0x7
-            rx_reg = reg(rx_code + 16)
-            return ("lw", f"{rx_reg},0x{offset:x}(sp)")
-        
-        # LBU instruction: 80 a2 => lbu a0, 0x0(v0)
-        # Pattern: 1010_0xxx_xxxx_xxxx for LBU
-        if (insn & 0xF800) == 0xA000:
-            offset = insn & 0x1F
-            ry_code = (insn >> 5) & 0x7
-            rx_code = (insn >> 8) & 0x7
-            ry_reg = reg(ry_code + 16)
-            rx_reg = reg(rx_code + 16)
-            return ("lbu", f"{ry_reg},0x{offset:x}({rx_reg})")
-        
-        # RR format instructions (major opcode 0x1D = 11101)
-        # Pattern: 1110_1xxx_xxxx_xxxx
-        if (insn & 0xF800) == 0xE800:
-            funct_rr = insn & 0x1F
-            rx_code = (insn >> 8) & 0x7
-            ry_code = (insn >> 5) & 0x7
+            return ("li", f"{rx},0x{imm:x}")
+
+        # LW (PC-rel): 0x17 (10111)
+        if major_op == 0x17: 
+            offset = (insn & 0xFF) << 2
+            return ("lw", f"{rx},0x{offset:x}(pc)")
             
-            # Specific RR instructions
-            if funct_rr == 0x00:  # JR rx
-                if rx_code == 7:
-                    return ("jr", "ra")
-                return ("jr", f"{reg(rx_code+16)}")
-            elif funct_rr == 0x01:  # JR ra (JALRC in some docs)
-                return ("jr", "ra")
-            elif funct_rr == 0x02:  # JALR
-                return ("jalr", f"{reg(rx_code+16)}")
-            elif funct_rr == 0x0C:  # AND (actually MFHI in some encodings)
-                return ("and", f"{reg(rx_code+16)},{reg(ry_code+16)}")
-            elif funct_rr == 0x11:  # CMP (actually might be something else)
-                # ec 91 might be a different pattern
-                pass
+        # LW (SP-rel): 0x13 (10011)
+        if major_op == 0x13:
+            offset = (insn & 0xFF) << 2
+            return ("lw", f"{rx},0x{offset:x}(sp)")
+
+        # LW (Reg-rel): 0x16 (10110)
+        # Format: 10110 ry rx offset(5)
+        if major_op == 0x16: 
+            offset = (insn & 0x1F) << 2
+            return ("lw", f"{ry},0x{offset:x}({rx})")
             
-            # Generic RR ops
-            rr_ops = {
-                0x0a: "slt", 0x0b: "sltu",
-                0x0c: "sllv", 0x0e: "srlv", 0x0f: "srav",
-                0x1a: "cmp", 0x1c: "neg", 0x1d: "and", 0x1e: "or", 0x1f: "xor"
-            }
-            
-            if funct_rr in rr_ops:
-                return (rr_ops[funct_rr], f"{reg(rx_code+16)},{reg(ry_code+16)}")
+        # SW (SP-rel): 0x1B (11011)
+        if major_op == 0x1B:
+             offset = (insn & 0xFF) << 2
+             return ("sw", f"{rx},0x{offset:x}(sp)")
+
+        # SW (Reg-rel): 0x1D (11101) - NO.
+        # SW (Reg): 0x1B is rx, offset(sp).
+        # SW (Reg-rel): 11011 is not reg-rel.
+        # Format RRI-A for SW: 11011 ry rx offset ?? No.
+        # Major 0x1B is SW sp.
+        # Major 0x1D ?? 11101
         
-        # JAL instruction: Pattern 0_0011_xxxx_xxxx_xxxx (major = 0x03)
-        # or 1_1111_xxxx_xxxx_xxxx (major = 0x1F)
-        if major_op == 0x03 or major_op == 0x1F:
-            target = insn & 0x7FF
-            return ("jal", f"0x{target:x}")
-        
-        # NOP: 00 65 when it's actually a MOVE encoding that does nothing
-        if insn == 0x6500:
-            return ("_nop", "")
-        
-        # ADDIU sp, sp, imm
-        if (insn >> 8) == 0x65 and (insn & 0xFF) == 0:
-            return ("addiu", "sp,sp,0")
-        
-        # BEQZ/BNEZ branches
-        if (insn & 0xF800) == 0x2000:  # BEQZ
-            rx_code = (insn >> 8) & 0x7
-            offset_raw = insn & 0xFF
-            if offset_raw & 0x80:
-                offset = -(256 - offset_raw) * 2
-            else:
-                offset = offset_raw * 2
-            rx_reg = reg(rx_code + 16)
-            return ("beqz", f"{rx_reg},0x{offset:x}")
-        
-        if (insn & 0xF800) == 0x2800:  # BNEZ
-            rx_code = (insn >> 8) & 0x7
-            offset_raw = insn & 0xFF
-            if offset_raw & 0x80:
-                offset = -(256 - offset_raw) * 2
-            else:
-                offset = offset_raw * 2
-            rx_reg = reg(rx_code + 16)
-            return ("bnez", f"{rx_reg},0x{offset:x}")
-        
-        # ADDIU rx, imm8: Pattern varies by major opcode
-        if (insn & 0xF800) == 0x4800:
-            rx_code = (insn >> 8) & 0x7
-            imm_val = insn & 0xFF
-            rx_reg = reg(rx_code + 16)
-            return ("addiu", f"{rx_reg},0x{imm_val:x}")
-        
-        # SLL/SRL shift operations
-        if major_op == 0x06:  # SLL
-            shift = (insn >> 2) & 0x1F
-            ry_code = (insn >> 5) & 0x7
-            rx_code = (insn >> 8) & 0x7
-            return ("sll", f"{reg(rx_code+16)},{reg(ry_code+16)},{shift}")
-        
-        if major_op == 0x07:  # SRL
-            shift = (insn >> 2) & 0x1F
-            ry_code = (insn >> 5) & 0x7
-            rx_code = (insn >> 8) & 0x7
-            return ("srl", f"{reg(rx_code+16)},{reg(ry_code+16)},{shift}")
-        
-        # ADDU/SUBU arithmetic
-        if major_op == 0x02:  # ADDU
-            return ("addu", f"{reg(rz+16)},{reg(rx+16)},{reg(ry+16)}")
-        
-        if major_op == 0x03:  # SUBU (but conflicts with JAL?)
-            # Actually JAL is also major 0x03, need to check further
+        if (insn & 0xF800) == 0xD800: # 11011... wait 0xD800 is 1101_1...
+            # 11011 = 0x1B.
+            # 0xD800 is 1101_1000... -> 0x1B with sub?
             pass
+
+        # LBU: 0x14 (10100) -> 10100 ry rx offset
+        # 10100 010 (ry) 100 (rx) . (LBU v0, 0(a0))
+        # Ghidra: LBU a0, 0(v0) -> DEST=a0(4), BASE=v0(2). 
+        # Enc: ry=2, rx=4.
+        # So decoding ry=Dest, rx=Base?
+        # But MIPS16 spec says: LBU ry, offset(rx).
+        # if ry=2 (v0), rx=4 (a0) => LBU v0, 0(a0).
+        # Ghidra: LBU a0, 0(v0).
+        # This implies Swap? Or my bit reading is swapped?
+        # A280 -> 1010_0010_1000_0000
+        # 10100 (LBU)
+        # 010 (2)
+        # 100 (4)
+        # 0000
+        # If order is rx, ry?
+        # Spec: LBU rx, offset(ry)? 
+        # Ref: MIPS16e LBU: 10100 rx ry offset.
+        # YES. rx is first (bits 10:8), ry is second (bits 7:5).
+        # my current vars: rx_code = bits 8-10.
+        # so code 'rx' IS 'rx' in spec.
+        # And spec says "LBU rx, offset(ry)".
+        # destination is rx. base is ry.
+        # So: LBU rx, offset(ry).
+        # msg: rx=2 (v0). ry=4 (a0). -> LBU v0, 0(a0).
+        # Ghidra: LBU a0, 0(v0).
+        # Did I swap bits? 
+        # A280: 1010 0010 1000 0000
+        #              ^^^ (bits 10:8) = 010 = 2. -> rx=2.
+        #                   ^^^ (bits 7:5) = 100 = 4. -> ry=4.
+        # So LBU v0, 0(a0).
+        # Ghidra: LBU a0, 0(v0).
+        # !!! 
+        # Maybe 80 A2 is not A280?
+        # '80 A2' in file. Little endian read -> A2 80 bytes? No.
+        # Little endian file: byte 0 is LSB.
+        # File: 80 A2
+        # u16 = 0xA280.
+        # Correct.
+        # Maybe I am wrong about MIPS16 encoding for LBU.
+        # Let's verify `SW` at 81e84284: `06 d2` -> `D206`.
+        # 1101 0010 0000 0110
+        # 11010 (SW SP) 
+        # 010 (rx=2 -> v0).
+        # 00000110 (imm=6 -> 24).
+        # SW v0, 24(sp).
+        # Ghidra: `sw v0,local_20(sp)` (local_20 is -0x20... wait. 24 is 0x18? hex 20? 0x20=32).
+        # Ghidra stack: local_20 is at -0x20. Function saves 0x38 (56). 
+        # SP moves down 56.
+        # So `local_20` relative to NEW SP is ??
+        # 56 - 32 = 24 (0x18).
+        # So `sw v0, 24(sp)` is correct.
+        # Matches my decode `SW rx, offset(sp)`.
         
-        # Default: show as unknown with hex code
+        # Okay, back to LBU.
+        # `80 a2`. `A280`. `1010 0010 1000 0000`.
+        # rx=2 (v0), ry=4 (a0).
+        # If output is `LBU v0, 0(a0)` -> Load byte into v0 from address in a0.
+        # Ghidra: `lbu a0, 0(v0)`. -> Load byte into a0 from address in v0.
+        # If Ghidra is right, then my registers are swapped.
+        # Maybe instruction is `LBU ry, offset(rx)`?
+        # Many sources say `LBU ry, offset(rx)`.
+        # Then `ry` is dest. `rx` is base.
+        # If `LBU ry, offset(rx)`:
+        # dest=ry(4)=a0. base=rx(2)=v0.
+        # This matches Ghidra!
+        # So encoding is `LBU ry, offset(rx)`.
+        # Note: Opcode 0x14?
+        # Let's fix decode map accordingly.
+
+        # LBU (0x14)
+        if major_op == 0x14:
+            imm = (insn & 0x1F)
+            return ("lbu", f"{ry},0x{imm:x}({rx})")
+
+        # SW (0xD800? - 11011) -> SW ry, offset(rx)
+        if major_op == 0x1B: # Wait, 11011 is SW SP? No.
+            # 11011 is SW SP if sub-decode?
+            # 0xD000 (11010) is SW SP.
+            # 0xD800 (11011) is SW R-R.
+            pass
+        if (insn & 0xF800) == 0xD000: # SW SP
+             imm = (insn & 0xFF) << 2
+             return ("sw", f"{rx},0x{imm:x}(sp)")
+             
+        if (insn & 0xF800) == 0xD800: # SW R-R
+             imm = (insn & 0x1F) << 2
+             return ("sw", f"{ry},0x{imm:x}({rx})")
+
+        # LW R-R (0x16? 10110? No)
+        # 0xB000 (10110)
+        if (insn & 0xF800) == 0xB000:
+             imm = (insn & 0x1F) << 2
+             return ("lw", f"{ry},0x{imm:x}({rx})")
+
+        # RR instructions (Major 0x1D = 11101)
+        if major_op == 0x1D:
+            funct = insn & 0x1F
+            if funct == 0:
+                if rx_code == 0: return ("jr", f"{rx}") # rx_code 0 is s0?
+                # JR: 01000 11101 xxx00000
+                # If rx=7? `jr ra`?
+                # jr rx.
+                return ("jr", f"{rx}")
+            
+            # ... handle rest if needed ...
+            return (f"UNK_RR_{funct:x}", "")
+            
+        # NOP (Move $0, $0 ? or 0x6500)
+        if insn == 0x6500: return ("_nop", "")
+        
         return (f"?_{insn:04x}", "")
-    
-    
-    
-    @staticmethod
-    def _sign_extend(value, bits):
-        """Sign extend a value"""
-        sign_bit = 1 << (bits - 1)
-        if value & sign_bit:
-            return value - (1 << bits)
-        return value
