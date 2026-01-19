@@ -7,6 +7,7 @@ import json
 import os
 import threading
 from simulator import AliMipsSimulator
+from mips16_decoder import MIPS16Decoder
 
 class MIPSSimulatorGUI:
     def __init__(self, root):
@@ -26,6 +27,7 @@ class MIPSSimulatorGUI:
         self.breakpoints = {}
         self.watches = []
         self.watch_previous_values = {}
+        self.forced_mips16_addresses = set()
         
         # Temp breakpoints for stepping
         self.temp_breakpoints = set()
@@ -162,6 +164,12 @@ class MIPSSimulatorGUI:
         if self.is_running: return
         self.temp_breakpoints.clear()
         self.execute_single_instruction()
+
+    def step_skip(self, event=None):
+        """Step Skip: Just advance PC by 4 without executing"""
+        if self.is_running: return
+        self.sim.skipInstruction()
+        self.update_ui_safe()
 
     def step_over(self, event=None):
         """F10: Step Over"""
@@ -321,26 +329,192 @@ class MIPSSimulatorGUI:
     def get_instructions_around_pc(self, pc, before=10, after=10):
         if not self.sim: return []
         instructions = []
-        addr = pc - (before * 4)
-        for i in range(before + after + 1):
-            try:
-                code_bytes = self.sim.mu.mem_read(addr, 4)
-                disasm = list(self.sim.md.disasm(code_bytes, addr))
-                if disasm:
+        
+        # Backward scan (Tricky with variable length)
+        # Strategy: Go back 'before * 4' bytes (approx), then disassemble forward.
+        # If we desync at PC, adjust start point.
+        
+        start_attempts = [pc - (before * 4), pc - (before * 4) + 2]
+        best_instrs = []
+        
+        for start_addr in start_attempts:
+            if start_addr < 0: continue
+            
+            # Check if PC is a JALX target before scanning
+            pc_is_jalx_target = False
+            prev_exec = getattr(self.sim, 'prev_executed_pc', None)
+            if prev_exec:
+                try:
+                    prev_bytes = self.sim.mu.mem_read(prev_exec, 4)
+                    prev_disasm = list(self.sim.md.disasm(prev_bytes, prev_exec))
+                    if prev_disasm and prev_disasm[0].mnemonic == 'jalx':
+                        pc_is_jalx_target = True
+                        print(f"[DEBUG] PC 0x{pc:08X} is JALX target from 0x{prev_exec:08X}")
+                except: pass
+            
+            temp_instrs = []
+            curr = start_addr
+            # Disassemble until we hit PC or pass it
+            valid_sequence = False
+            
+            # Track if we're in a MIPS16 region (entered via JALX)
+            in_mips16_region = False
+            
+            # Limit scan to reasonable amount to avoid infinite loops if something is wrong
+            while curr <= pc + (after * 4): 
+                # Decode one
+                try:
+                    # Check known size or Forced MIPS16
+                    is_mips16 = False
+                    
+                    # 1. Execution History
+                    known_size = self.sim.instruction_sizes.get(curr)
+                    if known_size == 2:
+                        is_mips16 = True
+                        print(f"[DEBUG] 0x{curr:08X} is MIPS16 from execution history")
+                    
+                    # 2. Forced Address (Manual Toggle)
+                    if curr in self.forced_mips16_addresses:
+                        is_mips16 = True
+                        print(f"[DEBUG] 0x{curr:08X} is MIPS16 from forced addresses")
+                    
+                    # 3. JALX target detection
+                    if not is_mips16 and curr == pc and pc_is_jalx_target:
+                        is_mips16 = True
+                        in_mips16_region = True  # Enter MIPS16 region
+                        print(f"[DEBUG] 0x{curr:08X} is MIPS16 as JALX target - entering MIPS16 region")
+                    
+                    # 4. If we're in a MIPS16 region (and no execution history says otherwise), assume MIPS16
+                    if not is_mips16 and in_mips16_region and known_size != 4:
+                        is_mips16 = True
+                        print(f"[DEBUG] 0x{curr:08X} is MIPS16 from region continuation")
+
+                    if is_mips16:
+                        # It's MIPS16! Decode it properly
+                        valid_bytes = self.sim.mu.mem_read(curr, 2)
+                        bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
+                        
+                        # Decode MIPS16 instruction
+                        mnemonic, operands = MIPS16Decoder.decode(valid_bytes)
+                        
+                        temp_instrs.append({
+                            'address': curr,
+                            'bytes': bytes_str,
+                            'mnemonic': mnemonic,
+                            'operands': operands,
+                            'loop_count': self.sim.visit_counts.get(curr, 0),
+                            'is_current': (curr == pc),
+                            'is_breakpoint': (curr in self.breakpoints)
+                        })
+                        curr += 2
+                        if curr == pc: valid_sequence = True
+                        if curr > pc and not valid_sequence: break
+                        if valid_sequence:
+                             # check after count
+                             count_after = sum(1 for i in temp_instrs if i['address'] > pc)
+                             if count_after >= after: break
+                        continue
+
+                    # Try to disassemble as MIPS32 first
+                    code = self.sim.mu.mem_read(curr, 4)
+                    disasm = list(self.sim.md.disasm(code, curr))
+                    
+                    if not disasm:
+                        # Fallback: treat as MIPS16 instruction
+                        try:
+                            valid_bytes = self.sim.mu.mem_read(curr, 2)
+                            bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
+                            mnemonic, operands = MIPS16Decoder.decode(valid_bytes)
+                            temp_instrs.append({
+                                'address': curr,
+                                'bytes': bytes_str,
+                                'mnemonic': mnemonic,
+                                'operands': operands,
+                                'loop_count': self.sim.visit_counts.get(curr, 0),
+                                'is_current': (curr == pc),
+                                'is_breakpoint': (curr in self.breakpoints)
+                            })
+                            curr += 2
+                        except:
+                            curr += 4  # Skip if read fails
+                        continue
+                        
                     instr = disasm[0]
-                    bytes_str = ' '.join(f'{b:02x}' for b in instr.bytes)
-                    loop_count = self.sim.visit_counts.get(addr, 0)
-                    instructions.append({
-                        'address': addr,
-                        'bytes': bytes_str,
+                    
+                    item = {
+                        'address': curr,
+                        'bytes': ' '.join(f'{b:02x}' for b in instr.bytes),
                         'mnemonic': instr.mnemonic,
                         'operands': instr.op_str,
-                        'loop_count': loop_count,
-                        'is_current': (addr == pc),
-                        'is_breakpoint': (addr in self.breakpoints)
+                        'loop_count': self.sim.visit_counts.get(curr, 0),
+                        'is_current': (curr == pc),
+                        'is_breakpoint': (curr in self.breakpoints)
+                    }
+                    temp_instrs.append(item)
+                    
+                    if curr == pc:
+                        valid_sequence = True
+                        
+                    curr += instr.size
+                    
+                    # If we passed PC
+                    if curr > pc and not valid_sequence:
+                         break # Desync
+                         
+                    # Stop if we have enough "after" instructions
+                    if valid_sequence:
+                        # Count how many after PC
+                        count_after = 0
+                        for i in reversed(temp_instrs):
+                            if i['address'] > pc: count_after += 1
+                            else: break
+                        if count_after >= after: break
+                        
+                except:
+                    curr += 4 # Fallback
+            
+            if valid_sequence:
+                best_instrs = temp_instrs
+                break
+        
+        if not best_instrs:
+            # Ultimate fallback: Show raw hex dump around PC
+            print(f"[DEBUG] No valid disassembly found, using hex dump fallback at PC=0x{pc:08X}")
+            curr = max(0, pc - 20)  # Show a bit before PC
+            for i in range(25):  # Show ~50 bytes
+                try:
+                    # Try 2-byte MIPS16 first
+                    code = self.sim.mu.mem_read(curr, 2)
+                    mnemonic, operands = MIPS16Decoder.decode(code)
+                    bytes_str = ' '.join(f'{b:02x}' for b in code)
+                    best_instrs.append({
+                        'address': curr,
+                        'bytes': bytes_str,
+                        'mnemonic': mnemonic,
+                        'operands': operands,
+                        'loop_count': self.sim.visit_counts.get(curr, 0),
+                        'is_current': (curr == pc),
+                        'is_breakpoint': (curr in self.breakpoints)
                     })
-            except: pass
-            addr += 4
+                    curr += 2
+                except:
+                    curr += 2
+                 
+        # Filter to requested window
+        # Find index of PC
+        pc_idx = -1
+        for i, item in enumerate(best_instrs):
+            if item['address'] == pc: 
+                pc_idx = i
+                break
+                
+        if pc_idx != -1:
+            start_idx = max(0, pc_idx - before)
+            end_idx = min(len(best_instrs), pc_idx + after + 1)
+            instructions = best_instrs[start_idx:end_idx]
+        else:
+            instructions = best_instrs[:before+after] # Fallback
+            
         return instructions
 
     def update_instruction_display(self):
@@ -432,6 +606,7 @@ class MIPSSimulatorGUI:
         
         tk.Button(btn_frame, text="Step Into (F11)", command=self.step_into, width=15, bg="#4CAF50", fg="white").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Step Over (F10)", command=self.step_over, width=15, bg="#2196F3", fg="white").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_frame, text="Step Skip (F8)", command=self.step_skip, width=15, bg="#008CBA", fg="white").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Step Out (Sh+F11)", command=self.step_out, width=15, bg="#9C27B0", fg="white").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Run (F5)", command=self.run_continuous, width=10, bg="#FF9800", fg="white").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Pause (F6)", command=self.pause_execution, width=10, bg="#FFC107", fg="black").pack(side=tk.LEFT, padx=2)
@@ -439,6 +614,7 @@ class MIPSSimulatorGUI:
 
         self.root.bind('<F11>', self.step_into)
         self.root.bind('<F10>', self.step_over)
+        self.root.bind('<F8>', self.step_skip)
         self.root.bind('<Shift-F11>', self.step_out)
         self.root.bind('<F5>', lambda e: self.run_continuous())
         self.root.bind('<F6>', lambda e: self.pause_execution())
@@ -570,6 +746,14 @@ class MIPSSimulatorGUI:
                                          command=lambda: self.toggle_breakpoint(address))
                         menu.add_command(label=f"Add Named Breakpoint...", 
                                          command=lambda: self.add_named_breakpoint_at(address))
+                                         
+                    menu.add_separator()
+                    if address in self.forced_mips16_addresses:
+                         menu.add_command(label=f"Unforce MIPS16 View", 
+                                          command=lambda: self.toggle_mips16_force(address))
+                    else:
+                         menu.add_command(label=f"Force MIPS16 View", 
+                                          command=lambda: self.toggle_mips16_force(address))
                     
                     menu.tk_popup(event.x_root, event.y_root)
         except Exception as e:
@@ -585,6 +769,17 @@ class MIPSSimulatorGUI:
             
         self.save_breakpoints()
         self.update_breakpoint_list()
+        self.update_instruction_display()
+
+    def toggle_mips16_force(self, address):
+        """Toggle forced 16-bit display for a region starting at address"""
+        if address in self.forced_mips16_addresses:
+            self.forced_mips16_addresses.remove(address)
+            self.log(f"Unforced MIPS16 at 0x{address:08X}")
+        else:
+            self.forced_mips16_addresses.add(address)
+            self.log(f"Forced MIPS16 at 0x{address:08X}")
+            
         self.update_instruction_display()
 
     def add_named_breakpoint_at(self, address):

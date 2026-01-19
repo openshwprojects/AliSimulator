@@ -2,6 +2,7 @@ from unicorn import *
 from unicorn.mips_const import *
 from capstone import *
 import sys
+from mips16_decoder import MIPS16Decoder
 
 class AliMipsSimulator:
     def __init__(self, rom_size=8*1024*1024, ram_size=128*1024*1024, log_handler=None):
@@ -15,11 +16,14 @@ class AliMipsSimulator:
         self.last_lui_addr = None
         self.instruction_count = 0
         self.visit_counts = {}
+        self.instruction_sizes = {}
         self.trace_instructions = False
         self.stop_instr = None
         self.break_on_printf = False
         self.max_instructions = 10000000
         self.is_syncing = False
+        self.prev_executed_pc = None
+        self.current_executed_pc = None
 
         self._init_unicorn()
         self._init_capstone()
@@ -83,6 +87,16 @@ class AliMipsSimulator:
             self.log("Initialized UART LSR at 0xb8018305 (and mirrors) to 0x20")
         except Exception as e:
             self.log(f"Failed to init UART LSR: {e}")
+
+        # Set Magic Value at 0xb8000002 for testing
+        try:
+            val_bytes = b'\x11\x38' # 0x3811 Little Endian
+            self.mu.mem_write(0xb8000002, val_bytes)
+            self.mu.mem_write(0x18000002, val_bytes)
+            self.mu.mem_write(0x98000002, val_bytes)
+            self.log("Initialized magic value 0x3811 at 0xb8000002 (and mirrors)")
+        except Exception as e:
+            self.log(f"Failed to init magic value: {e}")
 
         # Hooks
         self.mu.hook_add(UC_HOOK_MEM_INVALID, self._hook_mem_invalid)
@@ -167,18 +181,36 @@ class AliMipsSimulator:
 
 
     def _hook_code(self, uc, address, size, user_data):
+        # Track history for jumps
+        if not hasattr(self, 'current_executed_pc'): self.current_executed_pc = None
+        self.prev_executed_pc = self.current_executed_pc
+        self.current_executed_pc = address
+
         # Track visit count
         if address not in self.visit_counts:
             self.visit_counts[address] = 0
+            # Track size on first visit (or every visit?)
+            if not hasattr(self, 'instruction_sizes'): self.instruction_sizes = {}
+            self.instruction_sizes[address] = size
+        
         self.visit_counts[address] += 1
+        self.instruction_sizes[address] = size # Ensure latest size is stored
         
         if self.trace_instructions:
             code_bytes = uc.mem_read(address, size)
             try:
-                for i in self.md.disasm(code_bytes, address):
-                    bytes_str = ' '.join(f'{b:02x}' for b in i.bytes)
+                # Handle MIPS16 instructions (size == 2)
+                if size == 2:
+                    mnemonic, operands = MIPS16Decoder.decode(code_bytes)
+                    bytes_str = ' '.join(f'{b:02x}' for b in code_bytes)
                     loop_str = f" [LOOP {self.visit_counts[address]}]" if self.visit_counts[address] > 1 else ""
-                    self.log(f"0x{i.address:08X}: {bytes_str:<15} {i.mnemonic}\t{i.op_str}{loop_str}")
+                    self.log(f"0x{address:08X}: {bytes_str:<15} {mnemonic}\t{operands}{loop_str}")
+                else:
+                    # Standard MIPS32 disassembly
+                    for i in self.md.disasm(code_bytes, address):
+                        bytes_str = ' '.join(f'{b:02x}' for b in i.bytes)
+                        loop_str = f" [LOOP {self.visit_counts[address]}]" if self.visit_counts[address] > 1 else ""
+                        self.log(f"0x{i.address:08X}: {bytes_str:<15} {i.mnemonic}\t{i.op_str}{loop_str}")
             except: pass
 
         if self.stop_instr is not None and address == self.stop_instr:
@@ -191,6 +223,10 @@ class AliMipsSimulator:
             uc.emu_stop()
 
     def _hook_instruction_fix(self, uc, address, size, user_data):
+        # MIPS16 instruction safety check - REMOVED restriction
+        # if size != 4:
+        #    return
+
         try:
             # Optimization: Only read if we need to (check opcode logic first?)
             # Actually we need to read to know opcode.
@@ -358,3 +394,28 @@ class AliMipsSimulator:
             self.log(f"PC at error: {hex(self.mu.reg_read(UC_MIPS_REG_PC))}")
         except Exception as e:
             self.log(f"Error: {e}")
+
+    def skipInstruction(self):
+        """Skip the current instruction by advancing PC by 4"""
+        try:
+            cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+            # Try to determine size of instruction at PC
+            # Default to 4
+            incr = 4
+            try:
+                code = self.mu.mem_read(cur_pc, 4)
+                # We need a disassembler that understands the current mode...
+                # Sim's self.md is MIPS32. If we are in MIPS16, we might fail or get it wrong.
+                # Heuristic: Check PC alignment? MIPS16 PC is usually odd in JALX but even in execution?
+                # Actually, in Unicorn, PC is the address.
+                # If we are in MIPS16 mode, we might need a separate disassembler.
+                for i in self.md.disasm(code, cur_pc):
+                    incr = i.size
+                    break
+            except: pass
+
+            self.mu.reg_write(UC_MIPS_REG_PC, cur_pc + incr)
+            self.log(f"Skipped instruction at 0x{cur_pc:08X} (size {incr})")
+        except Exception as e:
+            self.log(f"Error skipping instruction: {e}")
+
