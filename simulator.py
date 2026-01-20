@@ -619,7 +619,7 @@ class AliMipsSimulator:
                         first_word = self.mu.mem_read(curr, 2)
                         word1 = int.from_bytes(first_word, byteorder='little')
                         major_op = (word1 >> 11) & 0x1F
-                        is_4byte = (major_op == 0x03)  # JAL/JALX opcode
+                        is_4byte = (major_op == 0x03 or major_op == 0x1E)  # JAL/JALX opcode or EXTEND
                         
                         # Read appropriate number of bytes
                         if is_4byte:
@@ -660,9 +660,9 @@ class AliMipsSimulator:
                         try:
                             # Read first 2 bytes to check instruction type
                             first_word = self.mu.mem_read(curr, 2)
-                            word1 = int.from_bytes(first_word, byteorder='little')
+                            word1 = int.from_bytes(first_word, 'little')
                             major_op = (word1 >> 11) & 0x1F
-                            is_4byte = (major_op == 0x03)
+                            is_4byte = (major_op == 0x03 or major_op == 0x1E)
                             
                             # Read appropriate number of bytes
                             if is_4byte:
@@ -737,7 +737,7 @@ class AliMipsSimulator:
                     first_word = self.mu.mem_read(curr, 2)
                     word1 = int.from_bytes(first_word, byteorder='little')
                     major_op = (word1 >> 11) & 0x1F
-                    is_4byte = (major_op == 0x03)
+                    is_4byte = (major_op == 0x03 or major_op == 0x1E)
                     
                     # Read appropriate number of bytes
                     if is_4byte:

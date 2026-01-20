@@ -59,9 +59,61 @@ class MIPS16Decoder:
                 mnemonic = "jal" if x_bit == 0 else "jalx"
                 return (mnemonic, f"0x{target_addr:x}")
 
-            # EXTEND instructions (0xF000)
-            if (word1 & 0xF800) == 0xF000:
-                pass
+            # EXTEND instructions (0xF000) - Major Op 0x1E (11110)
+            if major_op == 0x1E:
+                 # EXTEND format: 11110 imm10:5 imm15:11 imm4:0
+                 # Unscramble immediate:
+                 # word1 = 0xF0B0 -> 11110 00010 110000 -> ext_10_5=0x05, ext_15_11=0x10.
+                 # ext_10_5  = (word1 >> 5) & 0x3F ? No, 0x1F is 5 bits. 0x3F is 6 bits.
+                 # Wait, bits 10-5 is 6 bits. Bits 4-0 is 5 bits. Total 11 bits.
+                 # My previous analysis:
+                 # Bits 10-5 of word1 -> Bits 10-5 of Result.
+                 # Bits 4-0 of word1 -> Bits 15-11 of Result.
+                 
+                 ext_10_5 = (word1 >> 5) & 0x3F # Bits 10-5 (6 bits)
+                 ext_15_11 = word1 & 0x1F       # Bits 4-0 (5 bits)
+                 
+                 # Decode instruction in word2
+                 insn = word2
+                 op2 = (insn >> 11) & 0x1F
+                 
+                 # LBU (0x14) extended
+                 if op2 == 0x14:
+                     # LBU format: 10100 ry rx offset(5)
+                     # Full Offset = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     
+                     # Sign extend 16-bit offset
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                         
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     
+                     # MIPS16 LBU is ry, offset(rx)
+                     return ("lbu", f"{ry},{hex(full_imm)}({rx})")
+                     # Note: hex() handles negative sign correctly (-0x...)
+
+                 # LW (0x13) extended
+                 if op2 == 0x13:
+                     # LW format: 10011 ry rx offset(5)
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                         
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     
+                     return ("lw", f"{ry},{hex(full_imm)}({rx})")
+                 
+                 return (f"EXT_{word1:04x}_{word2:04x}", "")
 
             return (f"UNK32_{word1:04x}{word2:04x}", "")
 
@@ -159,7 +211,8 @@ class MIPS16Decoder:
                 r32 = (insn >> 3) & 0x1F
                 ry_reg = insn & 0x7
                 return ("move", f"{MIPS16Decoder.reg_5bit(r32)},{MIPS16Decoder.reg_3bit(ry_reg)}")
-
+            
+            # I8 Format Instructions (subfunc logic continued for Major Op 0xC)
             if subfunc == 0x4:  # SAVE / RESTORE (distinguished by bit 7)
                 # Bit 7: 1 = SAVE, 0 = RESTORE
                 is_save = (insn >> 7) & 0x1
@@ -207,6 +260,13 @@ class MIPS16Decoder:
                     return ("btnez", f"0x{target:x}")
                 return ("btnez", f"0x{offset:x}")
 
+        # CMPI - Major Op 0xE (01110)
+        if major_op == 0x0E:
+            rx_code = (insn >> 8) & 0x7
+            imm = insn & 0xFF
+            rx = MIPS16Decoder.reg_3bit(rx_code)
+            return ("cmpi", f"{rx},0x{imm:x}")
+
         # SLTI: 0x0A (01010)
         if major_op == 0x0A:
             imm = insn & 0xFF
@@ -233,34 +293,48 @@ class MIPS16Decoder:
             offset = (insn & 0xFF) << 2
             return ("lw", f"{rx},0x{offset:x}(pc)")
             
-        # LW (SP-rel): 0x13 (10011)
-        if major_op == 0x13:
+        # LW (SP-rel): 0x12 (10010)
+        if major_op == 0x12:
             offset = (insn & 0xFF) << 2
             return ("lw", f"{rx},0x{offset:x}(sp)")
 
-        # LW (PC-rel) Alias?: 0x16 (10110)
-        # Observed in Ali firmware as LW rx, offset(pc) with 8-bit offset
-        # e.g. 0xB275 -> 10110 010 (rx=2) 01110101 (0x75) -> lw v0, 0x1d4(pc)
+        if major_op == 0x02:
+            offset = (insn & 0x7FF) * 2
+            # 11-bit immediate sign-extended
+            if offset & 0x800:
+                offset -= 0x1000
+            if address:
+                target = (address + 2) + offset
+                return ("b", f"0x{target:x}")
+            return ("b", f"0x{offset:x}")
+
+        # LW (Reg-rel): 0x13 (10011) - LW ry, offset(rx)
+        if major_op == 0x13:
+             # rx is bits 10:8 (base)
+             # ry is bits 7:5 (dest)
+             offset = (insn & 0x1F) << 2 
+             return ("lw", f"{ry},0x{offset:x}({rx})")
+
+        # LW (PC-rel) Alias: 0x16 (10110)
         if major_op == 0x16: 
              offset = (insn & 0xFF) << 2
              return ("lw", f"{rx},0x{offset:x}(pc)")
             
-        # SW (SP-rel): 0x1B (11011)
-        if major_op == 0x1B:
+        # SW (SP-rel): 0x1A (11010)
+        if major_op == 0x1A:
              offset = (insn & 0xFF) << 2
              return ("sw", f"{rx},0x{offset:x}(sp)")
 
-        # SW (Reg-rel): 0x1D (11101) - NO.
-        # SW (Reg): 0x1B is rx, offset(sp).
-        # SW (Reg-rel): 11011 is not reg-rel.
-        # Format RRI-A for SW: 11011 ry rx offset ?? No.
-        # Major 0x1B is SW sp.
-        # Major 0x1D ?? 11101
-        
-        if (insn & 0xF800) == 0xD800: # 11011... wait 0xD800 is 1101_1...
-            # 11011 = 0x1B.
-            # 0xD800 is 1101_1000... -> 0x1B with sub?
-            pass
+        # SW (Reg-rel): 0x1B (11011) - SW ry, offset(rx)
+        if major_op == 0x1B:
+             offset = (insn & 0x1F) << 2
+             return ("sw", f"{ry},0x{offset:x}({rx})")
+
+        if (insn & 0xF800) == 0xD000: # SW SP (0x1A) - Redundant but safe
+             pass 
+             
+        if (insn & 0xF800) == 0xD800: # SW R-R (0x1B) - Redundant but safe
+             pass
 
         # LBU: 0x14 (10100) -> 10100 ry rx offset
         # 10100 010 (ry) 100 (rx) . (LBU v0, 0(a0))
@@ -398,6 +472,22 @@ class MIPS16Decoder:
                 # If variant == 0 (000) -> ZEB
                 if variant == 0:
                     return ("zeb", f"{rx}")
+
+            # AND - funct 0x0C (01100)
+            if funct == 0x0C:
+                return ("and", f"{rx},{ry}")
+
+            # OR - funct 0x0D (01101) - Proactive addition
+            if funct == 0x0D:
+                return ("or", f"{rx},{ry}")
+                
+            # XOR - funct 0x0E (01110) - Proactive addition
+            if funct == 0x0E:
+                return ("xor", f"{rx},{ry}")
+            
+            # NOT - funct 0x0F (01111) - Proactive addition
+            if funct == 0x0F:
+                return ("not", f"{rx},{ry}")
 
             return (f"UNK_RR_{funct:x}", "")
             
