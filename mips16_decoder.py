@@ -71,6 +71,9 @@ class MIPS16Decoder:
         
         # Read as little-endian 16-bit value
         insn = int.from_bytes(opcode_bytes, byteorder='little')
+
+        # NOP (Move $0, $0 ? or 0x6500)
+        if insn == 0x6500: return ("nop", "")
         
         # Major opcode (bits 11-15)
         major_op = (insn >> 11) & 0x1F
@@ -83,48 +86,142 @@ class MIPS16Decoder:
         rx = MIPS16Decoder.reg_3bit(rx_code)
         ry = MIPS16Decoder.reg_3bit(ry_code)
         rz = MIPS16Decoder.reg_3bit(rz_code)
+        
+        # RRR Format (3-register operations) - Major 0x1C (11100)
+        # Format: 11100 rx ry rz func
+        # ADDU: rz = rx + ry
+        if major_op == 0x1C:
+            funct = insn & 0x3  # bits [1:0] for function code
+            if funct == 0x1:  # ADDU
+                return ("addu", f"{rz},{rx},{ry}")
+            # Other RRR instructions can be added here
+            return (f"UNK_RRR_{funct:x}", "")
+
+        # ADDIU rx, SP, imm - Major 0x00
+        if major_op == 0x00:
+            imm = (insn & 0xFF) << 2
+            return ("addiu", f"{rx},sp,0x{imm:x}")
+        
+        # BEQZ rx, offset - Major 0x04 (00100)
+        if major_op == 0x04:
+            offset = (insn & 0xFF) * 2
+            # Sign extend 8-bit offset
+            if offset & 0x100:
+                offset -= 0x200
+            if address:
+                target = (address + 2) + offset
+                return ("beqz", f"{rx},0x{target:x}")
+            return ("beqz", f"{rx},0x{offset:x}")
+        
+            # ADDIU rx, imm - Major 0x08 (01000) - ADDIU rx, rx, immediate
+        if major_op == 0x08:
+            imm = insn & 0xFF
+            # Sign extend 8-bit immediate
+            if imm & 0x80:
+                imm_signed = imm - 0x100
+                return ("addiu", f"{rx},{rx},-0x{-imm_signed:x}")
+            return ("addiu", f"{rx},{rx},0x{imm:x}")
 
         # I8 Format (SAVE, RESTORE, etc) - Major 0x0C
         if major_op == 0x0C:
             subfunc = (insn >> 8) & 0x7 # bits 10:8
             
-            if subfunc == 0x4:  # SAVE
+            if subfunc == 0x7:
+                # MOVE ry, r32 format (bits 7:5 = ry, bits 4:0 = r32)
+                # BUT also MOVE r32, ry format (bits 10:8 = rx, bits 4:0 = r32)
+                # Check if this is move rx, ry (where ry is encoded in bits 4:0 as 3-bit)
+                r32_field = insn & 0x1F
+                
+                # If r32_field < 8, it might be a MOVE rx, ry (3-bit encoding)
+                # Ghidra shows: move t9,a0 for 0x653c
+                # 0x653c = 0110 0101 0011 1100
+                # Major op = 01100 (0x0C), subfunc = 101 (0x5... wait no)
+                # Let me recalculate: bits 15:11 = 01100 (0x0C) ✓
+                # bits 10:8 = 101 (0x5) - this is subfunc 5, not 7!
+                # So 0x653c is handled by subfunc == 0x5 case below, not here
+                
+                # Original logic for subfunc 0x7:
+                dest = ry
+                src = MIPS16Decoder.reg_5bit(insn & 0x1F)
+                return ("move", f"{dest},{src}")
+
+            # MOVE32R: move ry, r32 (MIPS16 ← MIPS32) - subfunc=5
+            # Note: There appear to be multiple MOVE encoding variants.
+            # The standard encoding may not cover all cases (e.g., move t9, a0).
+            # TODO: Investigate alternative MOVE formats or EXTEND prefix handling.
+            if subfunc == 0x5:
+                r32 = (insn >> 3) & 0x1F
+                ry_reg = insn & 0x7
+                return ("move", f"{MIPS16Decoder.reg_3bit(ry_reg)},{MIPS16Decoder.reg_5bit(r32)}")
+
+            # MOVI32R: move r32, ry (MIPS32 ← MIPS16) - subfunc=6
+            if subfunc == 0x6:
+                r32 = (insn >> 3) & 0x1F
+                ry_reg = insn & 0x7
+                return ("move", f"{MIPS16Decoder.reg_5bit(r32)},{MIPS16Decoder.reg_3bit(ry_reg)}")
+
+            if subfunc == 0x4:  # SAVE / RESTORE (distinguished by bit 7)
+                # Bit 7: 1 = SAVE, 0 = RESTORE
+                is_save = (insn >> 7) & 0x1
+                
                 xsregs = (insn >> 4) & 0xF
                 aregs = xsregs & 0x3
                 sregs = (xsregs >> 2) & 0x3
                 framesize = (insn & 0xF) << 3
                 
                 regs = "ra"
-                total_sregs = sregs + aregs
-                if total_sregs > 0:
-                    if total_sregs == 1:
-                        regs += ",s0"
-                    else:
-                        regs += f",s0-s{total_sregs-1}"
-                return ("save", f"0x{framesize:x},{regs}")
-            
-            elif subfunc == 0x5:  # RESTORE
-                xsregs = (insn >> 4) & 0xF
-                aregs = xsregs & 0x3
-                sregs = (xsregs >> 2) & 0x3
-                framesize = (insn & 0xF) << 3
                 
-                regs = "ra"
-                total_sregs = sregs + aregs
+                # SAVE: uses both sregs and aregs
+                # RESTORE: uses only sregs
+                if is_save:
+                    total_sregs = sregs + aregs
+                else:
+                    total_sregs = sregs
+                
                 if total_sregs > 0:
                     if total_sregs == 1:
                         regs += ",s0"
                     else:
                         regs += f",s0-s{total_sregs-1}"
-                return ("restore", f"0x{framesize:x},{regs}")
+                
+                mnemonic = "save" if is_save else "restore"
+                return (mnemonic, f"0x{framesize:x},{regs}")
                 
             elif subfunc == 0x0: # BTEQZ
-                offset = (insn & 0xFF) * 2 # simplified sign?
-                return ("bteqz", f"0x{offset:x}") # Logic needs check?
+                offset = (insn & 0xFF) * 2
+                # Sign extend 8-bit offset
+                if offset & 0x100:
+                    offset -= 0x200
+                if address:
+                    target = (address + 2) + offset
+                    return ("bteqz", f"0x{target:x}")
+                return ("bteqz", f"0x{offset:x}")
                 
             elif subfunc == 0x1: # BTNEZ
                 offset = (insn & 0xFF) * 2
+                # Sign extend 8-bit offset
+                if offset & 0x100:
+                    offset -= 0x200
+                if address:
+                    target = (address + 2) + offset
+                    return ("btnez", f"0x{target:x}")
                 return ("btnez", f"0x{offset:x}")
+
+        # SLTI: 0x0A (01010)
+        if major_op == 0x0A:
+            imm = insn & 0xFF
+            return ("slti", f"{rx},0x{imm:x}")
+
+        # BNEZ: 0x05 (00101)
+        if major_op == 0x05:
+            offset = (insn & 0xFF) * 2
+            # Sign extend 8-bit offset
+            if offset & 0x100:
+                offset -= 0x200
+            if address:
+                target = (address + 2) + offset
+                return ("bnez", f"{rx},0x{target:x}")
+            return ("bnez", f"{rx},0x{offset:x}")
 
         # LI: 0x0D (01101) => 01101 xxxxxxx ...
         if major_op == 0x0D:
@@ -143,8 +240,13 @@ class MIPS16Decoder:
 
         # LW (Reg-rel): 0x16 (10110)
         # Format: 10110 ry rx offset(5)
+        # LW (Reg-rel): 0x16 (10110)
+        # Format: 10110 ry rx offset(5)
+        # Exception: If ry == 0, it acts as LW rx, offset(PC)
         if major_op == 0x16: 
             offset = (insn & 0x1F) << 2
+            if ry_code == 0:
+                 return ("lw", f"{rx},0x{offset:x}(pc)")
             return ("lw", f"{ry},0x{offset:x}({rx})")
             
         # SW (SP-rel): 0x1B (11011)
@@ -237,6 +339,12 @@ class MIPS16Decoder:
         if major_op == 0x14:
             imm = (insn & 0x1F)
             return ("lbu", f"{ry},0x{imm:x}({rx})")
+        
+        # SB (Store Byte) - Major 0x18 (11000)
+        # Format: 11000 rx ry offset[4:0]
+        if major_op == 0x18:
+            imm = (insn & 0x1F)
+            return ("sb", f"{ry},0x{imm:x}({rx})")
 
         # SW (0xD800? - 11011) -> SW ry, offset(rx)
         if major_op == 0x1B: # Wait, 11011 is SW SP? No.
@@ -262,13 +370,39 @@ class MIPS16Decoder:
         if major_op == 0x1D:
             funct = insn & 0x1F
             if funct == 0:
-                if rx_code == 0: return ("jr", f"{rx}") # rx_code 0 is s0?
-                # JR: 01000 11101 xxx00000
-                # If rx=7? `jr ra`?
-                # jr rx.
+                # JR vs JRC distinction:
+                # JRC: rx=0, ry!=0 → Jump Register Compact (always RA, no delay slot)
+                # JR: rx!=0 → Jump Register (specified register, has delay slot)
+                if rx_code == 0 and ry_code != 0:
+                    return ("jrc", "ra")
                 return ("jr", f"{rx}")
             
-            # ... handle rest if needed ...
+            # ADDU - funct 0x01 (00001)
+            # Format: 11101 rx ry rz 00001
+            # Operation: rz = rx + ry
+            if funct == 0x01:
+                return ("addu", f"{rz},{rx},{ry}")
+            
+            # SLTU - funct 0x03 (00011)
+            # Format: 11101 rx ry rz 00011
+            # Operation: rz = (rx < ry) ? 1 : 0 (unsigned)
+            if funct == 0x03:
+                return ("sltu", f"{rz},{rx},{ry}")
+            
+            if funct == 0x11: # SEB / ZEB
+                # RR format for CNV operations:
+                # Format: 11101 rx(10-8) yyy(7-5) zzz(4-2) 10001
+                # rx is the destination register (bits 10-8)
+                # bits 7-5 indicate operation: 100 (4) = SEB, 000 (0) = ZEB
+                variant = (insn >> 5) & 0x7
+                
+                # If variant == 4 (100) -> SEB
+                if variant == 4:
+                    return ("seb", f"{rx}")
+                # If variant == 0 (000) -> ZEB
+                if variant == 0:
+                    return ("zeb", f"{rx}")
+
             return (f"UNK_RR_{funct:x}", "")
             
         # NOP (Move $0, $0 ? or 0x6500)

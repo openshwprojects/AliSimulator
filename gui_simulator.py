@@ -396,11 +396,23 @@ class MIPSSimulatorGUI:
 
                     if is_mips16:
                         # It's MIPS16! Decode it properly
-                        valid_bytes = self.sim.mu.mem_read(curr, 2)
-                        bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
+                        # Read first 2 bytes to check instruction type
+                        first_word = self.sim.mu.mem_read(curr, 2)
+                        word1 = int.from_bytes(first_word, byteorder='little')
+                        major_op = (word1 >> 11) & 0x1F
+                        is_4byte = (major_op == 0x03)  # JAL/JALX opcode
                         
-                        # Decode MIPS16 instruction
-                        mnemonic, operands = MIPS16Decoder.decode(valid_bytes)
+                        # Read appropriate number of bytes
+                        if is_4byte:
+                            valid_bytes = self.sim.mu.mem_read(curr, 4)
+                            instr_size = 4
+                        else:
+                            valid_bytes = first_word
+                            instr_size = 2
+                        
+                        # Decode MIPS16 instruction (with address for JAL target calculation)
+                        mnemonic, operands = MIPS16Decoder.decode(valid_bytes, curr)
+                        bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
                         
                         temp_instrs.append({
                             'address': curr,
@@ -411,7 +423,7 @@ class MIPSSimulatorGUI:
                             'is_current': (curr == pc),
                             'is_breakpoint': (curr in self.breakpoints)
                         })
-                        curr += 2
+                        curr += instr_size
                         if curr == pc: valid_sequence = True
                         if curr > pc and not valid_sequence: break
                         if valid_sequence:
@@ -427,9 +439,23 @@ class MIPSSimulatorGUI:
                     if not disasm:
                         # Fallback: treat as MIPS16 instruction
                         try:
-                            valid_bytes = self.sim.mu.mem_read(curr, 2)
+                            # Read first 2 bytes to check instruction type
+                            first_word = self.sim.mu.mem_read(curr, 2)
+                            word1 = int.from_bytes(first_word, byteorder='little')
+                            major_op = (word1 >> 11) & 0x1F
+                            is_4byte = (major_op == 0x03)
+                            
+                            # Read appropriate number of bytes
+                            if is_4byte:
+                                valid_bytes = self.sim.mu.mem_read(curr, 4)
+                                instr_size = 4
+                            else:
+                                valid_bytes = first_word
+                                instr_size = 2
+                            
+                            mnemonic, operands = MIPS16Decoder.decode(valid_bytes, curr)
                             bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
-                            mnemonic, operands = MIPS16Decoder.decode(valid_bytes)
+                            
                             temp_instrs.append({
                                 'address': curr,
                                 'bytes': bytes_str,
@@ -439,7 +465,7 @@ class MIPSSimulatorGUI:
                                 'is_current': (curr == pc),
                                 'is_breakpoint': (curr in self.breakpoints)
                             })
-                            curr += 2
+                            curr += instr_size
                         except:
                             curr += 4  # Skip if read fails
                         continue
@@ -488,10 +514,23 @@ class MIPSSimulatorGUI:
             curr = max(0, pc - 20)  # Show a bit before PC
             for i in range(25):  # Show ~50 bytes
                 try:
-                    # Try 2-byte MIPS16 first
-                    code = self.sim.mu.mem_read(curr, 2)
-                    mnemonic, operands = MIPS16Decoder.decode(code)
+                    # Read first 2 bytes to check instruction type
+                    first_word = self.sim.mu.mem_read(curr, 2)
+                    word1 = int.from_bytes(first_word, byteorder='little')
+                    major_op = (word1 >> 11) & 0x1F
+                    is_4byte = (major_op == 0x03)
+                    
+                    # Read appropriate number of bytes
+                    if is_4byte:
+                        code = self.sim.mu.mem_read(curr, 4)
+                        instr_size = 4
+                    else:
+                        code = first_word
+                        instr_size = 2
+                    
+                    mnemonic, operands = MIPS16Decoder.decode(code, curr)
                     bytes_str = ' '.join(f'{b:02x}' for b in code)
+                    
                     best_instrs.append({
                         'address': curr,
                         'bytes': bytes_str,
@@ -501,7 +540,7 @@ class MIPSSimulatorGUI:
                         'is_current': (curr == pc),
                         'is_breakpoint': (curr in self.breakpoints)
                     })
-                    curr += 2
+                    curr += instr_size
                 except:
                     curr += 2
                  

@@ -127,6 +127,20 @@ class AliMipsSimulator:
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
 
+    def _get_reg_id(self, reg_name):
+        reg_map = {
+            'zero': UC_MIPS_REG_ZERO, 'at': UC_MIPS_REG_AT, 'v0': UC_MIPS_REG_V0, 'v1': UC_MIPS_REG_V1,
+            'a0': UC_MIPS_REG_A0, 'a1': UC_MIPS_REG_A1, 'a2': UC_MIPS_REG_A2, 'a3': UC_MIPS_REG_A3,
+            't0': UC_MIPS_REG_T0, 't1': UC_MIPS_REG_T1, 't2': UC_MIPS_REG_T2, 't3': UC_MIPS_REG_T3,
+            't4': UC_MIPS_REG_T4, 't5': UC_MIPS_REG_T5, 't6': UC_MIPS_REG_T6, 't7': UC_MIPS_REG_T7,
+            's0': UC_MIPS_REG_S0, 's1': UC_MIPS_REG_S1, 's2': UC_MIPS_REG_S2, 's3': UC_MIPS_REG_S3,
+            's4': UC_MIPS_REG_S4, 's5': UC_MIPS_REG_S5, 's6': UC_MIPS_REG_S6, 's7': UC_MIPS_REG_S7,
+            't8': UC_MIPS_REG_T8, 't9': UC_MIPS_REG_T9, 'k0': UC_MIPS_REG_K0, 'k1': UC_MIPS_REG_K1,
+            'gp': UC_MIPS_REG_GP, 'sp': UC_MIPS_REG_SP, 'fp': UC_MIPS_REG_FP, 'ra': UC_MIPS_REG_RA,
+            's8': UC_MIPS_REG_FP 
+        }
+        return reg_map.get(reg_name, UC_MIPS_REG_ZERO)
+
     def setLogHandler(self, handler):
         self.log_callback = handler
 
@@ -223,9 +237,101 @@ class AliMipsSimulator:
             uc.emu_stop()
 
     def _hook_instruction_fix(self, uc, address, size, user_data):
-        # MIPS16 instruction safety check - REMOVED restriction
-        # if size != 4:
-        #    return
+        # MIPS16 Support
+        if size == 2:
+            try:
+                insn_bytes = uc.mem_read(address, 2)
+                # Decode using MIPS16Decoder to know what we are dealing with
+                mnemonic, ops = MIPS16Decoder.decode(insn_bytes, address)
+                
+                # Check for unimplemented instructions and emulate them
+                # SEB / ZEB
+                if mnemonic in ["seb", "zeb"]:
+                    reg_name = ops.strip()
+                    reg_id = self._get_reg_id(reg_name)
+                    val = uc.reg_read(reg_id) & 0xFF
+                    
+                    if mnemonic == "seb":
+                        # Sign extend byte
+                        if val & 0x80:
+                            val |= 0xFFFFFF00
+                    # ZEB is just zero extend, which & 0xFF did.
+                    
+                    uc.reg_write(reg_id, val)
+                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
+                    return
+
+                # MOVE
+                elif mnemonic == "move":
+                    # ops: "dest,src"
+                    dest_name, src_name = ops.split(',')
+                    dest_id = self._get_reg_id(dest_name)
+                    src_id = self._get_reg_id(src_name)
+                    
+                    val = uc.reg_read(src_id)
+                    uc.reg_write(dest_id, val)
+                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
+                    return
+
+                # SLTI
+                elif mnemonic == "slti":
+                    # slti rx, imm
+                    rx_name, imm_str = ops.split(',')
+                    rx_id = self._get_reg_id(rx_name)
+                    imm = int(imm_str.strip(), 0)
+                    if imm & 0x8000: imm -= 0x10000 
+                    if imm & 0x80: imm -= 0x100 # Sign extend 8-bit imm
+                    
+                    val = uc.reg_read(rx_id)
+                    # Convert to signed 32-bit for comparison
+                    if val & 0x80000000: val -= 0x100000000
+                    
+                    res = 1 if val < imm else 0
+                    uc.reg_write(UC_MIPS_REG_T8, res) # Result goes to T8
+                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
+                    return
+                
+                # BNEZ
+                elif mnemonic == "bnez":
+                    # bnez rx, offset
+                    rx_name, offset_str = ops.split(',')
+                    rx_id = self._get_reg_id(rx_name)
+                    offset = int(offset_str.strip(), 0)
+                    
+                    val = uc.reg_read(rx_id)
+                    if val != 0:
+                        # Branch taken
+                        # Target = (PC + 2) + offset
+                        target = (address + 2) + offset
+                        uc.reg_write(UC_MIPS_REG_PC, target | 1)
+                    else:
+                        uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
+                    return
+
+                # LW PC-Rel
+                elif mnemonic == "lw" and "(pc)" in ops:
+                    # lw rx, offset(pc)
+                    rx_name, rest = ops.split(',')
+                    offset_str = rest.replace('(pc)', '')
+                    offset = int(offset_str.strip(), 0)
+                    rx_id = self._get_reg_id(rx_name)
+                    
+                    # PC-relative load address: (PC & ~3) + offset
+                    base = (address & 0xFFFFFFFC)
+                    target = base + offset
+                    
+                    data = uc.mem_read(target, 4)
+                    val = int.from_bytes(data, byteorder='little')
+                    uc.reg_write(rx_id, val)
+                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
+                    return
+
+            except Exception as e:
+                # self.log(f"MIPS16 Manual Error: {e}")
+                pass
+            
+            # If not handled, return to let Unicorn try (or fail)
+            return
 
         try:
             # Optimization: Only read if we need to (check opcode logic first?)
