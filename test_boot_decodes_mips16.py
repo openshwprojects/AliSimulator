@@ -68,6 +68,31 @@ def main():
         0x81E842FA: {"hex": "90 f0 58 9b", "asm": "lw       v0,-0x7f68(v1)"},
         0x81E842FE: {"hex": "06 d2", "asm": "sw       v0,0x18(sp)"},
         0x81E84300: {"hex": "1c 10", "asm": "b        0x81e8433a"},
+        0x81E84302: {"hex": "7c 67", "asm": "move     v1,gp"},
+        0x81E84304: {"hex": "b0 f0 44 a3", "asm": "lbu      v0,-0x7f5c(v1)"},
+        0x81E84308: {"hex": "18 2a", "asm": "bnez     v0,0x81e8433a"},
+        0x81E8430A: {"hex": "5b b2", "asm": "lw       v0,0x16c(pc)"},
+        0x81E8430C: {"hex": "08 93", "asm": "lw       v1,0x20(sp)"},
+        0x81E8430E: {"hex": "6e ea", "asm": "xor      v0,v1"},
+        0x81E84310: {"hex": "0b 2a", "asm": "bnez     v0,0x81e84328"},
+        0x81E84312: {"hex": "5a b2", "asm": "lw       v0,0x168(pc)"},
+        0x81E84314: {"hex": "40 9a", "asm": "lw       v0,0x0(v0)"},
+        0x81E84316: {"hex": "05 d2", "asm": "sw       v0,0x14(sp)"},
+        0x81E84318: {"hex": "05 04", "asm": "addiu    a0,sp,0x14"},
+        0x81E8431A: {"hex": "59 b2", "asm": "lw       v0,0x164(pc)"},
+        0x81E8431C: {"hex": "a0 9a", "asm": "lw       a1,0x0(v0)"},
+        0x81E8431E: {"hex": "01 6e", "asm": "li       a2,0x1"},
+        0x81E84320: {"hex": "43 1b e0 19", "asm": "jal      0x81e86780"},
+        0x81E84324: {"hex": "00 65", "asm": "nop"},
+        0x81E84326: {"hex": "09 10", "asm": "b        0x81e8433a"},
+        0x81E84328: {"hex": "56 b2", "asm": "lw       v0,0x158(pc)"},
+        0x81E8432A: {"hex": "05 d2", "asm": "sw       v0,0x14(sp)"},
+        0x81E8432C: {"hex": "05 04", "asm": "addiu    a0,sp,0x14"},
+        0x81E8432E: {"hex": "56 b5", "asm": "lw       a1,0x158(pc)"},
+        0x81E84330: {"hex": "01 6e", "asm": "li       a2,0x1"},
+        0x81E84332: {"hex": "43 1b e0 19", "asm": "jal      0x81e86780"},
+        0x81E84336: {"hex": "00 65", "asm": "nop"},
+        0x81E84338: {"hex": "06 d2", "asm": "sw       v0,0x18(sp)"},
     }
 
     stats = {
@@ -90,7 +115,7 @@ def main():
             
             # Get Context - large enough to cover all our test cases
             # We want to see from 0x81E84280 down to 0x81E842A2 and slightly beyond
-            instrs = sim.get_instructions_around_pc(address, before=15, after=70)
+            instrs = sim.get_instructions_around_pc(address, before=15, after=80)
             
             for i in instrs:
                 i_addr = i['address']
