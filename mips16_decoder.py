@@ -238,16 +238,12 @@ class MIPS16Decoder:
             offset = (insn & 0xFF) << 2
             return ("lw", f"{rx},0x{offset:x}(sp)")
 
-        # LW (Reg-rel): 0x16 (10110)
-        # Format: 10110 ry rx offset(5)
-        # LW (Reg-rel): 0x16 (10110)
-        # Format: 10110 ry rx offset(5)
-        # Exception: If ry == 0, it acts as LW rx, offset(PC)
+        # LW (PC-rel) Alias?: 0x16 (10110)
+        # Observed in Ali firmware as LW rx, offset(pc) with 8-bit offset
+        # e.g. 0xB275 -> 10110 010 (rx=2) 01110101 (0x75) -> lw v0, 0x1d4(pc)
         if major_op == 0x16: 
-            offset = (insn & 0x1F) << 2
-            if ry_code == 0:
-                 return ("lw", f"{rx},0x{offset:x}(pc)")
-            return ("lw", f"{ry},0x{offset:x}({rx})")
+             offset = (insn & 0xFF) << 2
+             return ("lw", f"{rx},0x{offset:x}(pc)")
             
         # SW (SP-rel): 0x1B (11011)
         if major_op == 0x1B:
