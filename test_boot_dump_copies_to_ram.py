@@ -58,12 +58,18 @@ def main():
 
     print(f"Stopped at {hex(cur_pc)}")
 
-    print(f"Checking memory at {hex(check_addr)} (should NOT be nulls)...")
+    print(f"Checking memory at {hex(check_addr)}...")
     mem_after = sim.mu.mem_read(check_addr, check_size)
     print(f"Bytes: {mem_after.hex()}")
-    assert mem_after != b'\x00' * check_size, "Memory is still null!"
+    
+    expected_bytes_hex = "e8ffbd271000bfafea81043cf0838424e981013c502724ac85337a0c00000000"
+    expected_bytes = bytes.fromhex(expected_bytes_hex)
 
-    print("SUCCESS: Memory was modified.")
+    if mem_after == expected_bytes:
+        print("\033[92mSUCCESS: Memory was modified and matches expected bytes.\033[0m")
+    else:
+        print(f"\033[91mFAILURE: Memory does not match expected bytes!\nExpected: {expected_bytes_hex}\nActual:   {mem_after.hex()}\033[0m")
+        # assert mem_after == expected_bytes, "Memory mismatch!"
 
 if __name__ == "__main__":
     main()

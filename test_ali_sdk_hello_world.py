@@ -88,12 +88,8 @@ def main():
     
     sim.loadFile("ali_sdk.bin")
     
-    # User requested 1000 instructions. 
-    # Use a safe upper bound or exactly what they asked?
-    # "check each char in realtime ... 1k instr is enough for ali_sdk.bin self test"
-    # I'll use 20000 to be safe for a full boot log if 1000 isn't enough, 
-    # but small enough to be fast.
-    sim.run(max_instructions=200000)
+    # 50k is enough, tested for this specific bin
+    sim.run(max_instructions=50000)
     
     verifier.finish()
 
