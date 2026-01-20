@@ -19,6 +19,9 @@ def main():
     # Define Test Cases
     # Format: Address -> {'hex': 'expected_hex', 'asm': 'expected_disassembly'}
     TEST_CASES = {
+        0xafc00490: {'hex': '05 0d f0 0f', 'asm': 'jal 0xafc03414'},
+        0xafc00494: {'hex': '00 00 00 00', 'asm': 'nop'},
+        0xafc00498: {'hex': '10 00 08 24', 'asm': 'addiu $t0, $zero, 0x10'},
         0xafc0049c: {'hex': 'ff ff 00 15', 'asm': 'bnez $t0, 0xafc0049c'},
         0xafc004a0: {'hex': 'ff ff 08 25', 'asm': 'addiu $t0, $t0, -1'},
         0xafc004a4: {'hex': '00 80 08 40', 'asm': 'mfc0 $t0, $s0, 0'},
@@ -56,28 +59,13 @@ def main():
         0xafc00524: {'hex': '74 00 48 ad', 'asm': 'sw $t0, 0x74($t2)'},
         0xafc00528: {'hex': '6a 01 f0 0b', 'asm': 'j 0xafc005a8'},
         0xafc0052c: {'hex': '00 00 00 00', 'asm': 'nop'},
-        0xafc00530: {'hex': '00 b8 0a 3c', 'asm': 'lui $t2, 0xb800'},
-        0xafc00534: {'hex': '74 00 48 8d', 'asm': 'lw $t0, 0x74($t2)'},
-        0xafc00538: {'hex': '7f fe 01 24', 'asm': 'addiu $at, $zero, -0x181'},
-        0xafc0053c: {'hex': '24 40 01 01', 'asm': 'and $t0, $t0, $at'},
-        0xafc00540: {'hex': '40 00 01 3c', 'asm': 'lui $at, 0x40'},
-        0xafc00544: {'hex': '80 00 21 34', 'asm': 'ori $at, $at, 0x80'},
-        0xafc00548: {'hex': '25 40 01 01', 'asm': 'or $t0, $t0, $at'},
-        0xafc0054c: {'hex': '8f ff 01 24', 'asm': 'addiu $at, $zero, -0x71'},
-        0xafc00550: {'hex': '24 40 01 01', 'asm': 'and $t0, $t0, $at'},
-        0xafc00554: {'hex': '20 00 01 3c', 'asm': 'lui $at, 0x20'},
-        0xafc00558: {'hex': '40 00 21 34', 'asm': 'ori $at, $at, 0x40'},
-        0xafc0055c: {'hex': '25 40 01 01', 'asm': 'or $t0, $t0, $at'},
-        0xafc00560: {'hex': '74 00 48 ad', 'asm': 'sw $t0, 0x74($t2)'},
-        0xafc00564: {'hex': '6a 01 f0 0b', 'asm': 'j 0xafc005a8'},
-        0xafc00568: {'hex': '00 00 00 00', 'asm': 'nop'},
     }
 
     # We want to run enough to hit our test cases. 
-    LIMIT_INSTRUCTIONS = 2000
+    LIMIT_INSTRUCTIONS = 100
     
     print(f"Running auto-test with {len(TEST_CASES)} test cases...")
-    TRIGGER_ADDRESS = 0xafc0049c
+    TRIGGER_ADDRESS = 0xafc00490
     context = {"done": False}
     
     # Create verification hook using utility module

@@ -3,6 +3,7 @@ from unicorn import *
 from unicorn.mips_const import *
 from mips16_decoder import MIPS16Decoder
 import sys
+from test_util_verifyAssembly import create_verification_hook, print_test_summary, run_until_trigger
 
 def main():
     # Initialize simulator
@@ -95,12 +96,6 @@ def main():
         0x81E84338: {"hex": "06 d2", "asm": "sw       v0,0x18(sp)"},
     }
 
-    stats = {
-        "pass": 0,
-        "fail": 0,
-        "checked": set() # Avoid double counting if loop hits same addr
-    }
-    
     # We want to run enough to hit our test cases. 
     LIMIT_INSTRUCTIONS = 20000000 
     
@@ -108,103 +103,23 @@ def main():
     TRIGGER_ADDRESS = 0x81E84280
     context = {"done": False}
     
-    def hook_code(uc, address, size, user_data):
-        if address == TRIGGER_ADDRESS:
-            # Stats tracking for this run
-            run_stats = {"pass": 0, "fail": 0}
-            
-            # Get Context - large enough to cover all our test cases
-            # We want to see from 0x81E84280 down to 0x81E842A2 and slightly beyond
-            instrs = sim.get_instructions_around_pc(address, before=15, after=80)
-            
-            for i in instrs:
-                i_addr = i['address']
-                
-                # Default formatting
-                hex_str = f"{i['bytes']:<11}"
-                asm_str = f"{i['mnemonic']:<8} {i['operands']}"
-                addr_str = f"0x{i_addr:08X}"
-                
-                # Check if this specific instruction is a test case
-                status_str = "INFO"
-                color_start = ""
-                color_end = ""
-                
-                if i_addr in TEST_CASES:
-                    stats['checked'].add(i_addr)
-                    expected = TEST_CASES[i_addr]
-                    
-                    # Validate
-                    act_hex_spaced = i['bytes'].strip()
-                    exp_hex_spaced = expected['hex'].strip()
-                    
-                    act_asm_norm = ' '.join(asm_str.split())
-                    exp_asm_norm = ' '.join(expected['asm'].split())
-                    
-                    hex_match = (act_hex_spaced == exp_hex_spaced)
-                    asm_match = (act_asm_norm == exp_asm_norm)
-                    
-                    if hex_match and asm_match:
-                        status_str = "PASS"
-                        color_start = "\033[92m"
-                        run_stats['pass'] += 1
-                        stats['pass'] += 1
-                    else:
-                        status_str = "FAIL"
-                        color_start = "\033[91m"
-                        run_stats['fail'] += 1
-                        stats['fail'] += 1
-                
-                color_end = "\033[0m" if status_str != "INFO" else ""
-                
-                print(f"{color_start}{status_str:<8}{color_end} {addr_str}   {hex_str:<20} {asm_str}")
-                
-                if status_str == "FAIL":
-                     if i_addr in TEST_CASES:
-                         print(f"         Expected Hex: {TEST_CASES[i_addr]['hex']}")
-                         print(f"         Expected Asm: {TEST_CASES[i_addr]['asm']}")
-
-            print("-" * 80)
-            
-            # We are done after one check
-            context["done"] = True
-            uc.emu_stop()
-
+    # Create verification hook using utility module
+    hook_code, stats = create_verification_hook(
+        sim, 
+        TEST_CASES, 
+        TRIGGER_ADDRESS, 
+        context, 
+        before=15, 
+        after=80
+    )
+    
     sim.mu.hook_add(UC_HOOK_CODE, hook_code)
 
-    # Run Loop
-    end_addr = sim.base_addr + sim.rom_size
-    cur_pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    steps = 0
-    
     # Run until trigger or limit
-    while cur_pc < end_addr and steps < LIMIT_INSTRUCTIONS:
-        if context.get("done", False):
-            break
-            
-        sim.apply_manual_fixes()
-        sim.invalidate_jit(cur_pc)
-        try:
-            sim.mu.emu_start(cur_pc, end_addr) 
-        except UcError:
-            pass 
-        
-        cur_pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-        steps += 1 # Rough counting blocks
+    run_until_trigger(sim, context, LIMIT_INSTRUCTIONS)
 
-
-    print("-" * 80)
-    print(f"Test Finished. PASS: {stats['pass']}, FAIL: {stats['fail']}, Total: {len(TEST_CASES)}")
-    
-    missing = set(TEST_CASES.keys()) - stats['checked']
-    if missing:
-        print("\033[93m" + "MISSING TEST CASES (Not reached in execution window):" + "\033[0m")
-        for addr in sorted(missing):
-            print(f"\033[93mMISSING  0x{addr:08X}   Expected: {TEST_CASES[addr]['asm']}\033[0m")
-    
-    if stats['fail'] > 0 or len(missing) > 0:
-        sys.exit(1)
-    sys.exit(0)
+    exit_code = print_test_summary(stats, TEST_CASES)
+    sys.exit(exit_code)
 
 if __name__ == "__main__":
     main()
