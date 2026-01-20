@@ -3,7 +3,7 @@ from unicorn import *
 from unicorn.mips_const import *
 from mips16_decoder import MIPS16Decoder
 import sys
-from test_util_verifyAssembly import create_verification_hook, print_test_summary, run_until_trigger
+from util_testVerifyAssembly import create_verification_hook, print_test_summary, run_until_trigger
 
 def main():
     # Initialize simulator
