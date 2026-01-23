@@ -142,21 +142,21 @@ class MIPSSimulatorGUI:
     # Execution Control
     # -------------------------------------------------------------------------
     def execute_single_instruction(self):
-        """Execute one instruction using the backend"""
+        """Execute one instruction using the new stepping API"""
         try:
             pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-            if pc in self.breakpoints:
-                # Use special step helper
-                self._step_over_breakpoint()
-            else:
-                self.sim.runStep()
-                
+            
+            # Use the new stepping API
+            result = self.sim.step()
+            
             self.check_watches()
             # Update UI immediately for single step
             self.update_ui_safe()
             return True
         except Exception as e:
-            self.log(f"Step error: {e}")
+            import traceback
+            self.log(f"Step error at PC=0x{pc:08X}: {e}")
+            self.log(f"Traceback: {traceback.format_exc()}")
             return False
 
     def step_into(self, event=None):
@@ -216,7 +216,7 @@ class MIPSSimulatorGUI:
         self.run_continuous(stop_at_temp=True)
 
     def run_continuous(self, stop_at_temp=False):
-        """Run execution loop"""
+        """Run execution loop using the new stepping API"""
         if self.is_running: return
         
         if not stop_at_temp:
@@ -232,39 +232,38 @@ class MIPSSimulatorGUI:
                 if current_pc in self.breakpoints:
                      self._step_over_breakpoint()
                 
+                step_count = 0
                 while self.is_running and not self.paused:
-                    # 1. Apply manual fixes (LUI etc) needed by the backend
-                    self.sim.apply_manual_fixes()
-                    
-                    # 2. Get PC and invalidate JIT for self-modifying code support
-                    current_pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-                    self.sim.invalidate_jit(current_pc)
-                    
-                    # 3. Run a chunk of instructions
-                    # Use a reasonable block size to keep UI responsive-ish
-                    CHUNK_SIZE = 10000 
-                    end_addr = self.sim.base_addr + self.sim.rom_size
-                    
+                    # Execute one step using the new API
                     try:
-                        self.sim.mu.emu_start(current_pc, end_addr, count=CHUNK_SIZE)
-                    except UcError:
-                        # Error or Stop request?
-                        # If stopped by hook, it's fine.
-                        pass
-                    
-                    # 4. Check status
-                    # If we hit a breakpoint hook, it sets self.is_running = False
-                    if not self.is_running or self.paused:
-                        break
+                        result = self.sim.step()
+                        step_count += 1
                         
-                    # 5. Check watches occasionally
-                    if self.sim.instruction_count % 50000 < CHUNK_SIZE:
-                        if self.check_watches():
+                        # Check if we hit a breakpoint
+                        if result.next_pc in self.breakpoints:
+                            self.log(f"Breakpoint hit at 0x{result.next_pc:08X}")
                             self.is_running = False
                             self.paused = True
                             break
-                        # Periodic UI update
-                        self.root.after(0, self.update_ui_safe)
+                        
+                        # Check temp breakpoints (for step over/out)
+                        if result.next_pc in self.temp_breakpoints:
+                            self.is_running = False
+                            break
+                        
+                        # Periodic UI updates (every 1000 steps to keep responsive)
+                        if step_count % 1000 == 0:
+                            if self.check_watches():
+                                self.is_running = False
+                                self.paused = True
+                                break
+                            # Update UI
+                            self.root.after(0, self.update_ui_safe)
+                            
+                    except Exception as e:
+                        self.log(f"Step error: {e}")
+                        self.is_running = False
+                        break
                         
             except Exception as e:
                 self.log(f"Execution Error: {e}")

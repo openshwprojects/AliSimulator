@@ -2,7 +2,33 @@ from unicorn import *
 from unicorn.mips_const import *
 from capstone import *
 import sys
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 from mips16_decoder import MIPS16Decoder
+from mips16_engine import MIPS16Engine, ExecutionResult
+
+class ISAMode(Enum):
+    """ISA mode enumeration"""
+    MIPS32 = 'mips32'
+    MIPS16 = 'mips16'
+
+
+@dataclass
+class StepResult:
+    """Result of a single step execution"""
+    address: int
+    instruction: str
+    operands: str
+    next_pc: int
+    mode_before: str
+    mode_after: str
+    is_branch: bool = False
+    is_call: bool = False
+    is_return: bool = False
+    mode_switched: bool = False
+    instruction_size: int = 4
+
 
 class AliMipsSimulator:
     def __init__(self, rom_size=8*1024*1024, ram_size=128*1024*1024, log_handler=None):
@@ -24,9 +50,19 @@ class AliMipsSimulator:
         self.is_syncing = False
         self.prev_executed_pc = None
         self.current_executed_pc = None
+        
+        # NEW: Explicit ISA mode tracking
+        self.isa_mode = ISAMode.MIPS32
+        
+        # Call stack tracking for step_out
+        self.call_stack = []
+        
+        # Debug flag - only log after MIPS16 mode entered
+        self.debug_enabled = False
 
         self._init_unicorn()
         self._init_capstone()
+        self._init_mips16_engine()
 
         self.gpr_map = [
             UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0, UC_MIPS_REG_V1,
@@ -126,6 +162,33 @@ class AliMipsSimulator:
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
+    
+    def _init_mips16_engine(self):
+        """Initialize native MIPS16 execution engine"""
+        self.mips16_engine = MIPS16Engine(
+            memory_reader=self._mem_read_callback,
+            memory_writer=self._mem_write_callback,
+            register_reader=self._reg_read_callback,
+            register_writer=self._reg_write_callback
+        )
+    
+    def _mem_read_callback(self, address, size):
+        """Memory read callback for MIPS16 engine"""
+        return self.mu.mem_read(address, size)
+    
+    def _mem_write_callback(self, address, data):
+        """Memory write callback for MIPS16 engine"""
+        self.mu.mem_write(address, data)
+    
+    def _reg_read_callback(self, reg_name):
+        """Register read callback for MIPS16 engine"""
+        reg_id = self._get_reg_id(reg_name)
+        return self.mu.reg_read(reg_id)
+    
+    def _reg_write_callback(self, reg_name, value):
+        """Register write callback for MIPS16 engine"""
+        reg_id = self._get_reg_id(reg_name)
+        self.mu.reg_write(reg_id, value & 0xFFFFFFFF)
 
     def _get_reg_id(self, reg_name):
         reg_map = {
@@ -237,6 +300,34 @@ class AliMipsSimulator:
             uc.emu_stop()
 
     def _hook_instruction_fix(self, uc, address, size, user_data):
+        # JALX Support - Unicorn doesn't support JALX, so we emulate it manually
+        if size == 4:
+            try:
+                insn_bytes = uc.mem_read(address, 4)
+                insn = int.from_bytes(insn_bytes, byteorder='little')
+                opcode = (insn >> 26) & 0x3F
+                
+                # JALX opcode is 0x1D (29)
+                if opcode == 0x1D:
+                    # Extract target address (26-bit)
+                    target_index = insn & 0x3FFFFFF
+                    target_addr = (address & 0xF0000000) | (target_index << 2)
+                    
+                    # Save return address
+                    return_addr = address + 8  # PC+8 in delay slot
+                    uc.reg_write(UC_MIPS_REG_RA, return_addr)
+                    
+                    # Jump to target (MIPS16 mode - target is even)
+                    uc.reg_write(UC_MIPS_REG_PC, target_addr)
+                    
+                    self.log(f"[DEBUG] Manual JALX: 0x{address:08X} -> 0x{target_addr:08X}, RA=0x{return_addr:08X}")
+                    
+                    # Stop emulation to let our step() handle the mode switch
+                    uc.emu_stop()
+                    return
+            except:
+                pass
+        
         # MIPS16 Support
         if size == 2:
             try:
@@ -519,6 +610,223 @@ class AliMipsSimulator:
             self.log(f"PC at error: {hex(self.mu.reg_read(UC_MIPS_REG_PC))}")
         except Exception as e:
             self.log(f"Error: {e}")
+    
+    # NEW: Unified Stepping APIs
+    
+    def step(self) -> StepResult:
+        """
+        Execute one instruction in the current ISA mode
+        
+        Returns:
+            StepResult with execution details
+        """
+        pc = self.mu.reg_read(UC_MIPS_REG_PC)
+        mode_before = self.isa_mode.value
+        
+        # DEBUG: Log current mode (only if debug enabled)
+        if self.debug_enabled:
+            self.log(f"[DEBUG] step() at PC=0x{pc:08X}, mode={mode_before}")
+        
+        if self.isa_mode == ISAMode.MIPS16:
+            result = self._step_mips16(pc)
+        else:
+            result = self._step_mips32(pc)
+        
+        # Update mode if switched
+        if result.mode_switched:
+            self.isa_mode = ISAMode.MIPS32 if result.mode_after == 'mips32' else ISAMode.MIPS16
+            
+            # Enable debug logging when entering MIPS16 for first time
+            if result.mode_after == 'mips16' and not self.debug_enabled:
+                self.debug_enabled = True
+                self.log("[DEBUG] MIPS16 mode entered - enabling debug logging")
+            
+            if self.debug_enabled:
+                self.log(f"[DEBUG] Mode switched: {result.mode_before} -> {result.mode_after}")
+        
+        # Update instruction counter
+        self.instruction_count += 1
+        
+        # Track call stack for step_out
+        if result.is_call:
+            self.call_stack.append(result.address)
+        elif result.is_return and self.call_stack:
+            self.call_stack.pop()
+        
+        return result
+    
+    def step_into(self) -> StepResult:
+        """
+        Step into function calls (same as step())
+        
+        Returns:
+            StepResult with execution details
+        """
+        return self.step()
+    
+    def step_over(self) -> StepResult:
+        """
+        Step over function calls (execute entire function if next instruction is a call)
+        
+        Returns:
+            StepResult with execution details
+        """
+        # Execute one step
+        result = self.step()
+        
+        # If it's a call, keep executing until we return
+        if result.is_call:
+            return_address = result.next_pc
+            max_steps = 100000  # Safety limit
+            steps = 0
+            
+            while steps < max_steps:
+                current_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                if current_pc == return_address:
+                    # We've returned from the call
+                    break
+                
+                step_result = self.step()
+                steps += 1
+                
+                # If we hit a breakpoint or stop condition, return immediately
+                if self.stop_instr and current_pc == self.stop_instr:
+                    break
+        
+        return result
+    
+    def step_out(self) -> StepResult:
+        """
+        Step out of current function (execute until return)
+        
+        Returns:
+            StepResult with execution details
+        """
+        initial_stack_depth = len(self.call_stack)
+        max_steps = 100000  # Safety limit
+        steps = 0
+        last_result = None
+        
+        while steps < max_steps:
+            last_result = self.step()
+            steps += 1
+            
+            # Check if we've returned from the function
+            if len(self.call_stack) < initial_stack_depth:
+                break
+            
+            # If we hit a stop condition, break
+            current_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+            if self.stop_instr and current_pc == self.stop_instr:
+                break
+        
+        return last_result if last_result else StepResult(
+            address=self.mu.reg_read(UC_MIPS_REG_PC),
+            instruction="???",
+            operands="",
+            next_pc=self.mu.reg_read(UC_MIPS_REG_PC),
+            mode_before=self.isa_mode.value,
+            mode_after=self.isa_mode.value
+        )
+    
+    def _step_mips32(self, pc: int) -> StepResult:
+        """Execute one MIPS32 instruction using Unicorn"""
+        mode_before = 'mips32'
+        
+        # Read instruction
+        insn_bytes = self.mu.mem_read(pc, 4)
+        
+        # Decode for display
+        mnemonic = "???"
+        operands = ""
+        try:
+            disasm = list(self.md.disasm(insn_bytes, pc))
+            if disasm:
+                mnemonic = disasm[0].mnemonic
+                operands = disasm[0].op_str
+        except:
+            pass
+        
+        # DEBUG: Log JALX instructions (only if debug enabled)
+        if mnemonic == 'jalx' and self.debug_enabled:
+            self.log(f"[DEBUG] Executing JALX at 0x{pc:08X} -> target {operands}")
+        
+        # Execute one instruction with Unicorn
+        end_addr = self.base_addr + self.rom_size
+        try:
+            self.apply_manual_fixes()
+            self.invalidate_jit(pc)
+            self.mu.emu_start(pc, end_addr, count=1)
+        except Exception as e:
+            pass  # Continue even on error
+        
+        next_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+        
+        # DEBUG: Log PC after JALX (only if debug enabled)
+        if mnemonic == 'jalx' and self.debug_enabled:
+            self.log(f"[DEBUG] After JALX: PC = 0x{next_pc:08X}, switching to MIPS16 mode")
+        
+        # Check for mode switch (JALX instruction)
+        mode_after = mode_before
+        mode_switched = False
+        if mnemonic == 'jalx':
+            mode_after = 'mips16'
+            mode_switched = True
+        
+        # Determine instruction type
+        is_call = mnemonic in ['jal', 'jalr', 'jalx']
+        is_return = mnemonic in ['jr'] and 'ra' in operands
+        is_branch = mnemonic.startswith('b') or mnemonic.startswith('j')
+        
+        return StepResult(
+            address=pc,
+            instruction=mnemonic,
+            operands=operands,
+            next_pc=next_pc,
+            mode_before=mode_before,
+            mode_after=mode_after,
+            is_branch=is_branch,
+            is_call=is_call,
+            is_return=is_return,
+            mode_switched=mode_switched,
+            instruction_size=4
+        )
+    
+    def _step_mips16(self, pc: int) -> StepResult:
+        """Execute one MIPS16 instruction using native engine"""
+        mode_before = 'mips16'
+        
+        # Execute using native MIPS16 engine
+        exec_result = self.mips16_engine.execute(pc)
+        
+        # Decode for display
+        if exec_result.instruction_size == 4:
+            insn_bytes = self.mu.mem_read(pc, 4)
+        else:
+            insn_bytes = self.mu.mem_read(pc, 2)
+        
+        mnemonic, operands = MIPS16Decoder.decode(insn_bytes, pc)
+        
+        # Update PC
+        self.mu.reg_write(UC_MIPS_REG_PC, exec_result.next_pc)
+        
+        # Determine mode after execution
+        mode_after = exec_result.mode_switch if exec_result.mode_switch else mode_before
+        mode_switched = exec_result.mode_switch is not None
+        
+        return StepResult(
+            address=pc,
+            instruction=mnemonic,
+            operands=operands,
+            next_pc=exec_result.next_pc,
+            mode_before=mode_before,
+            mode_after=mode_after,
+            is_branch=exec_result.is_branch,
+            is_call=exec_result.is_call,
+            is_return=exec_result.is_return,
+            mode_switched=mode_switched,
+            instruction_size=exec_result.instruction_size
+        )
 
     def skipInstruction(self):
         """Skip the current instruction by advancing PC by 4"""
