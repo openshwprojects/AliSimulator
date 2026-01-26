@@ -46,36 +46,43 @@ def test_step_approach():
     sim = AliMipsSimulator()
     sim.loadFile("ali_sdk.bin")
     
-    # We don't necessarily NEED to add breakpoints for manual stepping, 
-    # but let's see if adding them interferes.
+    # Add breakpoints just to ensure they don't block manual stepping
     sim.addBreakpoint(BP1)
+    sim.addBreakpoint(BP2)
     
+    # 1. Step until BP1
     print(f"Stepping manually until {hex(BP1)}...")
-    
     max_steps = 100
     steps = 0
-    hit = False
-    
+    hit_bp1 = False
     while steps < max_steps:
-        res = sim.step()
+        sim.step()
         steps += 1
-        # Check if current instruction (address about to be executed or just executed?)
-        # sim.step() returns result for the instruction AT address.
-        # After sim.step(), the PC in mu is already at the NEXT instruction.
-        # But res.address is the one we just did.
-        
-        # In a real debugger, we stop BEFORE executing the instruction at BP.
-        # However, our sim.run() stops WHEN _hook_code hits the address.
-        
-        # Let's check the PC from registers after each step.
         pc = sim.mu.reg_read(unicorn.mips_const.UC_MIPS_REG_PC)
         if pc == BP1:
             print(f"SUCCESS: Reached PC {hex(pc)} in {steps} steps")
-            hit = True
+            hit_bp1 = True
             break
             
-    if not hit:
+    if not hit_bp1:
         print(f"FAILURE: Did not reach {hex(BP1)} within {max_steps} steps")
+        return False
+
+    # 2. Step until BP2
+    print(f"Stepping manually until {hex(BP2)}...")
+    hit_bp2 = False
+    start_steps = steps
+    while steps < max_steps:
+        sim.step()
+        steps += 1
+        pc = sim.mu.reg_read(unicorn.mips_const.UC_MIPS_REG_PC)
+        if pc == BP2:
+            print(f"SUCCESS: Reached PC {hex(pc)} in {steps - start_steps} more steps (Total: {steps})")
+            hit_bp2 = True
+            break
+            
+    if not hit_bp2:
+        print(f"FAILURE: Did not reach {hex(BP2)} within {max_steps} steps")
         return False
         
     return True
