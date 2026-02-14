@@ -59,6 +59,12 @@ class AliMipsSimulator:
         
         # Debug flag - only log after MIPS16 mode entered
         self.debug_enabled = False
+        
+        # Breakpoints
+        self.breakpoints = set()
+        self.is_stepping = False
+        self.pc_history = []
+        self.history_size = 50
 
         self._init_unicorn()
         self._init_capstone()
@@ -210,6 +216,15 @@ class AliMipsSimulator:
     def setUartHandler(self, handler):
         self.uart_callback = handler
 
+    def addBreakpoint(self, address):
+        self.breakpoints.add(address)
+        self.log(f"Breakpoint added at 0x{address:08X}")
+
+    def removeBreakpoint(self, address):
+        if address in self.breakpoints:
+            self.breakpoints.remove(address)
+            self.log(f"Breakpoint removed at 0x{address:08X}")
+
     def log(self, msg):
         if self.log_callback:
             self.log_callback(msg)
@@ -240,9 +255,14 @@ class AliMipsSimulator:
 
     def _hook_mem_invalid(self, uc, access, address, size, value, user_data):
         access_types = {0: "READ", 1: "WRITE", 2: "FETCH", 16: "READ_UNMAPPED", 17: "WRITE_UNMAPPED", 18: "FETCH_UNMAPPED"}
-        self.log(f"\n[!] INVALID MEMORY ACCESS")
-        self.log(f"    Type: {access_types.get(access, access)}")
-        self.log(f"    Address: 0x{address:08X}")
+        
+        if address == 0 and access in [2, 18]: # FETCH or FETCH_UNMAPPED
+            self.log(f"\n[!] STOPPED: Jump to NULL (0x0) detected!")
+        else:
+            self.log(f"\n[!] INVALID MEMORY ACCESS")
+            self.log(f"    Type: {access_types.get(access, access)}")
+            self.log(f"    Address: 0x{address:08X}")
+            
         self.log(f"    Size: {size}")
         self.log(f"    PC: 0x{uc.reg_read(UC_MIPS_REG_PC):08X}")
         return False
@@ -262,6 +282,11 @@ class AliMipsSimulator:
         if not hasattr(self, 'current_executed_pc'): self.current_executed_pc = None
         self.prev_executed_pc = self.current_executed_pc
         self.current_executed_pc = address
+
+        # PC History
+        self.pc_history.append(address)
+        if len(self.pc_history) > self.history_size:
+            self.pc_history.pop(0)
 
         # Track visit count
         if address not in self.visit_counts:
@@ -290,10 +315,18 @@ class AliMipsSimulator:
                         self.log(f"0x{i.address:08X}: {bytes_str:<15} {i.mnemonic}\t{i.op_str}{loop_str}")
             except: pass
 
-        if self.stop_instr is not None and address == self.stop_instr:
-            self.log(f"\n[STOP] Reached stop address: 0x{address:08X}")
-            uc.emu_stop()
-            return
+        if not self.is_stepping:
+            hit = False
+            if self.stop_instr is not None and address == self.stop_instr:
+                hit = True
+                self.log(f"\n[STOP] Reached stop address: 0x{address:08X}")
+            elif address in self.breakpoints:
+                hit = True
+                self.log(f"\n[BREAKPOINT] Hit at 0x{address:08X}")
+            
+            if hit:
+                uc.emu_stop()
+                return
             
         self.instruction_count += 1
         if self.max_instructions and self.instruction_count >= self.max_instructions:
@@ -554,12 +587,12 @@ class AliMipsSimulator:
         return False
 
     def run(self, max_instructions=None):
-        self.log(f"Starting emulation at {hex(self.base_addr)}...")
+        cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+        self.log(f"Starting emulation at {hex(cur_pc)}...")
         
         if max_instructions is not None:
             self.max_instructions = max_instructions
         
-        cur_pc = self.base_addr
         end_addr = self.base_addr + self.rom_size
         
         try:
@@ -573,14 +606,36 @@ class AliMipsSimulator:
                 
                 # MIPS16 Mode Force
                 start_pc = cur_pc
+                
+                # If we are currently AT a breakpoint/stop address, we must step over it
+                # to avoid hitting it immediately in emu_start.
+                if cur_pc in self.breakpoints or (self.stop_instr is not None and cur_pc == self.stop_instr):
+                    # self.log(f"[DEBUG] Stepping over breakpoint at 0x{cur_pc:08X}")
+                    self.step()
+                    cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                    if self.max_instructions and self.instruction_count >= self.max_instructions:
+                        break
+                    if cur_pc >= end_addr or (cur_pc & ~1) == 0:
+                        break
+                    start_pc = cur_pc
+
                 if self.is_mips16_addr(start_pc):
                     start_pc |= 1
 
                 # Run!
                 self.mu.emu_start(start_pc, end_addr)
                 
-                # If we stopped, update PC and loop
+                # If we stopped, update PC
                 cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                
+                # If we hit a breakpoint or stop address, break the loop to return to caller
+                if cur_pc in self.breakpoints or (self.stop_instr is not None and cur_pc == self.stop_instr):
+                    break
+                    
+                # Stop if PC is NULL
+                if (cur_pc & ~1) == 0:
+                    self.log("[!] Stopped: Jump to NULL")
+                    break
         
         except UcError as e:
             self.log(f"Unicorn Error: {e}")
@@ -603,7 +658,16 @@ class AliMipsSimulator:
                  start_pc |= 1
                  
              # Run 1 instruction
-             self.mu.emu_start(start_pc, end_addr, count=1)
+             self.is_stepping = True
+             try:
+                 self.mu.emu_start(start_pc, end_addr, count=1)
+             finally:
+                 self.is_stepping = False
+             
+             # Stop if PC is NULL
+             new_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+             if (new_pc & ~1) == 0:
+                 self.log("[!] Stopped: Jump to NULL")
              
         except UcError as e:
             self.log(f"Unicorn Error: {e}")
@@ -623,14 +687,34 @@ class AliMipsSimulator:
         pc = self.mu.reg_read(UC_MIPS_REG_PC)
         mode_before = self.isa_mode.value
         
+        # AUTO-MODE SWITCH: If we are in a known MIPS16 address range but currently in MIPS32 mode,
+        # switch to MIPS16. This handles cases where we might have jumped/reset into MIPS16
+        # without an explicit JALX, ensuring 'Run' and 'Step' behave consistently.
+        if self.isa_mode == ISAMode.MIPS32 and self.is_mips16_addr(pc):
+            self.isa_mode = ISAMode.MIPS16
+            if self.debug_enabled:
+                self.log(f"[DEBUG] Auto-switched to MIPS16 mode at 0x{pc:08X}")
+
         # DEBUG: Log current mode (only if debug enabled)
         if self.debug_enabled:
-            self.log(f"[DEBUG] step() at PC=0x{pc:08X}, mode={mode_before}")
+            self.log(f"[DEBUG] step() at PC=0x{pc:08X}, mode={self.isa_mode.value}")
         
-        if self.isa_mode == ISAMode.MIPS16:
-            result = self._step_mips16(pc)
-        else:
-            result = self._step_mips32(pc)
+        self.is_stepping = True
+        try:
+            if self.isa_mode == ISAMode.MIPS16:
+                result = self._step_mips16(pc)
+            else:
+                result = self._step_mips32(pc)
+        finally:
+            self.is_stepping = False
+        
+        # Detect and stop on jump to NULL (0x0)
+        # We check result.next_pc & ~1 because MIPS16 targets might have LSB set
+        if (result.next_pc & ~1) == 0:
+            self.log(f"\n[!] STOPPED: Program is about to jump to 0x0 from 0x{pc:08X}")
+            self.log(f"    Instruction: {result.instruction} {result.operands}")
+            # Raise exception to stop continuous execution if running
+            raise Exception(f"Jump to NULL (0x0) detected at 0x{pc:08X}: {result.instruction} {result.operands}")
         
         # Update mode if switched
         if result.mode_switched:
