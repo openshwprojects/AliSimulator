@@ -99,6 +99,11 @@ def discover_test_files():
         if "util" not in file_path.stem:
             test_files.append(str(file_path))
     
+    # Also include the specific regression test requested
+    reg_test = current_dir / "run_dump_to_print_bl_flash_init.py"
+    if reg_test.exists():
+        test_files.append(str(reg_test))
+    
     return sorted(test_files)
 
 

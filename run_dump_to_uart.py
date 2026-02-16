@@ -13,8 +13,9 @@ from unicorn.mips_const import *
 # ─── Configuration ───────────────────────────────────────────────────
 FIRMWARE = "dump.bin"
 MAX_INSTRUCTIONS = 100_000_000      # safety cap
+TRACE_AFTER = 667_900               # just before crash at 668019
 BATCH_SIZE = 100_000                # instructions per run() batch
-STALL_WINDOW = 10                   # same PC for N batches = stall
+STALL_WINDOW = 0                    # disabled - busy-wait loops are expected
 
 # ─── UART capture ────────────────────────────────────────────────────
 uart_output = []
@@ -37,6 +38,7 @@ def main():
 
     sim = AliMipsSimulator(log_handler=lambda msg: None)
     sim.setUartHandler(on_uart)
+    trace_enabled = False
 
     try:
         sim.loadFile(FIRMWARE)
@@ -65,9 +67,16 @@ def main():
                 errors.append(f"Step {total_steps}: PC is NULL")
                 break
 
+            # Enable tracing near crash point
+            if not trace_enabled and total_steps >= TRACE_AFTER:
+                trace_enabled = True
+                sim.trace_instructions = True
+                sim.log_handler = print
+                print(f"  [Trace enabled at {total_steps:,} steps]")
+
             # Run a batch
             remaining = MAX_INSTRUCTIONS - total_steps
-            batch = min(BATCH_SIZE, remaining)
+            batch = min(500 if trace_enabled else BATCH_SIZE, remaining)
             count_before = sim.instruction_count
 
             try:
