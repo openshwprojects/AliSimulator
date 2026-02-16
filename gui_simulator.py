@@ -146,8 +146,13 @@ class MIPSSimulatorGUI:
         try:
             pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
             
-            # Use the new stepping API
-            result = self.sim.step()
+            # If on a breakpoint, ignore it for this single step
+            if pc in self.breakpoints:
+                self.ignore_bp_addr = pc
+            try:
+                result = self.sim.step()
+            finally:
+                self.ignore_bp_addr = None
             
             self.check_watches()
             # Update UI immediately for single step
@@ -216,7 +221,7 @@ class MIPSSimulatorGUI:
         self.run_continuous(stop_at_temp=True)
 
     def run_continuous(self, stop_at_temp=False):
-        """Run execution loop using the new stepping API"""
+        """Run execution loop using sim.run() for native speed"""
         if self.is_running: return
         
         if not stop_at_temp:
@@ -232,38 +237,24 @@ class MIPSSimulatorGUI:
                 if current_pc in self.breakpoints:
                      self._step_over_breakpoint()
                 
-                step_count = 0
+                # Run in batches for UI responsiveness.
+                # Sync GUI breakpoints to simulator so sim.run()'s internal loop
+                # correctly stops (otherwise it re-enters emu_start after hook's emu_stop).
+                BATCH_SIZE = 50000
                 while self.is_running and not self.paused:
-                    # Execute one step using the new API
-                    try:
-                        result = self.sim.step()
-                        step_count += 1
-                        
-                        # Check if we hit a breakpoint
-                        if result.next_pc in self.breakpoints:
-                            self.log(f"Breakpoint hit at 0x{result.next_pc:08X}")
-                            self.is_running = False
-                            self.paused = True
-                            break
-                        
-                        # Check temp breakpoints (for step over/out)
-                        if result.next_pc in self.temp_breakpoints:
-                            self.is_running = False
-                            break
-                        
-                        # Periodic UI updates (every 1000 steps to keep responsive)
-                        if step_count % 1000 == 0:
-                            if self.check_watches():
-                                self.is_running = False
-                                self.paused = True
-                                break
-                            # Update UI
-                            self.root.after(0, self.update_ui_safe)
-                            
-                    except Exception as e:
-                        self.log(f"Step error: {e}")
+                    self.sim.breakpoints = set(self.breakpoints.keys()) | self.temp_breakpoints
+                    self.sim.max_instructions = self.sim.instruction_count + BATCH_SIZE
+                    self.sim.run()
+                    self.sim.breakpoints = set()  # Clear after run
+                    
+                    # Check watches between batches
+                    if self.check_watches():
                         self.is_running = False
+                        self.paused = True
                         break
+                    
+                    # Update UI between batches
+                    self.root.after(0, self.update_ui_safe)
                         
             except Exception as e:
                 self.log(f"Execution Error: {e}")

@@ -6,7 +6,6 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
 from mips16_decoder import MIPS16Decoder
-from mips16_engine import MIPS16Engine, ExecutionResult
 
 class ISAMode(Enum):
     """ISA mode enumeration"""
@@ -39,7 +38,7 @@ class AliMipsSimulator:
         self.md = None
         self.uart_callback = None
         self.log_callback = log_handler
-        self.last_lui_addr = None
+
         self.instruction_count = 0
         self.visit_counts = {}
         self.instruction_sizes = {}
@@ -66,9 +65,14 @@ class AliMipsSimulator:
         self.pc_history = []
         self.history_size = 50
 
+        # Simulated CP0 Count register (hardware cycle counter)
+        # Unicorn doesn't expose CP0 Count via reg_read/reg_write, so we track it ourselves.
+        self.cp0_count = 0
+        self._step_count = 0  # Hook-based step counter for precise single-stepping
+
         self._init_unicorn()
         self._init_capstone()
-        self._init_mips16_engine()
+
 
         self.gpr_map = [
             UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0, UC_MIPS_REG_V1,
@@ -84,6 +88,8 @@ class AliMipsSimulator:
     def _init_unicorn(self):
         # Initialize Unicorn (MIPS32 + Little Endian)
         self.mu = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 + UC_MODE_LITTLE_ENDIAN)
+        # Set MIPS32R2 CPU model (24Kf) to match ALI hardware
+        self.mu.ctl_set_cpu_model(UC_CPU_MIPS32_24KF)
         
         # Map memory
         self.log(f"Mapping memory at {hex(self.base_addr)}")
@@ -168,47 +174,6 @@ class AliMipsSimulator:
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
-    
-    def _init_mips16_engine(self):
-        """Initialize native MIPS16 execution engine"""
-        self.mips16_engine = MIPS16Engine(
-            memory_reader=self._mem_read_callback,
-            memory_writer=self._mem_write_callback,
-            register_reader=self._reg_read_callback,
-            register_writer=self._reg_write_callback
-        )
-    
-    def _mem_read_callback(self, address, size):
-        """Memory read callback for MIPS16 engine"""
-        return self.mu.mem_read(address, size)
-    
-    def _mem_write_callback(self, address, data):
-        """Memory write callback for MIPS16 engine"""
-        self.mu.mem_write(address, data)
-    
-    def _reg_read_callback(self, reg_name):
-        """Register read callback for MIPS16 engine"""
-        reg_id = self._get_reg_id(reg_name)
-        return self.mu.reg_read(reg_id)
-    
-    def _reg_write_callback(self, reg_name, value):
-        """Register write callback for MIPS16 engine"""
-        reg_id = self._get_reg_id(reg_name)
-        self.mu.reg_write(reg_id, value & 0xFFFFFFFF)
-
-    def _get_reg_id(self, reg_name):
-        reg_map = {
-            'zero': UC_MIPS_REG_ZERO, 'at': UC_MIPS_REG_AT, 'v0': UC_MIPS_REG_V0, 'v1': UC_MIPS_REG_V1,
-            'a0': UC_MIPS_REG_A0, 'a1': UC_MIPS_REG_A1, 'a2': UC_MIPS_REG_A2, 'a3': UC_MIPS_REG_A3,
-            't0': UC_MIPS_REG_T0, 't1': UC_MIPS_REG_T1, 't2': UC_MIPS_REG_T2, 't3': UC_MIPS_REG_T3,
-            't4': UC_MIPS_REG_T4, 't5': UC_MIPS_REG_T5, 't6': UC_MIPS_REG_T6, 't7': UC_MIPS_REG_T7,
-            's0': UC_MIPS_REG_S0, 's1': UC_MIPS_REG_S1, 's2': UC_MIPS_REG_S2, 's3': UC_MIPS_REG_S3,
-            's4': UC_MIPS_REG_S4, 's5': UC_MIPS_REG_S5, 's6': UC_MIPS_REG_S6, 's7': UC_MIPS_REG_S7,
-            't8': UC_MIPS_REG_T8, 't9': UC_MIPS_REG_T9, 'k0': UC_MIPS_REG_K0, 'k1': UC_MIPS_REG_K1,
-            'gp': UC_MIPS_REG_GP, 'sp': UC_MIPS_REG_SP, 'fp': UC_MIPS_REG_FP, 'ra': UC_MIPS_REG_RA,
-            's8': UC_MIPS_REG_FP 
-        }
-        return reg_map.get(reg_name, UC_MIPS_REG_ZERO)
 
     def setLogHandler(self, handler):
         self.log_callback = handler
@@ -278,6 +243,25 @@ class AliMipsSimulator:
 
 
     def _hook_code(self, uc, address, size, user_data):
+        # Increment simulated CP0 Count register (hardware cycle counter)
+        # Real MIPS increments Count every other clock cycle.
+        # Without this, firmware timeout loops polling MFC0 reg 9 never exit.
+        self.cp0_count = (self.cp0_count + 2) & 0xFFFFFFFF
+
+        # Hook-based single-stepping: Unicorn's count=1 counts Translation Blocks,
+        # not individual instructions. For tight MIPS16 loops, a whole loop body
+        # is one TB, so count=1 executes the full loop. To step exactly 1 instruction,
+        # we track how many instructions have fired since emu_start and stop after the first.
+        if self.is_stepping:
+            self._step_count += 1
+            if self._step_count > 1:
+                uc.emu_stop()
+                return
+
+        # NOTE: ISA mode is NOT tracked here from instruction size because it's
+        # unreliable for mode-switching instructions (JALX delay slots etc.).
+        # Mode is determined by _detect_isa_mode() after emu_start() returns.
+
         # Track history for jumps
         if not hasattr(self, 'current_executed_pc'): self.current_executed_pc = None
         self.prev_executed_pc = self.current_executed_pc
@@ -333,148 +317,35 @@ class AliMipsSimulator:
             uc.emu_stop()
 
     def _hook_instruction_fix(self, uc, address, size, user_data):
-        # JALX Support - Unicorn doesn't support JALX, so we emulate it manually
-        if size == 4:
-            try:
-                insn_bytes = uc.mem_read(address, 4)
-                insn = int.from_bytes(insn_bytes, byteorder='little')
-                opcode = (insn >> 26) & 0x3F
-                
-                # JALX opcode is 0x1D (29)
-                if opcode == 0x1D:
-                    # Extract target address (26-bit)
-                    target_index = insn & 0x3FFFFFF
-                    target_addr = (address & 0xF0000000) | (target_index << 2)
-                    
-                    # Save return address
-                    return_addr = address + 8  # PC+8 in delay slot
-                    uc.reg_write(UC_MIPS_REG_RA, return_addr)
-                    
-                    # Jump to target (MIPS16 mode - target is even)
-                    uc.reg_write(UC_MIPS_REG_PC, target_addr)
-                    
-                    self.log(f"[DEBUG] Manual JALX: 0x{address:08X} -> 0x{target_addr:08X}, RA=0x{return_addr:08X}")
-                    
-                    # Stop emulation to let our step() handle the mode switch
-                    uc.emu_stop()
-                    return
-            except:
-                pass
+        # NOTE: JALX and MIPS16 instructions handled natively by Unicorn
         
-        # MIPS16 Support
-        if size == 2:
-            try:
-                insn_bytes = uc.mem_read(address, 2)
-                # Decode using MIPS16Decoder to know what we are dealing with
-                mnemonic, ops = MIPS16Decoder.decode(insn_bytes, address)
-                
-                # Check for unimplemented instructions and emulate them
-                # SEB / ZEB
-                if mnemonic in ["seb", "zeb"]:
-                    reg_name = ops.strip()
-                    reg_id = self._get_reg_id(reg_name)
-                    val = uc.reg_read(reg_id) & 0xFF
-                    
-                    if mnemonic == "seb":
-                        # Sign extend byte
-                        if val & 0x80:
-                            val |= 0xFFFFFF00
-                    # ZEB is just zero extend, which & 0xFF did.
-                    
-                    uc.reg_write(reg_id, val)
-                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
-                    return
-
-                # MOVE
-                elif mnemonic == "move":
-                    # ops: "dest,src"
-                    dest_name, src_name = ops.split(',')
-                    dest_id = self._get_reg_id(dest_name)
-                    src_id = self._get_reg_id(src_name)
-                    
-                    val = uc.reg_read(src_id)
-                    uc.reg_write(dest_id, val)
-                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
-                    return
-
-                # SLTI
-                elif mnemonic == "slti":
-                    # slti rx, imm
-                    rx_name, imm_str = ops.split(',')
-                    rx_id = self._get_reg_id(rx_name)
-                    imm = int(imm_str.strip(), 0)
-                    if imm & 0x8000: imm -= 0x10000 
-                    if imm & 0x80: imm -= 0x100 # Sign extend 8-bit imm
-                    
-                    val = uc.reg_read(rx_id)
-                    # Convert to signed 32-bit for comparison
-                    if val & 0x80000000: val -= 0x100000000
-                    
-                    res = 1 if val < imm else 0
-                    uc.reg_write(UC_MIPS_REG_T8, res) # Result goes to T8
-                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
-                    return
-                
-                # BNEZ
-                elif mnemonic == "bnez":
-                    # bnez rx, offset
-                    rx_name, offset_str = ops.split(',')
-                    rx_id = self._get_reg_id(rx_name)
-                    offset = int(offset_str.strip(), 0)
-                    
-                    val = uc.reg_read(rx_id)
-                    if val != 0:
-                        # Branch taken
-                        # Target = (PC + 2) + offset
-                        target = (address + 2) + offset
-                        uc.reg_write(UC_MIPS_REG_PC, target | 1)
-                    else:
-                        uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
-                    return
-
-                # LW PC-Rel
-                elif mnemonic == "lw" and "(pc)" in ops:
-                    # lw rx, offset(pc)
-                    rx_name, rest = ops.split(',')
-                    offset_str = rest.replace('(pc)', '')
-                    offset = int(offset_str.strip(), 0)
-                    rx_id = self._get_reg_id(rx_name)
-                    
-                    # PC-relative load address: (PC & ~3) + offset
-                    base = (address & 0xFFFFFFFC)
-                    target = base + offset
-                    
-                    data = uc.mem_read(target, 4)
-                    val = int.from_bytes(data, byteorder='little')
-                    uc.reg_write(rx_id, val)
-                    uc.reg_write(UC_MIPS_REG_PC, (address + 2) | 1)
-                    return
-
-            except Exception as e:
-                # self.log(f"MIPS16 Manual Error: {e}")
-                pass
-            
-            # If not handled, return to let Unicorn try (or fail)
+        # Skip non-MIPS32 instructions (MIPS16 handled by Unicorn native)
+        if size != 4:
             return
 
         try:
-            # Optimization: Only read if we need to (check opcode logic first?)
-            # Actually we need to read to know opcode.
             insn_bytes = uc.mem_read(address, 4)
             insn = int.from_bytes(insn_bytes, byteorder='little')
             
             opcode = (insn >> 26) & 0x3F
             rs = (insn >> 21) & 0x1F
             rt = (insn >> 16) & 0x1F
+            rd = (insn >> 11) & 0x1F
             imm = insn & 0xFFFF
             if imm & 0x8000: imm -= 0x10000 
 
-            # LUI
-            if opcode == 0x0F:
-                self.last_lui_addr = address
+            # MFC0: opcode=0x10 (COP0), rs=0x00 (MF)
+            # Intercept reads of CP0 Count register (rd=9).
+            # Unicorn doesn't increment CP0 Count, so firmware polling loops hang.
+            # We set the dest register to our simulated cp0_count, advance PC,
+            # and stop emulation so Unicorn doesn't overwrite with its stale value.
+            if opcode == 0x10 and rs == 0x00 and rd == 9:
+                uc.reg_write(self.gpr_map[rt], self.cp0_count)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
                 uc.emu_stop()
                 return
+
+            # LUI handled natively by Unicorn
 
             base = uc.reg_read(self.gpr_map[rs])
             target = base + imm
@@ -553,29 +424,12 @@ class AliMipsSimulator:
             pass
 
     def apply_manual_fixes(self):
-        if self.last_lui_addr is not None:
-             try:
-                 # Manual LUI fix
-                 insn_bytes = self.mu.mem_read(self.last_lui_addr, 4)
-                 insn = int.from_bytes(insn_bytes, byteorder='little')
-                 rt = (insn >> 16) & 0x1F
-                 imm = insn & 0xFFFF
-                 val = imm << 16
-                 
-                 # print(f"DEBUG: Manual LUI at {hex(self.last_lui_addr)}: rt={rt}, val={hex(val)}")
-                 # print(f"DEBUG: Manual LUI at {hex(self.last_lui_addr)}: rt={rt}, val={hex(val)}")
-                 self.mu.reg_write(self.gpr_map[rt], val)
-             except Exception as e: 
-                 # print(f"DEBUG: LUI fix error: {e}")
-                 pass
-             
-             self.last_lui_addr = None
+        """No-op: kept for API compatibility with test scripts"""
+        pass
 
     def invalidate_jit(self, address):
-         try:
-              insn_data = self.mu.mem_read(address, 4)
-              self.mu.mem_write(address, insn_data)
-         except: pass
+        """No-op: kept for API compatibility with test scripts"""
+        pass
 
     def is_mips16_addr(self, address):
         """Heuristic to check if address is in known MIPS16 region"""
@@ -585,6 +439,79 @@ class AliMipsSimulator:
              if address < 0x81E8E000:
                  return True
         return False
+
+    def _detect_isa_mode(self, pc):
+        """Determine ISA mode by probing bytecode at PC.
+        
+        We cannot rely on tracked isa_mode from _hook_code because emu_stop()
+        can fire at a MIPS16 delay slot of a JALX instruction, leaving
+        isa_mode=MIPS16 even though the CPU has switched to MIPS32 mode.
+        
+        Instead, we read 4 bytes at PC and check if they form a valid MIPS32
+        instruction by examining the opcode field (bits 31-26).
+        """
+        # If address is not in the MIPS16 region, it's definitely MIPS32
+        if not self.is_mips16_addr(pc):
+            return ISAMode.MIPS32
+        
+        # Address IS in the MIPS16 region — but could be a MIPS32 function
+        # that was called via JAL (not JALX) from MIPS32 code.
+        # Probe the bytes to distinguish:
+        try:
+            raw = self.mu.mem_read(pc, 4)
+            word32 = int.from_bytes(raw, byteorder='little')
+            opcode6 = (word32 >> 26) & 0x3F
+            
+            # Known MIPS32 opcodes that appear in this firmware's MIPS32
+            # functions within the MIPS16 address range:
+            #   0x00 = SPECIAL (jr, addu, subu, sll, etc.)
+            #   0x01 = REGIMM (bgez, bltz)
+            #   0x02 = J, 0x03 = JAL
+            #   0x04 = BEQ, 0x05 = BNE, 0x06 = BLEZ, 0x07 = BGTZ
+            #   0x08 = ADDI, 0x09 = ADDIU
+            #   0x0A = SLTI, 0x0B = SLTIU, 0x0C = ANDI, 0x0D = ORI, 0x0E = XORI
+            #   0x0F = LUI
+            #   0x10 = COP0 (MFC0, MTC0)
+            #   0x20 = LB, 0x21 = LH, 0x23 = LW, 0x24 = LBU, 0x25 = LHU
+            #   0x28 = SB, 0x29 = SH, 0x2B = SW
+            #   0x1D = JALX (doesn't appear inside MIPS32 code)
+            #
+            # For MIPS16 code, the first halfword has opcode in bits 15-11.
+            # When read as a 32-bit LE word, bits 31-26 would be arbitrary.
+            #
+            # Strategy: check for MFC0 (opcode=0x10, rs=0x00, rd=9) which is 
+            # the specific instruction at the known MIPS32 function 0x81E8DAEC.
+            # Also check for NOP (0x00000000) and JR RA (0x03E00008).
+            
+            # Check for known specific MIPS32 instruction patterns:
+            if word32 == 0x00000000:  # NOP
+                return ISAMode.MIPS32
+            if word32 == 0x03E00008:  # JR $RA
+                return ISAMode.MIPS32
+            if opcode6 == 0x10 and ((word32 >> 21) & 0x1F) == 0x00:  # MFC0
+                return ISAMode.MIPS32
+            
+            # For the general case: check if this is part of a known MIPS32
+            # sequence. The MIPS32 function at 0x81E8DAEC is:
+            #   MFC0 v0, $9    (40024800)
+            #   NOP * 4
+            #   JR RA          (03E00008)  
+            #   NOP
+            # Any PC between 0x81E8DAEC and 0x81E8DB08 is MIPS32.
+            if 0x81E8DAEC <= pc <= 0x81E8DB08:
+                return ISAMode.MIPS32
+            
+            # Also: MIPS32 code above 0x81E8E000 calls into this range via JAL.
+            # If we detect ADDIU $SP (common function prologue/epilogue), it's MIPS32.
+            if opcode6 == 0x09 and ((word32 >> 16) & 0x1F) == 29:  # ADDIU $sp, ...
+                return ISAMode.MIPS32
+            
+            # Default: trust the address-based heuristic for the MIPS16 region
+            return ISAMode.MIPS16
+            
+        except Exception:
+            # If we can't read bytes, fall back to address heuristic
+            return ISAMode.MIPS16 if self.is_mips16_addr(pc) else ISAMode.MIPS32
 
     def run(self, max_instructions=None):
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
@@ -597,8 +524,7 @@ class AliMipsSimulator:
         
         try:
             while cur_pc < end_addr:
-                self.apply_manual_fixes()
-                self.invalidate_jit(cur_pc)
+
                 
                 # Check for max instruction count stop
                 if self.max_instructions and self.instruction_count >= self.max_instructions:
@@ -619,8 +545,15 @@ class AliMipsSimulator:
                         break
                     start_pc = cur_pc
 
-                if self.is_mips16_addr(start_pc):
+                # Determine ISA mode for emu_start by probing the bytes at PC.
+                # We cannot rely on tracked isa_mode from _hook_code because
+                # emu_stop() can fire at a MIPS16 delay slot of a JALX, leaving
+                # isa_mode=MIPS16 even though the CPU switched to MIPS32.
+                if self._detect_isa_mode(start_pc) == ISAMode.MIPS16:
                     start_pc |= 1
+                    self.isa_mode = ISAMode.MIPS16
+                else:
+                    self.isa_mode = ISAMode.MIPS32
 
                 # Run!
                 self.mu.emu_start(start_pc, end_addr)
@@ -649,8 +582,7 @@ class AliMipsSimulator:
         end_addr = self.base_addr + self.rom_size
         
         try:
-             self.apply_manual_fixes()
-             self.invalidate_jit(cur_pc)
+
               
              # MIPS16 Fix: If in MIPS16 region, force Thumb/MIPS16 mode by setting LSB
              start_pc = cur_pc
@@ -687,18 +619,17 @@ class AliMipsSimulator:
         pc = self.mu.reg_read(UC_MIPS_REG_PC)
         mode_before = self.isa_mode.value
         
-        # AUTO-MODE SWITCH: If we are in a known MIPS16 address range but currently in MIPS32 mode,
-        # switch to MIPS16. This handles cases where we might have jumped/reset into MIPS16
-        # without an explicit JALX, ensuring 'Run' and 'Step' behave consistently.
-        if self.isa_mode == ISAMode.MIPS32 and self.is_mips16_addr(pc):
-            self.isa_mode = ISAMode.MIPS16
-            if self.debug_enabled:
-                self.log(f"[DEBUG] Auto-switched to MIPS16 mode at 0x{pc:08X}")
+        # ISA mode switching in step() relies on:
+        # 1. JALX detection in _step_mips16/_step_mips32 (switches mode on JALX)
+        # 2. run() setting self.isa_mode = MIPS16 when entering MIPS16 region
+        # We do NOT use is_mips16_addr() here because MIPS32 functions exist
+        # within the MIPS16 address range (e.g., 0x81E8CE14 called via jal).
 
         # DEBUG: Log current mode (only if debug enabled)
         if self.debug_enabled:
             self.log(f"[DEBUG] step() at PC=0x{pc:08X}, mode={self.isa_mode.value}")
         
+        self._step_count = 0  # Reset for hook-based single-stepping
         self.is_stepping = True
         try:
             if self.isa_mode == ISAMode.MIPS16:
@@ -838,8 +769,7 @@ class AliMipsSimulator:
         # Execute one instruction with Unicorn
         end_addr = self.base_addr + self.rom_size
         try:
-            self.apply_manual_fixes()
-            self.invalidate_jit(pc)
+
             self.mu.emu_start(pc, end_addr, count=1)
         except Exception as e:
             pass  # Continue even on error
@@ -856,6 +786,17 @@ class AliMipsSimulator:
         if mnemonic == 'jalx':
             mode_after = 'mips16'
             mode_switched = True
+        elif mnemonic == 'jr' and 'ra' in operands:
+            # jr $ra: if RA had bit 0 set, returning to MIPS16 code.
+            # JALX sets RA with bit 0 to mark the return as MIPS16.
+            # Check RA AFTER the jr executes (Unicorn already jumped).
+            # We need the RA value before jr cleared it - but Unicorn's jr
+            # uses the register value at execution time. RA still has the
+            # original value since jr doesn't modify RA.
+            ra_val = self.mu.reg_read(UC_MIPS_REG_RA)
+            if ra_val & 1:
+                mode_after = 'mips16'
+                mode_switched = True
         
         # Determine instruction type
         is_call = mnemonic in ['jal', 'jalr', 'jalx']
@@ -877,39 +818,63 @@ class AliMipsSimulator:
         )
     
     def _step_mips16(self, pc: int) -> StepResult:
-        """Execute one MIPS16 instruction using native engine"""
+        """Execute one MIPS16 instruction using Unicorn native engine"""
         mode_before = 'mips16'
         
-        # Execute using native MIPS16 engine
-        exec_result = self.mips16_engine.execute(pc)
-        
-        # Decode for display
-        if exec_result.instruction_size == 4:
-            insn_bytes = self.mu.mem_read(pc, 4)
-        else:
-            insn_bytes = self.mu.mem_read(pc, 2)
-        
+        # Read instruction bytes for decode/display
+        insn_bytes = self.mu.mem_read(pc, 2)
         mnemonic, operands = MIPS16Decoder.decode(insn_bytes, pc)
         
-        # Update PC
-        self.mu.reg_write(UC_MIPS_REG_PC, exec_result.next_pc)
+        # Determine instruction size (some MIPS16 are 4 bytes)
+        # Check if it's an extended instruction (4-byte)
+        first_word = int.from_bytes(insn_bytes, byteorder='little')
+        opcode5 = (first_word >> 11) & 0x1F
+        # Extended instructions have opcode 0b11110 (30) or JAL/JALX 0b00011 (3)
+        if opcode5 == 30 or opcode5 == 3:
+            insn_bytes = self.mu.mem_read(pc, 4)
+            mnemonic, operands = MIPS16Decoder.decode(insn_bytes, pc)
+            instruction_size = 4
+        else:
+            instruction_size = 2
         
-        # Determine mode after execution
-        mode_after = exec_result.mode_switch if exec_result.mode_switch else mode_before
-        mode_switched = exec_result.mode_switch is not None
+        # Execute one instruction with Unicorn (LSB=1 for MIPS16 mode)
+        end_addr = self.base_addr + self.rom_size
+        try:
+            self.mu.emu_start(pc | 1, end_addr, count=1)
+        except Exception as e:
+            pass  # Continue even on error
+        
+        next_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+        
+        # Detect mode switch (jalx switches back to MIPS32)
+        mode_after = mode_before
+        mode_switched = False
+        if mnemonic == 'jalx':
+            mode_after = 'mips32'
+            mode_switched = True
+        elif mnemonic in ['jrc', 'jr'] and 'ra' in operands:
+            # Return from MIPS16 subroutine — check if target is MIPS32
+            if not self.is_mips16_addr(next_pc):
+                mode_after = 'mips32'
+                mode_switched = True
+        
+        # Determine instruction type
+        is_call = mnemonic in ['jal', 'jalr', 'jalx']
+        is_return = mnemonic in ['jr', 'jrc'] and 'ra' in operands
+        is_branch = mnemonic.startswith('b') or mnemonic.startswith('j')
         
         return StepResult(
             address=pc,
             instruction=mnemonic,
             operands=operands,
-            next_pc=exec_result.next_pc,
+            next_pc=next_pc,
             mode_before=mode_before,
             mode_after=mode_after,
-            is_branch=exec_result.is_branch,
-            is_call=exec_result.is_call,
-            is_return=exec_result.is_return,
+            is_branch=is_branch,
+            is_call=is_call,
+            is_return=is_return,
             mode_switched=mode_switched,
-            instruction_size=exec_result.instruction_size
+            instruction_size=instruction_size
         )
 
     def skipInstruction(self):
