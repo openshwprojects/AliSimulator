@@ -12,7 +12,7 @@ from unicorn.mips_const import *
 
 # ─── Configuration ───────────────────────────────────────────────────
 FIRMWARE = "dump.bin"
-MAX_INSTRUCTIONS = 50_000_000       # safety cap
+MAX_INSTRUCTIONS = 100_000_000      # safety cap
 BATCH_SIZE = 100_000                # instructions per run() batch
 STALL_WINDOW = 10                   # same PC for N batches = stall
 

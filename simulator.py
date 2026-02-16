@@ -237,6 +237,11 @@ class AliMipsSimulator:
         # Check all aliases: 0x18018300, 0x98018300, 0xB8018300
         if (address & 0xFFFFF) == 0x18300:
             self._uart_log(value)
+            # Set LSR bit 5 (0x20 = Transmitter Holding Register Empty)
+            # so firmware's uart_write_char doesn't timeout and retry 3x.
+            # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
+            lsr_addr = (address & ~0xFFFFF) | 0x18305
+            uc.mem_write(lsr_addr, b'\x20')
 
 
 
