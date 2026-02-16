@@ -70,6 +70,31 @@ class AliMipsSimulator:
         self.cp0_count = 0
         self._step_count = 0  # Hook-based step counter for precise single-stepping
 
+        # Set of addresses observed executing as MIPS32 within the MIPS16 region.
+        # Populated by _hook_code when Unicorn reports size=4 at a MIPS16-range address.
+        # Used by _detect_isa_mode to correctly re-enter MIPS32 code after emu_stop().
+        self.mips32_islands = set()
+
+        # Tracks whether the current emu_start() call was started in MIPS32 mode.
+        # Used by _hook_code to correctly populate mips32_islands without
+        # confusing MIPS16 extended (4-byte) instructions with MIPS32.
+        self._emu_started_as_mips32 = False
+
+        # SPI Flash emulation state (Winbond W25Q128, JEDEC EF 40 18)
+        # Note: Real chip was GD25Q32 (C8 40 16), but using Winbond since
+        # firmware has explicit Winbond support in its flash identification table.
+        self._spi_jedec_id = [0xEF, 0x40, 0x18]  # manufacturer, type, capacity
+        self._spi_cmd = 0          # last SPI command written to +0x98
+        self._spi_response = []    # queued response bytes for reads from +0x9A
+        self._spi_resp_idx = 0     # current read index into response
+
+        # Track last instruction's size and address from _hook_code.
+        # Used by _detect_isa_mode to detect JALX-induced mode switches:
+        # after JALX, Unicorn internally switches to MIPS32 and reports size=4
+        # for the target instructions, even though we started in MIPS16 mode.
+        self._last_hook_size = 0
+        self._last_hook_addr = 0
+
         self._init_unicorn()
         self._init_capstone()
 
@@ -162,6 +187,11 @@ class AliMipsSimulator:
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
 
+        # SPI Flash Controller Hooks (0xB802E098-0xB802E09A + mirrors)
+        for base in [0x1802E098, 0x9802E098, 0xB802E098]:
+            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_write, begin=base, end=base + 2)
+            self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_read, begin=base, end=base + 2)
+
         self.mu.hook_add(UC_HOOK_CODE, self._hook_code)
         
         # CP0 Status configuration
@@ -243,6 +273,41 @@ class AliMipsSimulator:
             lsr_addr = (address & ~0xFFFFF) | 0x18305
             uc.mem_write(lsr_addr, b'\x20')
 
+    def _hook_spi_write(self, uc, access, address, size, value, user_data):
+        """Handle writes to SPI flash controller registers."""
+        offset = address & 0xF  # 0x98=cmd, 0x99=ctrl, 0x9A=data
+        if offset == 0x8:  # +0x98 = SPI command register
+            self._spi_cmd = value & 0xFF
+            # Queue response based on command
+            if self._spi_cmd == 0x9F:  # JEDEC Read ID
+                self._spi_response = list(self._spi_jedec_id)
+                self._spi_resp_idx = 0
+            elif self._spi_cmd == 0x05:  # Read Status Register
+                # Return 0x00 = ready, not busy, write disabled
+                self._spi_response = [0x00]
+                self._spi_resp_idx = 0
+            elif self._spi_cmd == 0xAB:  # Release from Deep Power Down
+                # Returns electronic ID (capacity)
+                self._spi_response = [self._spi_jedec_id[2]]
+                self._spi_resp_idx = 0
+            elif self._spi_cmd == 0x06:  # Write Enable
+                # No response data, but set WEL bit in status
+                self._spi_response = []
+                self._spi_resp_idx = 0
+
+    def _hook_spi_read(self, uc, access, address, size, value, user_data):
+        """Handle reads from SPI flash controller registers.
+        
+        Inject response bytes when firmware reads the SPI data register.
+        """
+        offset = address & 0xF  # 0x98=cmd, 0x99=ctrl, 0x9A=data
+        if offset == 0xA:  # +0x9A = SPI read data register
+            if self._spi_resp_idx < len(self._spi_response):
+                byte_val = self._spi_response[self._spi_resp_idx]
+                self._spi_resp_idx += 1
+                # Write the response byte into the register so the firmware reads it
+                uc.mem_write(address, bytes([byte_val]))
+
 
 
 
@@ -263,9 +328,22 @@ class AliMipsSimulator:
                 uc.emu_stop()
                 return
 
-        # NOTE: ISA mode is NOT tracked here from instruction size because it's
-        # unreliable for mode-switching instructions (JALX delay slots etc.).
-        # Mode is determined by _detect_isa_mode() after emu_start() returns.
+        # Record MIPS32 addresses within the MIPS16 range for _detect_isa_mode.
+        # _emu_started_as_mips32 (set in run() before emu_start) distinguishes
+        # real MIPS32 from MIPS16 extended (both report size=4).
+        # If we see size=2 while _emu_started_as_mips32 is True, a JALX mode
+        # switch occurred within this emu_start batch — clear the flag to stop
+        # polluting mips32_islands with MIPS16 addresses.
+        if self._emu_started_as_mips32:
+            if size == 2:
+                # MIPS32 never has 2-byte instructions — we switched to MIPS16
+                self._emu_started_as_mips32 = False
+            elif self.is_mips16_addr(address):
+                self.mips32_islands.add(address)
+        
+        # Track last instruction size/address for _detect_isa_mode
+        self._last_hook_size = size
+        self._last_hook_addr = address
 
         # Track history for jumps
         if not hasattr(self, 'current_executed_pc'): self.current_executed_pc = None
@@ -325,6 +403,8 @@ class AliMipsSimulator:
         # NOTE: JALX and MIPS16 instructions handled natively by Unicorn
         
         # Skip non-MIPS32 instructions (MIPS16 handled by Unicorn native)
+        # Note: MIPS16 extended instructions also have size=4 so we can't
+        # unconditionally record size=4 as MIPS32 here.
         if size != 4:
             return
 
@@ -347,6 +427,12 @@ class AliMipsSimulator:
             if opcode == 0x10 and rs == 0x00 and rd == 9:
                 uc.reg_write(self.gpr_map[rt], self.cp0_count)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
+                # Update tracking BEFORE emu_stop — _hook_code may not fire
+                # after emu_stop, so _detect_isa_mode needs these for re-entry.
+                self._last_hook_size = 4
+                self._last_hook_addr = address
+                if self.is_mips16_addr(address + 4):
+                    self.mips32_islands.add(address + 4)
                 uc.emu_stop()
                 return
 
@@ -446,77 +532,77 @@ class AliMipsSimulator:
         return False
 
     def _detect_isa_mode(self, pc):
-        """Determine ISA mode by probing bytecode at PC.
+        """Determine ISA mode by checking learned MIPS32 islands then opcode heuristics.
         
-        We cannot rely on tracked isa_mode from _hook_code because emu_stop()
-        can fire at a MIPS16 delay slot of a JALX instruction, leaving
-        isa_mode=MIPS16 even though the CPU has switched to MIPS32 mode.
-        
-        Instead, we read 4 bytes at PC and check if they form a valid MIPS32
-        instruction by examining the opcode field (bits 31-26).
+        Strategy:
+        1. Outside MIPS16 range → always MIPS32
+        2. PC in mips32_islands (seen executing as MIPS32 before) → MIPS32
+        3. Nearby addresses in mips32_islands → likely MIPS32 (mid-function re-entry)
+        4. Probe 4 bytes at PC: if the opcode field matches a valid MIPS32 primary
+           opcode, AND the instruction passes structural checks → MIPS32
+        5. Default → MIPS16
         """
-        # If address is not in the MIPS16 region, it's definitely MIPS32
+        # 1. Outside MIPS16 range → MIPS32
         if not self.is_mips16_addr(pc):
             return ISAMode.MIPS32
         
-        # Address IS in the MIPS16 region — but could be a MIPS32 function
-        # that was called via JAL (not JALX) from MIPS32 code.
-        # Probe the bytes to distinguish:
+        # 2. Exact match in learned set
+        if pc in self.mips32_islands:
+            return ISAMode.MIPS32
+        
+        # 3. Nearby addresses — if we stopped mid-function, adjacent instructions
+        #    were seen as MIPS32 (4-byte aligned)
+        for offset in range(4, 20, 4):
+            if (pc + offset) in self.mips32_islands or (pc - offset) in self.mips32_islands:
+                return ISAMode.MIPS32
+        
+        # 3b. Check last hook's instruction size — if Unicorn was executing in
+        # MIPS32 mode (size=4) at a MIPS16-range address just before stopping,
+        # and PC is close to that address, we're still in MIPS32 mode.
+        # This catches JALX targets: JALX switches Unicorn internally to MIPS32,
+        # so subsequent hooks report size=4 even though we started as MIPS16.
+        if (self._last_hook_size == 4 and self.is_mips16_addr(self._last_hook_addr)
+                and abs(pc - self._last_hook_addr) < 32):
+            return ISAMode.MIPS32
+        
+        # 4. Conservative byte-probing for first encounters
+        # Only match very specific MIPS32 patterns that cannot be MIPS16.
+        # The broad opcode check was removed because MIPS16 byte pairs frequently
+        # have opcode6 values that collide with valid MIPS32 opcodes.
         try:
             raw = self.mu.mem_read(pc, 4)
             word32 = int.from_bytes(raw, byteorder='little')
+            
+            # Don't check NOP (0x00000000) — zero-filled memory matches it and
+            # would falsely classify uninitialized MIPS16-range addresses as MIPS32.
+            # Real MIPS32 NOPs within functions are covered by mips32_islands
+            # (adjacent instructions would have been recorded).
+            
+            # JR $RA (0x03E00008) — unique 4-byte pattern
+            if word32 == 0x03E00008:
+                return ISAMode.MIPS32
+            
             opcode6 = (word32 >> 26) & 0x3F
             
-            # Known MIPS32 opcodes that appear in this firmware's MIPS32
-            # functions within the MIPS16 address range:
-            #   0x00 = SPECIAL (jr, addu, subu, sll, etc.)
-            #   0x01 = REGIMM (bgez, bltz)
-            #   0x02 = J, 0x03 = JAL
-            #   0x04 = BEQ, 0x05 = BNE, 0x06 = BLEZ, 0x07 = BGTZ
-            #   0x08 = ADDI, 0x09 = ADDIU
-            #   0x0A = SLTI, 0x0B = SLTIU, 0x0C = ANDI, 0x0D = ORI, 0x0E = XORI
-            #   0x0F = LUI
-            #   0x10 = COP0 (MFC0, MTC0)
-            #   0x20 = LB, 0x21 = LH, 0x23 = LW, 0x24 = LBU, 0x25 = LHU
-            #   0x28 = SB, 0x29 = SH, 0x2B = SW
-            #   0x1D = JALX (doesn't appear inside MIPS32 code)
-            #
-            # For MIPS16 code, the first halfword has opcode in bits 15-11.
-            # When read as a 32-bit LE word, bits 31-26 would be arbitrary.
-            #
-            # Strategy: check for MFC0 (opcode=0x10, rs=0x00, rd=9) which is 
-            # the specific instruction at the known MIPS32 function 0x81E8DAEC.
-            # Also check for NOP (0x00000000) and JR RA (0x03E00008).
+            # LUI with hardware-address immediates (0xB800, 0xAFC0, etc.)
+            # LUI opcode=0x0F, format: LUI rt, imm16
+            # These are function prologues for MIPS32 functions that access MMIO.
+            if opcode6 == 0x0F:
+                imm16 = word32 & 0xFFFF
+                if imm16 in (0xB800, 0xB802, 0xAFC0, 0x8000, 0xA000):
+                    return ISAMode.MIPS32
             
-            # Check for known specific MIPS32 instruction patterns:
-            if word32 == 0x00000000:  # NOP
-                return ISAMode.MIPS32
-            if word32 == 0x03E00008:  # JR $RA
-                return ISAMode.MIPS32
-            if opcode6 == 0x10 and ((word32 >> 21) & 0x1F) == 0x00:  # MFC0
-                return ISAMode.MIPS32
-            
-            # For the general case: check if this is part of a known MIPS32
-            # sequence. The MIPS32 function at 0x81E8DAEC is:
-            #   MFC0 v0, $9    (40024800)
-            #   NOP * 4
-            #   JR RA          (03E00008)  
-            #   NOP
-            # Any PC between 0x81E8DAEC and 0x81E8DB08 is MIPS32.
-            if 0x81E8DAEC <= pc <= 0x81E8DB08:
-                return ISAMode.MIPS32
-            
-            # Also: MIPS32 code above 0x81E8E000 calls into this range via JAL.
-            # If we detect ADDIU $SP (common function prologue/epilogue), it's MIPS32.
-            if opcode6 == 0x09 and ((word32 >> 16) & 0x1F) == 29:  # ADDIU $sp, ...
-                return ISAMode.MIPS32
-            
-            # Default: trust the address-based heuristic for the MIPS16 region
-            return ISAMode.MIPS16
-            
+            # MFC0 / MTC0 (opcode=0x10, rs=0x00 or 0x04)
+            # These are unique to MIPS32 coprocessor instructions
+            if opcode6 == 0x10:
+                rs = (word32 >> 21) & 0x1F
+                if rs in (0x00, 0x04):  # MFC0, MTC0
+                    return ISAMode.MIPS32
         except Exception:
-            # If we can't read bytes, fall back to address heuristic
-            return ISAMode.MIPS16 if self.is_mips16_addr(pc) else ISAMode.MIPS32
+            pass
+        
+        # 5. Default: trust the address-based heuristic
+        return ISAMode.MIPS16
 
     def run(self, max_instructions=None):
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
@@ -561,6 +647,7 @@ class AliMipsSimulator:
                     self.isa_mode = ISAMode.MIPS32
 
                 # Run!
+                self._emu_started_as_mips32 = (self.isa_mode == ISAMode.MIPS32)
                 self.mu.emu_start(start_pc, end_addr)
                 
                 # If we stopped, update PC
@@ -580,7 +667,9 @@ class AliMipsSimulator:
             self.log(f"PC at error: {hex(self.mu.reg_read(UC_MIPS_REG_PC))}")
             self.log(f"Status at error: {hex(self.mu.reg_read(UC_MIPS_REG_CP0_STATUS))}")
         except Exception as e:
+            import traceback
             self.log(f"Error: {e}")
+            self.log(traceback.format_exc())
 
     def runStep(self):
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
