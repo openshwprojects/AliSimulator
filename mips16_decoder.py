@@ -97,6 +97,18 @@ class MIPS16Decoder:
                      return ("lbu", f"{ry},{hex(full_imm)}({rx})")
                      # Note: hex() handles negative sign correctly (-0x...)
 
+                 # LHU (0x15) extended - Load Halfword Unsigned
+                 if op2 == 0x15:
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     return ("lhu", f"{ry},{hex(full_imm)}({rx})")
+
                  # LW (0x13) extended
                  if op2 == 0x13:
                      # LW format: 10011 ry rx offset(5)
@@ -521,6 +533,13 @@ class MIPS16Decoder:
                 # If variant == 0 (000) -> ZEB
                 if variant == 0:
                     return ("zeb", f"{rx}")
+                # If variant == 1 (001) -> ZEH (Zero Extend Halfword)
+                if variant == 1:
+                    return ("zeh", f"{rx}")
+
+            # NEG - funct 0x0B (01011)
+            if funct == 0x0B:
+                return ("neg", f"{rx},{ry}")
 
             # AND - funct 0x0C (01100)
             if funct == 0x0C:
