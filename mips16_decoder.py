@@ -161,6 +161,61 @@ class MIPS16Decoder:
                      ry = MIPS16Decoder.reg_3bit(ry_code)
                      return ("sw", f"{ry},{hex(full_imm)}({rx})")
                  
+                 # I8 (0x0C) extended - SAVE/RESTORE with extended encoding
+                 if op2 == 0x0C:
+                     subfunc = (insn >> 8) & 0x7
+                     if subfunc == 0x4:  # SAVE/RESTORE
+                         is_save = (insn >> 7) & 0x1
+                         ra_saved = (insn >> 6) & 0x1
+                         s1_saved = (insn >> 5) & 0x1
+                         s0_saved = (insn >> 4) & 0x1
+                         framesize4 = insn & 0xF
+                         
+                         # Extended fields from EXTEND prefix
+                         xsregs = (ext_10_5 >> 1) & 0xF  # ext[10:7]
+                         aregs_code = ext_15_11 & 0xF  # ext[4:0] lower 4 bits
+                         
+                         # Frame size
+                         framesize = framesize4 << 3
+                         
+                         # Build register list
+                         mnemonic = "save" if is_save else "restore"
+                         parts = []
+                         
+                         # Aregs (argument registers saved)
+                         aregs_map = {0: "", 1: "a0", 2: "a0-a1", 3: "a0-a2",
+                                      4: "a0", 5: "a0-a1", 6: "a0-a2", 7: "a0-a3"}
+                         aregs_str = aregs_map.get(aregs_code, "")
+                         if aregs_str:
+                             parts.append(aregs_str)
+                         
+                         parts.append(f"0x{framesize:x}")
+                         
+                         # RA and static registers
+                         regs = []
+                         if ra_saved:
+                             regs.append("ra")
+                         
+                         s_count = s0_saved + s1_saved + xsregs
+                         if s_count > 0:
+                             if s_count == 1:
+                                 regs.append("s0")
+                             else:
+                                 regs.append(f"s0-s{s_count - 1}")
+                         
+                         if regs:
+                             parts.append(",".join(regs))
+                         
+                         return (mnemonic, ",".join(parts))
+
+                 # LI (0x0D) extended - Load Immediate with 16-bit value
+                 if op2 == 0x0D:
+                      rx_code = (insn >> 8) & 0x7
+                      imm5 = insn & 0x1F
+                      full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                      rx = MIPS16Decoder.reg_3bit(rx_code)
+                      return ("li", f"{rx},0x{full_imm:x}")
+                  
                  return (f"EXT_{word1:04x}_{word2:04x}", "")
 
             return (f"UNK32_{word1:04x}{word2:04x}", "")
@@ -221,6 +276,11 @@ class MIPS16Decoder:
                 imm_signed = imm - 0x100
                 return ("addiu", f"{rx},{rx},-0x{-imm_signed:x}")
             return ("addiu", f"{rx},{rx},0x{imm:x}")
+
+        # ADDIU8 rx, imm - Major 0x09 (01001) - ADDIU rx, unsigned imm8
+        if major_op == 0x09:
+            imm = insn & 0xFF
+            return ("addiu", f"{rx},0x{imm:x}")
 
         # I8 Format (SAVE, RESTORE, etc) - Major 0x0C
         if major_op == 0x0C:
@@ -397,6 +457,12 @@ class MIPS16Decoder:
         if (insn & 0xF800) == 0xD800: # SW R-R (0x1B) - Redundant but safe
              pass
 
+        # LH (Load Halfword) - Major 0x11 (10001)
+        # Format: 10001 rx ry offset[4:0]
+        if major_op == 0x11:
+            imm = (insn & 0x1F) << 1
+            return ("lh", f"{ry},0x{imm:x}({rx})")
+
         # LBU: 0x14 (10100) -> 10100 ry rx offset
         # 10100 010 (ry) 100 (rx) . (LBU v0, 0(a0))
         # Ghidra: LBU a0, 0(v0) -> DEST=a0(4), BASE=v0(2). 
@@ -471,11 +537,23 @@ class MIPS16Decoder:
             imm = (insn & 0x1F)
             return ("lbu", f"{ry},0x{imm:x}({rx})")
         
+        # LHU (Load Halfword Unsigned) - Major 0x15 (10101)
+        # Format: 10101 rx ry offset[4:0]
+        if major_op == 0x15:
+            imm = (insn & 0x1F) << 1
+            return ("lhu", f"{ry},0x{imm:x}({rx})")
+
         # SB (Store Byte) - Major 0x18 (11000)
         # Format: 11000 rx ry offset[4:0]
         if major_op == 0x18:
             imm = (insn & 0x1F)
             return ("sb", f"{ry},0x{imm:x}({rx})")
+
+        # SH (Store Halfword) - Major 0x19 (11001)
+        # Format: 11001 rx ry offset[4:0]
+        if major_op == 0x19:
+            imm = (insn & 0x1F) << 1
+            return ("sh", f"{ry},0x{imm:x}({rx})")
 
         # SW (0xD800? - 11011) -> SW ry, offset(rx)
         if major_op == 0x1B: # Wait, 11011 is SW SP? No.
