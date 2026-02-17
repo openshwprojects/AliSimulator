@@ -18,7 +18,11 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="emulator.cpp" />
+    <ClCompile Include="emulator_core.cpp" />
+    <ClCompile Include="emulator_mem.cpp" />
+    <ClCompile Include="emulator_cpu.cpp" />
+    <ClCompile Include="emulator_itype.cpp" />
+    <ClCompile Include="emulator_cop.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="emulator.h" />
