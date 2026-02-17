@@ -58,6 +58,12 @@ class MIPSSimulatorGUI:
         """Add message to log"""
         self.log_text.insert(tk.END, f"{message}\n")
         self.log_text.see(tk.END)
+        # Yield to event loop periodically so the window stays responsive
+        if not hasattr(self, '_log_count'):
+            self._log_count = 0
+        self._log_count += 1
+        if self._log_count % 50 == 0:
+            self.root.update_idletasks()
 
     def on_uart_write(self, char):
         """Handle UART output"""
@@ -69,6 +75,17 @@ class MIPSSimulatorGUI:
              self.uart_text.insert(tk.END, char)
              self.uart_text.see(tk.END)
 
+    def on_spi_log(self, message):
+        """Handle SPI log output"""
+        self.spi_text.insert(tk.END, message + "\n")
+        self.spi_text.see(tk.END)
+
+    def _copy_text(self, text_widget):
+        """Copy all text from a Text widget to clipboard"""
+        content = text_widget.get("1.0", tk.END).strip()
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+
     def init_emulator(self):
         """Initialize the simulator backend"""
         try:
@@ -76,6 +93,7 @@ class MIPSSimulatorGUI:
             # We pass our log method as the handler
             self.sim = AliMipsSimulator(log_handler=self.log)
             self.sim.setUartHandler(self.on_uart_write)
+            self.sim.setSpiHandler(self.on_spi_log)
             
             # Load the binary
             self.sim.loadFile(self.BINARY_FILE)
@@ -258,6 +276,7 @@ class MIPSSimulatorGUI:
                         
             except Exception as e:
                 self.log(f"Execution Error: {e}")
+                self.paused = True
             finally:
                 self.is_running = False
                 self.root.after(0, self.update_ui_safe)
@@ -503,18 +522,35 @@ class MIPSSimulatorGUI:
             lbl.grid(row=4, column=i, padx=1, pady=1)
             self.reg_labels[name] = lbl
             
-        # UART
-        uart_frame = tk.LabelFrame(bottom_container, text="UART Output", padx=5, pady=5)
-        uart_frame.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
-        
-        uart_scroll = tk.Scrollbar(uart_frame)
+        # UART / SPI Tabs
+        io_notebook = ttk.Notebook(bottom_container)
+        io_notebook.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
+
+        # UART Tab
+        uart_tab = tk.Frame(io_notebook)
+        io_notebook.add(uart_tab, text="UART")
+        uart_scroll = tk.Scrollbar(uart_tab)
         uart_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.uart_text = tk.Text(uart_frame, wrap=tk.WORD, height=8, width=40, font=("Courier New", 9), 
+        self.uart_text = tk.Text(uart_tab, wrap=tk.WORD, height=8, width=40, font=("Courier New", 9),
                                  bg="black", fg="#00FF00", yscrollcommand=uart_scroll.set)
         self.uart_text.pack(fill=tk.BOTH, expand=True)
-        
         uart_scroll.config(command=self.uart_text.yview)
+        uart_copy_btn = tk.Button(uart_tab, text="Copy", font=("Segoe UI", 7), padx=4, pady=1,
+                                  command=lambda: self._copy_text(self.uart_text))
+        uart_copy_btn.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-4)
+
+        # SPI Tab
+        spi_tab = tk.Frame(io_notebook)
+        io_notebook.add(spi_tab, text="SPI")
+        spi_scroll = tk.Scrollbar(spi_tab)
+        spi_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.spi_text = tk.Text(spi_tab, wrap=tk.WORD, height=8, width=40, font=("Courier New", 9),
+                                bg="black", fg="#FFB300", yscrollcommand=spi_scroll.set)
+        self.spi_text.pack(fill=tk.BOTH, expand=True)
+        spi_scroll.config(command=self.spi_text.yview)
+        spi_copy_btn = tk.Button(spi_tab, text="Copy", font=("Segoe UI", 7), padx=4, pady=1,
+                                 command=lambda: self._copy_text(self.spi_text))
+        spi_copy_btn.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-4)
         
         # Status Bar
         status_frame = tk.Frame(self.root, relief=tk.SUNKEN, bd=1)

@@ -13,7 +13,7 @@ from unicorn.mips_const import *
 # ─── Configuration ───────────────────────────────────────────────────
 FIRMWARE = "dump.bin"
 MAX_INSTRUCTIONS = 100_000_000      # safety cap
-TRACE_AFTER = 667_900               # just before crash at 668019
+TRACE_AFTER = 667_800               # just before crash at 668099
 BATCH_SIZE = 100_000                # instructions per run() batch
 STALL_WINDOW = 0                    # disabled - busy-wait loops are expected
 

@@ -37,6 +37,7 @@ class AliMipsSimulator:
         self.mu = None
         self.md = None
         self.uart_callback = None
+        self.spi_callback = None
         self.log_callback = log_handler
 
         self.instruction_count = 0
@@ -80,12 +81,27 @@ class AliMipsSimulator:
         # confusing MIPS16 extended (4-byte) instructions with MIPS32.
         self._emu_started_as_mips32 = False
 
-        # SPI Flash emulation state (Winbond W25Q128, JEDEC EF 40 18)
-        # Note: Real chip was GD25Q32 (C8 40 16), but using Winbond since
-        # firmware has explicit Winbond support in its flash identification table.
-        self._spi_jedec_id = [0xEF, 0x40, 0x18]  # manufacturer, type, capacity
-        self._spi_cmd = 0          # last SPI command written to +0x98
-        self._spi_response = []    # queued response bytes for reads from +0x9A
+        # SPI Flash Controller emulation (matches flash_raw_sl_c.c)
+        # Hardware registers:
+        #   SF_INS (+0x98) = command/instruction register
+        #   SF_FMT (+0x99) = format register (which SPI bus phases are active)
+        #   SF_DUM (+0x9A) = dummy/data register
+        #   SF_CFG (+0x9B) = configuration register
+        # SF_FMT bit flags:
+        #   0x01 SF_HIT_DATA  - data phase active
+        #   0x02 SF_HIT_DUMM  - dummy cycle active
+        #   0x04 SF_HIT_ADDR  - address phase active
+        #   0x08 SF_HIT_CODE  - command/opcode phase active
+        #   0x40 SF_CONT_RD   - continuous read mode
+        #   0x80 SF_CONT_WR   - continuous write mode
+        self._spi_jedec_id = [0xEF, 0x40, 0x18]  # Winbond W25Q128
+        self._spi_ins = 0x03       # SF_INS: current SPI command (default: normal read)
+        self._spi_fmt = 0x0D       # SF_FMT: default = HIT_CODE|HIT_ADDR|HIT_DATA (normal read)
+        self._spi_dum = 0x00       # SF_DUM: dummy/data register
+        self._spi_cfg = 0x00       # SF_CFG: config register
+        self._spi_status = 0x00    # Flash status register (bit0=WIP, bits[5:2]=BP)
+        self._spi_wel = False      # Write Enable Latch
+        self._spi_response = []    # queued response bytes for memory-mapped reads
         self._spi_resp_idx = 0     # current read index into response
 
         # Track last instruction's size and address from _hook_code.
@@ -187,10 +203,25 @@ class AliMipsSimulator:
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
 
-        # SPI Flash Controller Hooks (0xB802E098-0xB802E09A + mirrors)
-        for base in [0x1802E098, 0x9802E098, 0xB802E098]:
-            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_write, begin=base, end=base + 2)
-            self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_read, begin=base, end=base + 2)
+        # SPI Flash Controller Register Hooks
+        # Hook BOTH register bases: 0xB8000098 (default) and 0xB802E098 (M3329E rev>=5)
+        # Each base has 4 registers: SF_INS(+0x98), SF_FMT(+0x99), SF_DUM(+0x9A), SF_CFG(+0x9B)
+        for base in [0x18000098, 0x98000098, 0xB8000098,
+                     0x1802E098, 0x9802E098, 0xB802E098]:
+            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_write, begin=base, end=base + 3)
+            self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_read, begin=base, end=base + 3)
+
+        # SPI Flash Memory-Mapped Data Hooks (SYS_FLASH_BASE_ADDR)
+        # Command-mode READS (JEDEC ID, status) always access offset 0, so we
+        # hook only the first 4 bytes for reads to avoid slowing down normal
+        # instruction fetches from the ROM region.
+        # WRITES need the full range because erase/program use the access
+        # offset as the flash address (e.g. ((volatile UINT8*)base)[sector_addr] = 0).
+        for flash_base in [self.base_addr, 0x0FC00000]:
+            self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_flash_read,
+                             begin=flash_base, end=flash_base + 3)
+            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_flash_write,
+                             begin=flash_base, end=flash_base + self.rom_size - 1)
 
         self.mu.hook_add(UC_HOOK_CODE, self._hook_code)
         
@@ -210,6 +241,9 @@ class AliMipsSimulator:
 
     def setUartHandler(self, handler):
         self.uart_callback = handler
+
+    def setSpiHandler(self, handler):
+        self.spi_callback = handler
 
     def addBreakpoint(self, address):
         self.breakpoints.add(address)
@@ -232,6 +266,21 @@ class AliMipsSimulator:
             self.uart_callback(chr(value & 0xFF))
         else:
             print(chr(value & 0xFF), end='', flush=True)
+
+    # SPI command name lookup for readable log output
+    _SPI_CMD_NAMES = {
+        0x03: "Read", 0x0B: "Fast Read", 0x9F: "JEDEC Read ID",
+        0x05: "Read Status", 0xAB: "Release Power Down",
+        0x90: "Read Mfr/Dev ID", 0x06: "WREN", 0x04: "WRDI",
+        0x01: "Write Status", 0x02: "Page Program", 0xAD: "AAI Program",
+        0xD8: "Sector Erase", 0xC7: "Chip Erase",
+    }
+
+    def _spi_log(self, msg):
+        if self.spi_callback:
+            self.spi_callback(msg)
+        else:
+            print(f"[SPI] {msg}", flush=True)
 
     def loadFile(self, filename):
         self.log(f"Loading {filename}...")
@@ -274,39 +323,206 @@ class AliMipsSimulator:
             uc.mem_write(lsr_addr, b'\x20')
 
     def _hook_spi_write(self, uc, access, address, size, value, user_data):
-        """Handle writes to SPI flash controller registers."""
-        offset = address & 0xF  # 0x98=cmd, 0x99=ctrl, 0x9A=data
-        if offset == 0x8:  # +0x98 = SPI command register
-            self._spi_cmd = value & 0xFF
-            # Queue response based on command
-            if self._spi_cmd == 0x9F:  # JEDEC Read ID
-                self._spi_response = list(self._spi_jedec_id)
+        """Handle writes to SPI flash controller registers.
+        
+        Matches the hardware register interface from flash_raw_sl_c.c:
+          SF_INS (+0x98) — SPI command/instruction
+          SF_FMT (+0x99) — format (which bus phases are active)
+          SF_DUM (+0x9A) — dummy/data register
+          SF_CFG (+0x9B) — configuration
+        """
+        offset = address & 0xF
+        if offset == 0x8:  # SF_INS — SPI instruction register
+            self._spi_ins = value & 0xFF
+            # Queue response based on command (response read via memory-mapped access)
+            cmd = self._spi_ins
+            cmd_name = self._SPI_CMD_NAMES.get(cmd, f"Unknown")
+            pc = uc.reg_read(UC_MIPS_REG_PC)
+            self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [PC=0x{pc:08X}]")
+            if cmd == 0x9F:  # JEDEC Read ID (RDID)
+                # Returns 3-byte manufacturer/type/capacity, padded to 4 for word reads
+                self._spi_response = list(self._spi_jedec_id) + [0x00]
                 self._spi_resp_idx = 0
-            elif self._spi_cmd == 0x05:  # Read Status Register
-                # Return 0x00 = ready, not busy, write disabled
-                self._spi_response = [0x00]
+            elif cmd == 0x05:  # Read Status Register (RDSR)
+                # Return current status: bit0=WIP(busy), bits[5:2]=BP(block protect)
+                self._spi_response = [self._spi_status]
                 self._spi_resp_idx = 0
-            elif self._spi_cmd == 0xAB:  # Release from Deep Power Down
-                # Returns electronic ID (capacity)
-                self._spi_response = [self._spi_jedec_id[2]]
+            elif cmd == 0xAB:  # Release from Deep Power Down / Read Electronic ID
+                # Returns electronic signature (capacity byte), padded
+                self._spi_response = [self._spi_jedec_id[2], 0x00, 0x00, 0x00]
                 self._spi_resp_idx = 0
-            elif self._spi_cmd == 0x06:  # Write Enable
-                # No response data, but set WEL bit in status
+            elif cmd == 0x90:  # Read Manufacturer/Device ID
+                self._spi_response = [self._spi_jedec_id[0], self._spi_jedec_id[2],
+                                      self._spi_jedec_id[0], self._spi_jedec_id[2]]
+                self._spi_resp_idx = 0
+            elif cmd == 0x06:  # Write Enable (WREN)
+                self._spi_wel = True
+                self._spi_status |= 0x02  # Set WEL bit in status
                 self._spi_response = []
                 self._spi_resp_idx = 0
+            elif cmd == 0x04:  # Write Disable (WRDI)
+                self._spi_wel = False
+                self._spi_status &= ~0x02  # Clear WEL bit
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0x01:  # Write Status Register (WRSR)
+                # Data byte will come via memory-mapped write
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0x03:  # Normal Read — passthrough mode
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0x0B:  # Fast Read — passthrough mode
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0x02:  # Page Program (PP)
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0xAD:  # AAI Word Program (SST)
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0xD8:  # Sector Erase
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            elif cmd == 0xC7:  # Chip Erase
+                self._spi_response = []
+                self._spi_resp_idx = 0
+            else:
+                # Unknown command — no response
+                self._spi_response = []
+                self._spi_resp_idx = 0
+        elif offset == 0x9:  # SF_FMT — format register
+            self._spi_fmt = value & 0xFF
+            # Decode format flags for logging
+            flags = []
+            if value & 0x01: flags.append("DATA")
+            if value & 0x02: flags.append("DUMM")
+            if value & 0x04: flags.append("ADDR")
+            if value & 0x08: flags.append("CODE")
+            if value & 0x40: flags.append("CONT_RD")
+            if value & 0x80: flags.append("CONT_WR")
+            self._spi_log(f"  FMT 0x{value & 0xFF:02X} [{' | '.join(flags)}]")
+        elif offset == 0xA:  # SF_DUM — dummy/data register
+            self._spi_dum = value & 0xFF
+        elif offset == 0xB:  # SF_CFG — config register
+            self._spi_cfg = value & 0xFF
 
     def _hook_spi_read(self, uc, access, address, size, value, user_data):
         """Handle reads from SPI flash controller registers.
         
-        Inject response bytes when firmware reads the SPI data register.
+        Firmware does volatile readback of registers it just wrote
+        (e.g. write SF_INS then read SF_INS back). Return the stored values.
         """
-        offset = address & 0xF  # 0x98=cmd, 0x99=ctrl, 0x9A=data
-        if offset == 0xA:  # +0x9A = SPI read data register
-            if self._spi_resp_idx < len(self._spi_response):
+        offset = address & 0xF
+        if offset == 0x8:  # SF_INS readback
+            uc.mem_write(address, bytes([self._spi_ins]))
+        elif offset == 0x9:  # SF_FMT readback
+            uc.mem_write(address, bytes([self._spi_fmt]))
+        elif offset == 0xA:  # SF_DUM readback
+            uc.mem_write(address, bytes([self._spi_dum]))
+        elif offset == 0xB:  # SF_CFG readback
+            uc.mem_write(address, bytes([self._spi_cfg]))
+
+    def _spi_is_passthrough(self):
+        """Check if SPI controller is in normal flash read mode (passthrough).
+        
+        In normal read mode, reads from SYS_FLASH_BASE_ADDR return actual
+        flash content. The controller is in passthrough when:
+          SF_INS = 0x03 (Read) or 0x0B (Fast Read)
+          SF_FMT has SF_HIT_ADDR set (address phase active)
+        """
+        return (self._spi_ins in (0x03, 0x0B)) and (self._spi_fmt & 0x04)  # SF_HIT_ADDR
+
+    def _hook_spi_flash_read(self, uc, access, address, size, value, user_data):
+        """Handle reads from the memory-mapped flash region (SYS_FLASH_BASE_ADDR).
+        
+        When the SPI controller is in command mode (not passthrough), reads
+        from the flash address space return SPI response data instead of
+        flash content. This implements the hardware behavior where:
+        
+          write_uint8(SF_FMT, SF_HIT_CODE | SF_HIT_DATA);  // command mode
+          write_uint8(SF_INS, 0x9F);                         // JEDEC Read ID
+          result = *(volatile UINT32 *)SYS_FLASH_BASE_ADDR;  // read response
+        """
+        if self._spi_is_passthrough():
+            return  # Normal read mode — let ROM content pass through
+
+        # Command mode — inject SPI response data
+        if self._spi_resp_idx < len(self._spi_response):
+            if size == 4:  # Word read (e.g. JEDEC ID)
+                resp = bytearray(4)
+                for i in range(4):
+                    if self._spi_resp_idx < len(self._spi_response):
+                        resp[i] = self._spi_response[self._spi_resp_idx]
+                        self._spi_resp_idx += 1
+                    else:
+                        resp[i] = 0x00
+                uc.mem_write(address, bytes(resp))
+                self._spi_log(f"  RESP [{size}B]: {' '.join(f'{b:02X}' for b in resp)}")
+            elif size == 2:  # Half-word read
+                resp = bytearray(2)
+                for i in range(2):
+                    if self._spi_resp_idx < len(self._spi_response):
+                        resp[i] = self._spi_response[self._spi_resp_idx]
+                        self._spi_resp_idx += 1
+                    else:
+                        resp[i] = 0x00
+                uc.mem_write(address, bytes(resp))
+                self._spi_log(f"  RESP [{size}B]: {' '.join(f'{b:02X}' for b in resp)}")
+            else:  # Byte read (e.g. status register)
                 byte_val = self._spi_response[self._spi_resp_idx]
                 self._spi_resp_idx += 1
-                # Write the response byte into the register so the firmware reads it
                 uc.mem_write(address, bytes([byte_val]))
+                self._spi_log(f"  RESP [1B]: {byte_val:02X}")
+        else:
+            # No more response data — return 0x00 (flash idle / not busy)
+            uc.mem_write(address, b'\x00' * size)
+
+    def _hook_spi_flash_write(self, uc, access, address, size, value, user_data):
+        """Handle writes to the memory-mapped flash region (SYS_FLASH_BASE_ADDR).
+        
+        Memory-mapped writes trigger SPI command execution:
+          - WREN/WRDI (cmd 0x06/0x04): trigger via write to any flash address
+          - WRSR (cmd 0x01): the write data is the new status register value
+          - Chip/Sector Erase (cmd 0xC7/0xD8): triggered by write
+          - Page Program (cmd 0x02): write data byte to flash
+        """
+        if self._spi_is_passthrough():
+            return  # Normal mode — writes go to ROM (ignored in emulator)
+
+        # Compute flash offset from access address
+        # Firmware does: ((volatile UINT8 *)flash_base_addr)[flash_offset] = data
+        if address >= self.base_addr:
+            flash_offset = address - self.base_addr
+        elif address >= 0x0FC00000:
+            flash_offset = address - 0x0FC00000
+        else:
+            flash_offset = address
+
+        cmd = self._spi_ins
+        cmd_name = self._SPI_CMD_NAMES.get(cmd, f"0x{cmd:02X}")
+        if cmd == 0x06:  # WREN — trigger
+            self._spi_wel = True
+            self._spi_status |= 0x02
+            self._spi_log(f"  EXEC {cmd_name}")
+        elif cmd == 0x04:  # WRDI — trigger
+            self._spi_wel = False
+            self._spi_status &= ~0x02
+            self._spi_log(f"  EXEC {cmd_name}")
+        elif cmd == 0x01:  # WRSR — write status register
+            if self._spi_wel:
+                self._spi_status = value & 0xFF
+                self._spi_wel = False
+                self._spi_status &= ~0x02  # Clear WEL after write
+                self._spi_log(f"  EXEC {cmd_name} = 0x{value & 0xFF:02X}")
+        elif cmd == 0xC7:  # Chip Erase — acknowledge
+            self._spi_log(f"  EXEC {cmd_name}")
+        elif cmd == 0xD8:  # Sector Erase — acknowledge
+            self._spi_log(f"  EXEC {cmd_name} @ flash[0x{flash_offset:06X}]")
+        elif cmd == 0x02:  # Page Program — acknowledge
+            self._spi_log(f"  EXEC {cmd_name} @ flash[0x{flash_offset:06X}] = 0x{value & 0xFF:02X}")
+        elif cmd == 0xAD:  # AAI Word Program — acknowledge
+            self._spi_log(f"  EXEC {cmd_name} @ flash[0x{flash_offset:06X}] = 0x{value & 0xFFFF:04X}")
 
 
 
@@ -317,6 +533,14 @@ class AliMipsSimulator:
         # Real MIPS increments Count every other clock cycle.
         # Without this, firmware timeout loops polling MFC0 reg 9 never exit.
         self.cp0_count = (self.cp0_count + 2) & 0xFFFFFFFF
+
+        # Stuck-PC detection: if Unicorn fires the hook at the same address twice
+        # in a row, it failed to execute the instruction (unsupported MIPS16 opcode).
+        # Manually emulate and stop so run() re-enters from the new PC.
+        if address == self._last_hook_addr and size == self._last_hook_size and size == 2:
+            if self._emulate_mips16_manual(address):
+                uc.emu_stop()
+                return
 
         # Hook-based single-stepping: Unicorn's count=1 counts Translation Blocks,
         # not individual instructions. For tight MIPS16 loops, a whole loop body
@@ -338,8 +562,22 @@ class AliMipsSimulator:
             if size == 2:
                 # MIPS32 never has 2-byte instructions — we switched to MIPS16
                 self._emu_started_as_mips32 = False
+            elif address & 0x3:
+                # Not 4-byte aligned → can't be MIPS32, must be MIPS16 extended/JAL
+                self._emu_started_as_mips32 = False
             elif self.is_mips16_addr(address):
                 self.mips32_islands.add(address)
+        
+        # Track actual ISA mode based on Unicorn's execution:
+        # - size==2 → definitely MIPS16
+        # - size==4 and _emu_started_as_mips32 still True → MIPS32
+        # - size==4 and _emu_started_as_mips32 False → MIPS16 extended/JAL
+        if size == 2:
+            self._tracked_isa_mode = ISAMode.MIPS16
+        elif self._emu_started_as_mips32:
+            self._tracked_isa_mode = ISAMode.MIPS32
+        else:
+            self._tracked_isa_mode = ISAMode.MIPS16
         
         # Track last instruction size/address for _detect_isa_mode
         self._last_hook_size = size
@@ -401,10 +639,9 @@ class AliMipsSimulator:
 
     def _hook_instruction_fix(self, uc, address, size, user_data):
         # NOTE: JALX and MIPS16 instructions handled natively by Unicorn
+        # MIPS16 stuck-PC handling now done in _hook_code (fires after this hook)
         
-        # Skip non-MIPS32 instructions (MIPS16 handled by Unicorn native)
-        # Note: MIPS16 extended instructions also have size=4 so we can't
-        # unconditionally record size=4 as MIPS32 here.
+        # Skip non-MIPS32 instructions
         if size != 4:
             return
 
@@ -514,6 +751,146 @@ class AliMipsSimulator:
             # self.log(f"Error in manual instruction at {hex(address)}: {e}")
             pass
 
+    # MIPS16 3-bit register encoding → MIPS32 register index
+    MIPS16_REG_MAP = [16, 17, 2, 3, 4, 5, 6, 7]  # s0,s1,v0,v1,a0,a1,a2,a3
+
+    def _emulate_mips16_manual(self, pc):
+        """Manually emulate a MIPS16 instruction that Unicorn cannot execute.
+        
+        Returns True if the instruction was emulated and PC advanced,
+        False if the instruction is not supported for manual emulation.
+        """
+        raw = self.mu.mem_read(pc, 4)
+        insn = int.from_bytes(raw[0:2], byteorder='little')
+        major_op = (insn >> 11) & 0x1F
+        rx_idx = (insn >> 8) & 0x7
+        ry_idx = (insn >> 5) & 0x7
+        rx_gpr = self.MIPS16_REG_MAP[rx_idx]
+        ry_gpr = self.MIPS16_REG_MAP[ry_idx]
+        
+        # SHIFT: SLL/SRL/SRA (opcode 00110 = 6)
+        if major_op == 0x06:
+            sa = (insn >> 2) & 0x7
+            func = insn & 0x3
+            if sa == 0:
+                sa = 8
+            ry_val = self.mu.reg_read(self.gpr_map[ry_gpr])
+            if func == 0:  # SLL
+                result = (ry_val << sa) & 0xFFFFFFFF
+            elif func == 2:  # SRA
+                # Sign-extend to 32 bits, then arithmetic shift right
+                if ry_val & 0x80000000:
+                    ry_val_s = ry_val - 0x100000000
+                else:
+                    ry_val_s = ry_val
+                result = (ry_val_s >> sa) & 0xFFFFFFFF
+            elif func == 3:  # SRL
+                result = (ry_val >> sa) & 0xFFFFFFFF
+            else:
+                return False
+            self.mu.reg_write(self.gpr_map[rx_gpr], result)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # CMPI (opcode 01110 = 0x0E): compare rx with immediate, result in T8
+        if major_op == 0x0E:
+            imm = insn & 0xFF
+            rx_val = self.mu.reg_read(self.gpr_map[rx_gpr])
+            # CMPI: T8 = (rx ^ imm)  — actually CMPI does: T8 = rx XOR imm
+            # No wait — CMPI sets T8 = 1 if rx != imm, T8 = 0 if rx == imm
+            # Actually in MIPS16, CMPI rx, imm sets T8 = (rx XOR imm)
+            # The BTEQZ/BTNEZ branches test if T8 == 0 or T8 != 0
+            result = rx_val ^ imm
+            self.mu.reg_write(UC_MIPS_REG_T8, result & 0xFFFFFFFF)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # SLTI (opcode 01010 = 0x0A): set T8 = (rx < imm) signed
+        if major_op == 0x0A:
+            imm = insn & 0xFF
+            rx_val = self.mu.reg_read(self.gpr_map[rx_gpr])
+            # Sign-extend both
+            if rx_val & 0x80000000:
+                rx_signed = rx_val - 0x100000000
+            else:
+                rx_signed = rx_val
+            result = 1 if rx_signed < imm else 0
+            self.mu.reg_write(UC_MIPS_REG_T8, result)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # SLTIU (opcode 01011 = 0x0B): set T8 = (rx < imm) unsigned
+        if major_op == 0x0B:
+            imm = insn & 0xFF
+            rx_val = self.mu.reg_read(self.gpr_map[rx_gpr])
+            result = 1 if rx_val < imm else 0
+            self.mu.reg_write(UC_MIPS_REG_T8, result)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # ADDIU (opcode 01000 = 0x08): rx = rx + sign_ext(imm8)
+        if major_op == 0x08:
+            imm = insn & 0xFF
+            if imm & 0x80:
+                imm -= 0x100
+            rx_val = self.mu.reg_read(self.gpr_map[rx_gpr])
+            result = (rx_val + imm) & 0xFFFFFFFF
+            self.mu.reg_write(self.gpr_map[rx_gpr], result)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # LI (opcode 01101 = 0x0D): rx = imm8
+        if major_op == 0x0D:
+            imm = insn & 0xFF
+            self.mu.reg_write(self.gpr_map[rx_gpr], imm)
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        # RR format (opcode 11101 = 0x1D): register-register operations
+        # Uses 5-bit function code in bits[4:0].
+        # Some instructions (ADDU func=0x01) also use rz from bits[4:2],
+        # but the func5 value uniquely identifies the instruction.
+        if major_op == 0x1D:
+            func5 = insn & 0x1F
+            rz_idx = (insn >> 2) & 0x7
+            rz_gpr = self.MIPS16_REG_MAP[rz_idx]
+            rx_val = self.mu.reg_read(self.gpr_map[rx_gpr])
+            ry_val = self.mu.reg_read(self.gpr_map[ry_gpr])
+            
+            # ADDU: func5=0x01, rz = rx + ry (RRR 3-register format)
+            if func5 == 0x01:
+                result = (rx_val + ry_val) & 0xFFFFFFFF
+                self.mu.reg_write(self.gpr_map[rz_gpr], result)
+            # SLTU: func5=0x03, T8 = (rx < ry) ? 1 : 0 (unsigned)
+            # Result goes to T8 for use with BTEQZ/BTNEZ conditional branches.
+            elif func5 == 0x03:
+                self.mu.reg_write(UC_MIPS_REG_T8, 1 if rx_val < ry_val else 0)
+            # CMP: func5=0x0A, T8 = rx XOR ry
+            elif func5 == 0x0A:
+                self.mu.reg_write(UC_MIPS_REG_T8, (rx_val ^ ry_val) & 0xFFFFFFFF)
+            # NEG: func5=0x0B, rx = -ry
+            elif func5 == 0x0B:
+                self.mu.reg_write(self.gpr_map[rx_gpr], (-ry_val) & 0xFFFFFFFF)
+            # AND: func5=0x0C
+            elif func5 == 0x0C:
+                self.mu.reg_write(self.gpr_map[rx_gpr], rx_val & ry_val)
+            # OR: func5=0x0D
+            elif func5 == 0x0D:
+                self.mu.reg_write(self.gpr_map[rx_gpr], rx_val | ry_val)
+            # XOR: func5=0x0E
+            elif func5 == 0x0E:
+                self.mu.reg_write(self.gpr_map[rx_gpr], rx_val ^ ry_val)
+            # NOT: func5=0x0F
+            elif func5 == 0x0F:
+                self.mu.reg_write(self.gpr_map[rx_gpr], (~ry_val) & 0xFFFFFFFF)
+            else:
+                return False
+            
+            self.mu.reg_write(UC_MIPS_REG_PC, pc + 2)
+            return True
+        
+        return False
+
     def apply_manual_fixes(self):
         """No-op: kept for API compatibility with test scripts"""
         pass
@@ -546,6 +923,11 @@ class AliMipsSimulator:
         if not self.is_mips16_addr(pc):
             return ISAMode.MIPS32
         
+        # 1b. MIPS32 requires 4-byte alignment. If we're in the MIPS16 range
+        # and PC is NOT 4-byte aligned, it cannot be MIPS32.
+        if pc & 0x3:
+            return ISAMode.MIPS16
+        
         # 2. Exact match in learned set
         if pc in self.mips32_islands:
             return ISAMode.MIPS32
@@ -556,14 +938,9 @@ class AliMipsSimulator:
             if (pc + offset) in self.mips32_islands or (pc - offset) in self.mips32_islands:
                 return ISAMode.MIPS32
         
-        # 3b. Check last hook's instruction size — if Unicorn was executing in
-        # MIPS32 mode (size=4) at a MIPS16-range address just before stopping,
-        # and PC is close to that address, we're still in MIPS32 mode.
-        # This catches JALX targets: JALX switches Unicorn internally to MIPS32,
-        # so subsequent hooks report size=4 even though we started as MIPS16.
-        if (self._last_hook_size == 4 and self.is_mips16_addr(self._last_hook_addr)
-                and abs(pc - self._last_hook_addr) < 32):
-            return ISAMode.MIPS32
+        # Rule 3b (last_hook_size == 4) REMOVED: caused false MIPS32 detection
+        # at MIPS16 addresses when batch boundaries fell after MIPS32 code.
+        # The mips32_islands set (rules 2 and 3) handles this correctly.
         
         # 4. Conservative byte-probing for first encounters
         # Only match very specific MIPS32 patterns that cannot be MIPS16.
@@ -637,9 +1014,6 @@ class AliMipsSimulator:
                     start_pc = cur_pc
 
                 # Determine ISA mode for emu_start by probing the bytes at PC.
-                # We cannot rely on tracked isa_mode from _hook_code because
-                # emu_stop() can fire at a MIPS16 delay slot of a JALX, leaving
-                # isa_mode=MIPS16 even though the CPU switched to MIPS32.
                 if self._detect_isa_mode(start_pc) == ISAMode.MIPS16:
                     start_pc |= 1
                     self.isa_mode = ISAMode.MIPS16
@@ -648,10 +1022,21 @@ class AliMipsSimulator:
 
                 # Run!
                 self._emu_started_as_mips32 = (self.isa_mode == ISAMode.MIPS32)
+                prev_pc = cur_pc
                 self.mu.emu_start(start_pc, end_addr)
                 
                 # If we stopped, update PC
                 cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                
+                # Stuck-PC detection: if Unicorn returned to the same PC,
+                # it failed to execute the instruction. For MIPS16 code this
+                # typically means the instruction type is unsupported by Unicorn.
+                # Try manual emulation before giving up.
+                if cur_pc == prev_pc and self.isa_mode == ISAMode.MIPS16:
+                    if self._emulate_mips16_manual(cur_pc):
+                        cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                    # else: leave cur_pc as-is, will re-enter loop and detect
+                    #        via max_instructions or other stop condition
                 
                 # If we hit a breakpoint or stop address, break the loop to return to caller
                 if cur_pc in self.breakpoints or (self.stop_instr is not None and cur_pc == self.stop_instr):
@@ -666,10 +1051,12 @@ class AliMipsSimulator:
             self.log(f"Unicorn Error: {e}")
             self.log(f"PC at error: {hex(self.mu.reg_read(UC_MIPS_REG_PC))}")
             self.log(f"Status at error: {hex(self.mu.reg_read(UC_MIPS_REG_CP0_STATUS))}")
+            raise  # Re-raise so GUI can break
         except Exception as e:
             import traceback
             self.log(f"Error: {e}")
             self.log(traceback.format_exc())
+            raise  # Re-raise so GUI can break
 
     def runStep(self):
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
@@ -698,8 +1085,10 @@ class AliMipsSimulator:
         except UcError as e:
             self.log(f"Unicorn Error: {e}")
             self.log(f"PC at error: {hex(self.mu.reg_read(UC_MIPS_REG_PC))}")
+            raise  # Re-raise so GUI can break
         except Exception as e:
             self.log(f"Error: {e}")
+            raise  # Re-raise so GUI can break
     
     # NEW: Unified Stepping APIs
     
@@ -940,6 +1329,12 @@ class AliMipsSimulator:
         
         next_pc = self.mu.reg_read(UC_MIPS_REG_PC)
         
+        # If PC didn't advance, Unicorn failed to execute this MIPS16 instruction.
+        # Fall back to manual emulation.
+        if next_pc == pc:
+            if self._emulate_mips16_manual(pc):
+                next_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+        
         # Detect mode switch (jalx switches back to MIPS32)
         mode_after = mode_before
         mode_switched = False
@@ -1179,8 +1574,10 @@ class AliMipsSimulator:
                 break
         
         if not best_instrs:
-            # Ultimate fallback: Show raw hex dump around PC
-            print(f"[DEBUG] No valid disassembly found, using hex dump fallback at PC=0x{pc:08X}")
+            # Ultimate fallback: Show raw hex dump around PC (suppress repeated prints)
+            if not hasattr(self, '_last_fallback_pc') or self._last_fallback_pc != pc:
+                print(f"[DEBUG] No valid disassembly found, using hex dump fallback at PC=0x{pc:08X}")
+                self._last_fallback_pc = pc
             curr = max(0, pc - 20)  # Show a bit before PC
             for i in range(25):  # Show ~50 bytes
                 try:

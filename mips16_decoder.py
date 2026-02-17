@@ -113,6 +113,42 @@ class MIPS16Decoder:
                      
                      return ("lw", f"{ry},{hex(full_imm)}({rx})")
                  
+                 # SB (0x18) extended - Store Byte
+                 if op2 == 0x18:
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     return ("sb", f"{ry},{hex(full_imm)}({rx})")
+
+                 # SH (0x19) extended - Store Halfword
+                 if op2 == 0x19:
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     return ("sh", f"{ry},{hex(full_imm)}({rx})")
+
+                 # SW (0x1B) extended - Store Word (reg-rel)
+                 if op2 == 0x1B:
+                     imm5 = insn & 0x1F
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                     if full_imm & 0x8000:
+                         full_imm -= 0x10000
+                     rx_code = (insn >> 8) & 0x7
+                     ry_code = (insn >> 5) & 0x7
+                     rx = MIPS16Decoder.reg_3bit(rx_code)
+                     ry = MIPS16Decoder.reg_3bit(ry_code)
+                     return ("sw", f"{ry},{hex(full_imm)}({rx})")
+                 
                  return (f"EXT_{word1:04x}_{word2:04x}", "")
 
             return (f"UNK32_{word1:04x}{word2:04x}", "")
@@ -259,6 +295,19 @@ class MIPS16Decoder:
                     target = (address + 2) + offset
                     return ("btnez", f"0x{target:x}")
                 return ("btnez", f"0x{offset:x}")
+
+        # SHIFT - Major Op 0x06 (00110): SLL, SRL, SRA
+        # Format: 00110 rx ry sa[4:2] func[1:0]
+        # func: 00=SLL, 10=SRA, 11=SRL (01=reserved/SLLV in MIPS16e)
+        # sa=0 means shift-by-8 in MIPS16
+        if major_op == 0x06:
+            sa = (insn >> 2) & 0x7
+            func = insn & 0x3
+            if sa == 0:
+                sa = 8
+            shift_ops = {0: "sll", 2: "sra", 3: "srl"}
+            mnemonic = shift_ops.get(func, f"shift_{func}")
+            return (mnemonic, f"{rx},{ry},{sa}")
 
         # CMPI - Major Op 0xE (01110)
         if major_op == 0x0E:
