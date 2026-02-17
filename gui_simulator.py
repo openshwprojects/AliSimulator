@@ -15,7 +15,7 @@ class MIPSSimulatorGUI:
         self.root.title("MIPS Simulator - GUI Debugger (New Engine)")
         self.root.geometry("1400x900")
         
-        self.BINARY_FILE = "dump.bin"
+        self.BINARY_FILE = "dump_maciej.bin"
         
         # Simulator instance
         self.sim = None
