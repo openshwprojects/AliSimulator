@@ -5,13 +5,18 @@
 // ============================================================================
 
 uint8_t *Emulator::resolve_addr(uint32_t addr, bool write) {
-  // ROM: 0xAFC00000 - 0xB03FFFFF
+  // ROM: 0xAFC00000 - 0xB03FFFFF (KSEG1 uncached)
   if (addr >= ROM_BASE && addr < ROM_BASE + ROM_SIZE) {
     return &rom[addr - ROM_BASE];
   }
-  // ROM mirror: 0x0FC00000 - 0x103FFFFF
+  // ROM mirror: 0x0FC00000 - 0x103FFFFF (physical)
   if (addr >= ROM_MIRROR && addr < ROM_MIRROR + ROM_SIZE) {
     return &rom[addr - ROM_MIRROR];
+  }
+  // ROM mirror: 0x8FC00000 - 0x913FFFFF (KSEG0 cached)
+  if (addr >= (ROM_MIRROR + 0x80000000) &&
+      addr < (ROM_MIRROR + 0x80000000 + ROM_SIZE)) {
+    return &rom[addr - (ROM_MIRROR + 0x80000000)];
   }
 
   // RAM at 0x80000000

@@ -18,14 +18,16 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="emulator_core.cpp" />
-    <ClCompile Include="emulator_mem.cpp" />
-    <ClCompile Include="emulator_cpu.cpp" />
-    <ClCompile Include="emulator_itype.cpp" />
-    <ClCompile Include="emulator_cop.cpp" />
+    <ClCompile Include="emulator\emulator_core.cpp" />
+    <ClCompile Include="emulator\emulator_mem.cpp" />
+    <ClCompile Include="emulator\emulator_cpu.cpp" />
+    <ClCompile Include="emulator\emulator_itype.cpp" />
+    <ClCompile Include="emulator\emulator_cop.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="emulator.h" />
+    <ClInclude Include="emulator\emulator.h" />
+    <ClInclude Include="tests\test_ali_sdk_hello_world.h" />
+    <ClInclude Include="tests\test_boot_dump_copies_to_ram.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

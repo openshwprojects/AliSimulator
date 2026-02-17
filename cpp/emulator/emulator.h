@@ -32,6 +32,16 @@ public:
   // Instruction count
   int getInstructionCount() const { return instruction_count; }
 
+  // Read memory at virtual address (returns 0 for unmapped)
+  uint8_t readMem8(uint32_t addr);
+  uint32_t readMem32(uint32_t addr);
+  // Read a block of memory into a buffer, returns bytes read
+  int readMem(uint32_t addr, uint8_t *buf, int size);
+
+  // Run until PC reaches stop_addr (or max_instructions), returns instruction
+  // count
+  int runUntil(uint32_t stop_addr, int max_instructions = 1000000);
+
 private:
   // ---- CPU State ----
   uint32_t regs[32]; // General Purpose Registers ($0 is always 0)

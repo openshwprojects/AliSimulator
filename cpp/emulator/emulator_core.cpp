@@ -136,3 +136,46 @@ int Emulator::run(int max_instructions) {
       pc);
   return instruction_count;
 }
+
+// ============================================================================
+// Public Memory Access
+// ============================================================================
+
+uint8_t Emulator::readMem8(uint32_t addr) { return mem_read8(addr); }
+
+uint32_t Emulator::readMem32(uint32_t addr) { return mem_read32(addr); }
+
+int Emulator::readMem(uint32_t addr, uint8_t *buf, int size) {
+  for (int i = 0; i < size; i++) {
+    uint8_t *p = resolve_addr(addr + i);
+    if (!p)
+      return i;
+    buf[i] = *p;
+  }
+  return size;
+}
+
+// ============================================================================
+// Run Until
+// ============================================================================
+
+int Emulator::runUntil(uint32_t stop_addr, int max_instructions) {
+  stopped = false;
+  int count = 0;
+
+  while (!stopped && count < max_instructions) {
+    if (pc == stop_addr)
+      break;
+
+    uint32_t insn = mem_read32(pc);
+    pc = next_pc;
+    next_pc = pc + 4;
+    execute_instruction(insn);
+    regs[0] = 0;
+    cp0_count += 2;
+    instruction_count++;
+    count++;
+  }
+
+  return count;
+}
