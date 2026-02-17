@@ -88,8 +88,8 @@ def main():
     
     sim.loadFile("ali_sdk.bin")
     
-    # 50k is enough, tested for this specific bin
-    sim.run(max_instructions=50000)
+    # 60k is enough, tested for this specific bin
+    sim.run(max_instructions=60000)
     
     verifier.finish()
 
