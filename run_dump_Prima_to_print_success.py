@@ -44,9 +44,9 @@ def main():
     sim.setUartHandler(on_uart)
     
     try:
-        sim.loadFile("dump.bin")
+        sim.loadFile("SRT_Prima_VIII_V1.0.6_20160114.abs")
     except FileNotFoundError:
-        print("dump.bin not found")
+        print("SRT_Prima_VIII_V1.0.6_20160114.abs not found")
         sys.exit(1)
 
     print("Running simulator until success!...")
