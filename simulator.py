@@ -94,7 +94,7 @@ class AliMipsSimulator:
         #   0x08 SF_HIT_CODE  - command/opcode phase active
         #   0x40 SF_CONT_RD   - continuous read mode
         #   0x80 SF_CONT_WR   - continuous write mode
-        self._spi_jedec_id = [0xEF, 0x40, 0x18]  # Winbond W25Q128
+        self._spi_jedec_id = [0xEF, 0x40, 0x16]  # Winbond W25Q64 (capacity 0x16 is in device table)
         self._spi_ins = 0x03       # SF_INS: current SPI command (default: normal read)
         self._spi_fmt = 0x0D       # SF_FMT: default = HIT_CODE|HIT_ADDR|HIT_DATA (normal read)
         self._spi_dum = 0x00       # SF_DUM: dummy/data register
@@ -641,12 +641,126 @@ class AliMipsSimulator:
         # NOTE: JALX and MIPS16 instructions handled natively by Unicorn
         # MIPS16 stuck-PC handling now done in _hook_code (fires after this hook)
         
-        # Skip non-MIPS32 instructions
+        # Skip 16-bit MIPS16 instructions (handled by _emulate_mips16_manual)
         if size != 4:
             return
 
         try:
             insn_bytes = uc.mem_read(address, 4)
+
+            # ---- MIPS16 Extended Instruction Handling ----
+            # EXTEND prefix: bits 15:11 of first halfword == 11110 (0x1E)
+            # Unicorn reports size=4 for these, same as MIPS32, but they use
+            # a completely different encoding. We detect the EXTEND prefix and
+            # manually emulate memory operations targeting MMIO, since Unicorn's
+            # MIPS16 engine crashes (UC_ERR_EXCEPTION) on some extended stores.
+            word1 = int.from_bytes(insn_bytes[0:2], byteorder='little')
+            if (word1 >> 11) & 0x1F == 0x1E:
+                word2 = int.from_bytes(insn_bytes[2:4], byteorder='little')
+                ext_10_5 = (word1 >> 5) & 0x3F
+                ext_15_11 = word1 & 0x1F
+                op2 = (word2 >> 11) & 0x1F
+                rx_code = (word2 >> 8) & 0x7
+                ry_code = (word2 >> 5) & 0x7
+                imm5 = word2 & 0x1F
+
+                # Register-relative memory operations
+                # Loads: LB(0x10) LH(0x11) LW(0x13) LBU(0x14) LHU(0x15)
+                # Stores: SB(0x18) SH(0x19) SW(0x1B)
+                mem_ops = {0x10, 0x11, 0x13, 0x14, 0x15, 0x18, 0x19, 0x1B}
+                if op2 not in mem_ops:
+                    return  # Not a memory op, let Unicorn handle
+
+                rx_gpr = self.MIPS16_REG_MAP[rx_code]
+                ry_gpr = self.MIPS16_REG_MAP[ry_code]
+
+                # Full 16-bit signed offset from EXTEND + instruction immediate
+                full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
+                if full_imm & 0x8000:
+                    full_imm -= 0x10000
+
+                base_val = uc.reg_read(self.gpr_map[rx_gpr])
+                target = (base_val + full_imm) & 0xFFFFFFFF
+
+                # Only intercept MMIO accesses
+                is_mmio = (0x18000000 <= target < 0x19000000) or \
+                          (0x98000000 <= target < 0x99000000) or \
+                          (0xB8000000 <= target < 0xB9000000)
+                if not is_mmio:
+                    return
+
+                # Check if target is an SPI controller register
+                spi_reg_bases = [0x18000098, 0x98000098, 0xB8000098,
+                                 0x1802E098, 0x9802E098, 0xB802E098]
+                is_spi_reg = any(base <= target <= base + 3 for base in spi_reg_bases)
+
+                # Check if target is in the flash memory-mapped region
+                flash_bases = [self.base_addr, 0x0FC00000]
+                is_flash_region = any(fb <= target < fb + self.rom_size for fb in flash_bases)
+
+                # Determine store size from opcode
+                store_ops = {0x18: 1, 0x19: 2, 0x1B: 4}  # SB, SH, SW
+                load_ops = {0x10: (1, True), 0x14: (1, False),  # LB, LBU
+                            0x11: (2, True), 0x15: (2, False),  # LH, LHU
+                            0x13: (4, False)}                    # LW
+
+                if op2 in store_ops:
+                    sz = store_ops[op2]
+                    if sz == 1:
+                        val = uc.reg_read(self.gpr_map[ry_gpr]) & 0xFF
+                    elif sz == 2:
+                        val = uc.reg_read(self.gpr_map[ry_gpr]) & 0xFFFF
+                    else:
+                        val = uc.reg_read(self.gpr_map[ry_gpr])
+
+                    # Write the value to memory first
+                    uc.mem_write(target, val.to_bytes(sz, 'little'))
+
+                    # Invoke SPI register hook if targeting SPI controller
+                    if is_spi_reg:
+                        self._hook_spi_write(uc, UC_MEM_WRITE, target, sz, val, None)
+
+                    # Invoke SPI flash write hook if targeting flash region
+                    if is_flash_region:
+                        self._hook_spi_flash_write(uc, UC_MEM_WRITE, target, sz, val, None)
+
+                    # Handle UART writes
+                    if sz == 1 and target == 0xb8018300:
+                        self._uart_log(val)
+                        self.mu.mem_write(0xb8018305, b'\x20')
+                    elif sz == 4 and target <= 0xb8018300 < target + 4:
+                        off = 0xb8018300 - target
+                        self._uart_log((val >> (off * 8)) & 0xFF)
+
+                elif op2 in load_ops:
+                    sz, signed = load_ops[op2]
+
+                    # Invoke SPI flash read hook if targeting flash and
+                    # in SPI command mode (not passthrough)
+                    if is_flash_region and not self._spi_is_passthrough():
+                        self._hook_spi_flash_read(uc, UC_MEM_READ, target, sz, 0, None)
+
+                    # Invoke SPI register read hook if targeting SPI regs
+                    if is_spi_reg:
+                        self._hook_spi_read(uc, UC_MEM_READ, target, sz, 0, None)
+
+                    # Now read the (possibly updated) value from memory
+                    data = uc.mem_read(target, sz)
+                    if signed:
+                        val = int.from_bytes(data, 'little', signed=True) & 0xFFFFFFFF
+                    else:
+                        val = int.from_bytes(data, 'little')
+                    uc.reg_write(self.gpr_map[ry_gpr], val)
+                else:
+                    return
+
+                uc.reg_write(UC_MIPS_REG_PC, address + 4)
+                self._last_hook_size = 4
+                self._last_hook_addr = address
+                uc.emu_stop()
+                return
+
+            # ---- MIPS32 Instruction Handling ----
             insn = int.from_bytes(insn_bytes, byteorder='little')
             
             opcode = (insn >> 26) & 0x3F
