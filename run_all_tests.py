@@ -108,6 +108,10 @@ def discover_test_files():
     if reg_test_maciej.exists():
         test_files.append(str(reg_test_maciej))
     
+    reg_test_check_program = current_dir / "run_dump_to_print_check_program.py"
+    if reg_test_check_program.exists():
+        test_files.append(str(reg_test_check_program))
+    
     return sorted(test_files)
 
 
