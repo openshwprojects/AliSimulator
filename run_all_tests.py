@@ -124,7 +124,7 @@ def discover_test_files():
     if reg_test_prima.exists():
         test_files.append(str(reg_test_prima))
     
-    reg_test_success = current_dir / "run_dump_to_print_success.py"
+    reg_test_success = current_dir / "run_dump_Prima_to_print_success.py"
     if reg_test_success.exists():
         test_files.append(str(reg_test_success))
     
