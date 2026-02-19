@@ -8,7 +8,7 @@ from simulator import AliMipsSimulator
 def main():
     print(f"=== Regression Test: run dump to end ===")
     
-    sim = AliMipsSimulator(log_handler=lambda msg: None)
+    sim = AliMipsSimulator(log_handler=lambda msg: print(msg) if "INVALID" in msg or "STOPPED" in msg or "Address:" in msg or "Type:" in msg or "Size:" in msg or "PC:" in msg else None)
     
     # We'll capture UART output
     uart_output = []
@@ -36,7 +36,7 @@ def main():
     
     # Run with a safety limit
     try:
-        sim.run(max_instructions=2_000_000)
+        sim.run(max_instructions=55_000_000)
     except Exception as e:
         print(f"\nSimulator stopped with exception: {e}")
 
