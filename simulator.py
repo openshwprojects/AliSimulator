@@ -30,7 +30,7 @@ class StepResult:
 
 
 class AliMipsSimulator:
-    def __init__(self, rom_size=8*1024*1024, ram_size=128*1024*1024, log_handler=None):
+    def __init__(self, rom_size=4*1024*1024, ram_size=128*1024*1024, log_handler=None):
         self.rom_size = rom_size
         self.ram_size = ram_size
         self.base_addr = 0xAFC00000
@@ -141,7 +141,7 @@ class AliMipsSimulator:
         self.log(f"Mapping mirror at 0x0FC00000")
         self.mu.mem_map(0x0FC00000, self.rom_size)
         
-        # Shared RAM Buffer
+        # Shared RAM Buffer (128MB as per device spec)
         import ctypes
         self.ram_buffer = ctypes.create_string_buffer(self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
@@ -285,6 +285,18 @@ class AliMipsSimulator:
         self.log(f"Loading {filename}...")
         with open(filename, "rb") as f:
             code = f.read()
+        
+        # Auto-expand ROM mapping if file is larger than rom_size
+        if len(code) > self.rom_size:
+            new_size = (len(code) + 0xFFF) & ~0xFFF  # Round up to 4KB page
+            self.log(f"File size (0x{len(code):X}) exceeds rom_size (0x{self.rom_size:X}), expanding to 0x{new_size:X}")
+            # Unmap old regions and remap with new size
+            self.mu.mem_unmap(self.base_addr, self.rom_size)
+            self.mu.mem_unmap(0x0FC00000, self.rom_size)
+            self.rom_size = new_size
+            self.mu.mem_map(self.base_addr, self.rom_size)
+            self.mu.mem_map(0x0FC00000, self.rom_size)
+        
         self.mu.mem_write(self.base_addr, code)
         self.mu.mem_write(0x0FC00000, code)
         
@@ -297,17 +309,53 @@ class AliMipsSimulator:
         self.last_lui_addr = None
 
     def _hook_mem_invalid(self, uc, access, address, size, value, user_data):
-        access_types = {0: "READ", 1: "WRITE", 2: "FETCH", 16: "READ_UNMAPPED", 17: "WRITE_UNMAPPED", 18: "FETCH_UNMAPPED"}
+        access_types = {
+            16: "READ", 17: "WRITE", 18: "FETCH",
+            19: "READ_UNMAPPED", 20: "WRITE_UNMAPPED", 21: "FETCH_UNMAPPED",
+            22: "WRITE_PROT", 23: "READ_PROT", 24: "FETCH_PROT",
+        }
+        pc = uc.reg_read(UC_MIPS_REG_PC)
+        atype = access_types.get(access, f"UNKNOWN({access})")
         
-        if address == 0 and access in [2, 18]: # FETCH or FETCH_UNMAPPED
+        # Always print to stderr so crash details are never lost
+        import sys as _sys
+        print(f"\n[!] INVALID MEMORY ACCESS", file=_sys.stderr, flush=True)
+        print(f"    Type: {atype}", file=_sys.stderr, flush=True)
+        print(f"    Address: 0x{address:08X}", file=_sys.stderr, flush=True)
+        print(f"    Size: {size}", file=_sys.stderr, flush=True)
+        print(f"    PC: 0x{pc:08X}", file=_sys.stderr, flush=True)
+        
+        # Dump all GPRs for debugging
+        gpr_names = [
+            "zero","at","v0","v1","a0","a1","a2","a3",
+            "t0","t1","t2","t3","t4","t5","t6","t7",
+            "s0","s1","s2","s3","s4","s5","s6","s7",
+            "t8","t9","k0","k1","gp","sp","fp","ra"
+        ]
+        print(f"    --- Register Dump ---", file=_sys.stderr, flush=True)
+        for i, name in enumerate(gpr_names):
+            val = uc.reg_read(self.gpr_map[i])
+            print(f"    {name:4s} = 0x{val:08X}", file=_sys.stderr, flush=True)
+        
+        # Disassemble instruction at PC
+        try:
+            code = uc.mem_read(pc, 4)
+            print(f"    --- Instruction at PC ---", file=_sys.stderr, flush=True)
+            print(f"    Bytes: {' '.join(f'{b:02x}' for b in code)}", file=_sys.stderr, flush=True)
+            for i in self.md.disasm(bytes(code), pc):
+                print(f"    {i.mnemonic}\t{i.op_str}", file=_sys.stderr, flush=True)
+        except Exception as e:
+            print(f"    (could not disasm: {e})", file=_sys.stderr, flush=True)
+        
+        # Also send to log handler
+        if address == 0 and access in [18, 21]:  # FETCH or FETCH_UNMAPPED
             self.log(f"\n[!] STOPPED: Jump to NULL (0x0) detected!")
         else:
             self.log(f"\n[!] INVALID MEMORY ACCESS")
-            self.log(f"    Type: {access_types.get(access, access)}")
+            self.log(f"    Type: {atype}")
             self.log(f"    Address: 0x{address:08X}")
-            
         self.log(f"    Size: {size}")
-        self.log(f"    PC: 0x{uc.reg_read(UC_MIPS_REG_PC):08X}")
+        self.log(f"    PC: 0x{pc:08X}")
         return False
 
     def _hook_uart_write(self, uc, access, address, size, value, user_data):

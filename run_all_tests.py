@@ -116,6 +116,10 @@ def discover_test_files():
     if reg_test_bad_flash.exists():
         test_files.append(str(reg_test_bad_flash))
     
+    reg_test_maciej_verify = current_dir / "run_dump_maciej_to_bl_verify_sw.py"
+    if reg_test_maciej_verify.exists():
+        test_files.append(str(reg_test_maciej_verify))
+    
     return sorted(test_files)
 
 
