@@ -112,6 +112,10 @@ def discover_test_files():
     if reg_test_check_program.exists():
         test_files.append(str(reg_test_check_program))
     
+    reg_test_bad_flash = current_dir / "run_dump_with_bad_flash_id.py"
+    if reg_test_bad_flash.exists():
+        test_files.append(str(reg_test_bad_flash))
+    
     return sorted(test_files)
 
 
