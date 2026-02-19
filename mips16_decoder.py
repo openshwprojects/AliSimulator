@@ -249,7 +249,8 @@ class MIPS16Decoder:
             funct = insn & 0x3  # bits [1:0] for function code
             if funct == 0x1:  # ADDU
                 return ("addu", f"{rz},{rx},{ry}")
-            # Other RRR instructions can be added here
+            if funct == 0x2:  # SUBU
+                return ("subu", f"{rz},{rx},{ry}")
             return (f"UNK_RRR_{funct:x}", "")
 
         # ADDIU rx, SP, imm - Major 0x00
@@ -368,6 +369,17 @@ class MIPS16Decoder:
                     return ("btnez", f"0x{target:x}")
                 return ("btnez", f"0x{offset:x}")
 
+            elif subfunc == 0x2: # SWRASP - SW ra, offset(sp)
+                offset = (insn & 0xFF) << 2
+                return ("sw", f"ra,0x{offset:x}(sp)")
+
+            elif subfunc == 0x3: # ADJSP - ADDIU sp, sp, imm
+                imm = (insn & 0xFF) << 3
+                # Sign extend
+                if imm & 0x400:
+                    imm -= 0x800
+                return ("addiu", f"sp,sp,{imm}")
+
         # SHIFT - Major Op 0x06 (00110): SLL, SRL, SRA
         # Format: 00110 rx ry sa[4:2] func[1:0]
         # func: 00=SLL, 10=SRA, 11=SRL (01=reserved/SLLV in MIPS16e)
@@ -392,6 +404,11 @@ class MIPS16Decoder:
         if major_op == 0x0A:
             imm = insn & 0xFF
             return ("slti", f"{rx},0x{imm:x}")
+
+        # SLTIU: 0x0B (01011) - Set on Less Than Immediate Unsigned
+        if major_op == 0x0B:
+            imm = insn & 0xFF
+            return ("sltiu", f"{rx},0x{imm:x}")
 
         # BNEZ: 0x05 (00101)
         if major_op == 0x05:
@@ -451,11 +468,11 @@ class MIPS16Decoder:
              offset = (insn & 0x1F) << 2
              return ("sw", f"{ry},0x{offset:x}({rx})")
 
-        if (insn & 0xF800) == 0xD000: # SW SP (0x1A) - Redundant but safe
-             pass 
-             
-        if (insn & 0xF800) == 0xD800: # SW R-R (0x1B) - Redundant but safe
-             pass
+        # LB (Load Byte signed) - Major 0x10 (10000)
+        # Format: 10000 rx ry offset[4:0]
+        if major_op == 0x10:
+            imm = insn & 0x1F
+            return ("lb", f"{ry},0x{imm:x}({rx})")
 
         # LH (Load Halfword) - Major 0x11 (10001)
         # Format: 10001 rx ry offset[4:0]
@@ -555,48 +572,32 @@ class MIPS16Decoder:
             imm = (insn & 0x1F) << 1
             return ("sh", f"{ry},0x{imm:x}({rx})")
 
-        # SW (0xD800? - 11011) -> SW ry, offset(rx)
-        if major_op == 0x1B: # Wait, 11011 is SW SP? No.
-            # 11011 is SW SP if sub-decode?
-            # 0xD000 (11010) is SW SP.
-            # 0xD800 (11011) is SW R-R.
-            pass
-        if (insn & 0xF800) == 0xD000: # SW SP
-             imm = (insn & 0xFF) << 2
-             return ("sw", f"{rx},0x{imm:x}(sp)")
-             
-        if (insn & 0xF800) == 0xD800: # SW R-R
-             imm = (insn & 0x1F) << 2
-             return ("sw", f"{ry},0x{imm:x}({rx})")
-
-        # LW R-R (0x16? 10110? No)
-        # 0xB000 (10110)
-        if (insn & 0xF800) == 0xB000:
-             imm = (insn & 0x1F) << 2
-             return ("lw", f"{ry},0x{imm:x}({rx})")
 
         # RR instructions (Major 0x1D = 11101)
         if major_op == 0x1D:
             funct = insn & 0x1F
             if funct == 0:
-                # JR vs JRC distinction:
+                # JR / JRC / JALRC distinction:
+                # JALRC: rx=0, ry=0 → JALRC ra (Jump And Link Register Compact)
                 # JRC: rx=0, ry!=0 → Jump Register Compact (always RA, no delay slot)
                 # JR: rx!=0 → Jump Register (specified register, has delay slot)
+                if rx_code == 0 and ry_code == 0:
+                    return ("jalrc", "ra")
                 if rx_code == 0 and ry_code != 0:
                     return ("jrc", "ra")
                 return ("jr", f"{rx}")
             
-            # ADDU - funct 0x01 (00001)
-            # Format: 11101 rx ry rz 00001
-            # Operation: rz = rx + ry
-            if funct == 0x01:
-                return ("addu", f"{rz},{rx},{ry}")
+            # SLT - funct 0x02 (00010)
+            # Format: 11101 rx ry 00010
+            # Operation: T = (rx < ry) ? 1 : 0 (signed)
+            if funct == 0x02:
+                return ("slt", f"{rx},{ry}")
             
             # SLTU - funct 0x03 (00011)
-            # Format: 11101 rx ry rz 00011
-            # Operation: rz = (rx < ry) ? 1 : 0 (unsigned)
+            # Format: 11101 rx ry 00011
+            # Operation: T = (rx < ry) ? 1 : 0 (unsigned)
             if funct == 0x03:
-                return ("sltu", f"{rz},{rx},{ry}")
+                return ("sltu", f"{rx},{ry}")
             
             if funct == 0x11: # SEB / ZEB
                 # RR format for CNV operations:
@@ -635,9 +636,48 @@ class MIPS16Decoder:
             if funct == 0x0F:
                 return ("not", f"{rx},{ry}")
 
+            # SLLV - funct 0x04 (00100)
+            if funct == 0x04:
+                return ("sllv", f"{ry},{rx}")
+
+            # SRLV - funct 0x06 (00110)
+            if funct == 0x06:
+                return ("srlv", f"{ry},{rx}")
+
+            # SRAV - funct 0x07 (00111)
+            if funct == 0x07:
+                return ("srav", f"{ry},{rx}")
+
+            # CMP - funct 0x0A (01010)
+            if funct == 0x0A:
+                return ("cmp", f"{rx},{ry}")
+
+            # MULT - funct 0x18 (11000)
+            if funct == 0x18:
+                return ("mult", f"{rx},{ry}")
+
+            # MULTU - funct 0x19 (11001)
+            if funct == 0x19:
+                return ("multu", f"{rx},{ry}")
+
+            # DIV - funct 0x1A (11010)
+            if funct == 0x1A:
+                return ("div", f"{rx},{ry}")
+
+            # DIVU - funct 0x1B (11011)
+            if funct == 0x1B:
+                return ("divu", f"{rx},{ry}")
+
+            # MFHI - funct 0x10 (10000)
+            if funct == 0x10:
+                return ("mfhi", f"{rx}")
+
+            # MFLO - funct 0x12 (10010)
+            if funct == 0x12:
+                return ("mflo", f"{rx}")
+
             return (f"UNK_RR_{funct:x}", "")
             
-        # NOP (Move $0, $0 ? or 0x6500)
-        if insn == 0x6500: return ("_nop", "")
+        # (redundant NOP check removed — already handled at line 231)
         
         return (f"?_{insn:04x}", "")
