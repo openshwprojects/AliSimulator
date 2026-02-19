@@ -103,6 +103,7 @@ class AliMipsSimulator:
         self._spi_wel = False      # Write Enable Latch
         self._spi_response = []    # queued response bytes for memory-mapped reads
         self._spi_resp_idx = 0     # current read index into response
+        self._last_flash_read_page = -1  # for throttled flash read logging
 
         # Track last instruction's size and address from _hook_code.
         # Used by _detect_isa_mode to detect JALX-induced mode switches:
@@ -212,14 +213,12 @@ class AliMipsSimulator:
             self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_read, begin=base, end=base + 3)
 
         # SPI Flash Memory-Mapped Data Hooks (SYS_FLASH_BASE_ADDR)
-        # Command-mode READS (JEDEC ID, status) always access offset 0, so we
-        # hook only the first 4 bytes for reads to avoid slowing down normal
-        # instruction fetches from the ROM region.
-        # WRITES need the full range because erase/program use the access
-        # offset as the flash address (e.g. ((volatile UINT8*)base)[sector_addr] = 0).
+        # Read hook covers the full range to log flash read offsets.
+        # Passthrough path is cheap (page-change throttled logging).
+        # Writes need full range for erase/program operations.
         for flash_base in [self.base_addr, 0x0FC00000]:
             self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_flash_read,
-                             begin=flash_base, end=flash_base + 3)
+                             begin=flash_base, end=flash_base + self.rom_size - 1)
             self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_flash_write,
                              begin=flash_base, end=flash_base + self.rom_size - 1)
 
@@ -334,6 +333,7 @@ class AliMipsSimulator:
         offset = address & 0xF
         if offset == 0x8:  # SF_INS — SPI instruction register
             self._spi_ins = value & 0xFF
+            self._last_flash_read_page = -1  # Reset so next passthrough read always logs
             # Queue response based on command (response read via memory-mapped access)
             cmd = self._spi_ins
             cmd_name = self._SPI_CMD_NAMES.get(cmd, f"Unknown")
@@ -429,9 +429,12 @@ class AliMipsSimulator:
         In normal read mode, reads from SYS_FLASH_BASE_ADDR return actual
         flash content. The controller is in passthrough when:
           SF_INS = 0x03 (Read) or 0x0B (Fast Read)
-          SF_FMT has SF_HIT_ADDR set (address phase active)
+        
+        Note: SF_HIT_ADDR may or may not be set. In CONT_RD mode the firmware
+        sets FMT=0x0D (DATA|ADDR|CODE) for the first read, then FMT=0x09
+        (DATA|CODE) for sequential reads without address phase.
         """
-        return (self._spi_ins in (0x03, 0x0B)) and (self._spi_fmt & 0x04)  # SF_HIT_ADDR
+        return self._spi_ins in (0x03, 0x0B)
 
     def _hook_spi_flash_read(self, uc, access, address, size, value, user_data):
         """Handle reads from the memory-mapped flash region (SYS_FLASH_BASE_ADDR).
@@ -445,6 +448,17 @@ class AliMipsSimulator:
           result = *(volatile UINT32 *)SYS_FLASH_BASE_ADDR;  // read response
         """
         if self._spi_is_passthrough():
+            # Log flash read offset (throttled: only when 64KB sector changes)
+            if address >= self.base_addr:
+                flash_offset = address - self.base_addr
+            elif address >= 0x0FC00000:
+                flash_offset = address - 0x0FC00000
+            else:
+                flash_offset = address
+            sector = flash_offset >> 16  # 64KB sectors
+            if self._last_flash_read_page != sector:
+                self._last_flash_read_page = sector
+                self._spi_log(f"  FLASH READ @ 0x{flash_offset:06X} (sector {sector})")
             return  # Normal read mode — let ROM content pass through
 
         # Command mode — inject SPI response data
@@ -735,9 +749,9 @@ class AliMipsSimulator:
                 elif op2 in load_ops:
                     sz, signed = load_ops[op2]
 
-                    # Invoke SPI flash read hook if targeting flash and
-                    # in SPI command mode (not passthrough)
-                    if is_flash_region and not self._spi_is_passthrough():
+                    # Invoke SPI flash read hook if targeting flash region
+                    # (handles both command mode responses and passthrough offset logging)
+                    if is_flash_region:
                         self._hook_spi_flash_read(uc, UC_MEM_READ, target, sz, 0, None)
 
                     # Invoke SPI register read hook if targeting SPI regs
