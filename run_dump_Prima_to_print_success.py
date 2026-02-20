@@ -55,7 +55,7 @@ def main():
     
     # Run with a safety limit
     try:
-        sim.run(max_instructions=2_000_000)
+        sim.run(max_instructions=150_000_000)
     except Exception as e:
         print(f"\nSimulator stopped: {e}")
 
