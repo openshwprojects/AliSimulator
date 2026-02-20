@@ -38,6 +38,8 @@ class AliMipsSimulator:
         self.md = None
         self.uart_callback = None
         self.spi_callback = None
+        self.gpio_callback = None
+        self._gpio_dbg_seen = set()
         self._spi_dump_enabled = True
         self.log_callback = log_handler
 
@@ -205,6 +207,20 @@ class AliMipsSimulator:
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
 
+
+        # GPIO DO Register Hooks — only Data-Output registers for I2C/panel decoding
+        for mmio_base in [0x18000000, 0x98000000, 0xB8000000]:
+            for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0E8, 0x0F4
+                addr = mmio_base + gpio_off
+                self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_gpio_write, begin=addr, end=addr + 3)
+
+        # GPIO DI→DO loopback: reads from DI registers return DO values
+        # This is essential for I2C bit-bang — driver reads back pin state
+        for mmio_base in [0x18000000, 0x98000000, 0xB8000000]:
+            for di_off in self._GPIO_DI_TO_DO:  # 0x050, 0x0D0, 0x0E4, 0x0F0
+                addr = mmio_base + di_off
+                self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_gpio_di_read, begin=addr, end=addr + 3)
+
         # SPI Flash Controller Register Hooks
         # Hook BOTH register bases: 0xB8000098 (default) and 0xB802E098 (M3329E rev>=5)
         # Each base has 4 registers: SF_INS(+0x98), SF_FMT(+0x99), SF_DUM(+0x9A), SF_CFG(+0x9B)
@@ -248,6 +264,33 @@ class AliMipsSimulator:
     def setSPIDump(self, enabled):
         """Enable or disable SPI dump logging."""
         self._spi_dump_enabled = enabled
+
+    def setGpioHandler(self, handler, sda_gpio=None):
+        """Set callback for GPIO DO register writes: handler(address, size, value).
+        
+        If sda_gpio is set (0-127), also simulate I2C ACK by clearing that
+        bit in DI reads so the bit-bang driver sees slave pulling SDA low.
+        """
+        self.gpio_callback = handler
+        if sda_gpio is not None:
+            # Map gpio number to DI offset and bit mask
+            if sda_gpio < 32:
+                self._i2c_sda_di_offset = 0x050
+            elif sda_gpio < 64:
+                self._i2c_sda_di_offset = 0x0D0
+                sda_gpio -= 32
+            elif sda_gpio < 96:
+                self._i2c_sda_di_offset = 0x0E4
+                sda_gpio -= 64
+            else:
+                self._i2c_sda_di_offset = 0x0F0
+                sda_gpio -= 96
+            self._i2c_sda_mask = 1 << sda_gpio
+
+    def setI2CDump(self, enabled):
+        """Enable or disable I2C/GPIO trace logging. TM1650 results always shown."""
+        if self.gpio_callback and hasattr(self.gpio_callback, '__self__'):
+            self.gpio_callback.__self__.dump_enabled = enabled
 
     def addBreakpoint(self, address):
         self.breakpoints.add(address)
@@ -375,6 +418,80 @@ class AliMipsSimulator:
             # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
             lsr_addr = (address & ~0xFFFFF) | 0x18305
             uc.mem_write(lsr_addr, b'\x20')
+
+    # GPIO DO register offsets for I2C/panel decoding
+    _GPIO_DO_OFFSETS = {0x054, 0x0D4, 0x0E8, 0x0F4}
+
+    # GPIO DI (data-in) → DO (data-out) loopback mapping
+    # When firmware reads DI, return the DO value (pin loopback)
+    _GPIO_DI_TO_DO = {
+        0x050: 0x054,  # GPIO bank 0
+        0x0D0: 0x0D4,  # GPIO bank 1
+        0x0E4: 0x0E8,  # GPIO bank 2
+        0x0F0: 0x0F4,  # GPIO bank 3
+    }
+    # Corresponding DIR register offsets
+    _GPIO_DI_TO_DIR = {
+        0x050: 0x058,  # GPIO bank 0
+        0x0D0: 0x0D8,  # GPIO bank 1
+        0x0E4: 0x0EC,  # GPIO bank 2
+        0x0F0: 0x0F8,  # GPIO bank 3
+    }
+
+    def _notify_gpio(self, address, size, value):
+        """Notify GPIO callback if this write targets a GPIO DO register."""
+        if self.gpio_callback:
+            offset = address & 0xFFF
+            # Only match GPIO Data-Output registers, NOT direction (0x058) or other regs
+            if offset in self._GPIO_DO_OFFSETS:
+                # Read full 32-bit register value for correct bit extraction
+                base = address & ~3
+                try:
+                    data = self.mu.mem_read(base, 4)
+                    full_val = int.from_bytes(data, 'little')
+                except:
+                    full_val = value
+                self.gpio_callback(base, 4, full_val)
+
+
+
+    def _hook_gpio_write(self, uc, access, address, size, value, user_data):
+        """UC_HOOK_MEM_WRITE for GPIO region. Decoder handles dedup."""
+        if self.gpio_callback:
+            if size < 4:
+                base = address & ~3
+                data = uc.mem_read(base, 4)
+                value = int.from_bytes(data, 'little')
+                address = base
+                size = 4
+            self.gpio_callback(address, size, value)
+
+    def _hook_gpio_di_read(self, uc, access, address, size, value, user_data):
+        """GPIO DI→DO loopback with DIR-aware ACK simulation.
+        
+        For each bit:
+        - If DIR bit = 1 (output): return the DO value (master is driving)
+        - If DIR bit = 0 (input):  return 0 (simulate slave pulling low = ACK)
+        
+        This makes I2C START succeed (SDA=output, DI returns 1) while also
+        making ACK succeed (SDA=input after SET_SDA_IN, DI returns 0).
+        """
+        di_offset = address & 0xFFF
+        do_offset = self._GPIO_DI_TO_DO.get(di_offset)
+        dir_offset = self._GPIO_DI_TO_DIR.get(di_offset)
+        if do_offset is not None and dir_offset is not None:
+            mmio_base = address & 0xFFFFF000
+            try:
+                do_data = uc.mem_read(mmio_base + do_offset, 4)
+                do_val = int.from_bytes(do_data, 'little')
+                dir_data = uc.mem_read(mmio_base + dir_offset, 4)
+                dir_val = int.from_bytes(dir_data, 'little')
+                # Output bits (DIR=1): return DO value
+                # Input bits (DIR=0): return 0 (simulated slave response)
+                di_val = do_val & dir_val
+                uc.mem_write(address & ~3, di_val.to_bytes(4, 'little'))
+            except:
+                pass
 
     def _hook_spi_write(self, uc, access, address, size, value, user_data):
         """Handle writes to SPI flash controller registers.
@@ -785,6 +902,9 @@ class AliMipsSimulator:
                     # Write the value to memory first
                     uc.mem_write(target, val.to_bytes(sz, 'little'))
 
+                    # Handle GPIO writes (for I2C/TM1650 decoding)
+                    self._notify_gpio(target, sz, val)
+
                     # Invoke SPI register hook if targeting SPI controller
                     if is_spi_reg:
                         self._hook_spi_write(uc, UC_MEM_WRITE, target, sz, val, None)
@@ -800,6 +920,9 @@ class AliMipsSimulator:
                     elif sz == 4 and target <= 0xb8018300 < target + 4:
                         off = 0xb8018300 - target
                         self._uart_log((val >> (off * 8)) & 0xFF)
+
+                    # Handle GPIO writes (for I2C/TM1650 decoding)
+                    self._notify_gpio(target, sz, val)
 
                 elif op2 in load_ops:
                     sz, signed = load_ops[op2]
@@ -873,21 +996,23 @@ class AliMipsSimulator:
                 return
 
             val = 0
+
             
             if opcode == 0x28: # SB
                 val = uc.reg_read(self.gpr_map[rt]) & 0xFF
                 val_bytes = val.to_bytes(1, byteorder='little')
                 uc.mem_write(target, val_bytes)
-                # If target is UART, hook will handle it via uc.mem_write
                 if target == 0xb8018300:
                     self._uart_log(val)
                     self.mu.mem_write(0xb8018305, b'\x20') 
+                self._notify_gpio(target, 1, val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x29: # SH
                 val = uc.reg_read(self.gpr_map[rt]) & 0xFFFF
                 val_bytes = val.to_bytes(2, byteorder='little')
                 uc.mem_write(target, val_bytes)
+                self._notify_gpio(target, 2, val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
 
             elif opcode == 0x2B: # SW
@@ -898,6 +1023,7 @@ class AliMipsSimulator:
                     offset = 0xb8018300 - target
                     byte_val = (val >> (offset * 8)) & 0xFF
                     self._uart_log(byte_val)
+                self._notify_gpio(target, 4, val)
                 uc.reg_write(UC_MIPS_REG_PC, address + 4)
                 
             elif opcode == 0x23: # LW
