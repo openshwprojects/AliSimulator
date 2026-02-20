@@ -18,7 +18,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install unicorn
+        run: pip install unicorn capstone
 
       - name: Run all tests
         run: python run_all_tests.py
