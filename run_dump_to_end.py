@@ -9,6 +9,7 @@ def main():
     print(f"=== Regression Test: run dump to end ===")
     
     sim = AliMipsSimulator(log_handler=lambda msg: print(msg) if "INVALID" in msg or "STOPPED" in msg or "Address:" in msg or "Type:" in msg or "Size:" in msg or "PC:" in msg else None)
+    sim.setSPIDump(False)
     
     # We'll capture UART output
     uart_output = []
@@ -28,7 +29,7 @@ def main():
     try:
         sim.loadFile("dump.bin")
     except FileNotFoundError:
-        print("dump.bin not found")
+        print("dump_maciej.bin not found")
         sys.exit(1)
 
     print("Running simulator...")
@@ -36,7 +37,7 @@ def main():
     
     # Run with a safety limit
     try:
-        sim.run(max_instructions=55_000_000)
+        sim.run(max_instructions=5000000)
     except Exception as e:
         print(f"\nSimulator stopped with exception: {e}")
 

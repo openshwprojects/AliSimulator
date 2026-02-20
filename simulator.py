@@ -38,6 +38,7 @@ class AliMipsSimulator:
         self.md = None
         self.uart_callback = None
         self.spi_callback = None
+        self._spi_dump_enabled = True
         self.log_callback = log_handler
 
         self.instruction_count = 0
@@ -244,6 +245,10 @@ class AliMipsSimulator:
     def setSpiHandler(self, handler):
         self.spi_callback = handler
 
+    def setSPIDump(self, enabled):
+        """Enable or disable SPI dump logging."""
+        self._spi_dump_enabled = enabled
+
     def addBreakpoint(self, address):
         self.breakpoints.add(address)
         self.log(f"Breakpoint added at 0x{address:08X}")
@@ -276,6 +281,8 @@ class AliMipsSimulator:
     }
 
     def _spi_log(self, msg):
+        if not self._spi_dump_enabled:
+            return
         if self.spi_callback:
             self.spi_callback(msg)
         else:
