@@ -128,6 +128,10 @@ def discover_test_files():
     if reg_test_success.exists():
         test_files.append(str(reg_test_success))
     
+    reg_test_i2c_display = current_dir / "run_dump_maciej_to_I2C_display_ON.py"
+    if reg_test_i2c_display.exists():
+        test_files.append(str(reg_test_i2c_display))
+    
     return sorted(test_files)
 
 

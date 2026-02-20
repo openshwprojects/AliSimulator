@@ -29,10 +29,11 @@ class TM1650Decoder:
         0x40: '-', 0x08: '_', 0x80: '.',
     }
 
-    def __init__(self, scl_gpio=61, sda_gpio=74, log_handler=None):
+    def __init__(self, scl_gpio=61, sda_gpio=74, log_handler=None, on_transaction=None):
         self.scl_offset, self.scl_bit = self._gpio_to_offset_bit(scl_gpio)
         self.sda_offset, self.sda_bit = self._gpio_to_offset_bit(sda_gpio)
         self.log_handler = log_handler
+        self.on_transaction = on_transaction
 
         # I2C state
         self.prev_scl = 1
@@ -238,6 +239,9 @@ class TM1650Decoder:
         self.i2c_transaction_count += 1
         addr = self.bytes_received[0]
         data = self.bytes_received[1]
+
+        if self.on_transaction:
+            self.on_transaction(addr, data)
 
         if addr == self.ADDR_DISPLAY_CTRL:
             on = bool(data & 0x01)
