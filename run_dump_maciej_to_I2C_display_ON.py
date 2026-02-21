@@ -39,8 +39,17 @@ def main():
     sim.setGpioHandler(tm1650.on_gpio_write)
     sim.setI2CDump(False)
     
-    # Capture UART (silent)
-    sim.setUartHandler(lambda c: None)
+    # Capture UART output and print to stdout
+    uart_output = []
+    def on_uart(char):
+        uart_output.append(char)
+        # Prevent flooding stdout
+        if len(uart_output) < 1000:
+            sys.stdout.write(char)
+            sys.stdout.flush()
+        elif len(uart_output) == 1000:
+            sys.stdout.write("\n[... output suppressed due to flooding ...]\n")
+    sim.setUartHandler(on_uart)
     
     try:
         sim.loadFile("dump_maciej.bin")
