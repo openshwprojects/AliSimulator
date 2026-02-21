@@ -400,6 +400,20 @@ class AliMipsSimulator:
         self.visit_counts = {}
         self.last_lui_addr = None
 
+    def loadFileTruncated(self, filename, max_bytes):
+        """Load a ROM file but keep only the first max_bytes.
+        
+        The rest of ROM is filled with 0xFF (erased flash state).
+        Useful for testing bootloader behavior when main app chunks
+        are missing or corrupted.
+        """
+        self.loadFile(filename)
+        if max_bytes < self.rom_size:
+            pad = b'\xFF' * (self.rom_size - max_bytes)
+            self.mu.mem_write(self.base_addr + max_bytes, pad)
+            self.mu.mem_write(0x0FC00000 + max_bytes, pad)
+            self.log(f"Truncated ROM to {max_bytes // 1024}KB (rest filled with 0xFF)")
+
     def _hook_mem_invalid(self, uc, access, address, size, value, user_data):
         access_types = {
             16: "READ", 17: "WRITE", 18: "FETCH",

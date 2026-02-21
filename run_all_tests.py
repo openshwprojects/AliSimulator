@@ -143,6 +143,10 @@ def discover_test_files():
     reg_test_uart_overflow = current_dir / "run_dump_maciej_to_check_uart_overflow.py"
     if reg_test_uart_overflow.exists():
         test_files.append(str(reg_test_uart_overflow))
+
+    reg_test_no_main_app = current_dir / "run_dump_no_main_app.py"
+    if reg_test_no_main_app.exists():
+        test_files.append(str(reg_test_no_main_app))
     
     return sorted(test_files)
 
