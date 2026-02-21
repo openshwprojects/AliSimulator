@@ -139,6 +139,10 @@ def discover_test_files():
     reg_test_uart_negative = current_dir / "run_dump_maciej_without_uart_interrupt.py"
     if reg_test_uart_negative.exists():
         test_files.append(str(reg_test_uart_negative))
+
+    reg_test_uart_overflow = current_dir / "run_dump_maciej_to_check_uart_overflow.py"
+    if reg_test_uart_overflow.exists():
+        test_files.append(str(reg_test_uart_overflow))
     
     return sorted(test_files)
 
