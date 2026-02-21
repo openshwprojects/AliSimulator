@@ -131,6 +131,14 @@ def discover_test_files():
     reg_test_i2c_display = current_dir / "run_dump_maciej_to_I2C_display_ON.py"
     if reg_test_i2c_display.exists():
         test_files.append(str(reg_test_i2c_display))
+
+    reg_test_uart_buffer = current_dir / "run_dump_maciej_to_verify_uart_buffer.py"
+    if reg_test_uart_buffer.exists():
+        test_files.append(str(reg_test_uart_buffer))
+
+    reg_test_uart_negative = current_dir / "run_dump_maciej_without_uart_interrupt.py"
+    if reg_test_uart_negative.exists():
+        test_files.append(str(reg_test_uart_negative))
     
     return sorted(test_files)
 

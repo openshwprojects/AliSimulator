@@ -69,9 +69,23 @@ class AliMipsSimulator:
         self.pc_history = []
         self.history_size = 50
 
-        # Simulated CP0 Count register (hardware cycle counter)
-        # Unicorn doesn't expose CP0 Count via reg_read/reg_write, so we track it ourselves.
+        # Simulated CP0 registers — Unicorn doesn't reliably expose these.
+        # Count (reg 9): hardware cycle counter, incremented every instruction
+        # Status (reg 12): IE, EXL, IM bits — controls interrupt enable
+        # Cause (reg 13): IP bits — pending interrupt lines
+        # EPC (reg 14): saved PC on exception entry
         self.cp0_count = 0
+        self.cp0_status = 0x10400000  # Must match Unicorn's initial CP0 Status
+        self.cp0_cause = 0
+        self.cp0_epc = 0
+
+        # UART Receive simulation
+        from collections import deque
+        self._uart_rx_queue = deque()  # Queued bytes for UART receive
+        self._pending_uart_irq = False
+        self._uart_irq_delivered = False
+        self._uart_irq_arm_after = 0  # Deliver IRQ only after this icount
+        self._uart_irq_retries = 0
         self._step_count = 0  # Hook-based step counter for precise single-stepping
 
         # Set of addresses observed executing as MIPS32 within the MIPS16 region.
@@ -202,10 +216,14 @@ class AliMipsSimulator:
         phys_end = self.ram_size - 1
         # RAM Sync Hooks REMOVED (Handled by mem_map_ptr)
 
-        # UART Hooks (Aliased)
+        # UART Hooks (Aliased) — Write hooks for TX
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x18018300, end=0x18018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
+        # UART Hooks — Read hooks for RX simulation (LSR, URBR, UIIR)
+        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0x18018300, end=0x18018309)
+        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0x98018300, end=0x98018309)
+        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0xb8018300, end=0xb8018309)
 
 
         # GPIO DO Register Hooks — only Data-Output registers for I2C/panel decoding
@@ -257,6 +275,30 @@ class AliMipsSimulator:
 
     def setUartHandler(self, handler):
         self.uart_callback = handler
+
+    def setUartReceiveData(self, data_bytes, delay_instructions=500000, force_immediate=False):
+        """Queue bytes for UART receive simulation.
+
+        When the firmware's UART ISR runs, it reads UIIR, LSR, and URBR.
+        Our read hook serves bytes from this queue.  Also arms interrupt
+        delivery so the ISR gets invoked via the MIPS exception vector.
+
+        Args:
+            data_bytes: bytes to queue for UART receive
+            delay_instructions: wait this many instructions before delivering
+                               the first interrupt (default 500K, so TDS2 has
+                               registered the UART ISR via OS_RegisterISR)
+            force_immediate: if True, deliver IRQ at exactly delay_instructions
+                            regardless of CP0 Status IE/EXL (for testing)
+        """
+        self._uart_rx_queue.extend(data_bytes)
+        if len(self._uart_rx_queue) > 0:
+            self._pending_uart_irq = True
+            self._uart_irq_delivered = False
+            self._uart_irq_arm_after = self.instruction_count + delay_instructions
+            self._uart_irq_retries = 0
+            self._uart_irq_force = force_immediate
+        self.log(f"[UART RX] Queued {len(data_bytes)} bytes, IRQ armed after {delay_instructions} instructions{' (FORCED)' if force_immediate else ''}")
 
     def setSpiHandler(self, handler):
         self.spi_callback = handler
@@ -418,6 +460,37 @@ class AliMipsSimulator:
             # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
             lsr_addr = (address & ~0xFFFFF) | 0x18305
             uc.mem_write(lsr_addr, b'\x20')
+
+    def _hook_uart_read(self, uc, access, address, size, value, user_data):
+        """Handle reads from UART registers for RX simulation.
+
+        16550 UART registers at base 0xB8018300:
+          +0 URBR  — Receive Buffer Register (read: get received byte)
+          +2 UIIR  — Interrupt Identification Register
+          +5 ULSR  — Line Status Register (bit0=DataReady, bit5=THRE)
+        """
+        reg_offset = (address & 0xF)  # offset within UART block
+        if reg_offset == 5:  # ULSR — Line Status Register
+            lsr = 0x20  # bit5 = THRE always set
+            if len(self._uart_rx_queue) > 0:
+                lsr |= 0x01  # bit0 = Data Ready
+            uc.mem_write(address, bytes([lsr]))
+        elif reg_offset == 0:  # URBR — Receive Buffer Register
+            if len(self._uart_rx_queue) > 0:
+                byte_val = self._uart_rx_queue.popleft()
+                uc.mem_write(address, bytes([byte_val]))
+                self.log(f"[UART RX] Read byte 0x{byte_val:02X} ('{chr(byte_val)}'), {len(self._uart_rx_queue)} remaining")
+                # Re-trigger interrupt if more data available
+                if len(self._uart_rx_queue) > 0:
+                    self._pending_uart_irq = True
+                    self._uart_irq_delivered = False
+        elif reg_offset == 2:  # UIIR — Interrupt Identification Register
+            if len(self._uart_rx_queue) > 0:
+                # bit0=0 means interrupt pending, bits[3:1]=010 = Received Data Available
+                uc.mem_write(address, bytes([0x04]))
+            else:
+                # bit0=1 means no interrupt pending
+                uc.mem_write(address, bytes([0x01]))
 
     # GPIO DO register offsets for I2C/panel decoding
     _GPIO_DO_OFFSETS = {0x054, 0x0D4, 0x0E8, 0x0F4}
@@ -720,6 +793,43 @@ class AliMipsSimulator:
         # Without this, firmware timeout loops polling MFC0 reg 9 never exit.
         self.cp0_count = (self.cp0_count + 2) & 0xFFFFFFFF
 
+        # UART Interrupt Delivery: simulate MIPS hardware interrupt.
+        # Delay until enough instructions have executed for TDS2 to have
+        # registered the UART ISR via OS_RegisterISR.
+        if self._pending_uart_irq and not self._uart_irq_delivered:
+            if self.instruction_count >= self._uart_irq_arm_after:
+                ie = self.cp0_status & 0x01       # Interrupt Enable
+                exl = self.cp0_status & 0x02      # Exception Level
+                force = getattr(self, '_uart_irq_force', False)
+                if force or (ie and not exl):
+                    self._uart_irq_delivered = True
+                    self._pending_uart_irq = False
+                    self._uart_irq_retries += 1
+                    # Set ALI Interrupt Controller EISR/EIER for UART IRQ 24
+                    # EISR bits 0-23 map to IRQ 8-31, so IRQ 24 = bit 16.
+                    uart_ic_bit = 1 << 16
+                    for mmio_base in [0x18000000, 0x98000000, 0xB8000000]:
+                        try:
+                            eisr_addr = mmio_base + 0x30
+                            eisr_val = int.from_bytes(uc.mem_read(eisr_addr, 4), 'little')
+                            uc.mem_write(eisr_addr, (eisr_val | uart_ic_bit).to_bytes(4, 'little'))
+                            eier_addr = mmio_base + 0x38
+                            eier_val = int.from_bytes(uc.mem_read(eier_addr, 4), 'little')
+                            uc.mem_write(eier_addr, (eier_val | uart_ic_bit).to_bytes(4, 'little'))
+                        except:
+                            pass
+                    # Save PC -> EPC, set exception state
+                    self.cp0_epc = address
+                    self.cp0_cause = 0x00000800   # IP[3] bit set
+                    self.cp0_status |= 0x0800     # IM[3] enable
+                    self.cp0_status |= 0x02       # EXL = 1
+                    bev = (self.cp0_status >> 22) & 1
+                    exc_vector = 0xBFC00380 if bev else 0x80000180
+                    uc.reg_write(UC_MIPS_REG_PC, exc_vector)
+                    self.log(f"[UART IRQ] Delivering interrupt #{self._uart_irq_retries} -> {hex(exc_vector)} (from {hex(address)}, icount={self.instruction_count})")
+                    uc.emu_stop()
+                    return
+
         # Stuck-PC detection: if Unicorn fires the hook at the same address twice
         # in a row, it failed to execute the instruction (unsupported MIPS16 opcode).
         # Manually emulate and stop so run() re-enters from the new PC.
@@ -962,22 +1072,57 @@ class AliMipsSimulator:
             imm = insn & 0xFFFF
             if imm & 0x8000: imm -= 0x10000 
 
-            # MFC0: opcode=0x10 (COP0), rs=0x00 (MF)
-            # Intercept reads of CP0 Count register (rd=9).
-            # Unicorn doesn't increment CP0 Count, so firmware polling loops hang.
-            # We set the dest register to our simulated cp0_count, advance PC,
-            # and stop emulation so Unicorn doesn't overwrite with its stale value.
-            if opcode == 0x10 and rs == 0x00 and rd == 9:
-                uc.reg_write(self.gpr_map[rt], self.cp0_count)
-                uc.reg_write(UC_MIPS_REG_PC, address + 4)
-                # Update tracking BEFORE emu_stop — _hook_code may not fire
-                # after emu_stop, so _detect_isa_mode needs these for re-entry.
-                self._last_hook_size = 4
-                self._last_hook_addr = address
-                if self.is_mips16_addr(address + 4):
-                    self.mips32_islands.add(address + 4)
-                uc.emu_stop()
-                return
+            # COP0 instructions: opcode=0x10
+            if opcode == 0x10:
+                funct = insn & 0x3F
+                # MFC0: rs=0x00 (MF) — read CP0 register into GPR
+                if rs == 0x00:
+                    cp0_val = 0
+                    if rd == 9:    cp0_val = self.cp0_count
+                    elif rd == 12: cp0_val = self.cp0_status
+                    elif rd == 13: cp0_val = self.cp0_cause
+                    elif rd == 14: cp0_val = self.cp0_epc
+                    else: return  # Unknown CP0 reg, let Unicorn handle
+                    uc.reg_write(self.gpr_map[rt], cp0_val & 0xFFFFFFFF)
+                    uc.reg_write(UC_MIPS_REG_PC, address + 4)
+                    self._last_hook_size = 4
+                    self._last_hook_addr = address
+                    if self.is_mips16_addr(address + 4):
+                        self.mips32_islands.add(address + 4)
+                    uc.emu_stop()
+                    return
+                # MTC0: rs=0x04 (MT) — write GPR into CP0 register
+                elif rs == 0x04:
+                    val = uc.reg_read(self.gpr_map[rt])
+                    if rd == 9:    self.cp0_count = val & 0xFFFFFFFF
+                    elif rd == 12:
+                        self.cp0_status = val & 0xFFFFFFFF
+                        try: uc.reg_write(UC_MIPS_REG_CP0_STATUS, val & 0xFFFFFFFF)
+                        except: pass
+                    elif rd == 13: self.cp0_cause = val & 0xFFFFFFFF
+                    elif rd == 14: self.cp0_epc = val & 0xFFFFFFFF
+                    else: return  # Unknown CP0 reg, let Unicorn handle natively
+                    uc.reg_write(UC_MIPS_REG_PC, address + 4)
+                    self._last_hook_size = 4
+                    self._last_hook_addr = address
+                    uc.emu_stop()
+                    return
+                # ERET: rs=0x10 (CO), funct=0x18 — return from exception
+                elif rs == 0x10 and funct == 0x18:
+                    self.cp0_status &= ~0x02   # Clear EXL
+                    uc.reg_write(UC_MIPS_REG_PC, self.cp0_epc)
+                    self._last_hook_size = 4
+                    self._last_hook_addr = address
+                    self.log(f"[ERET] Returning to {hex(self.cp0_epc)}, Status=0x{self.cp0_status:08X}")
+                    # Re-arm UART IRQ if more data pending
+                    if len(self._uart_rx_queue) > 0:
+                        self._pending_uart_irq = True
+                        self._uart_irq_delivered = False
+                        self._uart_irq_arm_after = self.instruction_count + 100
+                    uc.emu_stop()
+                    return
+                else:
+                    return  # Other COP0 instructions, let Unicorn handle
 
             # LUI handled natively by Unicorn
 
