@@ -92,6 +92,7 @@ class MIPSSimulatorGUI:
             # Create simulator instance
             # We pass our log method as the handler
             self.sim = AliMipsSimulator(log_handler=self.log)
+            self.sim.hook_every_instruction = True   # exact per-instruction hook for history/loop counts
             self.sim.setUartHandler(self.on_uart_write)
             self.sim.setSpiHandler(self.on_spi_log)
             
@@ -199,21 +200,24 @@ class MIPSSimulatorGUI:
         if self.is_running: return
         self.temp_breakpoints.clear()
         
-        # Analyze current instruction
+        # Analyze current instruction in the CPU's current ISA mode
         try:
             pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-            code_bytes = self.sim.mu.mem_read(pc, 4)
-            instrs = list(self.sim.md.disasm(code_bytes, pc))
-            
-            if instrs:
-                instr = instrs[0]
-                # Check for JAL, JALR, BAL
-                if instr.mnemonic in ['jal', 'jalr', 'bal']:
+            m16 = self.sim.is_mips16_mode()
+            mnemonic, operands, size = self.sim._decode_for_display(pc, m16)
+            if mnemonic in ['jal', 'jalx', 'jalr', 'jalrc', 'bal']:
+                if m16:
+                    # MIPS16: return address is after the call and its delay slot
+                    # (JALRC has no delay slot)
+                    return_addr = pc + size
+                    if mnemonic != 'jalrc':
+                        return_addr += self.sim._decode_for_display(return_addr, True)[2]
+                else:
                     return_addr = pc + 8
-                    self.log(f"Stepping over call at 0x{pc:08X} -> break at 0x{return_addr:08X}")
-                    self.temp_breakpoints.add(return_addr)
-                    self.run_to_breakpoint()
-                    return
+                self.log(f"Stepping over call at 0x{pc:08X} -> break at 0x{return_addr:08X}")
+                self.temp_breakpoints.add(return_addr)
+                self.run_to_breakpoint()
+                return
         except: pass
         
         # Default: just step into

@@ -83,7 +83,7 @@ def run_test_file(test_file_path):
         sys.exit = original_exit
 
 
-def discover_test_files():
+def discover_test_files(include_slow=False):
     """
     Discover all test files in the current directory.
     
@@ -147,7 +147,13 @@ def discover_test_files():
     reg_test_no_main_app = current_dir / "run_dump_no_main_app.py"
     if reg_test_no_main_app.exists():
         test_files.append(str(reg_test_no_main_app))
-    
+
+    # Slow regressions (minutes): only with --slow
+    if include_slow:
+        reg_test_main_app = current_dir / "run_dump_maciej_to_main_app.py"
+        if reg_test_main_app.exists():
+            test_files.append(str(reg_test_main_app))
+
     return sorted(test_files)
 
 
@@ -157,8 +163,11 @@ def main():
     print("MIPS Simulator Test Suite - Running All Tests")
     print("=" * 80)
     
-    # Discover all test files
-    test_files = discover_test_files()
+    # Discover all test files (--slow adds the multi-minute regressions)
+    include_slow = "--slow" in sys.argv[1:]
+    test_files = discover_test_files(include_slow)
+    if not include_slow:
+        print("(slow regressions skipped; run with --slow to include run_dump_maciej_to_main_app.py)")
     
     if not test_files:
         print("No test files found!")

@@ -246,12 +246,9 @@ class MIPS16Decoder:
         # Format: 11100 rx ry rz func
         # ADDU: rz = rx + ry
         if major_op == 0x1C:
-            funct = insn & 0x3  # bits [1:0] for function code
-            if funct == 0x1:  # ADDU
-                return ("addu", f"{rz},{rx},{ry}")
-            if funct == 0x2:  # SUBU
-                return ("subu", f"{rz},{rx},{ry}")
-            return (f"UNK_RRR_{funct:x}", "")
+            funct = insn & 0x3  # bits [1:0]: 0=DADDU 1=ADDU 2=DSUBU 3=SUBU
+            rrr_ops = {0: "daddu", 1: "addu", 2: "dsubu", 3: "subu"}
+            return (rrr_ops[funct], f"{rz},{rx},{ry}")
 
         # ADDIU rx, SP, imm - Major 0x00
         if major_op == 0x00:
@@ -269,18 +266,23 @@ class MIPS16Decoder:
                 return ("beqz", f"{rx},0x{target:x}")
             return ("beqz", f"{rx},0x{offset:x}")
         
-            # ADDIU rx, imm - Major 0x08 (01000) - ADDIU rx, rx, immediate
+        # RRI-A format - Major 0x08 (01000): ADDIU ry, rx, imm4 (sign-extended)
+        # Encoding: 01000 rx(3) ry(3) f(1) imm(4); f=1 is DADDIU (MIPS64 only)
         if major_op == 0x08:
-            imm = insn & 0xFF
-            # Sign extend 8-bit immediate
-            if imm & 0x80:
-                imm_signed = imm - 0x100
-                return ("addiu", f"{rx},{rx},-0x{-imm_signed:x}")
-            return ("addiu", f"{rx},{rx},0x{imm:x}")
+            imm = insn & 0xF
+            if imm & 0x8:
+                imm -= 0x10
+            f = (insn >> 4) & 1
+            mnemonic = "daddiu" if f else "addiu"
+            if imm < 0:
+                return (mnemonic, f"{ry},{rx},-0x{-imm:x}")
+            return (mnemonic, f"{ry},{rx},0x{imm:x}")
 
-        # ADDIU8 rx, imm - Major 0x09 (01001) - ADDIU rx, unsigned imm8
+        # ADDIU8 rx, imm - Major 0x09 (01001): rx = rx + sign_extend(imm8)
         if major_op == 0x09:
             imm = insn & 0xFF
+            if imm & 0x80:
+                return ("addiu", f"{rx},-0x{0x100 - imm:x}")
             return ("addiu", f"{rx},0x{imm:x}")
 
         # I8 Format (SAVE, RESTORE, etc) - Major 0x0C
@@ -311,9 +313,11 @@ class MIPS16Decoder:
             # The standard encoding may not cover all cases (e.g., move t9, a0).
             # TODO: Investigate alternative MOVE formats or EXTEND prefix handling.
             if subfunc == 0x5:
-                r32 = (insn >> 3) & 0x1F
-                ry_reg = insn & 0x7
-                return ("move", f"{MIPS16Decoder.reg_3bit(ry_reg)},{MIPS16Decoder.reg_5bit(r32)}")
+                # MOV32R: 01100 101 r32[2:0] r32[4:3] rz  ->  move r32, rz
+                # (the 5-bit register number is stored with its low 3 bits first)
+                r32 = ((insn >> 5) & 0x7) | (((insn >> 3) & 0x3) << 3)
+                rz_reg = insn & 0x7
+                return ("move", f"{MIPS16Decoder.reg_5bit(r32)},{MIPS16Decoder.reg_3bit(rz_reg)}")
 
             # MOVI32R: move r32, ry (MIPS32 ← MIPS16) - subfunc=6
             if subfunc == 0x6:
@@ -381,15 +385,15 @@ class MIPS16Decoder:
                 return ("addiu", f"sp,sp,{imm}")
 
         # SHIFT - Major Op 0x06 (00110): SLL, SRL, SRA
-        # Format: 00110 rx ry sa[4:2] func[1:0]
-        # func: 00=SLL, 10=SRA, 11=SRL (01=reserved/SLLV in MIPS16e)
+        # Format: 00110 rx ry sa[4:2] f[1:0]
+        # f: 00=SLL, 01=DSLL (MIPS64 only), 10=SRL, 11=SRA
         # sa=0 means shift-by-8 in MIPS16
         if major_op == 0x06:
             sa = (insn >> 2) & 0x7
             func = insn & 0x3
             if sa == 0:
                 sa = 8
-            shift_ops = {0: "sll", 2: "sra", 3: "srl"}
+            shift_ops = {0: "sll", 1: "dsll", 2: "srl", 3: "sra"}
             mnemonic = shift_ops.get(func, f"shift_{func}")
             return (mnemonic, f"{rx},{ry},{sa}")
 
@@ -577,15 +581,17 @@ class MIPS16Decoder:
         if major_op == 0x1D:
             funct = insn & 0x1F
             if funct == 0:
-                # JR / JRC / JALRC distinction:
-                # JALRC: rx=0, ry=0 → JALRC ra (Jump And Link Register Compact)
-                # JRC: rx=0, ry!=0 → Jump Register Compact (always RA, no delay slot)
-                # JR: rx!=0 → Jump Register (specified register, has delay slot)
-                if rx_code == 0 and ry_code == 0:
-                    return ("jalrc", "ra")
-                if rx_code == 0 and ry_code != 0:
-                    return ("jrc", "ra")
-                return ("jr", f"{rx}")
+                # J(AL)R(C) family, variant in bits 7:5 (the ry field):
+                # 000 JR rx, 001 JR ra, 010 JALR rx (delay slot);
+                # 100 JRC rx, 101 JRC ra, 110 JALRC rx (compact, no delay slot)
+                variant = ry_code
+                if variant == 0: return ("jr", f"{rx}")
+                if variant == 1: return ("jr", "ra")
+                if variant == 2: return ("jalr", f"{rx}")
+                if variant == 4: return ("jrc", f"{rx}")
+                if variant == 5: return ("jrc", "ra")
+                if variant == 6: return ("jalrc", f"{rx}")
+                return (f"UNK_JR_{variant:x}", f"{rx}")
             
             # SLT - funct 0x02 (00010)
             # Format: 11101 rx ry 00010

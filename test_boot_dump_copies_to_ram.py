@@ -44,7 +44,7 @@ def main():
             
         try:
             # Run!
-            sim.mu.emu_start(cur_pc, end_addr)
+            sim.mu.emu_start(sim.start_pc(cur_pc), end_addr)   # bit 0 = current ISA mode
         except UcError as e:
             # If we simply stopped, it might not be an error, but usually emu_stop via hook is fine.
             pass

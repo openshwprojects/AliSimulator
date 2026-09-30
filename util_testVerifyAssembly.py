@@ -119,7 +119,7 @@ def run_until_trigger(sim, context, limit_instructions):
         sim.apply_manual_fixes()
         sim.invalidate_jit(cur_pc)
         try:
-            sim.mu.emu_start(cur_pc, end_addr) 
+            sim.mu.emu_start(sim.start_pc(cur_pc), end_addr)   # bit 0 = current ISA mode
         except UcError:
             pass 
         

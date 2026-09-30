@@ -29,8 +29,11 @@ def main():
         
         # Prevent flooding stdout
         if len(uart_output) < 1000:
-            sys.stdout.write(char)
-            sys.stdout.flush()
+            try:
+                sys.stdout.write(bytearray([ord(char)]).decode('ascii', errors='replace'))
+                sys.stdout.flush()
+            except:
+                pass
         elif len(uart_output) == 1000:
             sys.stdout.write("\n[... output suppressed due to flooding ...]\n")
 
@@ -47,7 +50,7 @@ def main():
     
     # Run with a safety limit
     try:
-        sim.run(max_instructions=5000000)
+        sim.run(max_instructions=100_000_000)
     except Exception as e:
         print(f"\nSimulator stopped with exception: {e}")
 
@@ -56,7 +59,8 @@ def main():
     print(f"\n\nTest finished in {duration:.2f}s")
     
     full_text = "".join(uart_output)
-    print(f"\nFull UART Output:\n{full_text}")
+    print("\nFull UART Output:")
+    print(full_text.encode('ascii', errors='replace').decode('ascii'))
     
     # Print final PC
     try:
