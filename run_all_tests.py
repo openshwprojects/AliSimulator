@@ -47,19 +47,10 @@ def run_test_file(test_file_path):
     print(f"Running: {test_name}")
     print(f"{'=' * 80}\n")
     
-    # Save original sys.exit to intercept exit codes
-    original_exit = sys.exit
+    # A test's sys.exit() ends that test (SystemExit is caught here), so a
+    # sys.exit(1) can no longer be overwritten by a later sys.exit(0).
     exit_code = 0
-    
-    def mock_exit(code=0):
-        nonlocal exit_code
-        exit_code = code
-        # Don't actually exit, just capture the code
-    
     try:
-        # Temporarily replace sys.exit
-        sys.exit = mock_exit
-        
         # Load and run the module
         module = load_test_module(test_file_path)
         if module and hasattr(module, 'main'):
@@ -67,20 +58,18 @@ def run_test_file(test_file_path):
         else:
             print(f"Warning: {test_name} has no main() function")
             return test_name, False
-            
-        # Check if test passed (exit code 0 means success)
-        passed = (exit_code == 0)
-        return test_name, passed
-        
+
+    except SystemExit as e:
+        exit_code = 0 if e.code is None else e.code
+
     except Exception as e:
         print(f"Error running {test_name}: {e}")
         import traceback
         traceback.print_exc()
         return test_name, False
-        
-    finally:
-        # Restore original sys.exit
-        sys.exit = original_exit
+
+    # Check if test passed (exit code 0 means success)
+    return test_name, exit_code == 0
 
 
 def discover_test_files(include_slow=False):

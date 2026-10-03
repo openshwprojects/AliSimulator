@@ -8,9 +8,10 @@ whole bootloader and starts the main application.
   3. expand() decompressed the main-code chunk correctly: the RAM at the entry
      equals an offline LZMA decompression of the chunk found in the flash
      image (7 MB compared byte for byte),
-  4. the application then runs until it parks in its idle loop (a `b .`
-     instruction), where it waits for the tick interrupt that the simulator
-     does not generate yet.
+  4. the application's RTOS runs: it takes CP0 timer interrupts (IP7 ticks)
+     and its main task gets past its first sleep and prints the init banner
+     ('MC: APP  init ok').  Before the timer existed the application parked
+     forever in the idle task's `b .`.
 
 Included in run_all_tests.py only with --slow.
 """
@@ -25,6 +26,7 @@ from unicorn.mips_const import UC_MIPS_REG_PC
 EXPECTED_STRINGS = ["APP  init!", "bl_panel_init!", "bl_flash_init!", "bl_verify_sw", "success!"]
 CHUNKID_MAINCODE, CHUNKID_MAINCODE_MASK = 0x01FE0000, 0xFFFF0000
 BOOT_LIMIT_S = 15 * 60
+APP_LIMIT_S = 120
 
 
 def find_main_code(flash):
@@ -118,16 +120,23 @@ def main():
         sys.exit(1)
     print(f"  [PASS] expand() output matches the LZMA decompression ({len(image)} bytes)")
 
-    # 4. the application runs until it parks in an idle loop (b .)
+    # 4. the RTOS takes timer ticks and the main task prints its init banner
+    ticks0, uart0 = sim.timer_irq_count, len(uart)
     t = time.time()
-    while time.time() - t < 30:
+    while time.time() - t < APP_LIMIT_S and "MC: APP  init ok" not in "".join(uart[uart0:]):
         sim.run(max_instructions=sim.instruction_count + 5_000_000)
-    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    word = int.from_bytes(sim.mu.mem_read(pc, 4), 'little')
-    if word != 0x1000FFFF:
-        print(f"  [FAIL] application is not parked in a `b .` loop (PC=0x{pc:08X}, word 0x{word:08X})")
+    app_text = "".join(uart[uart0:])
+    ticks = sim.timer_irq_count - ticks0
+    print(f"  application: {ticks} timer interrupts in {time.time() - t:.0f}s, "
+          f"UART: {app_text.encode('ascii', 'replace').decode()[:120]!r}")
+    if ticks == 0:
+        print("  [FAIL] the application took no timer interrupts")
         sys.exit(1)
-    print(f"  [PASS] application parked in its idle loop at 0x{pc:08X} (waiting for the tick interrupt)")
+    if "MC: APP  init ok" not in app_text:
+        pc = sim.mu.reg_read(UC_MIPS_REG_PC)
+        print(f"  [FAIL] 'MC: APP  init ok' not printed within {APP_LIMIT_S}s (PC=0x{pc:08X})")
+        sys.exit(1)
+    print(f"  [PASS] the RTOS runs on timer ticks and the application printed 'MC: APP  init ok'")
     print(f"\n[PASS] main application started ({time.time() - start:.0f}s total)")
     sys.exit(0)
 
