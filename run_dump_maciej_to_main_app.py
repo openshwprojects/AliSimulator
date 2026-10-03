@@ -27,6 +27,10 @@ EXPECTED_STRINGS = ["APP  init!", "bl_panel_init!", "bl_flash_init!", "bl_verify
 CHUNKID_MAINCODE, CHUNKID_MAINCODE_MASK = 0x01FE0000, 0xFFFF0000
 BOOT_LIMIT_S = 15 * 60
 APP_LIMIT_S = 120
+EXPECTED_APP = ("\x01MC: APP  init ok\r\r\n<< SDK4.0ba.4.0_20101217 >>\r\n\r\r\n"
+                "Libcore version 8.9.0@SDK4.0bd.8.9_20130409(gcc version 3.4.4 mipssde-6.06.01-20070420)"
+                "(vic.wang@ Mon Apr 1 19:08:06 2013)\r\n\r\r\n"
+                "Application version 1.0.0@SDK4.0ba.7.4_20120227\r\n\r\r\n")
 
 
 def find_main_code(flash):
@@ -121,9 +125,10 @@ def main():
     print(f"  [PASS] expand() output matches the LZMA decompression ({len(image)} bytes)")
 
     # 4. the RTOS takes timer ticks and the main task prints its init banner
+    #    (compared exactly: duplicated or lost characters fail)
     ticks0, uart0 = sim.timer_irq_count, len(uart)
     t = time.time()
-    while time.time() - t < APP_LIMIT_S and "MC: APP  init ok" not in "".join(uart[uart0:]):
+    while time.time() - t < APP_LIMIT_S and len(uart) - uart0 < len(EXPECTED_APP):
         sim.run(max_instructions=sim.instruction_count + 5_000_000)
     app_text = "".join(uart[uart0:])
     ticks = sim.timer_irq_count - ticks0
@@ -132,11 +137,12 @@ def main():
     if ticks == 0:
         print("  [FAIL] the application took no timer interrupts")
         sys.exit(1)
-    if "MC: APP  init ok" not in app_text:
+    if app_text != EXPECTED_APP:
         pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-        print(f"  [FAIL] 'MC: APP  init ok' not printed within {APP_LIMIT_S}s (PC=0x{pc:08X})")
+        print(f"  [FAIL] the application banner differs from the expected {len(EXPECTED_APP)} characters "
+              f"within {APP_LIMIT_S}s (PC=0x{pc:08X}): {app_text!r}")
         sys.exit(1)
-    print(f"  [PASS] the RTOS runs on timer ticks and the application printed 'MC: APP  init ok'")
+    print(f"  [PASS] the RTOS runs on timer ticks and the application printed its exact init banner")
     print(f"\n[PASS] main application started ({time.time() - start:.0f}s total)")
     sys.exit(0)
 

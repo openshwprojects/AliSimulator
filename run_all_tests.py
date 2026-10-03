@@ -137,6 +137,12 @@ def discover_test_files(include_slow=False):
     if reg_test_no_main_app.exists():
         test_files.append(str(reg_test_no_main_app))
 
+    # The firmware boots into its main application, whose RTOS runs on CP0
+    # timer ticks (about 10 s each)
+    for name in ("run_dump_to_main_app.py", "run_dump_Prima_to_main_app.py"):
+        if (current_dir / name).exists():
+            test_files.append(str(current_dir / name))
+
     # Slow regressions (minutes): only with --slow
     if include_slow:
         reg_test_main_app = current_dir / "run_dump_maciej_to_main_app.py"

@@ -154,8 +154,14 @@ of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
 --slow` adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 5 minutes), checks the
 decompressed image against an offline LZMA decompression of the flash chunk,
-and checks that the application's RTOS runs on timer ticks (it prints
-'MC: APP  init ok').
+and checks that the application's RTOS runs on timer ticks (it prints its
+init banner, compared exactly). `run_dump_to_main_app.py` and
+`run_dump_Prima_to_main_app.py` (about 10 s each, in the default run) do the
+same for dump.bin and SRT Prima: their whole UART output -- bootloader lines
+plus the application's 'MC: APP  init ok' / SDK / Libcore / Application
+banner -- must match byte for byte, timer interrupts must be taken, and the
+application must keep running. Before the CP0 timer existed these
+applications parked in the RTOS idle task right after 'success!'.
 
 Mechanism tests that need no firmware dump: `test_isa_mode_tracking.py`
 (MIPS32/MIPS16 switches, breakpoints inside MIPS16 code),
