@@ -6,7 +6,9 @@ Before the CP0 timer interrupt existed, the application parked forever in the
 RTOS idle task (`b .` at 0x802B1254) right after the bootloader's 'success!'.
 The whole UART output is compared byte for byte, so duplicated or lost
 characters (e.g. a device access replayed after an asynchronous slice stop)
-fail the test.  About 10 s.
+fail the test.  The init then has to get past the PMU handshake (0xB8018D02,
+6-7 minutes of polling when unmodelled) and the VCAP busy bit (0xB800F04B,
+an endless spin when unmodelled).  About 15 s.
 """
 import sys
 

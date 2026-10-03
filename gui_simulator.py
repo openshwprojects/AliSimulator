@@ -389,15 +389,15 @@ class MIPSSimulatorGUI:
                 if watch['type'] == 'direct':
                     addr = watch['address']
                     length = watch['length']
-                    current_value = self.sim.mu.mem_read(addr, length)
+                    current_value = self.sim.peek(addr, length)
                 elif watch['type'] == 'pointer':
                     ptr_addr = watch['ptr_address']
                     offset = watch.get('offset', 0)
                     length = watch['length']
-                    ptr_bytes = self.sim.mu.mem_read(ptr_addr, 4)
+                    ptr_bytes = self.sim.peek(ptr_addr, 4)
                     ptr_value = int.from_bytes(ptr_bytes, byteorder='little')
                     addr = ptr_value + offset
-                    current_value = self.sim.mu.mem_read(addr, length)
+                    current_value = self.sim.peek(addr, length)
                 else: continue
                 
                 prev_value = self.watch_previous_values.get(i)
@@ -733,7 +733,7 @@ class MIPSSimulatorGUI:
             try:
                 if self.sim:
                     if watch['type'] == 'direct':
-                        val = self.sim.mu.mem_read(watch['address'], watch['length'])
+                        val = self.sim.peek(watch['address'], watch['length'])
                         if watch['length'] <= 4:
                             val_int = int.from_bytes(val, 'little')
                             self.watch_listbox.insert(tk.END, f"[{i}] {hex(watch['address'])}: {val.hex()} ({val_int})")
@@ -745,11 +745,11 @@ class MIPSSimulatorGUI:
                         offset = watch.get('offset', 0)
                         length = watch['length']
                         
-                        ptr_bytes = self.sim.mu.mem_read(ptr_addr, 4)
+                        ptr_bytes = self.sim.peek(ptr_addr, 4)
                         ptr_val = int.from_bytes(ptr_bytes, 'little')
                         actual_addr = ptr_val + offset
                         
-                        val = self.sim.mu.mem_read(actual_addr, length)
+                        val = self.sim.peek(actual_addr, length)
                         if length <= 4:
                             val_int = int.from_bytes(val, 'little')
                             self.watch_listbox.insert(tk.END, f"[{i}] *{hex(ptr_addr)}+{offset}->{hex(actual_addr)}: {val.hex()} ({val_int})")
@@ -777,7 +777,7 @@ class MIPSSimulatorGUI:
         val = simpledialog.askstring("Write", "Value (hex):")
         if addr and val:
             try:
-                self.sim.mu.mem_write(int(addr, 16), int(val, 16).to_bytes(4, 'little'))
+                self.sim.poke(int(addr, 16), int(val, 16).to_bytes(4, 'little'))
                 self.log(f"Wrote {val} to {addr}")
                 self.update_watch_list()
             except Exception as e: messagebox.showerror("Error", str(e))

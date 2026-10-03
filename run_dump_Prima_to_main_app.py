@@ -5,7 +5,9 @@ application, whose RTOS runs on CP0 timer ticks and prints its init banner.
 Before the CP0 timer interrupt existed, the application parked forever in the
 RTOS idle task (`b .` at 0x802EA124) right after the bootloader's 'success!'.
 The whole UART output is compared byte for byte (the Libcore line carries a
-UTF-8 date), so duplicated or lost characters fail the test.  About 10 s.
+UTF-8 date), so duplicated or lost characters fail the test.  The init then
+has to get past the PMU handshake (0xB8018D02) and the VCAP busy bit
+(0xB800F04B), see app_reach_check.py.  About 15 s.
 """
 import sys
 

@@ -103,11 +103,16 @@ class AliMipsSimulator:
         self._timer_next_icount = 0   # exact mode: instruction_count of the next crossing check
         self._count_observed = None   # last Count value the guest read or wrote
         self._uart_ip3 = False        # IP3 asserted by a delivered UART interrupt until ERET
+        self._ic_lines = 0            # interrupt-controller inputs driven by modelled devices (see _ic_set_line)
+        self.ic_irq_count = 0         # IP3 interrupts taken for those lines
+        self._ge_status = 0           # graphics engine interrupt status (+8, see _hook_ge_write)
+        self.ge_ops = 0               # graphics engine commands completed
         self._in_run = False          # inside run(): hooks may stop the slice to deliver an IRQ
         self._run_tid = None          # thread running run()
         self._external_stop = False   # emu_stop() from another thread during run(): return
         self._eret_logged = 0
         self._dev_last = None         # last non-idempotent device access in this emu_start (see _dev_note)
+        self._dev_cb_depth = 0        # > 0 while a device access callback runs
         self._dev_replays = {}        # (pc, sp) -> access a stop left the PC on (its re-execution is a replay)
         self._ds_dev_warned = set()   # PCs of device accesses in delay slots already warned about
 
@@ -289,6 +294,23 @@ class AliMipsSimulator:
         
         import ctypes
         
+        # No UC_HOOK_MEM_READ / UC_HOOK_MEM_WRITE hooks in normal operation:
+        # while one such hook exists, whatever its range, Unicorn translates
+        # every load (store) to its slow path, which scans the whole hook list
+        # per access (decided per translation block when it is translated).
+        # With the ~60 device hooks this used to have, RAM loads / stores ran
+        # ~3x slower (dump_maciej's LZMA bootloader: ~200 s of emulation
+        # instead of ~64 s).  Instead the device registers are an mmio_map
+        # region (Python is called only for accesses to it), the flash window
+        # is write-protected (stores to it fault into a hook), and the flash
+        # read hook exists only around SPI command mode (see
+        # _update_flash_read_hooks).
+        # Memory hooks and protection faults report physical addresses, and
+        # the guest only ever reaches the physical mappings (kseg0 / kseg1
+        # translate to physical; kuseg is mapped 1:1 under the forced ERL),
+        # so the 0x8.../0x9.../0xA.../0xB... mappings below are views for
+        # Python (mem_read(0xB8000030), mem_write(base_addr, ...)).
+
         # Shared ROM Buffer (Usually 4MB dumped flash)
         self.rom_buffer = ctypes.create_string_buffer(self.rom_size)
         rom_ptr = ctypes.addressof(self.rom_buffer)
@@ -299,12 +321,16 @@ class AliMipsSimulator:
         # 0x0F000000 is the ALi flash window (KSEG0 0x8F..., KSEG1 0xAF...).
         # 0x1F000000 (KSEG1 0xBF...) holds the MIPS reset/BEV exception vectors
         # (0xBFC00000 / 0xBFC00380) which the chip also decodes to the flash.
+        # The physical windows the guest uses are read-only: a store to them
+        # (an SPI command trigger / page program data) faults into
+        # _hook_flash_write_prot, which emulates it and lets it land.
         for offset in range(0, 0x01000000, self.rom_size):
             for phys in (0x0F000000, 0x1F000000):
                 for seg in (0x00000000, 0x80000000, 0xA0000000):
                     base = seg + phys + offset
+                    perms = (UC_PROT_READ | UC_PROT_EXEC) if seg == 0 else UC_PROT_ALL
                     try:
-                        self.mu.mem_map_ptr(base, self.rom_size, UC_PROT_ALL, rom_ptr)
+                        self.mu.mem_map_ptr(base, self.rom_size, perms, rom_ptr)
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
         
@@ -318,100 +344,71 @@ class AliMipsSimulator:
         self.mu.mem_map_ptr(0xA0000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         self.mu.mem_map_ptr(0x00000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         
-        # Map MMIO
+        # Map MMIO: one shared register buffer.  The guest reaches it at the
+        # physical 0x18000000 (from any segment), an mmio_map region whose
+        # callbacks dispatch to the device handlers registered with _mmio_on
+        # and otherwise read / write the buffer like RAM.  0x98000000 /
+        # 0xB8000000 map the same buffer for Python (no side effects).
         MMIO_SIZE = 0x01000000
-        mmio_regions = [
-            (0x18000000, "Physical"),
-            (0x98000000, "KSEG0 cached"),
-            (0xB8000000, "KSEG1 uncached"),
-        ]
-        
-        # One shared MMIO buffer: the physical, KSEG0 and KSEG1 views of a
-        # register must agree, whichever segment the firmware uses.
         self.mmio_buffer = ctypes.create_string_buffer(MMIO_SIZE)
         mmio_ptr = ctypes.addressof(self.mmio_buffer)
-        for base, name in mmio_regions:
+        self._mmio_rd = {}          # offset -> [handler]: reads starting at that offset
+        self._mmio_wr = {}          # offset -> [handler]: writes starting at that offset
+        for base, name in [(0x98000000, "KSEG0 view"), (0xB8000000, "KSEG1 view")]:
             try:
                 self.mu.mem_map_ptr(base, MMIO_SIZE, UC_PROT_ALL, mmio_ptr)
-                self.log(f"Mapped {name} peripherals at {hex(base)} (shared)")
+                self.log(f"Mapped {name} of the peripherals at {hex(base)} (shared)")
             except UcError as e:
                 self.log(f"Warning: {name} at {hex(base)} - {e}")
+        self.mu.mmio_map(0x18000000, MMIO_SIZE, self._mmio_read, None, self._mmio_write, None)
 
-        # Set UART LSR
-        try:
-            self.mu.mem_write(0xb8018305, b'\x20')
-            # Mirror LSR to Physical and KSEG0 to avoid polling loops
-            self.mu.mem_write(0x18018305, b'\x20')
-            self.mu.mem_write(0x98018305, b'\x20')
-            self.log("Initialized UART LSR at 0xb8018305 (and mirrors) to 0x20")
-        except Exception as e:
-            self.log(f"Failed to init UART LSR: {e}")
-
-        # Set Magic Value at 0xb8000002 for testing
-        try:
-            val_bytes = b'\x11\x38' # 0x3811 Little Endian
-            self.mu.mem_write(0xb8000002, val_bytes)
-            self.mu.mem_write(0x18000002, val_bytes)
-            self.mu.mem_write(0x98000002, val_bytes)
-            self.log("Initialized magic value 0x3811 at 0xb8000002 (and mirrors)")
-        except Exception as e:
-            self.log(f"Failed to init magic value: {e}")
+        # Set UART LSR (THR empty) so the firmware's putc does not wait
+        self.mu.mem_write(0xB8018305, b'\x20')
+        # Chip ID 0x3811 at 0xB8000002
+        self.mu.mem_write(0xB8000002, b'\x11\x38')
 
         # Hooks
-        self.mu.hook_add(UC_HOOK_MEM_INVALID, self._hook_mem_invalid)
-        # Memory Sync Hook (KSEG0 <-> KSEG1)
-        # KSEG0: 0x80000000, KSEG1: 0xA0000000
-        # We hook both regions to sync writes
-        kseg0_end = 0x80000000 + self.ram_size - 1
-        kseg1_end = 0xA0000000 + self.ram_size - 1
-        phys_end = self.ram_size - 1
-        # RAM Sync Hooks REMOVED (Handled by mem_map_ptr)
+        self.mu.hook_add(UC_HOOK_MEM_UNMAPPED | UC_HOOK_MEM_FETCH_PROT | UC_HOOK_MEM_READ_PROT,
+                         self._hook_mem_invalid)
+        self.mu.hook_add(UC_HOOK_MEM_WRITE_PROT, self._hook_flash_write_prot)
 
-        # UART Hooks (Aliased) — Write hooks for TX
-        self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x18018300, end=0x18018305)
-        self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0x98018300, end=0x98018305)
-        self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_uart_write, begin=0xb8018300, end=0xb8018305)
-        # UART Hooks — Read hooks for RX simulation (LSR, URBR, UIIR)
-        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0x18018300, end=0x18018309)
-        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0x98018300, end=0x98018309)
-        self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_uart_read, begin=0xb8018300, end=0xb8018309)
+        # Device registers (offsets in the 0x18000000 window, any segment)
+        # UART: THR writes (TX), LSR / URBR / UIIR reads (RX simulation)
+        self._mmio_on('w', self._hook_uart_write, 0x18300, 0x18305)
+        self._mmio_on('r', self._hook_uart_read, 0x18300, 0x18309)
+        # GPIO DO writes for I2C / panel decoding, DI reads loop DO back
+        for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0E8, 0x0F4
+            self._mmio_on('w', self._hook_gpio_write, gpio_off, gpio_off + 3)
+        for di_off in self._GPIO_DI_TO_DO:      # 0x050, 0x0D0, 0x0E4, 0x0F0
+            self._mmio_on('r', self._hook_gpio_di_read, di_off, di_off + 3)
+        # Device operations the applications start and then poll for completion
+        # (see _hook_selfcomplete_read): PMU 0x18018D02, VCAP 0x1800F04B
+        for reg in self._SELF_COMPLETING:
+            self._mmio_on('r', self._hook_selfcomplete_read, reg & ~3, reg)
+        # Graphics engine command / interrupt status (_hook_ge_write) and the
+        # interrupt controller status the modelled lines show up in
+        self._mmio_on('w', self._hook_ge_write, 0xA004, 0xA00B)
+        self._mmio_on('r', self._hook_ge_read, 0xA008, 0xA00B)
+        self._mmio_on('r', self._hook_ic_status_read, 0x30, 0x37)
+        # SPI flash controller: both register bases, 0xB8000098 (default) and
+        # 0xB802E098 (M3329E rev>=5), each SF_INS(+0x98), SF_FMT(+0x99),
+        # SF_DUM(+0x9A), SF_CFG(+0x9B)
+        for base in (0x00098, 0x2E098):
+            self._mmio_on('w', self._hook_spi_write, base, base + 3)
+            self._mmio_on('r', self._hook_spi_read, base, base + 3)
 
-
-        # GPIO DO Register Hooks — only Data-Output registers for I2C/panel decoding
-        for mmio_base in [0x18000000, 0x98000000, 0xB8000000]:
-            for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0E8, 0x0F4
-                addr = mmio_base + gpio_off
-                self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_gpio_write, begin=addr, end=addr + 3)
-
-        # GPIO DI→DO loopback: reads from DI registers return DO values
-        # This is essential for I2C bit-bang — driver reads back pin state
-        for mmio_base in [0x18000000, 0x98000000, 0xB8000000]:
-            for di_off in self._GPIO_DI_TO_DO:  # 0x050, 0x0D0, 0x0E4, 0x0F0
-                addr = mmio_base + di_off
-                self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_gpio_di_read, begin=addr, end=addr + 3)
-
-        # SPI Flash Controller Register Hooks
-        # Hook BOTH register bases: 0xB8000098 (default) and 0xB802E098 (M3329E rev>=5)
-        # Each base has 4 registers: SF_INS(+0x98), SF_FMT(+0x99), SF_DUM(+0x9A), SF_CFG(+0x9B)
-        for base in [0x18000098, 0x98000098, 0xB8000098,
-                     0x1802E098, 0x9802E098, 0xB802E098]:
-            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_write, begin=base, end=base + 3)
-            self.mu.hook_add(UC_HOOK_MEM_READ, self._hook_spi_read, begin=base, end=base + 3)
-
-        # SPI Flash Memory-Mapped Data Hooks (SYS_FLASH_BASE_ADDR)
-        # Read hook covers the full range to log flash read offsets.
-        # Passthrough path is cheap (page-change throttled logging).
-        # Writes need full range for erase/program operations.
-        # Cover every 16MB flash window (physical / KSEG0 / KSEG1 of 0x0F000000
-        # and 0x1F000000): the firmware uses both 0xAFC00000 and 0x0FC00000.
-        # The read hook is only installed while the SPI controller is in
-        # command mode (or SPI dump logging is on): in normal read mode every
-        # flash load would otherwise pay for a Python callback.
-        self._flash_windows = [0x0F000000, 0x8F000000, 0xAF000000, 0x1F000000, 0x9F000000, 0xBF000000]
+        # SPI flash memory-mapped data (SYS_FLASH_BASE_ADDR, the physical
+        # 0x0F000000 / 0x1F000000 windows; the firmware uses both 0xAFC00000
+        # and 0x0FC00000).  Stores fault into _hook_flash_write_prot; the read
+        # hook is only installed around SPI command mode (or with
+        # setSPIDump(True, flash_reads=True)), see _update_flash_read_hooks.
+        self._flash_windows = [0x0F000000, 0x1F000000]
         self._flash_read_hooks = []
-        for flash_base in self._flash_windows:
-            self.mu.hook_add(UC_HOOK_MEM_WRITE, self._hook_spi_flash_write,
-                             begin=flash_base, end=flash_base + 0x00FFFFFF)
+        self._flash_hooks_pending = False
+        self._spi_cmd_vt = -1e9               # emulation time of the last SPI command mode
+        self._spi_dump_flash_reads = False
+        self.flash_hook_changes = 0           # flash read hook installs / removals (each flushes the TBs)
+        self._mmio_observers = []             # add_mmio_hook() callbacks
         self._update_flash_read_hooks()
 
         # Jumps to address 0 (NULL function pointers, end of a test program)
@@ -437,12 +434,21 @@ class AliMipsSimulator:
                 self._stop_reason = 'external'
             if self._in_run and threading.get_ident() != self._run_tid:
                 self._external_stop = True  # a pause from another thread (GUI): run() returns
+            elif self._dev_cb_depth == 0 and self._vt_slice_t0 is not None and \
+                    self._clk_key is not None and threading.get_native_id() == self._clk_key[0]:
+                # Requested on the emulation thread outside a device access (a
+                # code hook: breakpoint, GUI / user pause): the CPU stops before
+                # the next instruction, nothing is rewound (see _dev_note).
+                self._dev_last = None
             self._orig_emu_stop()
         self.mu.emu_stop = _emu_stop_wrapper
         # Account the time spent inside every emu_start() (run(), single steps
         # and test scripts that call it directly) as emulation time for Count.
         self._orig_emu_start = self.mu.emu_start
         def _emu_start_wrapper(*args, **kwargs):
+            # Flash read hook changes happen here, never while the CPU runs
+            if self._flash_hooks_pending or (self._flash_read_hooks and not self._flash_hooks_wanted()):
+                self._apply_flash_hooks()
             self._setup_clock()
             self._vt_stop_t = None
             self._dev_last = None
@@ -460,22 +466,33 @@ class AliMipsSimulator:
                 # access: that instruction runs again on resume (see _dev_note).
                 # (A counted run that simply ran out stops before an instruction:
                 # no replay.  An explicit emu_stop() is 'external' in any run.)
+                # ('flashhooks': requested inside an SF_INS store, which then
+                # re-executes like after an asynchronous stop)
                 count = kwargs.get('count', args[3] if len(args) > 3 else 0)
                 last = self._dev_last
-                if last is not None and (self._stop_reason == 'external' or
+                if last is not None and (self._stop_reason in ('external', 'flashhooks') or
                                          (self._stop_reason is None and not count)):
                     try:
                         # Rewound onto the access, not stopped before a later pass
-                        # of it: same PC and unchanged registers (a load's
-                        # destination is written only after the exit check).
-                        if self.mu.reg_read(UC_MIPS_REG_PC) == last[0] and \
-                                (last[4] is None or self._gpr_snapshot() == last[4]):
+                        # of it: the instruction at the (exact) stop PC is a load /
+                        # store of that address, it lies in the translation block
+                        # the access ran in, and the registers are unchanged (a
+                        # load's destination is written only after the exit
+                        # check).  The access itself cannot tell its PC: in an
+                        # mmio_map callback Unicorn's PC is the start of the
+                        # translation block (last[4]).
+                        pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                        if (last[3] is None or self._gpr_snapshot() == last[3]) and \
+                                self._phys(self._insn_mem_address(pc)) == self._phys(last[1]) and \
+                                (pc == last[4] if last[5] else self._same_block(last[4], pc)):
                             if len(self._dev_replays) >= 16:      # stale entries: drop the oldest
                                 self._dev_replays.pop(next(iter(self._dev_replays)))
                             # keyed by (PC, SP): an interrupt handler or another task
-                            # running the same code must not take this entry
-                            key = (last[0], self.mu.reg_read(UC_MIPS_REG_SP))
-                            self._dev_replays[key] = last[1:4]
+                            # running the same code must not take this entry.  On
+                            # resume the rewound instruction starts a translation
+                            # block, so its access sees this PC (_dev_replay_of).
+                            key = (pc, self.mu.reg_read(UC_MIPS_REG_SP))
+                            self._dev_replays[key] = last[0:3]
                     except UcError:
                         pass
         self.mu.emu_start = _emu_start_wrapper
@@ -526,25 +543,82 @@ class AliMipsSimulator:
     def setSpiHandler(self, handler):
         self.spi_callback = handler
 
-    def setSPIDump(self, enabled):
-        """Enable or disable SPI dump logging."""
+    def setSPIDump(self, enabled, flash_reads=False):
+        """Enable or disable SPI dump logging (SPI commands, responses, flash
+        program / erase).  flash_reads=True also logs normal-mode flash reads
+        (once per 64 KB sector); that keeps a Unicorn memory hook installed,
+        which slows every load of the emulation down (see _init_unicorn)."""
         self._spi_dump_enabled = enabled
+        self._spi_dump_flash_reads = bool(enabled and flash_reads)
         if self._rom_dirty:
             self._rom_restore()
         self._update_flash_read_hooks()
 
+    # The flash-window read hook (_hook_spi_flash_read) serves the SPI command
+    # responses.  It is a Unicorn memory hook, so while it exists every guest
+    # load takes Unicorn's slow path, and Unicorn decides that per translation
+    # block when the block is translated.  Therefore:
+    #  * it is only added / removed between emu_start() calls, and then the
+    #    translation cache is flushed so that every block sees the change
+    #    (added from a device callback while the CPU ran, the rest of the
+    #    running block still read the flash window without it; that version
+    #    also crashed Unicorn natively in 7-30% of the boots, together with the
+    #    response bytes written into the read-only flash mapping, see
+    #    _rom_inject);
+    #  * when the guest enters SPI command mode without the hook, the emulation
+    #    stops right at that SF_INS store (a stop requested inside a device
+    #    access takes effect before the next instruction; the store is
+    #    re-executed on resume and recognised as a replay), and the next
+    #    emu_start() installs the hook before the guest reads the response;
+    #  * leaving command mode stops at that SF_INS store too, and the next
+    #    emu_start() removes the hook (and flushes): with the hook installed,
+    #    every flash-window load (also in normal read mode) goes through it,
+    #    which is slow and exposes the delay-slot bug (_device_access).  The
+    #    two stops and flushes per command phase cost less than keeping it
+    #    (dump.bin / Prima decompression: idle 0 s ~ 0.05 s, both ~20% faster
+    #    than 0.5 s).  flash_hook_idle_s > 0 keeps it that long instead.
+    flash_hook_idle_s = 0.0
+
+    def _flash_hooks_wanted(self):
+        return (not self._spi_is_passthrough()) or self._spi_dump_flash_reads
+
     def _update_flash_read_hooks(self):
-        """Install the flash-window read hook only when it has work to do."""
-        wanted = (not self._spi_is_passthrough()) or self._spi_dump_enabled
+        """The SPI controller mode or the logging setting changed."""
+        wanted = self._flash_hooks_wanted()
+        if wanted:
+            self._spi_cmd_vt = self._vtime()
+        if wanted == bool(self._flash_read_hooks):
+            self._flash_hooks_pending = False
+        elif self._vt_slice_t0 is None:               # not emulating: change it now
+            self._apply_flash_hooks(force=True)
+        elif wanted or self.flash_hook_idle_s <= 0:   # emulating: at the next emu_start()
+            self._flash_hooks_pending = True
+            if not self.is_stepping:                   # (a single step ends after this instruction)
+                if self._stop_reason is None:
+                    self._stop_reason = 'flashhooks'
+                self._orig_emu_stop()
+        # (else: no longer wanted; _apply_flash_hooks removes it after the idle time)
+
+    def _apply_flash_hooks(self, force=False):
+        """Between emu_start() calls: install the flash read hook if wanted;
+        remove it if not, after flash_hook_idle_s without command mode (at
+        once with force)."""
+        self._flash_hooks_pending = False
+        wanted = self._flash_hooks_wanted()
         if wanted and not self._flash_read_hooks:
             for flash_base in self._flash_windows:
                 self._flash_read_hooks.append(self.mu.hook_add(
                     UC_HOOK_MEM_READ, self._hook_spi_flash_read,
                     begin=flash_base, end=flash_base + 0x00FFFFFF))
-        elif not wanted and self._flash_read_hooks:
+            self.flash_hook_changes += 1
+            self._flush_tb()
+        elif self._flash_read_hooks and not wanted and \
+                (force or self._vtime() - self._spi_cmd_vt >= self.flash_hook_idle_s):
             for h in self._flash_read_hooks:
                 self.mu.hook_del(h)
             self._flash_read_hooks = []
+            self.flash_hook_changes += 1
+            self._flush_tb()
 
     def _hook_null_jump(self, uc, address, size, user_data):
         if self.is_stepping:
@@ -680,7 +754,10 @@ class AliMipsSimulator:
         self._timer_next_icount = 0
         self._count_observed = None
         self._uart_ip3 = False
-        self.timer_irq_count = 0
+        while self._ic_lines:                   # (also clears their 0xB8000030 / 34 bits)
+            self._ic_set_line((self._ic_lines & -self._ic_lines).bit_length() - 1, False)
+        self._ge_status = 0
+        self.timer_irq_count = self.ic_irq_count = self.ge_ops = 0
         self._last_eret_vt = -1e9
         self._dev_replays = {}
         self.visit_counts = {}
@@ -782,14 +859,18 @@ class AliMipsSimulator:
     # Pending replays are kept per (PC, SP), so an interrupt handler or another
     # task running the same putc / getc in between does not take them.
 
-    def _device_access(self, uc):
-        """Start of every device memory hook.  A new device access proves the
-        noted one completed (see _dev_note).  Also warns once per PC about a
-        device access in a branch delay slot: Unicorn 2.1.4 then runs the
-        branch target's first instruction twice (hooked load/store in a delay
-        slot; not seen in the shipped dumps)."""
+    def _device_access(self, uc, hooked=False):
+        """Start of every device handler.  A new device access proves the
+        noted one completed (see _dev_note).  For an access that reached us
+        through a Unicorn memory hook / protection fault (hooked=True: the
+        flash window) also warn once per PC if it sits in a branch delay slot:
+        Unicorn 2.1.4 then runs the branch target's first instruction twice
+        (not seen in the shipped dumps).  mmio_map accesses (the device
+        registers) do not have that bug -- unless a Unicorn memory hook (a
+        debugging script's) covers the device window too, which is not
+        checked."""
         self._dev_last = None
-        if self._hflags_off is not None:
+        if hooked and self._hflags_off is not None:
             self.mu.context_update(self._ctx)
             if self._hflags_view.value & self._HFLAG_BMASK:
                 pc = uc.reg_read(UC_MIPS_REG_PC)
@@ -798,8 +879,109 @@ class AliMipsSimulator:
                     self.log(f"[WARN] device access in a branch delay slot at 0x{pc:08X}: Unicorn 2.1.4 "
                              f"executes the branch target's first instruction twice after it")
 
-    def _dev_note(self, uc, kind, address, data):
-        self._dev_last = (uc.reg_read(UC_MIPS_REG_PC), kind, address, data, self._gpr_snapshot())
+    def _dev_note(self, uc, kind, address, data, exact=None):
+        """Record a device access with a side effect (see the section comment).
+        Its PC is exact in exact mode and for accesses through a Unicorn memory
+        hook (exact=True: the flash window); in an mmio_map callback in fast
+        mode it is the start of the translation block."""
+        if exact is None:
+            exact = self._code_hook_h is not None
+        self._dev_last = (kind, address, data, self._gpr_snapshot(), uc.reg_read(UC_MIPS_REG_PC), exact)
+
+    def _same_block(self, start, pc):
+        """True if pc can lie in the translation block that starts at `start`:
+        straight-line code from start to pc, or pc is the delay slot of the
+        branch that ends it (in exact mode start is the access itself).  Tells
+        a rewound access from a stop just before another instruction that
+        repeats it (a later block)."""
+        if start is None:
+            return False
+        start &= ~1
+        # a translation block never crosses a 4 KB page
+        if not 0 <= pc - start < 0x1000 or (start ^ pc) & ~0xFFF:
+            return False
+        m16 = self.is_mips16_mode()
+        sites = self._cp0_site_hooks
+        a = start
+        try:
+            while a < pc:
+                if m16:
+                    op = int.from_bytes(self.mu.mem_read(a, 2), 'little') >> 11
+                    size = 4 if op in (0x1E, 0x03) else 2                # EXTEND / JAL(X)
+                    insn = bytes(self.mu.mem_read(a, size))
+                    hw = insn[0] | (insn[1] << 8)
+                    ends = (self._insn_has_delay_slot(insn, size, True)
+                            or self._m16_pc_relative_branch(insn, size)
+                            or (size == 2 and op == 0x1D and (hw & 0x1F) in (0, 1, 5)))  # J(AL)R(C), SDBBP, BREAK
+                else:
+                    size = 4
+                    insn = bytes(self.mu.mem_read(a, 4))
+                    w = int.from_bytes(insn, 'little')
+                    ends = (self._insn_has_delay_slot(insn, 4, False)
+                            or a in sites                                  # hooked CP0 site: the hook moves the PC
+                            or w in (0x42000018, 0x4200001F)               # ERET, DERET
+                            or (w & 0xFE00003F) == 0x42000020              # WAIT
+                            or (w & 0xFFE0FFDF) == 0x41606000              # DI / EI
+                            or ((w >> 26) == 1 and ((w >> 16) & 0x1F) == 0x1F)    # SYNCI
+                            or ((w >> 26) == 0 and (w & 0x3F) in (0x0C, 0x0D)))  # SYSCALL / BREAK
+                if ends:
+                    return pc == a + size and self._insn_has_delay_slot(insn, size, m16)
+                a += size
+            return a == pc
+        except UcError:
+            return False
+
+    @staticmethod
+    def _phys(address):
+        """Physical address of a kseg0 / kseg1 / (ERL) kuseg address; None stays None."""
+        if address is None:
+            return None
+        return address & 0x1FFFFFFF if 0x80000000 <= address < 0xC0000000 else address
+
+    # MIPS32 load / store opcodes: lb lh lwl lw lbu lhu lwr sb sh swl sw swr ll sc
+    _M32_MEM_OPS = frozenset((0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x28, 0x29, 0x2A, 0x2B, 0x2E,
+                              0x30, 0x38))
+    # MIPS16e: major opcode -> (offset scale, base register: None = rx, 29 = sp)
+    _M16_MEM_OPS = {0x10: (1, None), 0x11: (2, None), 0x12: (4, 29), 0x13: (4, None),
+                    0x14: (1, None), 0x15: (2, None), 0x18: (1, None), 0x19: (2, None),
+                    0x1A: (4, 29), 0x1B: (4, None)}
+    _M16_REGS = (16, 17, 2, 3, 4, 5, 6, 7)
+
+    def _insn_mem_address(self, pc):
+        """Effective address of the load / store at pc in the current ISA mode
+        (with the current registers), or None if it is not one."""
+        try:
+            if self.is_mips16_mode():
+                hw = int.from_bytes(self.mu.mem_read(pc, 2), 'little')
+                ext = None
+                if hw >> 11 == 0x1E:                        # EXTEND prefix
+                    ext = hw
+                    hw = int.from_bytes(self.mu.mem_read(pc + 2, 2), 'little')
+                op = hw >> 11
+                if op == 0x0C and (hw >> 8) & 7 == 2:       # SWRASP: sw ra, imm8*4(sp)
+                    scale, base, imm = 4, 29, hw & 0xFF
+                elif op in self._M16_MEM_OPS:
+                    scale, base = self._M16_MEM_OPS[op]
+                    if base is None:
+                        base, imm = self._M16_REGS[(hw >> 8) & 7], hw & 0x1F
+                    else:
+                        imm = hw & 0xFF
+                else:
+                    return None
+                if ext is not None:                         # 16-bit signed, unscaled
+                    off = ((ext & 0x1F) << 11) | (((ext >> 5) & 0x3F) << 5) | (hw & 0x1F)
+                    off -= (off & 0x8000) << 1
+                else:
+                    off = imm * scale
+            else:
+                w = int.from_bytes(self.mu.mem_read(pc, 4), 'little')
+                if w >> 26 not in self._M32_MEM_OPS:
+                    return None
+                base, off = (w >> 21) & 31, w & 0xFFFF
+                off -= (off & 0x8000) << 1
+            return (self.mu.reg_read(self.gpr_map[base]) + off) & 0xFFFFFFFF
+        except UcError:
+            return None
 
     def _dev_replay_of(self, uc, kind, address, data=None):
         """(kind, address, data) of the first execution if this access is its
@@ -812,6 +994,128 @@ class AliMipsSimulator:
             return None                     # not pending here, or re-executed with other data
         self._dev_note(uc, kind, address, rp[2])    # a stop during the replay is a replay again
         return rp
+
+    # ------------------------------------------------------------------
+    # Device register window (mmio_map at the physical 0x18000000)
+    # ------------------------------------------------------------------
+    def _mmio_on(self, kind, handler, begin, end):
+        """Call handler(uc, access, address, size, value, user_data) -- the
+        signature of a Unicorn memory hook -- for every read ('r') / write
+        ('w') of the device window that starts at an offset in begin..end
+        (offsets in the 16 MB window; any segment's address is accepted).  It
+        runs before the access, like a memory hook: a read handler can put the
+        value to be read into the register (via the 0xB8000000 view it is
+        given as `address`), a write handler sees the register before the
+        store lands."""
+        table = self._mmio_rd if kind == 'r' else self._mmio_wr
+        for off in range(begin & 0xFFFFFF, (end & 0xFFFFFF) + 1):
+            table.setdefault(off, []).append(handler)
+
+    @staticmethod
+    def _mmio_offset(address):
+        """Offset in the 16 MB device window of a physical / kseg0 / kseg1
+        address of it (0x18xxxxxx, 0x98xxxxxx, 0xB8xxxxxx), or of a bare offset."""
+        if address < 0x01000000:
+            return address
+        if (address & 0x1FFFFFFF) >> 24 == 0x18 and (address < 0x20000000 or address >= 0x80000000):
+            return address & 0x00FFFFFF
+        raise ValueError(f"0x{address:08X} is not in the device window (0x18000000-0x18FFFFFF)")
+
+    def add_mmio_hook(self, kind, callback, begin, end):
+        """Observe the guest's device register accesses: kind 'read' or
+        'write'; accesses that START in begin..end (any segment's addresses of
+        the 0x18000000 window, e.g. 0xB800A000..0xB800A0FF).  callback has the
+        Unicorn memory hook signature (uc, access, address, size, value,
+        user_data) with `address` in the side-effect-free 0xB8000000 view; a
+        write observer runs before the store with the value written, a read
+        observer after the device model updated the register, with the value
+        the guest reads.  Use this instead of mu.hook_add(UC_HOOK_MEM_READ /
+        WRITE), which slows every RAM access of the emulation down.  Caveats:
+        in fast mode uc.reg_read(PC) inside it is the start of the translation
+        block, not the accessing instruction; an access that re-executes after
+        a stop at it (an asynchronous stop, see _dev_note, or the stop at an
+        SF_INS store that installs the flash read hook) is seen again.
+        Returns a handle for remove_mmio_hook()."""
+        if kind not in ('read', 'write'):
+            raise ValueError(f"kind must be 'read' or 'write', not {kind!r}")
+        lo, hi = self._mmio_offset(begin), self._mmio_offset(end)
+        if lo > hi:
+            raise ValueError("begin > end")
+        handle = (kind == 'write', lo, hi, callback)
+        self._mmio_observers.append(handle)
+        return handle
+
+    def remove_mmio_hook(self, handle):
+        self._mmio_observers.remove(handle)
+
+    def _mmio_observe(self, uc, write, offset, size, value):
+        address = 0xB8000000 | offset
+        for w, lo, hi, cb in list(self._mmio_observers):
+            if w == write and lo <= offset <= hi:
+                cb(uc, UC_MEM_WRITE if write else UC_MEM_READ, address, size, value, None)
+
+    def _mmio_read(self, uc, offset, size, user_data):
+        self._dev_last = None           # (a new device access: the noted one completed)
+        self._dev_cb_depth += 1
+        try:
+            handlers = self._mmio_rd.get(offset)
+            if handlers:
+                address = 0xB8000000 | offset
+                for h in handlers:
+                    h(uc, UC_MEM_READ, address, size, 0, None)
+            value = int.from_bytes(self.mmio_buffer[offset:offset + size], 'little')
+            if self._mmio_observers:
+                self._mmio_observe(uc, False, offset, size, value)
+            return value
+        finally:
+            self._dev_cb_depth -= 1
+
+    def _mmio_write(self, uc, offset, size, value, user_data):
+        value &= (1 << (8 * size)) - 1
+        self._dev_last = None
+        self._dev_cb_depth += 1
+        try:
+            if self._mmio_observers:
+                self._mmio_observe(uc, True, offset, size, value)
+            handlers = self._mmio_wr.get(offset)
+            if handlers:
+                address = 0xB8000000 | offset
+                for h in handlers:
+                    h(uc, UC_MEM_WRITE, address, size, value, None)
+            self.mmio_buffer[offset:offset + size] = value.to_bytes(size, 'little')
+        finally:
+            self._dev_cb_depth -= 1
+
+    # Python-side memory access without device side effects: a mem_read /
+    # mem_write of the physical device window 0x18xxxxxx goes through the
+    # mmio_map callbacks (reading URBR pops a UART RX byte, writing THR prints
+    # a character, ...); peek / poke use the 0xB8000000 view of it instead.
+    @staticmethod
+    def _quiet_address(address):
+        return address + 0xA0000000 if 0x18000000 <= address < 0x19000000 else address
+
+    def peek(self, address, size):
+        """Read guest memory (any mapped address) without device side effects."""
+        return self.mu.mem_read(self._quiet_address(address), size)
+
+    def poke(self, address, data):
+        """Write guest memory (any mapped address) without device side effects."""
+        self.mu.mem_write(self._quiet_address(address), bytes(data))
+
+    def _hook_flash_write_prot(self, uc, access, address, size, value, user_data):
+        """A store to the read-only flash window: emulate it (SPI command
+        trigger, page program, see _hook_spi_flash_write) and let it land (it
+        is reverted before the firmware can read it back: at the next
+        instruction in exact mode; in fast mode at the next SPI register write,
+        flash hook, CP0 hook or slice end).  Anything else is invalid."""
+        if any(w <= address < w + 0x01000000 for w in self._flash_windows):
+            self._dev_cb_depth += 1
+            try:
+                self._hook_spi_flash_write(uc, access, address, size, value, user_data)
+            finally:
+                self._dev_cb_depth -= 1
+            return True
+        return self._hook_mem_invalid(uc, access, address, size, value, user_data)
 
     def _hook_uart_write(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
@@ -939,6 +1243,106 @@ class AliMipsSimulator:
             except:
                 pass
 
+    # Status bytes (offset in the MMIO window) of device operations that
+    # complete at once: {offset: (start bit, done bits to set, bits to clear)}.
+    #  * PMU (pmu_m36, 0xB8018D00): the application init sets bit 0x80 of
+    #    +2 and polls bit 0x20 with udelay(2000), up to 36,848 times (6-7
+    #    minutes in the simulator; the failure is then ignored).  The 13-bit
+    #    calibration value read afterwards (+1, +2[4:0]) is only used on
+    #    another chip revision and stays 0.
+    #  * VCAP_M36F (0xB800F000), opened by the video output: the driver sets
+    #    bit 0 of +0x4B and spins, without a timeout, until the hardware clears
+    #    it again.
+    _SELF_COMPLETING = {
+        0x18D02: (0x80, 0x20, 0x00),
+        0x0F04B: (None, 0x00, 0x01),
+    }
+
+    def _hook_selfcomplete_read(self, uc, access, address, size, value, user_data):
+        """Reads of a self-completing status byte see the operation finished
+        (idempotent, so a replayed load after an asynchronous stop is harmless)."""
+        self._device_access(uc)
+        for reg, (start, done, clear) in self._SELF_COMPLETING.items():
+            target = (address & ~0x00FFFFFF) | reg
+            if address <= target < address + size:
+                b = uc.mem_read(target, 1)[0]
+                if start is None or b & start:
+                    uc.mem_write(target, bytes([(b | done) & ~clear & 0xFF]))
+
+    # Graphics engine (GE_M36F, registers at 0xB800A000).  Nothing is drawn: a
+    # command written to +4 completes at once and sets its bit in the interrupt
+    # status +8 (write 1 to clear), which drives interrupt-controller line 4.
+    # The driver's ISR acks +8 and wakes the drawing task through an event
+    # flag; without the interrupt every operation ended in its timeout (0.5-6 s)
+    # and a GE reset, so the UI took minutes to come up.
+    _GE_DONE = {1: 0x4, 2: 0x1, 3: 0x2}     # command -> status bit (the flag bit its caller waits for)
+    _IC_GE = 4                               # interrupt-controller line (0xB8000030 bit 4)
+
+    def _hook_ge_write(self, uc, access, address, size, value, user_data):
+        self._device_access(uc)
+        off = address & 0xFFF
+        if off == 0x004:
+            done = self._GE_DONE.get(value & 0xFFFFFFFF, 0)
+            # (a store rewound by an asynchronous stop must not complete twice)
+            if done and self._dev_replay_of(uc, 'ge', address, value) is None:
+                self._dev_note(uc, 'ge', address, value)
+                self.ge_ops += 1
+                self._ge_status |= done
+                self._ic_set_line(self._IC_GE, True)
+        elif off == 0x008:
+            self._ge_status &= ~value
+            if not self._ge_status:
+                self._ic_set_line(self._IC_GE, False)
+
+    def _hook_ge_read(self, uc, access, address, size, value, user_data):
+        self._device_access(uc)
+        uc.mem_write((address & ~0xFFF) | 0x008, self._ge_status.to_bytes(4, 'little'))
+
+    def _hook_ic_status_read(self, uc, access, address, size, value, user_data):
+        """Interrupt-controller status 0xB8000030 / 34 shows the asserted lines
+        (a write-back acknowledge does not clear a line its device still drives)."""
+        if self._ic_lines:
+            for word in (0, 1):
+                bits = (self._ic_lines >> (32 * word)) & self._M32
+                if bits:
+                    a = (address & ~0xFFF) | (0x30 + 4 * word)
+                    v = int.from_bytes(uc.mem_read(a, 4), 'little')
+                    uc.mem_write(a, (v | bits).to_bytes(4, 'little'))
+
+    def _ic_set_line(self, line, on):
+        """Drive an interrupt-controller input of a modelled device (a level):
+        its 0xB8000030 / 34 status bit follows it, and while it is asserted and
+        enabled in 0xB8000038 / 3C the CPU sees IP3."""
+        bit = 1 << line
+        was = self._ic_lines
+        self._ic_lines = (was | bit) if on else (was & ~bit)
+        addr = 0xB8000030 + 4 * (line // 32)
+        b = 1 << (line % 32)
+        cur = int.from_bytes(self.mu.mem_read(addr, 4), 'little')
+        self.mu.mem_write(addr, ((cur | b) if on else (cur & ~b)).to_bytes(4, 'little'))
+        if on and not was & bit:
+            self._irq_soon()
+
+    def _ic_ip3(self):
+        """IP3 from the modelled interrupt-controller lines: asserted and enabled."""
+        if not self._ic_lines:
+            return False
+        return bool(self._ic_lines & int.from_bytes(self.mu.mem_read(0xB8000038, 8), 'little'))
+
+    def _irq_soon(self):
+        """A device raised an interrupt from a memory hook.  Fast mode, inside a
+        slice: end the slice at the next hooked CP0 instruction (or by the
+        asynchronous backstop) so that run() delivers it.  Not emu_stop() here:
+        Unicorn would finish the translation block first and skip the CP0
+        hooks in it (see async_stop_margin_us).  Exact mode delivers it at the
+        next instruction anyway."""
+        if self._in_run and self._code_hook_h is None and self._slice_cap_end is not None:
+            if self._slice_uses_stopper:
+                self._arm_deadline(0.0)
+                self._slice_armed_end = self._vtime()
+            else:
+                self._slice_deadline = time.perf_counter()
+
     def _hook_spi_write(self, uc, access, address, size, value, user_data):
         """Handle writes to SPI flash controller registers.
 
@@ -951,6 +1355,9 @@ class AliMipsSimulator:
         every byte of the access is dispatched to its own register.
         """
         self._device_access(uc)
+        if self._dev_replay_of(uc, 'spi_reg', address, value) is not None:
+            return      # the same store again after a stop at it (e.g. to install the flash read hook)
+        self._dev_note(uc, 'spi_reg', address, value)
         for i in range(size):
             reg = (address + i) & 0xF
             byte = (value >> (8 * i)) & 0xFF
@@ -972,7 +1379,9 @@ class AliMipsSimulator:
         self._update_flash_read_hooks()
         cmd_name = self._SPI_CMD_NAMES.get(cmd, "Unknown")
         pc = uc.reg_read(UC_MIPS_REG_PC)
-        self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [PC=0x{pc:08X}]")
+        # (fast mode: inside a device access Unicorn's PC is the translation block start)
+        where = f"PC=0x{pc:08X}" if self._code_hook_h is not None else f"block at 0x{pc:08X}"
+        self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [{where}]")
         self._spi_resp_idx = 0
         if cmd == 0x9F:      # JEDEC Read ID: 3 bytes, padded to 4 for word reads
             self._spi_response = list(self._spi_jedec_id) + [0x00]
@@ -1055,7 +1464,26 @@ class AliMipsSimulator:
         self.mu.mem_write(self.base_addr + start, b'\xFF' * length)
         self._rom_sites_dirty = True
 
+    def _rom_inject(self, uc, address, off, data):
+        """Put transient bytes (SPI responses) into the flash window for the
+        load at `address`, always through the writable 0xAFC00000 view of the
+        ROM buffer.  A Python write to the guest's read-only flash mapping
+        makes Unicorn toggle its protection, and doing that from a hook while
+        the CPU runs crashed Unicorn natively ('access violation reading
+        0xAFC00000' in 1 of 30 Prima boots; 0 of 105 since).  Reverted by _rom_restore."""
+        n = min(len(data), self.rom_size - off)
+        self.mu.mem_write(self.base_addr + off, data[:n])
+        if n < len(data):                       # a load across the end of a mirror reads the next one
+            self.mu.mem_write(self.base_addr, data[n:])
+
     def _hook_spi_flash_read(self, uc, access, address, size, value, user_data):
+        self._dev_cb_depth += 1
+        try:
+            self._spi_flash_read(uc, address, size)
+        finally:
+            self._dev_cb_depth -= 1
+
+    def _spi_flash_read(self, uc, address, size):
         """Handle reads from the memory-mapped flash region (SYS_FLASH_BASE_ADDR).
 
         When the SPI controller is in command mode (not passthrough), reads
@@ -1067,8 +1495,9 @@ class AliMipsSimulator:
           result = *(volatile UINT32 *)SYS_FLASH_BASE_ADDR;  // read response
 
         The response bytes are placed in the ROM buffer for this one load and
-        restored from rom_image at the next instruction, so they never leak
-        into the flash contents the firmware reads later.
+        restored from rom_image before the next flash-window load (and at the
+        next instruction in exact mode), so they never leak into the flash
+        contents the firmware reads later.
         """
         if self._rom_dirty:
             self._rom_restore()          # undo the previous transient bytes before this load
@@ -1077,16 +1506,16 @@ class AliMipsSimulator:
             self._dev_last = None        # (a plain flash read: no side effect, nothing to replay)
             # Log flash read offset (throttled: only when 64KB sector changes)
             sector = off >> 16
-            if self._last_flash_read_page != sector:
+            if self._spi_dump_flash_reads and self._last_flash_read_page != sector:
                 self._last_flash_read_page = sector
                 self._spi_log(f"  FLASH READ @ 0x{off:06X} (sector {sector})")
             return  # Normal read mode — let ROM content pass through
 
         # Command mode — inject SPI response data
-        self._device_access(uc)
+        self._device_access(uc, hooked=True)
         rp = self._dev_replay_of(uc, 'spi', address)
         if rp is not None and len(rp[2]) == size:
-            uc.mem_write(address, rp[2])     # replay: the same response bytes again
+            self._rom_inject(uc, address, off, rp[2])   # replay: the same response bytes again
             self._rom_dirty.append((off, size))
             return
         resp = bytearray(size)
@@ -1096,9 +1525,9 @@ class AliMipsSimulator:
                 self._spi_resp_idx += 1
             else:
                 resp[i] = 0x00      # no more response data: flash idle / not busy
-        uc.mem_write(address, bytes(resp))
+        self._rom_inject(uc, address, off, bytes(resp))
         self._rom_dirty.append((off, size))
-        self._dev_note(uc, 'spi', address, bytes(resp))
+        self._dev_note(uc, 'spi', address, bytes(resp), exact=True)    # (memory hook: exact PC)
         if self._spi_response:
             self._spi_log(f"  RESP [{size}B]: {' '.join(f'{b:02X}' for b in resp)}")
 
@@ -1112,10 +1541,10 @@ class AliMipsSimulator:
             the address (or the whole chip)
           - Page Program (cmd 0x02) / AAI (0xAD): program the data bytes
 
-        The guest's store itself is reverted at the next instruction; only the
-        emulated program/erase changes rom_image.
+        The guest's store itself is reverted later (see _hook_flash_write_prot);
+        only the emulated program/erase changes rom_image.
         """
-        self._device_access(uc)
+        self._device_access(uc, hooked=True)
         if self._rom_dirty:
             self._rom_restore()
         off = self._flash_offset(address)
@@ -1491,8 +1920,8 @@ class AliMipsSimulator:
         # is a known instruction count.
         if self.instruction_count >= self._timer_next_icount:
             self._timer_update()
-        if (self._ti or self.cp0_cause & 0x300) and not in_delay_slot and not self.is_stepping \
-                and self._irq_deliverable():
+        if (self._ti or self.cp0_cause & 0x300 or self._ic_lines) and not in_delay_slot \
+                and not self.is_stepping and self._irq_deliverable():
             if compact_jump or (m16 and self._m16_pc_relative_branch(insn, size)):
                 irq_stop = True
             else:
@@ -1743,18 +2172,20 @@ class AliMipsSimulator:
         v = self.cp0_cause
         if self._ti:
             v |= 0x40008000             # TI + IP7
-        if self._uart_ip3:
+        if self._uart_ip3 or self._ic_ip3():
             v |= 0x00000800             # IP3 (ALi interrupt controller)
         return v
 
     def _irq_deliverable(self):
-        """A timer or software interrupt is requested: IE=1, EXL=0, ERL=0 and
-        (IP & IM) != 0.  IP3 is left out: the UART interrupt is delivered by
-        its own one-shot path (_irq_due / _enter_uart_irq)."""
+        """A timer, software or modelled device (IP3, _ic_set_line) interrupt
+        is requested: IE=1, EXL=0, ERL=0 and (IP & IM) != 0.  The UART
+        interrupt is delivered by its own one-shot path (_irq_due /
+        _enter_uart_irq)."""
         s = self.cp0_status
         if (s & 0x7) != 0x1:
             return False
-        return bool((self._ti and s & 0x8000) or (self.cp0_cause & s & 0x300))
+        return bool((self._ti and s & 0x8000) or (self.cp0_cause & s & 0x300)
+                    or (s & 0x800 and self._ic_ip3()))
 
     def _enter_interrupt(self, uc, epc):
         """Take an interrupt exception: EPC (ISA mode in bit 0), Cause.BD and
@@ -1769,6 +2200,10 @@ class AliMipsSimulator:
             self.timer_irq_count += 1
             if self.timer_irq_count <= 8 or self.timer_irq_count % 1000 == 0:
                 self.log(f"[TIMER IRQ] #{self.timer_irq_count} from 0x{epc & ~1:08X}")
+        if self.cp0_status & 0x800 and not self._uart_ip3 and self._ic_ip3():    # (served in the same pass)
+            self.ic_irq_count += 1
+            if self.ic_irq_count <= 8 or self.ic_irq_count % 1000 == 0:
+                self.log(f"[IC IRQ] #{self.ic_irq_count} lines 0x{self._ic_lines:X} from 0x{epc & ~1:08X}")
         return (0xBFC00200 if bev else 0x80000000) + (0x200 if iv else 0x180)
 
     def _reschedule_slice(self):
@@ -2228,6 +2663,10 @@ class AliMipsSimulator:
         if slice_us is not None:
             cap_us = max(self.min_slice_us, slice_us)
             wait = self._timer_wait_us()
+            if self._ic_lines and self._irq_deliverable():
+                # a device interrupt held back by irq_min_gap_us
+                gap = self._irq_gap_left() * 1e6
+                wait = gap if wait is None else min(wait, gap)
             if wait is not None:
                 slice_us = min(slice_us, wait)
             slice_us = max(self.min_slice_us, slice_us)
@@ -2322,6 +2761,9 @@ class AliMipsSimulator:
                     self._stop_reason = None
                     self.mu.emu_start(self._start_pc(cur_pc), end_addr)
                     executed = None
+                    if self._stop_reason == 'flashhooks':
+                        # the SF_INS store was counted and runs again on resume
+                        self.instruction_count -= 1
                 else:
                     # Fast mode: native batches, interrupts are taken at their boundaries.
                     # Exact (counted) slice when close to a limit, otherwise a
@@ -2345,6 +2787,11 @@ class AliMipsSimulator:
                                 self._insn_rate = batch / dt
                         elif self._stop_reason == 'rescan':
                             executed = 0    # stopped before the first instruction of a new RAM chunk
+                        elif self._stop_reason == 'flashhooks':
+                            # stopped right after an SF_INS store, typically a few
+                            # instructions in: the (uncalibrated) rate estimate would
+                            # overcount a lot; count 1 so a run() budget still ends
+                            executed = 1
                         else:
                             # a hook stopped the slice early; Unicorn does not say how
                             # many instructions ran, so use the rate estimate

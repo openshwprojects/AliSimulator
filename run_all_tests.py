@@ -6,29 +6,9 @@ Individual test files can still be run directly via their own files.
 """
 
 import sys
-import importlib.util
 import os
+import subprocess
 from pathlib import Path
-
-
-def load_test_module(test_file_path):
-    """
-    Dynamically load a test module from a file path.
-    
-    Args:
-        test_file_path: Path to the test file
-        
-    Returns:
-        The loaded module or None if loading failed
-    """
-    try:
-        spec = importlib.util.spec_from_file_location("test_module", test_file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    except Exception as e:
-        print(f"Error loading {test_file_path}: {e}")
-        return None
 
 
 def run_test_file(test_file_path):
@@ -42,31 +22,22 @@ def run_test_file(test_file_path):
         Tuple of (test_name, passed) where passed is True if test succeeded
     """
     test_name = os.path.basename(test_file_path)
-    
+
     print(f"\n{'=' * 80}")
     print(f"Running: {test_name}")
-    print(f"{'=' * 80}\n")
-    
-    # A test's sys.exit() ends that test (SystemExit is caught here), so a
-    # sys.exit(1) can no longer be overwritten by a later sys.exit(0).
-    exit_code = 0
-    try:
-        # Load and run the module
-        module = load_test_module(test_file_path)
-        if module and hasattr(module, 'main'):
-            module.main()
-        else:
-            print(f"Warning: {test_name} has no main() function")
-            return test_name, False
+    print(f"{'=' * 80}\n", flush=True)
 
-    except SystemExit as e:
-        exit_code = 0 if e.code is None else e.code
-
-    except Exception as e:
-        print(f"Error running {test_name}: {e}")
-        import traceback
-        traceback.print_exc()
-        return test_name, False
+    # Each test runs in its own Python process: a test that crashes the
+    # interpreter (a native fault inside Unicorn) fails on its own instead of
+    # ending the whole run without a summary.  Unbuffered, so its output up to
+    # a crash is not lost, and with faulthandler, which prints the Python stack
+    # of a native crash.
+    env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONFAULTHANDLER="1")
+    exit_code = subprocess.call([sys.executable, test_file_path],
+                                cwd=os.path.dirname(os.path.abspath(test_file_path)), env=env)
+    if exit_code not in (0, 1):
+        print(f"\n{test_name} exited with code {exit_code} (0x{exit_code & 0xFFFFFFFF:08X}): "
+              f"crashed?", flush=True)
 
     # Check if test passed (exit code 0 means success)
     return test_name, exit_code == 0
@@ -138,7 +109,7 @@ def discover_test_files(include_slow=False):
         test_files.append(str(reg_test_no_main_app))
 
     # The firmware boots into its main application, whose RTOS runs on CP0
-    # timer ticks (about 10 s each)
+    # timer ticks (about 20 s each)
     for name in ("run_dump_to_main_app.py", "run_dump_Prima_to_main_app.py"):
         if (current_dir / name).exists():
             test_files.append(str(current_dir / name))

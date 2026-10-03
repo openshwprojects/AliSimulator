@@ -13,10 +13,23 @@ Unicorn-based simulator for ALi M3329 (MIPS32 + MIPS16e) satellite receiver firm
   `sim.slice_stopper = 'unicorn'` falls back to `emu_start(timeout=)`, which
   on Windows is 15-150 ms coarse and lacks the EXL / context-switch
   protections described under "Things learned").
-  Python is only involved through small ranged hooks: the CP0 instruction sites
-  (MFC0/MTC0/ERET of Count, Compare, Status, Cause, EPC, found by scanning
-  memory), breakpoints / `stop_instr`, and the first execution of each RAM
-  chunk (which triggers a rescan for new CP0 sites). `instruction_count` and
+  Python is only involved through small ranged code hooks -- the CP0
+  instruction sites (MFC0/MTC0/ERET of Count, Compare, Status, Cause, EPC,
+  found by scanning memory), breakpoints / `stop_instr`, and the first
+  execution of each RAM chunk (which triggers a rescan for new CP0 sites) --
+  and through the device registers: the 0x18000000 window is an `mmio_map`
+  region whose accesses call the device handlers (registered with `_mmio_on`;
+  tests observe them with `sim.add_mmio_hook()`), and stores to the
+  write-protected flash window fault into the SPI flash emulation. The only
+  Unicorn memory hook, the flash read hook that serves SPI command responses,
+  exists only around SPI command mode (see "Things learned"); otherwise RAM
+  loads and stores run at Unicorn's full speed. `setSPIDump(True)` logs SPI
+  commands without it; `setSPIDump(True, flash_reads=True)` also logs
+  normal-mode flash reads and keeps it installed (slower). Python code should
+  read / write device registers with `sim.peek()` / `sim.poke()` (or the
+  0xB8000000 view): `mu.mem_read` of the physical 0x18xxxxxx window runs the
+  device handlers (e.g. pops a UART RX byte); the GUI's watches use peek / poke.
+  `instruction_count` and
   `max_instructions` are *estimates* in this mode (rate measured at start-up),
   and the simulated CP0 Count follows emulation time at `count_hz`: the CPU
   time of the emulation thread inside `emu_start` (`thread_clock.py`;
@@ -68,6 +81,36 @@ Single steps always use the exact hook. Both modes read the real ISA mode
   ALi interrupt controller. IP3 is ORed into Cause (a pending IP7 stays
   visible). While RX bytes remain queued, the ERET that ends the UART
   interrupt re-arms it 100 instructions later; timer ERETs do not.
+* **Modelled device lines** of the ALi interrupt controller (levels, currently
+  only the graphics engine on line 4): an asserted line shows in its
+  0xB8000030 / 34 status bit and, while enabled in 0xB8000038 / 3C, raises IP3
+  (taken like the timer interrupt; `sim.ic_irq_count` counts them). The
+  firmware's dispatcher serves the lowest set status bit and reboots on an IP3
+  without one, so the line drops only when the device is acknowledged. A
+  device that raises its line from a register access ends a fast-mode slice at
+  the next hooked CP0 instruction (or by the 1 ms backstop), not with
+  `emu_stop()` inside the access (Unicorn would finish the translation block
+  with its CP0 hooks skipped).
+
+## Simulated devices
+
+Besides UART, SPI flash, GPIO (I2C front panel) and the CP0 timer:
+
+* **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
+  bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
+  Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read
+  afterwards stays 0 (only another chip revision uses it).
+* **VCAP** (`VCAP_M36F`, 0xB800F000): the video-output open sets bit 0 of +0x4B
+  and spins until the hardware clears it, without a timeout. The bit reads
+  back cleared.
+* **Graphics engine** (`GE_M36F`, 0xB800A000): nothing is drawn. A command
+  written to +4 (1, 2 or 3) completes at once and sets its bit in the
+  interrupt status +8 (0x4, 0x1, 0x2; write 1 to clear), which drives
+  interrupt-controller line 4. The driver's ISR acknowledges +8 and wakes the
+  drawing task through an event flag. Without it every GE operation of
+  dump_maciej's UI ended in its 0.5-6 s timeout and a GE reset. `sim.ge_ops`
+  counts commands. dump.bin and SRT Prima issue no GE commands in their first
+  minute.
 
 Interrupts are never injected inside a CP0-site hook (the kernel has k0/k1 live
 there), in a branch delay slot (also not after an asynchronous stop that left
@@ -107,18 +150,54 @@ then every 1000th.
   once hundreds of code hooks exist: counted slices then stall for minutes.
 * An asynchronous stop (slice deadline, Unicorn's timeout, a GUI pause) is
   noticed right after a load / store and rewinds the PC to it, so that access
-  and its memory hook run again on resume. For the device registers whose
-  access has a side effect (UART THR / URBR, SPI response reads) the hooks
-  recognise the re-execution and serve / skip the same data; before, this
+  and its device handler (memory hook or `mmio_map` callback alike) run again
+  on resume. For the device registers whose access has a side effect (UART
+  THR / URBR, SPI response reads, GE commands) the handlers recognise the
+  re-execution and serve / skip the same data; before, this
   duplicated UART output characters ('bbl_flash_init!') and lost RX bytes.
-  A stop counts as a rewind only if the PC is on the access and the registers
-  are unchanged (a later pass of a loop changes some register), and pending
-  replays are kept per (PC, SP), so an interrupt handler or another task using
-  the same putc / getc does not take them.
-* Unicorn 2.1.4 bug: after a load / store with a memory hook (i.e. a device
-  register) in a branch delay slot, the branch target's first instruction runs
-  twice. The shipped dumps never do this (checked over 80M instructions); the
-  simulator logs a `[WARN] device access in a branch delay slot` once per PC.
+  A stop counts as a rewind only if the instruction at the stop PC is a load /
+  store of the noted register, lies in the translation block the access ran in
+  (straight-line code from that block's start), and the registers are
+  unchanged (a later pass of a loop changes some register). The access itself
+  cannot tell its PC: inside an `mmio_map` callback Unicorn reports the start
+  of the translation block (registers are current), so a pending replay is
+  keyed by the exact PC of the stop, which is where the resumed translation
+  block starts. Pending replays are kept per (PC, SP), so an interrupt handler
+  or another task using the same putc / getc does not take them. (Observed:
+  asynchronous stops are noticed at device accesses, not at block entries.)
+* Unicorn 2.1.4: while any `UC_HOOK_MEM_READ` (`_WRITE`) hook exists, whatever
+  its range, every load (store) is translated to the slow path, which scans
+  the whole hook list per access. With the ~60 device hooks the simulator used
+  to register, RAM-heavy code ran about 3x slower (dump_maciej's unoptimised
+  LZMA bootloader: ~200 s of emulation instead of ~64 s). The decision is made
+  per translation block when it is translated: a hook added later is ignored
+  by blocks translated before it (they read the flash window without it), and
+  blocks translated while one existed stay slow after it is removed, until the
+  translation cache is flushed. Code hooks and invalid-access /
+  protection-fault hooks cost nothing, but a protection fault only fires on a
+  TLB miss (once per page), so it cannot serve every read. Hence `mmio_map`
+  for the device registers, write protection for the flash window, and the
+  flash read hook only during SPI command mode: entering command mode stops
+  the CPU right at the SF_INS store (a stop requested inside a device access
+  takes effect before the next instruction; the store re-executes and is
+  recognised as a replay), the next `emu_start()` installs the hook and
+  flushes the translation cache, and leaving command mode removes it the same
+  way (`flash_hook_idle_s` > 0 keeps it longer). Two native Unicorn crashes
+  (access violations, 7-30% of the boots) came with an earlier version: memory
+  hooks added / removed from a device callback while the CPU ran, and Python
+  writes (`uc.mem_write`) into the read-only guest flash mapping from a hook
+  while the CPU ran (Unicorn toggles the region's protection; with only that
+  left, 1 of 30 Prima boots still crashed; 0 of 105 since). Both are avoided: hooks change only
+  between `emu_start()` calls, and Python writes the ROM through its writable
+  0xAFC00000 view. Memory hooks and faults report physical addresses
+  (0xB8018300 -> 0x18018300), and the guest only reaches the physical mappings.
+* Unicorn 2.1.4 bug: after a load / store with a memory hook or a protection
+  fault in a branch delay slot, the branch target's first instruction runs
+  twice. `mmio_map` accesses are not affected (unless a debugging script adds
+  a memory hook over the device window), so this concerns the flash window;
+  the shipped dumps never access it in a delay slot (checked over 80M
+  instructions), and the simulator logs a `[WARN] device access in a branch
+  delay slot` once per PC for flash stores and command-mode reads.
 * Unicorn 2.1.4 bug: translating an unhooked straight-line block of ~375 or
   more instructions (also a jump into zero-filled RAM) crashes with an access
   violation. Fast mode reports it as a RuntimeError; exact mode is not
@@ -152,20 +231,32 @@ Run the scripts individually (`python run_dump_maciej_to_bl_verify_sw.py`,
 `python run_dump_to_end.py`, `python test_boot_decodes_mips16.py`, ...) or all
 of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
 --slow` adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
-through expand() into the main application (about 5 minutes), checks the
+through expand() into the main application (about 2 minutes, a minute of it
+the bootloader's unoptimised LZMA decompression), checks the
 decompressed image against an offline LZMA decompression of the flash chunk,
 and checks that the application's RTOS runs on timer ticks (it prints its
 init banner, compared exactly). `run_dump_to_main_app.py` and
-`run_dump_Prima_to_main_app.py` (about 10 s each, in the default run) do the
+`run_dump_Prima_to_main_app.py` (about 20 s each, in the default run) do the
 same for dump.bin and SRT Prima: their whole UART output -- bootloader lines
 plus the application's 'MC: APP  init ok' / SDK / Libcore / Application
 banner -- must match byte for byte, timer interrupts must be taken, and the
 application must keep running. Before the CP0 timer existed these
-applications parked in the RTOS idle task right after 'success!'.
+applications parked in the RTOS idle task right after 'success!'. All three
+then check that the init got past the PMU handshake and the VCAP busy bit
+(a few reads of each; unmodelled: thousands of PMU polls, then an endless VCAP
+spin), and the slow dump_maciej test also that its UI's graphics-engine
+commands complete through the GE interrupt without timeouts.
 
 Mechanism tests that need no firmware dump: `test_isa_mode_tracking.py`
 (MIPS32/MIPS16 switches, breakpoints inside MIPS16 code),
 `test_flash_window_isolation.py` (SPI responses vs flash contents, page program,
 sector erase), `test_cp0_count_emulation.py`, `test_cp0_timer_interrupt.py`
-(timer latch, masking, MIPS16 EPC, late Compare, software interrupts) and
-`test_mips16_decoder_encodings.py`.
+(timer latch, masking, MIPS16 EPC, late Compare, software interrupts),
+`test_device_models.py` (PMU, VCAP, graphics engine command -> interrupt ->
+acknowledge, masked line, partial acknowledge, controller write-back, command
+stores replayed after asynchronous stops, add_mmio_hook, peek / poke),
+`test_spi_command_mode.py` (SPI command responses read in the same block as
+the SF_INS store, with the flash read hook installed between slices, also
+toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
+`run_all_tests.py` runs every test in its own Python process, so a native
+crash fails that test only.

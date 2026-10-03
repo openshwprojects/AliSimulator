@@ -1,5 +1,5 @@
 """
-Regression test (slow, about 5 minutes): dump_maciej.bin boots through the
+Regression test (slow, about 2 minutes): dump_maciej.bin boots through the
 whole bootloader and starts the main application.
 
   1. the UART shows the boot sequence up to the bootloader's 'success!',
@@ -12,6 +12,11 @@ whole bootloader and starts the main application.
      and its main task gets past its first sleep and prints the init banner
      ('MC: APP  init ok').  Before the timer existed the application parked
      forever in the idle task's `b .`.
+  5. the init gets past the PMU handshake and the VCAP busy bit (see
+     app_reach_check.py), and the UI draws through the graphics engine: its
+     commands complete through the GE interrupt (interrupt-controller line 4).
+     Unmodelled, every GE command ended in its 0.5-6 s timeout followed by a
+     GE reset (the 0x01234567 pattern written to +0xA0).
 
 Included in run_all_tests.py only with --slow.
 """
@@ -20,6 +25,7 @@ import struct
 import sys
 import time
 
+from app_reach_check import MAX_POLLS, PMU, VCAP, _count_reads
 from simulator import AliMipsSimulator
 from unicorn.mips_const import UC_MIPS_REG_PC
 
@@ -27,6 +33,8 @@ EXPECTED_STRINGS = ["APP  init!", "bl_panel_init!", "bl_flash_init!", "bl_verify
 CHUNKID_MAINCODE, CHUNKID_MAINCODE_MASK = 0x01FE0000, 0xFFFF0000
 BOOT_LIMIT_S = 15 * 60
 APP_LIMIT_S = 120
+GE_LIMIT_S = 180
+GE_MIN_COMMANDS = 50          # the first screen takes ~350; through timeouts only a few per minute
 EXPECTED_APP = ("\x01MC: APP  init ok\r\r\n<< SDK4.0ba.4.0_20101217 >>\r\n\r\r\n"
                 "Libcore version 8.9.0@SDK4.0bd.8.9_20130409(gcc version 3.4.4 mipssde-6.06.01-20070420)"
                 "(vic.wang@ Mon Apr 1 19:08:06 2013)\r\n\r\r\n"
@@ -82,6 +90,17 @@ def main():
 
     sim.setUartHandler(on_uart)
     sim.loadFile("dump_maciej.bin")
+    polls = {PMU: 0, VCAP: 0}
+    _count_reads(sim, polls)
+    ge = {'cmds': 0, 'resets_after_cmd': 0}
+
+    def on_ge_write(uc, access, address, size, value, user_data):
+        off = address & 0xFFF
+        if off == 0x004 and value:
+            ge['cmds'] += 1
+        elif off == 0x0A0 and value == 0x01234567 and ge['cmds']:
+            ge['resets_after_cmd'] += 1     # the driver resets the GE after a command timed out
+    sim.add_mmio_hook('write', on_ge_write, 0xB800A000, 0xB800A0FF)
 
     # 1. boot until 'success!' (wall-clock guarded: instruction counts are estimates in fast mode)
     start = time.time()
@@ -143,6 +162,25 @@ def main():
               f"within {APP_LIMIT_S}s (PC=0x{pc:08X}): {app_text!r}")
         sys.exit(1)
     print(f"  [PASS] the RTOS runs on timer ticks and the application printed its exact init banner")
+
+    # 5. PMU / VCAP waits passed, GE commands complete through the GE interrupt
+    t = time.time()
+    while time.time() - t < GE_LIMIT_S and ge['cmds'] < GE_MIN_COMMANDS:
+        sim.run(max_instructions=sim.instruction_count + 5_000_000)
+    print(f"  init: PMU status read {polls[PMU]}x, VCAP status read {polls[VCAP]}x; graphics engine: "
+          f"{ge['cmds']} commands, {sim.ic_irq_count} GE interrupts, {ge['resets_after_cmd']} GE resets "
+          f"in {time.time() - t:.0f}s")
+    ok = True
+    for cond, msg in [
+            (1 <= polls[PMU] <= MAX_POLLS, "PMU start/ready handshake completed (0xB8018D02)"),
+            (1 <= polls[VCAP] <= MAX_POLLS, "VCAP busy bit cleared (0xB800F04B)"),
+            (ge['cmds'] >= GE_MIN_COMMANDS, f"the UI issued at least {GE_MIN_COMMANDS} GE commands"),
+            (sim.ic_irq_count > 0, "they completed through the GE interrupt (IP3, controller line 4)"),
+            (ge['resets_after_cmd'] == 0, "no GE command timed out (no GE reset after the first command)")]:
+        print(("  [PASS] " if cond else "  [FAIL] ") + msg)
+        ok &= bool(cond)
+    if not ok:
+        sys.exit(1)
     print(f"\n[PASS] main application started ({time.time() - start:.0f}s total)")
     sys.exit(0)
 

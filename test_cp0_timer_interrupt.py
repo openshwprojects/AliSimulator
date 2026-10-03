@@ -35,13 +35,17 @@ counted slices (small budgets right after start-up) and fast with timed slices
                 delay forward
   replay_tx/rx- (timed, native stopper and Unicorn timeout) an asynchronous
                 slice stop re-executes the last load/store on resume; UART TX
-                characters are not duplicated and RX bytes are not lost
+                characters are not duplicated and RX bytes are not lost (TX
+                also with the store in the middle of a translation block,
+                from MIPS16 code, plain and EXTENDed, and two identical stores
+                in consecutive blocks with a pause between them)
   shared_putc - the same with the timer ISR printing through the same putc
   false_rewind- (exact) a stop *before* a later pass of a store is not taken
                 for a rewind (no character dropped)
   counted_external_stop - emu_stop() from the UART callback during the
                 start-up counted slices does not duplicate a character
-  ds_warning  - a device access in a branch delay slot (Unicorn bug) is reported
+  ds_warning  - a device register store in a branch delay slot runs once (mmio_map);
+                a flash-window store there (Unicorn bug) is reported
 """
 import struct
 import sys
@@ -238,6 +242,14 @@ def scenario_mips16(mode, fails):
     allowed = (M16_LOOP,) if mode == 'exact' else (M16_LOOP, M16_LOOP + 2)
     check(e and all(x & 1 and (x & ~1) in allowed for x in e),
           f"EPC carries the MIPS16 bit ({sorted(set(hex(x) for x in e))})", fails)
+    in_loop = lambda: sim.mu.reg_read(UC_MIPS_REG_PC) in (M16_LOOP, M16_LOOP + 2)
+    if mode != 'exact':
+        # a timed / counted slice can end inside the handler (before its ERET):
+        # run on until the CPU is back in the loop (a few short runs at most)
+        for _ in range(50):
+            if in_loop():
+                break
+            sim.run(max_instructions=sim.instruction_count + 50)
     pc = sim.mu.reg_read(UC_MIPS_REG_PC)
     v0 = sim.mu.reg_read(UC_MIPS_REG_V0)
     check(sim.is_mips16_mode() and pc in (M16_LOOP, M16_LOOP + 2) and v0 > 0,
@@ -374,9 +386,18 @@ def replay_sim(kind, body):
     return sim
 
 
-def scenario_replay_tx(kind, fails):
+def scenario_replay_tx(kind, fails, mid_block=False, sim_hook=None):
     # L: sb s0,0(t6) (UART THR) ; addiu s0,1 ; b L ; nop
-    sim = replay_sim(kind, [sb(S0, 0, T6), addiu(S0, S0, 1), b(-3), NOP])
+    # mid_block: L: addiu t3,t3,1 ; addu t4,t3,s0 ; sb ... -- the store is not the
+    # first instruction of its translation block, where Unicorn's PC (as seen by
+    # an mmio_map callback) is the block start, not the store (dump_maciej's
+    # putc printed 'viic.wang' before the rewind check used the stop PC)
+    body = [sb(S0, 0, T6), addiu(S0, S0, 1), b(-3), NOP]
+    if mid_block:
+        body = [addiu(T3, T3, 1), addu(T4, T3, S0), sb(S0, 0, T6), addiu(S0, S0, 1), b(-5), NOP]
+    sim = replay_sim(kind, body)
+    if sim_hook:
+        sim_hook(sim)
     out = []
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
@@ -384,8 +405,64 @@ def scenario_replay_tx(kind, fails):
         sim.run(max_instructions=sim.instruction_count + 2_000_000)
     bad = sum(1 for a, b_ in zip(out, out[1:]) if (b_ - a) & 0xFF != 1)
     check(len(out) > 1000 and bad == 0 and ticks(sim) >= 5,
-          f"[{kind}] UART TX under async stops: {len(out)} chars, {bad} duplicated/skipped, "
-          f"{ticks(sim)} ticks, {sim._timeout_slices} slices", fails)
+          f"[{kind}{', store mid-block' if mid_block else ''}] UART TX under async stops: {len(out)} chars, "
+          f"{bad} duplicated/skipped, {ticks(sim)} ticks, {sim._timeout_slices} slices", fails)
+
+
+def scenario_replay_tx_pairs(kind, fails, sim_hook=None):
+    # L: sb s0,0(t6) ; b M ; nop ; M: sb s0,0(t6) ; addiu s0,1 ; b L ; nop
+    # Two identical stores (same address, data and registers) in consecutive
+    # translation blocks.  A user code hook pauses the CPU right before M on
+    # every 5th pass (like a GUI pause): that stop, after the first store, must
+    # not be taken for a rewind of the second one, which would then be skipped
+    # as a 'replay'.  Every value must come out exactly twice.
+    from unicorn import UC_HOOK_CODE
+    sim = replay_sim(kind, [sb(S0, 0, T6), b(1), NOP, sb(S0, 0, T6), addiu(S0, S0, 1), b(-6), NOP])
+    m_addr = MAIN + 4 * (PROLOGUE_LEN + 2 + 3)
+    visits = [0]
+
+    def pause(uc, address, size, user_data):
+        visits[0] += 1
+        if visits[0] % 5 == 0:
+            sim.mu.emu_stop()
+    sim.mu.hook_add(UC_HOOK_CODE, pause, begin=m_addr, end=m_addr)
+    if sim_hook:
+        sim_hook(sim)
+    out = []
+    sim.setUartHandler(lambda c: out.append(ord(c)))
+    t0 = time.time()
+    while time.time() - t0 < 2.0:
+        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+    n = len(out) // 2 * 2
+    bad = sum(1 for i in range(0, n, 2) if out[i] != out[i + 1] or (i and (out[i] - out[i - 1]) & 0xFF != 1))
+    # (throughput depends on the stopper and the host load: 'unicorn' restarts
+    # are slow; the real assertion is bad == 0 over enough pauses)
+    check(len(out) > 100 and visits[0] >= 100 and bad == 0,
+          f"[{kind}, identical stores in consecutive blocks] UART TX with {visits[0] // 5} pauses before the "
+          f"second store and async stops: {len(out)} chars, {bad} pairs wrong (dropped / duplicated), "
+          f"{ticks(sim)} ticks", fails)
+
+
+def scenario_replay_tx_m16(kind, fails, extended, sim_hook=None):
+    # The same from MIPS16 code (the bootloaders' device code is MIPS16):
+    # L: addiu a0,1 ; sb v0,0(v1)  (or EXTEND sb v0,0x300(v1)) ; addiu v0,1 ; b L
+    base, store = (0xB8018000, [0xF300, 0xC340]) if extended else (0xB8018300, [0xC340])
+    m16 = [0x4C01] + store + [0x4A01]
+    m16 += [0x1000 | ((-(2 * len(m16) + 4) // 2) & 0x7FF)]      # b L (MIPS16 B: no delay slot)
+    main = prologue(337500, 337500, 0x10008001) + li(3, base) + [addiu(2, ZERO, 0), jalx(M16_LOOP), NOP]
+    sim = make_sim('timed', main, handler(), {M16_LOOP: struct.pack(f'<{len(m16)}H', *m16)})
+    sim.slice_stopper = kind
+    if sim_hook:
+        sim_hook(sim)
+    out = []
+    sim.setUartHandler(lambda c: out.append(ord(c)))
+    t0 = time.time()
+    while time.time() - t0 < 2.0:
+        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+    bad = sum(1 for a, b_ in zip(out, out[1:]) if (b_ - a) & 0xFF != 1)
+    check(len(out) > 1000 and bad == 0 and ticks(sim) >= 5,
+          f"[{kind}, MIPS16{' EXTEND' if extended else ''} store mid-block] UART TX under async stops: "
+          f"{len(out)} chars, {bad} duplicated/skipped, {ticks(sim)} ticks", fails)
 
 
 def scenario_replay_rx(kind, fails):
@@ -488,17 +565,28 @@ def scenario_counted_external_stop(fails):
 
 
 def scenario_ds_warning(fails):
-    # A device store in a `jr ra` delay slot hits a Unicorn 2.1.4 bug; the
+    # A load / store that reaches a Unicorn memory hook (or protection fault)
+    # in a branch delay slot hits a Unicorn 2.1.4 bug: the branch target's
+    # first instruction runs twice.  Device registers are an mmio_map region,
+    # which is not affected; the flash window (write-protected) is, and the
     # simulator warns about it (once per PC).
-    logs = []
-    putc_ds = [jr(RA), sb(A0, 0, T6)]            # store in the delay slot
-    main = prologue(2000, 0x40000000, 0x10000001) + li(T6, 0xB8018300) + \
-        [addiu(A0, ZERO, 0x41), jal(PUTC), NOP, addiu(S0, S0, 1), b(-1), NOP]
-    sim = make_sim('exact', main, handler(), {PUTC: struct.pack('<2I', *putc_ds)})
-    sim.log_callback = logs.append
-    sim.run(max_instructions=200)
-    warns = [m for m in logs if 'delay slot' in m and 'WARN' in m]
-    check(len(warns) == 1, f"device access in a delay slot is reported once ({warns[:1]})", fails)
+    for what, base, warned in (("UART THR (mmio_map)", 0xB8018300, False),
+                               ("flash window (write-protected)", 0xAFC00100, True)):
+        logs, out = [], []
+        putc_ds = [jr(RA), sb(A0, 0, T6)]            # store in the delay slot
+        main = prologue(2000, 0x40000000, 0x10000001) + li(T6, base) +             [addiu(A0, ZERO, 0x41), jal(PUTC), NOP, addiu(S0, S0, 1), b(-1), NOP]
+        sim = make_sim('exact', main, handler(), {PUTC: struct.pack('<2I', *putc_ds)})
+        sim.log_callback = logs.append
+        sim.setUartHandler(out.append)
+        sim.run(max_instructions=200)
+        warns = [m for m in logs if 'delay slot' in m and 'WARN' in m]
+        if warned:
+            check(len(warns) == 1, f"{what}: a store in a delay slot is reported once ({warns[:1]})", fails)
+        else:
+            check(not warns and sim.mu.reg_read(UC_MIPS_REG_S0) == 1 and out == ['A'],
+                  f"{what}: a store in a delay slot runs once and returns once "
+                  f"(return-site instruction ran {sim.mu.reg_read(UC_MIPS_REG_S0)}x, output {out}, "
+                  f"warnings {len(warns)})", fails)
 
 
 def scenario_native_eret(fails):
@@ -566,6 +654,10 @@ def main():
     print("\n--- timed slices: device accesses replayed after asynchronous stops ---")
     for kind in ('auto', 'unicorn'):
         scenario_replay_tx(kind, fails)
+        scenario_replay_tx(kind, fails, mid_block=True)
+        scenario_replay_tx_m16(kind, fails, extended=False)
+        scenario_replay_tx_m16(kind, fails, extended=True)
+        scenario_replay_tx_pairs(kind, fails)
         scenario_replay_rx(kind, fails)
         scenario_shared_putc(kind, fails)
     scenario_false_rewind(fails)
