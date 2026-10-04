@@ -116,7 +116,8 @@ def discover_test_files(include_slow=False):
 
     # Slow regressions (minutes): only with --slow
     if include_slow:
-        for name in ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py"):
+        for name in ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
+                     "run_dump_maciej_remote.py"):
             if (current_dir / name).exists():
                 test_files.append(str(current_dir / name))
 
@@ -133,8 +134,8 @@ def main():
     include_slow = "--slow" in sys.argv[1:]
     test_files = discover_test_files(include_slow)
     if not include_slow:
-        print("(slow regressions skipped; run with --slow to include run_dump_maciej_to_main_app.py "
-              "and run_dump_maciej_capture_screen.py)")
+        print("(slow regressions skipped; run with --slow to include run_dump_maciej_to_main_app.py, "
+              "run_dump_maciej_capture_screen.py and run_dump_maciej_remote.py)")
     
     if not test_files:
         print("No test files found!")
