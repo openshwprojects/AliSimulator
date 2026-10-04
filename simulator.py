@@ -1425,6 +1425,10 @@ class AliMipsSimulator:
             self._ir_key_table = ir_remote.find_key_table(ram)
             if not self._ir_key_table:
                 raise RuntimeError("no remote key table in RAM (has the application started?)")
+        if vkey not in self._ir_key_table and isinstance(key, str):
+            # the firmware may number this key differently (ir_remote.VKEY_FALLBACKS)
+            vkey = next((v for v in ir_remote.VKEY_FALLBACKS.get(key.upper(), ())
+                         if v in self._ir_key_table), vkey)
         if vkey not in self._ir_key_table:
             raise KeyError(f"key {key!r} (vkey {vkey}) is not in the firmware's key table")
         address, command = ir_remote.ir16_to_nec(self._ir_key_table[vkey])

@@ -8,6 +8,8 @@ Fast checks of the IR remote support (ir_remote.py), no firmware boot:
    scan_code_to_msg_code()'s 16-bit ir_code.
 2. find_key_table() finds a g_itou_key_tab-style table in a synthetic RAM
    image, and press-key codes round-trip through ir16_to_nec().
+3. press_key() uses VKEY_FALLBACKS for a key the firmware numbers
+   differently (INFO = 29 in dump_maciej) and rejects unknown keys.
 """
 import sys
 
@@ -99,6 +101,25 @@ def main():
     found = ir_remote.find_key_table(ram)
     if found != table:
         print(f"[FAIL] find_key_table: {found}")
+        ok = False
+    # 3. a key the firmware numbers differently: press_key falls back to VKEY_FALLBACKS
+    from simulator import AliMipsSimulator
+    sim = AliMipsSimulator(log_handler=lambda m: None)
+    sim._ir_key_table = {12: 0x372F, 29: 0x37A7}         # UP, and 29 where INFO (27) is missing
+    sent = []
+    sim.ir_send_nec = lambda a, c, label=None: sent.append((a, c))
+    try:
+        if sim.press_key('INFO') != ir_remote.ir16_to_nec(0x37A7) or sim.press_key('UP') != ir_remote.ir16_to_nec(0x372F):
+            print("[FAIL] press_key: wrong NEC code for INFO (fallback vkey 29) or UP")
+            ok = False
+        try:
+            sim.press_key('MENU')
+            print("[FAIL] press_key('MENU') must raise KeyError when neither 15 nor a fallback is in the table")
+            ok = False
+        except KeyError:
+            pass
+    except Exception as e:
+        print(f"[FAIL] press_key: {e!r}")
         ok = False
     print("[PASS] IR remote: NEC frames decode, key table found" if ok else "[FAIL] IR remote")
     sys.exit(0 if ok else 1)

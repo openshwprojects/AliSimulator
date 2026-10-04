@@ -13,6 +13,19 @@ firmware's own interrupt handler, NEC decoder and key table turn them into
 UI key messages (see ir_remote.py and AliMipsSimulator.press_key).  The
 remote works once the application is up (dump_maciej: the first screen is
 drawn about 3 minutes after the start).
+
+Be patient: the emulated firmware redraws a menu page with a few hundred GE
+commands, which takes it several seconds of its own time and 30-50 s of
+wall-clock time, so a key shows its effect that much later; keys pressed
+meanwhile queue up ("+N queued" in the status line) and are served in
+order.  A key the firmware's key table does not have (dump_maciej: VOL, CH,
+EPG, MUTE, GREEN, POWER) is reported in the status line and does nothing
+(dump_maciej's POWER is its virtual key 19: sim.press_key(19) puts the box
+into standby, which the simulator cannot wake).  dump_maciej's wizard starts
+a DVB-T channel search when OK is
+pressed on its aspect-ratio page: that screen keeps redrawing its progress
+for about an hour and ignores every key except EXIT (which takes a minute or
+two to act).
 """
 import os
 import queue
@@ -39,6 +52,7 @@ REMOTE = [
     ("CH-", "CH-", 9, 0), ("VOL-", "VOL-", 9, 1), ("MUTE", "MUTE", 9, 2),
 ]
 COLOURS = [("RED", "#c0392b"), ("GREEN", "#27ae60"), ("YELLOW", "#d4ac0d"), ("BLUE", "#2471a3")]
+REFRESH_S = 1.5         # screen refresh interval while the GE keeps drawing
 KEYMAP = {
     "Up": "UP", "Down": "DOWN", "Left": "LEFT", "Right": "RIGHT", "Return": "OK",
     "KP_Enter": "OK", "Escape": "EXIT", "BackSpace": "EXIT", "m": "MENU", "i": "INFO",
@@ -130,9 +144,14 @@ class TvGui:
         sim.setUartHandler(lambda c: uart.append(c))
         sim.loadFile(self.dump)
         t0 = time.time()
-        shown_ops, last_ops, note, app = -1, 0, "", False
+        shown_ops, shown_at, last_ops, note, app = -1, 0.0, 0, "", False
         while not self.stop:
-            sim.run(max_instructions=sim.instruction_count + 2_000_000)
+            try:
+                sim.run(max_instructions=sim.instruction_count + 2_000_000)
+            except Exception as e:
+                # keep the window (and its last frame) alive, show what happened
+                self.status = f"{time.time() - t0:6.0f}s  EMULATION STOPPED: {e!r}"
+                return
             while not self.keys.empty():
                 key = self.keys.get()
                 try:
@@ -145,9 +164,14 @@ class TvGui:
                         note = f"key {key} (NEC 0x{a:02X}/0x{c:02X})"
                 except Exception as e:
                     note = f"key {key}: {e}"
-            # redraw once the GE has finished drawing (no new commands this slice)
-            if sim.ge_ops == last_ops and sim.ge_ops != shown_ops:
-                shown_ops = sim.ge_ops
+            # Redraw once the GE has finished drawing (no new commands this
+            # slice), and while it keeps drawing at least every REFRESH_S: a
+            # redraw costs the firmware seconds of emulated time (hundreds of
+            # GE commands), and a progress screen (the channel search) never
+            # goes quiet at all.
+            drawing = sim.ge_ops != last_ops
+            if sim.ge_ops != shown_ops and (not drawing or time.time() - shown_at >= REFRESH_S):
+                shown_ops, shown_at = sim.ge_ops, time.time()
                 try:
                     rgb = sim.capture_screen()
                     self.frame = np.ascontiguousarray(rgb[self.rows][:, self.cols])
@@ -156,8 +180,10 @@ class TvGui:
             last_ops = sim.ge_ops
             app = app or "Application version" in "".join(uart[-400:])
             phase = "application running" if app else "booting"
-            self.status = (f"{time.time() - t0:6.0f}s  {phase}  GE commands {sim.ge_ops}  "
-                           f"IR frames {sim.ir_keys_sent}  {note}")
+            queued = len(sim._irc_frames)
+            self.status = (f"{time.time() - t0:6.0f}s  {phase}  GE commands {sim.ge_ops}"
+                           f"{' (drawing)' if drawing else ''}  IR frames {sim.ir_keys_sent}"
+                           f"{f' +{queued} queued' if queued else ''}  {note}")
 
 
 def main():

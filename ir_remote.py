@@ -38,6 +38,14 @@ VKEYS = {
     'RED': 51, 'GREEN': 52, 'YELLOW': 53, 'BLUE': 54,
 }
 
+# A firmware built from another SDK generation numbers its virtual keys
+# differently.  When a name's VKEYS value is not in the firmware's key table,
+# press_key() tries these instead (found by pressing every code of the
+# dump_maciej table on its wizard: 29 opens the "info" help text; 19 is its
+# POWER, which puts the box into standby that the simulator cannot wake, so it
+# is deliberately not listed).
+VKEY_FALLBACKS = {'INFO': (29,)}
+
 PAN_KEY_TYPE_REMOTE = 1
 PAN_KEY_PRESSED = 1
 
