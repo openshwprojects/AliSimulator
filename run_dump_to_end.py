@@ -40,7 +40,7 @@ def main():
     sim.setUartHandler(on_uart)
     
     try:
-        sim.loadFile("dump_maciej.bin")
+        sim.loadFile("SRT_Prima_VIII_V1.0.6_20160114.abs")
     except FileNotFoundError:
         print("dump_maciej.bin not found")
         sys.exit(1)
@@ -50,7 +50,7 @@ def main():
     
     # Run with a safety limit
     try:
-        sim.run(max_instructions=100_000_000)
+        sim.run(max_instructions=500_000_000)
     except Exception as e:
         print(f"\nSimulator stopped with exception: {e}")
 

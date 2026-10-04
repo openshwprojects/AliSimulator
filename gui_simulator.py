@@ -120,6 +120,28 @@ class MIPSSimulatorGUI:
         self.temp_breakpoints.clear()
         self.init_emulator()
 
+    def show_screen(self):
+        """Show what the firmware's OSD displays now (the GMA display layer the
+        graphics engine drew into RAM, see AliMipsSimulator.capture_screen) and
+        save it as screen.png."""
+        if not self.sim:
+            return
+        path = os.path.abspath("screen.png")
+        try:
+            self.sim.capture_screen(path)
+        except Exception as e:
+            messagebox.showerror("Screen", f"Capture failed: {e}")
+            return
+        win = tk.Toplevel(self.root)
+        win.title(f"OSD screen - {path}")
+        img = tk.PhotoImage(file=path)
+        if img.width() > 960:
+            img = img.subsample(2, 2)
+        label = tk.Label(win, image=img)
+        label.image = img            # keep a reference
+        label.pack()
+        self.log(f"Screen captured to {path}")
+
     # -------------------------------------------------------------------------
     # Hooks
     # -------------------------------------------------------------------------
@@ -439,6 +461,7 @@ class MIPSSimulatorGUI:
         tk.Button(btn_frame, text="Run (F5)", command=self.run_continuous, width=10, bg="#FF9800", fg="white").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Pause (F6)", command=self.pause_execution, width=10, bg="#FFC107", fg="black").pack(side=tk.LEFT, padx=2)
         tk.Button(btn_frame, text="Reset", command=self.reset_emulator, width=10, bg="#F44336", fg="white").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_frame, text="Screen", command=self.show_screen, width=10, bg="#607D8B", fg="white").pack(side=tk.LEFT, padx=2)
 
         self.root.bind('<F11>', self.step_into)
         self.root.bind('<F10>', self.step_over)

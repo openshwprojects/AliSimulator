@@ -107,6 +107,8 @@ class AliMipsSimulator:
         self.ic_irq_count = 0         # IP3 interrupts taken for those lines
         self._ge_status = 0           # graphics engine interrupt status (+8, see _hook_ge_write)
         self.ge_ops = 0               # graphics engine commands completed
+        self.ge_render = True         # execute GE commands (draw into RAM) with the ge_m36f model
+        self.ge = None                # ge_m36f.GeM36F instance (created on the first command)
         self._in_run = False          # inside run(): hooks may stop the slice to deliver an IRQ
         self._run_tid = None          # thread running run()
         self._external_stop = False   # emu_stop() from another thread during run(): return
@@ -1269,12 +1271,13 @@ class AliMipsSimulator:
                 if start is None or b & start:
                     uc.mem_write(target, bytes([(b | done) & ~clear & 0xFF]))
 
-    # Graphics engine (GE_M36F, registers at 0xB800A000).  Nothing is drawn: a
-    # command written to +4 completes at once and sets its bit in the interrupt
-    # status +8 (write 1 to clear), which drives interrupt-controller line 4.
-    # The driver's ISR acks +8 and wakes the drawing task through an event
-    # flag; without the interrupt every operation ended in its timeout (0.5-6 s)
-    # and a GE reset, so the UI took minutes to come up.
+    # Graphics engine (GE_M36F, registers at 0xB800A000).  A command written to
+    # +4 is executed at once by the ge_m36f model (it draws into RAM, see
+    # ge_m36f.py; ge_render = False only completes it) and sets its bit in the
+    # interrupt status +8 (write 1 to clear), which drives interrupt-controller
+    # line 4.  The driver's ISR acks +8 and wakes the drawing task through an
+    # event flag; without the interrupt every operation ended in its timeout
+    # (0.5-6 s) and a GE reset, so the UI took minutes to come up.
     _GE_DONE = {1: 0x4, 2: 0x1, 3: 0x2}     # command -> status bit (the flag bit its caller waits for)
     _IC_GE = 4                               # interrupt-controller line (0xB8000030 bit 4)
 
@@ -1287,12 +1290,45 @@ class AliMipsSimulator:
             if done and self._dev_replay_of(uc, 'ge', address, value) is None:
                 self._dev_note(uc, 'ge', address, value)
                 self.ge_ops += 1
+                if self.ge_render:
+                    self._ge_execute(value & 0xFFFFFFFF)
                 self._ge_status |= done
                 self._ic_set_line(self._IC_GE, True)
         elif off == 0x008:
             self._ge_status &= ~value
             if not self._ge_status:
                 self._ic_set_line(self._IC_GE, False)
+
+    def _ge_execute(self, command):
+        """Run GE command 1 (the live registers), 2 / 3 (the HQ / LQ command
+        list between its start and end pointers) on the RAM image."""
+        if _np is None:
+            return
+        if self.ge is None:
+            import ge_m36f
+            ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+            self.ge = ge_m36f.GeM36F(ram, log=self.log)
+        regs = _np.frombuffer(bytes(self.mmio_buffer[0xA000:0xA100]), dtype='<u4').tolist()
+        if command == 1:
+            self.ge.run_io(regs)
+            return
+        o = 0x10 if command == 2 else 0x18
+        start, end = regs[o >> 2] & 0x1FFFFFFF, regs[(o >> 2) + 1] & 0x1FFFFFFF
+        if start <= end < start + 0x400000 and end + 4 <= self.ram_size:
+            self.ge.run_list(self.ge.ram[start:end + 4].view('<u4').tolist(), regs)
+
+    def capture_screen(self, path=None, screen=(1280, 720)):
+        """What the TV would show of the OSD: the enabled GMA display layers
+        (registers 0xB8006300 / 0xB8006304: enable, first region head in RAM)
+        composited over black (see gma_capture.py), drawn into RAM by the GE
+        model.  Returns an RGB uint8 array (height, width, 3) and writes a PNG
+        if path is given.  Needs numpy (and Pillow or zlib for the PNG)."""
+        import gma_capture
+        ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+        rgb, _ = gma_capture.capture(ram, bytes(self.mmio_buffer[0:0x10000]), screen)
+        if path:
+            gma_capture.save_png(path, rgb)
+        return rgb
 
     def _hook_ge_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)

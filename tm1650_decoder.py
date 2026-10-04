@@ -14,6 +14,9 @@ class TM1650Decoder:
     ADDR_DIG2 = 0x6A
     ADDR_DIG3 = 0x6C
     ADDR_DIG4 = 0x6E
+    # Key scan read command: 0x4F on FD650/HD2015-style chips, 0x49 on original TM1650.
+    # LSB=1 means I2C read; the data byte is driven by the display chip, not the CPU.
+    KEY_READ_ADDRS = (0x4F, 0x49)
 
     DIGIT_ADDRS = {0x68: 0, 0x6A: 1, 0x6C: 2, 0x6E: 3}
 
@@ -49,6 +52,8 @@ class TM1650Decoder:
         # Stats
         self.gpio_event_count = 0
         self.i2c_transaction_count = 0
+        self.key_read_count = 0
+        self._last_key_value = None
         self._offsets_seen = set()
         self._prev_reg_values = {}
         self._bit_toggle_counts = {}
@@ -260,8 +265,36 @@ class TM1650Decoder:
                     self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits
                 )
                 self.log(f"[TM1650] Display: [{display}]")
+        elif addr in self.KEY_READ_ADDRS:
+            # Key read: 7-bit I2C addr 0x27 -> (0x27<<1)|1 = 0x4F.
+            # Firmware polls the keypad continuously; only log the first read
+            # and whenever the observed value changes.
+            # NOTE: we only see the GPIO output latch, so 'data' is not the real
+            # key code unless the simulator emulates the chip driving SDA.
+            self.key_read_count += 1
+            if data != self._last_key_value:
+                self._last_key_value = data
+                self.log(f"[TM1650] Key read: {self.parse_key_byte(data)} "
+                         f"(read #{self.key_read_count}, identical reads suppressed)")
         else:
             self.log(f"[TM1650] I2C write: addr=0x{addr:02X} data=0x{data:02X}")
+
+    @staticmethod
+    def parse_key_byte(b):
+        """Format a TM1650/FD650 key-scan byte.
+
+        bit6    = 1 if key currently pressed (else: last pressed key history)
+        bits5:3 = KI row (0..6 -> KI1..KI7)
+        bit2    = always 1 in valid codes
+        bits1:0 = DIG column (0..3 -> DIG1..DIG4)
+        """
+        if b == 0xFF:
+            return "0xFF (no chip response - SDA idle high)"
+        pressed = bool(b & 0x40)
+        ki = ((b >> 3) & 0x07) + 1
+        dig = (b & 0x03) + 1
+        state = "PRESSED" if pressed else "released"
+        return f"0x{b:02X} {state} KI{ki}/DIG{dig}"
 
     def get_display_text(self):
         """Return current display as a 4-char string."""
