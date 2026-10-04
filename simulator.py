@@ -109,6 +109,13 @@ class AliMipsSimulator:
         self.ge_ops = 0               # graphics engine commands completed
         self.ge_render = True         # execute GE commands (draw into RAM) with the ge_m36f model
         self.ge = None                # ge_m36f.GeM36F instance (created on the first command)
+        from collections import deque
+        self._irc_fifo = deque()      # IR controller run-length FIFO (see ir_send_nec)
+        self._irc_status = 0          # IR controller interrupt status (+7)
+        self._irc_frames = deque()    # NEC frames waiting to be received (any thread may append)
+        self._irc_last_vt = -1e9      # emulation time the last frame was received
+        self._ir_key_table = None     # {vkey: ir16} found in RAM by press_key()
+        self.ir_keys_sent = 0         # IR frames delivered to the firmware
         self._in_run = False          # inside run(): hooks may stop the slice to deliver an IRQ
         self._run_tid = None          # thread running run()
         self._external_stop = False   # emu_stop() from another thread during run(): return
@@ -392,6 +399,10 @@ class AliMipsSimulator:
         self._mmio_on('w', self._hook_ge_write, 0xA004, 0xA00B)
         self._mmio_on('r', self._hook_ge_read, 0xA008, 0xA00B)
         self._mmio_on('r', self._hook_ic_status_read, 0x30, 0x37)
+        # IR receiver controller: FIFO count +1, interrupt status +7, RLC data +8
+        self._mmio_on('r', self._hook_irc_read, 0x18101, 0x18101)
+        self._mmio_on('r', self._hook_irc_read, 0x18107, 0x18108)
+        self._mmio_on('w', self._hook_irc_write, 0x18107, 0x18107)
         # SPI flash controller: both register bases, 0xB8000098 (default) and
         # 0xB802E098 (M3329E rev>=5), each SF_INS(+0x98), SF_FMT(+0x99),
         # SF_DUM(+0x9A), SF_CFG(+0x9B)
@@ -759,6 +770,12 @@ class AliMipsSimulator:
         while self._ic_lines:                   # (also clears their 0xB8000030 / 34 bits)
             self._ic_set_line((self._ic_lines & -self._ic_lines).bit_length() - 1, False)
         self._ge_status = 0
+        self._irc_fifo.clear()
+        self._irc_status = 0
+        self._irc_frames.clear()
+        self._irc_last_vt = -1e9
+        self._ir_key_table = None
+        self.ir_keys_sent = 0
         self.timer_irq_count = self.ic_irq_count = self.ge_ops = 0
         self._last_eret_vt = -1e9
         self._dev_replays = {}
@@ -1333,6 +1350,86 @@ class AliMipsSimulator:
     def _hook_ge_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
         uc.mem_write((address & ~0xFFF) | 0x008, self._ge_status.to_bytes(4, 'little'))
+
+    # IR receiver (M6303 IRC, registers at 0xB8018100, see ir_remote.py).  A
+    # frame from ir_send_nec() is put into the run-length FIFO at once and
+    # signalled as the idle timeout (status bit 1): the firmware's ISR
+    # (irc_m6303irc_lsr) reads the FIFO count (+1) and drains the bytes (+8)
+    # -- on that interrupt it also schedules its decoder -- and acknowledges
+    # the status by writing it back (+7, write 1 to clear).  The status drives
+    # interrupt-controller line 19 (OS IRQ 27) while enabled in IER (+6).
+    _IC_IRC = 19
+    IR_FRAME_GAP_S = 0.25            # emulation time between two frames (NEC repeats every 108 ms)
+
+    def _hook_irc_read(self, uc, access, address, size, value, user_data):
+        self._device_access(uc)
+        off = address & 0xFFF
+        if off == 0x101:                                     # FIFO byte count
+            uc.mem_write(address, bytes([min(len(self._irc_fifo), 0x7F)]))
+        elif off == 0x107:                                   # interrupt status
+            uc.mem_write(address, bytes([self._irc_status]))
+        elif off == 0x108:                                   # RLC data: pops the FIFO
+            rp = self._dev_replay_of(uc, 'irc', address)
+            if rp is not None:
+                uc.mem_write(address, bytes([rp[2]]))
+            elif self._irc_fifo:
+                b = self._irc_fifo.popleft()
+                uc.mem_write(address, bytes([b]))
+                self._dev_note(uc, 'irc', address, b)
+
+    def _hook_irc_write(self, uc, access, address, size, value, user_data):
+        self._device_access(uc)
+        self._irc_status &= ~value & 0xFF
+        self._irc_update_line()
+
+    def _irc_update_line(self):
+        ier = self.mu.mem_read(0xB8018106, 1)[0]
+        self._ic_set_line(self._IC_IRC, bool(self._irc_status & ier & 3))
+
+    def _irc_service(self):
+        """Between slices (emulation thread): receive the next queued IR frame
+        once the previous one was taken and IR_FRAME_GAP_S has passed."""
+        if not self._irc_frames or self._irc_fifo or self._irc_status:
+            return
+        if self._vtime() - self._irc_last_vt < self.IR_FRAME_GAP_S:
+            return
+        if not self.mu.mem_read(0xB8018100, 1)[0] & 0x80:   # IRCCFG: controller enabled
+            return
+        rlc, label = self._irc_frames.popleft()
+        self._irc_fifo.extend(rlc)
+        self._irc_status |= 0x02
+        self._irc_last_vt = self._vtime()
+        self.ir_keys_sent += 1
+        self.log(f"[IR] {label}: {len(rlc)} RLC bytes")
+        self._irc_update_line()
+
+    def ir_send_nec(self, address, command, label=None):
+        """Queue an NEC remote-control frame (address, command bytes) for the
+        IR receiver.  Thread-safe: it is received at the next slice boundary
+        of run(), at least IR_FRAME_GAP_S of emulation time after the previous
+        frame and only while the firmware has the controller enabled."""
+        import ir_remote
+        self._irc_frames.append((ir_remote.nec_rlc(address, command),
+                                 label or f"NEC 0x{address:02X}/0x{command:02X}"))
+
+    def press_key(self, key):
+        """Press a remote-control key: a name of ir_remote.VKEYS ('UP', 'DOWN',
+        'OK', 'MENU', 'EXIT', '0'..'9', ...) or a virtual key number.  The NEC
+        code is looked up in the UI's own key table, found in RAM the first
+        time (so only after the application has started).  Returns the
+        (address, command) sent."""
+        import ir_remote
+        vkey = ir_remote.VKEYS[key.upper()] if isinstance(key, str) else int(key)
+        if not self._ir_key_table:
+            ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+            self._ir_key_table = ir_remote.find_key_table(ram)
+            if not self._ir_key_table:
+                raise RuntimeError("no remote key table in RAM (has the application started?)")
+        if vkey not in self._ir_key_table:
+            raise KeyError(f"key {key!r} (vkey {vkey}) is not in the firmware's key table")
+        address, command = ir_remote.ir16_to_nec(self._ir_key_table[vkey])
+        self.ir_send_nec(address, command, label=f"key {key}")
+        return address, command
 
     def _hook_ic_status_read(self, uc, access, address, size, value, user_data):
         """Interrupt-controller status 0xB8000030 / 34 shows the asserted lines
@@ -2786,6 +2883,10 @@ class AliMipsSimulator:
 
                 self._sync_hooks()
                 full = self._code_hook_h is not None
+
+                # Remote-control frames queued by ir_send_nec() / press_key()
+                if self._irc_frames:
+                    self._irc_service()
 
                 # Interrupts that could not be injected inside the previous slice
                 # (fast mode: all of them; exact mode: MIPS16 branch self-loops).
