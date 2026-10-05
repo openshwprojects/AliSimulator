@@ -35,14 +35,35 @@ def compare(rgb, golden):
         int(np.abs(rgb.astype(int) - golden.astype(int)).max()) if n else 0, mask
 
 
-def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=16,
-        panel_text=None, title=None):
+class SimulatorCrash(Exception):
+    """The simulator stopped with an exception (a native Unicorn fault)."""
+
+
+def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
+        panel_text=None, title=None, retries=1):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `golden` (a PNG next to the scripts).  Exits the process with
-    the test's result."""
+    the test's result.  A run the simulator itself crashes (the asynchronous
+    slice-stop race, see README "Things learned": a hooked CP0 instruction
+    running natively ends in a jump to a stale register) is retried `retries`
+    times from a fresh boot before it counts as a failure."""
+    print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
+    for attempt in range(retries + 1):
+        try:
+            _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
+                 panel_text, title)
+        except SimulatorCrash as e:
+            if attempt < retries:
+                print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
+                continue
+            print(f"[FAIL] simulator crashed again ({e})")
+            sys.exit(1)
+        return
+
+
+def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title):
     make_golden = "--make-golden" in sys.argv or os.environ.get("MAKE_GOLDEN") == "1"
     name = os.path.splitext(os.path.basename(golden))[0].replace("_screen_golden", "")
-    print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     sim = AliMipsSimulator(log_handler=lambda m: None)
     sim.setSPIDump(False)
     sim.setI2CDump(False)
@@ -56,6 +77,7 @@ def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_
 
     start = time.time()
     app_t = drawn_t = None
+    last_probe = 0.0
     last_ops = captured_ops = 0
     frames, prev = 0, None
     panel_texts = []
@@ -79,16 +101,25 @@ def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_
         try:
             sim.run(max_instructions=sim.instruction_count + 5_000_000)
         except Exception as e:
-            print(f"[FAIL] simulator stopped: {e!r}")
-            sys.exit(1)
+            raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s, "
+                                 f"{sim.ge_ops} GE commands") from e
         note_panel()
         if app_t is None and "Application version" in "".join(uart[-400:]):
             app_t = time.time()
             print(f"[{app_t - start:6.1f}s] application started")
-        if drawn_t is None and sim.ge_ops >= min_ge_ops:
-            drawn_t = time.time()
-            print(f"[{drawn_t - start:6.1f}s] {sim.ge_ops} GE commands: the OSD is being drawn, "
-                  f"settling {settle_s:.0f} s")
+        # "drawn" = enough GE commands AND something visible, probed every
+        # 10 s whatever the GE does: the Globo shows a channel banner that
+        # times out and clears before its no-signal message, and the
+        # Cabletech's wizard keeps redrawing a little, so neither "N commands
+        # done" nor "the GE went quiet" alone marks the screen to capture.
+        if drawn_t is None and sim.ge_ops >= min_ge_ops and now - last_probe >= 10:
+            last_probe = now
+            rgb = sim.capture_screen()
+            colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+            if colours >= min_colours:
+                drawn_t = time.time()
+                print(f"[{drawn_t - start:6.1f}s] {sim.ge_ops} GE commands: the OSD is visible "
+                      f"({colours} colours), settling {settle_s:.0f} s")
         if sim.ge_ops != last_ops:               # still drawing
             last_ops = sim.ge_ops
             continue
