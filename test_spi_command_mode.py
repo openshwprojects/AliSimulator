@@ -17,12 +17,15 @@ flash window in the same block ; SF_INS = 0x03 (normal read) ; one lbu.
 Every response must be EF 40 16 00, and the normal read must return the flash
 byte (0x5A), never a leftover response byte.
 
-  default - SPI dump logging on (the constructor default, without flash_reads):
+  idle0   - SPI dump logging on (without flash_reads), flash_hook_idle_s = 0:
             the hook comes and goes with every command phase (2 changes per
             round), and each SF_INS store is processed once although the
             stops make it execute twice (replay guard: one 'CMD' log line each)
+  default - the constructor default (flash_hook_idle_s = 0.05 s): through
+            these dense command phases the hook stays installed
   hold    - flash_hook_idle_s large: installed once, stays
-  toggle  - short run() calls: the hook changes at many emu_start() boundaries
+  toggle  - short run() calls, flash_hook_idle_s = 0: the hook changes at many
+            emu_start() boundaries
 
 plus: a default AliMipsSimulator has no Unicorn memory hook (no slow loads)
 before and after running code that never enters command mode.
@@ -57,7 +60,7 @@ def program():
 def scenario(mode, variant, fails):
     sim = make_sim(mode, program(), [NOP])
     spi_lines = []
-    if variant == 'default':
+    if variant == 'idle0':
         sim.setSpiHandler(spi_lines.append)         # logging on (default), collected
     else:
         sim.setSPIDump(False)
@@ -66,6 +69,8 @@ def scenario(mode, variant, fails):
     done = lambda s: s.mu.reg_read(UC_MIPS_REG_S0) >= N
     if variant == 'hold':
         sim.flash_hook_idle_s = 1e9
+    elif variant in ('idle0', 'toggle'):
+        sim.flash_hook_idle_s = 0.0
     if variant == 'toggle':
         t0 = time.time()
         while not done(sim) and time.time() - t0 < 90:
@@ -82,13 +87,17 @@ def scenario(mode, variant, fails):
     check(bad_resp == 0, f"{tag} every JEDEC response read in the same block is EF 40 16 00 "
                          f"({bad_resp} wrong{'' if first is None else ', first at round %d: %s' % (first, log[5 * first:5 * first + 5].hex())})", fails)
     check(bad_read == 0, f"{tag} normal-mode reads return the flash byte, no leftover response ({bad_read} wrong)", fails)
-    if variant == 'default':
+    if variant == 'idle0':
         cmds = sum(1 for m in spi_lines if 'CMD 0x' in m)
         check(cmds == 2 * n and sim.flash_hook_changes >= 2 * n - 1,
               f"{tag} the hook comes and goes with each command phase ({sim.flash_hook_changes} changes) and "
               f"each SF_INS store is processed once despite the stops ({cmds} CMD lines for {2 * n} stores)", fails)
         check(not any('FLASH READ' in m for m in spi_lines),
               f"{tag} normal-mode flash reads are not logged without flash_reads=True", fails)
+    elif variant == 'default':
+        check(sim.flash_hook_idle_s == 0.05 and 1 <= sim.flash_hook_changes <= 3,
+              f"{tag} with the default idle time the hook stays through dense command phases "
+              f"({sim.flash_hook_changes} changes for {n} rounds)", fails)
     elif variant == 'hold':
         check(sim.flash_hook_changes == 1,
               f"{tag} the flash read hook was installed once and stayed ({sim.flash_hook_changes} changes)", fails)
@@ -119,7 +128,7 @@ def main():
     fails = []
     scenario_no_hook_by_default(fails)
     for mode in MODES:
-        for variant in ('default', 'hold', 'toggle'):
+        for variant in ('idle0', 'default', 'hold', 'toggle'):
             scenario(mode, variant, fails)
     if fails:
         print(f"\n\033[91m{len(fails)} check(s) failed\033[0m")

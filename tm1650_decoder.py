@@ -49,6 +49,16 @@ class TM1650Decoder:
         # Display state
         self.digits = [0x00, 0x00, 0x00, 0x00]
 
+        # Key scan: the byte the chip answers a key read (address 0x4F / 0x49)
+        # with, driven onto SDA bit by bit while the CPU clocks the data byte
+        # (see di_override / press_key).  0x00: no key.
+        self.key_byte = 0x00
+        self._press_reads_left = 0
+        self.key_reads_answered = 0
+        self._tx_serial = 0             # counts I2C STARTs (one answer byte per transaction)
+        self._answer_tx = -1
+        self._answer = 0x00
+
         # Stats
         self.gpio_event_count = 0
         self.i2c_transaction_count = 0
@@ -193,6 +203,7 @@ class TM1650Decoder:
                 self.bit_count = 0
                 self.current_byte = 0
                 self.bytes_received = []
+                self._tx_serial += 1
                 self.log(f"[I2C] START detected")
                 return
         
@@ -233,6 +244,7 @@ class TM1650Decoder:
                 self.bit_count = 0
                 self.current_byte = 0
                 self.bytes_received = []
+                self._tx_serial += 1
                 self.log(f"[I2C] Repeated START")
                 return
 
@@ -278,6 +290,48 @@ class TM1650Decoder:
                          f"(read #{self.key_read_count}, identical reads suppressed)")
         else:
             self.log(f"[TM1650] I2C write: addr=0x{addr:02X} data=0x{data:02X}")
+
+    # ---- key scan: the chip drives SDA during the data byte of a key read ----
+    @staticmethod
+    def key_code(ki, dig, pressed=True):
+        """Key-scan byte of the key at row KI<ki> (1..7), column DIG<dig> (1..4)."""
+        return ((0x40 if pressed else 0) | ((ki - 1) & 7) << 3 | 0x04 | ((dig - 1) & 3)) & 0xFF
+
+    def press_key(self, code, hold_reads=1):
+        """Press a front-panel key: the next hold_reads key reads answer `code`
+        with its pressed bit (0x40) set, later reads the same code released
+        (bit 6 clear), as the chip reports the last key.  `code` as returned
+        by key_code() (the pressed bit is added here).  Any thread may call it.
+        dump_maciej's panel driver turns every poll that sees the key pressed
+        into a key event, so hold_reads=1 is one press."""
+        self._press_reads_left = hold_reads
+        self.key_byte = (code | 0x40) & 0xFF
+
+    def sda_in(self):
+        """Level the chip drives on SDA now: during the data byte of a key
+        read the bit the CPU is clocking in (MSB first; it reads DI after the
+        SCL rising edge, when bit_count already counts that edge), else 0 (ACK
+        / idle: the CPU drives the line)."""
+        if (self.state == 'DATA' and len(self.bytes_received) == 1
+                and self.bytes_received[0] in self.KEY_READ_ADDRS and 1 <= self.bit_count <= 8):
+            if self._answer_tx != self._tx_serial:        # first bit of this transaction's data byte
+                self._answer_tx = self._tx_serial
+                self.key_reads_answered += 1
+                self._answer = self.key_byte
+                if self._press_reads_left > 0:
+                    self._press_reads_left -= 1
+                    if self._press_reads_left == 0:
+                        self.key_byte &= ~0x40 & 0xFF      # released from the next read on
+            return (self._answer >> (8 - self.bit_count)) & 1
+        return 0
+
+    def di_override(self, di_offset, di_value):
+        """Called by the simulator for every GPIO DI read: sets the SDA bit of
+        the read value to the level the chip drives (sda_in), for the bank
+        that holds SDA."""
+        if di_offset == self.sda_offset - 4 and self.sda_in():      # DI register = DO register - 4
+            return di_value | (1 << self.sda_bit)
+        return di_value
 
     @staticmethod
     def parse_key_byte(b):

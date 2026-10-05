@@ -394,6 +394,9 @@ class AliMipsSimulator:
         # (see _hook_selfcomplete_read): PMU 0x18018D02, VCAP 0x1800F04B
         for reg in self._SELF_COMPLETING:
             self._mmio_on('r', self._hook_selfcomplete_read, reg & ~3, reg)
+        # Video engine status words the decoder driver checks after a VE reset
+        for reg in self._VE_STATUS_REGS:
+            self._mmio_on('r', self._hook_ve_status_read, reg, reg + 3)
         # Graphics engine command / interrupt status (_hook_ge_write) and the
         # interrupt controller status the modelled lines show up in
         self._mmio_on('w', self._hook_ge_write, 0xA004, 0xA00B)
@@ -588,9 +591,12 @@ class AliMipsSimulator:
     #    every flash-window load (also in normal read mode) goes through it,
     #    which is slow and exposes the delay-slot bug (_device_access).  The
     #    two stops and flushes per command phase cost less than keeping it
-    #    (dump.bin / Prima decompression: idle 0 s ~ 0.05 s, both ~20% faster
-    #    than 0.5 s).  flash_hook_idle_s > 0 keeps it that long instead.
-    flash_hook_idle_s = 0.0
+    #    through sparse commands (dump.bin / Prima decompression: idle 0 s ~
+    #    0.05 s, both ~20% faster than 0.5 s), but dense command sequences
+    #    (dump.bin's application reads its flash database byte by byte, ~750k
+    #    commands) run 5x faster when the hook stays through them: it is kept
+    #    for flash_hook_idle_s of emulation time after command mode ends.
+    flash_hook_idle_s = 0.05
 
     def _flash_hooks_wanted(self):
         return (not self._spi_is_passthrough()) or self._spi_dump_flash_reads
@@ -1256,8 +1262,13 @@ class AliMipsSimulator:
                 dir_data = uc.mem_read(mmio_base + dir_offset, 4)
                 dir_val = int.from_bytes(dir_data, 'little')
                 # Output bits (DIR=1): return DO value
-                # Input bits (DIR=0): return 0 (simulated slave response)
+                # Input bits (DIR=0): return 0 (simulated slave response),
+                # unless the GPIO handler's object drives a line (the TM1650
+                # decoder answers key reads on SDA: di_override)
                 di_val = do_val & dir_val
+                override = getattr(getattr(self.gpio_callback, '__self__', None), 'di_override', None)
+                if override is not None:
+                    di_val = override(di_offset, di_val) & ~dir_val | (do_val & dir_val)
                 uc.mem_write(address & ~3, di_val.to_bytes(4, 'little'))
             except:
                 pass
@@ -1287,6 +1298,25 @@ class AliMipsSimulator:
                 b = uc.mem_read(target, 1)[0]
                 if start is None or b & start:
                     uc.mem_write(target, bytes([(b | done) & ~clear & 0xFF]))
+
+    # Video engine (the video decoder's hardware, registers at 0xB8004200).
+    # When the application starts playing a channel, the decoder driver resets
+    # the VE (vdec_reset_ve_hw: 0xB8000060, 0xB8000028 bit 1) and then checks
+    # the VE status word (+0x28, or +0x88 on another chip revision) for its
+    # busy / event bits 8-25 (masks 0x036FFF00 / 0x017FFF00); if any is set it
+    # takes the firmware's fatal path 0x8000070C, which reboots into the
+    # bootloader.  The register is RAM here and held the 0x318 the driver wrote
+    # at init, so dump.bin rebooted two minutes after its first screen and
+    # started over.  With no VE events to report those bits read clear.
+    _VE_STATUS_REGS = (0x4228, 0x4288)
+    _VE_STATUS_MASK = 0x037FFF00
+
+    def _hook_ve_status_read(self, uc, access, address, size, value, user_data):
+        self._device_access(uc)
+        word = address & ~3
+        v = int.from_bytes(uc.mem_read(word, 4), 'little')
+        if v & self._VE_STATUS_MASK:
+            uc.mem_write(word, (v & ~self._VE_STATUS_MASK).to_bytes(4, 'little'))
 
     # Graphics engine (GE_M36F, registers at 0xB800A000).  A command written to
     # +4 is executed at once by the ge_m36f model (it draws into RAM, see

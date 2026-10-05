@@ -103,6 +103,13 @@ Besides UART, SPI flash, GPIO (I2C front panel) and the CP0 timer:
 * **VCAP** (`VCAP_M36F`, 0xB800F000): the video-output open sets bit 0 of +0x4B
   and spins until the hardware clears it, without a timeout. The bit reads
   back cleared.
+* **Video engine** (the decoder hardware, 0xB8004200): when a channel starts
+  playing, the decoder driver resets the VE and checks its status word (+0x28,
+  or +0x88 on another chip revision) for busy / event bits 8-25; any set bit
+  sends the firmware down its fatal path (reboot into the bootloader). Those
+  bits read clear — there are no VE events here. Without this, dump.bin
+  rebooted two minutes after its first screen (the status word still held the
+  0x318 the driver had written at init) and started over.
 * **Graphics engine** (`GE_M36F`, 0xB800A000): nothing is drawn. A command
   written to +4 (1, 2 or 3) completes at once and sets its bit in the
   interrupt status +8 (0x4, 0x1, 0x2; write 1 to clear), which drives
@@ -182,7 +189,11 @@ then every 1000th.
   takes effect before the next instruction; the store re-executes and is
   recognised as a replay), the next `emu_start()` installs the hook and
   flushes the translation cache, and leaving command mode removes it the same
-  way (`flash_hook_idle_s` > 0 keeps it longer). Two native Unicorn crashes
+  way once no command has come for `flash_hook_idle_s` (0.05 s of emulation
+  time: sparse commands, as during the bootloader's decompression, cost two
+  flushes each, but dense sequences keep the hook — dump.bin's application
+  reads its flash database byte by byte, ~750k commands, 5x faster this way;
+  0 toggles it around every command). Two native Unicorn crashes
   (access violations, 7-30% of the boots) came with an earlier version: memory
   hooks added / removed from a device callback while the CPU ran, and Python
   writes (`uc.mem_write`) into the read-only guest flash mapping from a hook

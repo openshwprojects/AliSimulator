@@ -10,6 +10,10 @@ fast timed slices):
               it with udelay(2000), up to 36,848 times)
   vcap      - VCAP 0xB800F04B: the busy bit 0 the driver sets reads back
               cleared (the driver spins on it without a timeout)
+  ve        - video engine status 0xB8004228 / 0xB8004288: the busy / event
+              bits 8-25 read clear whatever was written (the decoder driver
+              reboots the box if they are set after a VE reset), other bits
+              and the neighbouring words keep their values
   ge        - graphics engine 0xB800A000: a command written to +4 completes
               at once; its status bit (+8, write 1 to clear) drives
               interrupt-controller line 4 (0xB8000030 bit 4) and IP3.  The
@@ -75,6 +79,19 @@ def scenario_vcap(mode, fails):
     sim = make_sim(mode, main, [ERET, NOP])
     run_until(sim, mode, 200, done)
     check(done(sim), "the busy bit 0 the driver set reads back cleared (no endless spin)", fails)
+
+
+def scenario_ve(mode, fails):
+    main = li(T1, 0xB8004228) + li(T2, 0x00000318) + [sw(T2, 0, T1), sw(T2, 4, T1)] + \
+           li(T2, 0x01234567) + [sw(T2, 0x60, T1),
+           lw(T3, 0, T1), lw(T4, 4, T1), lw(T5, 0x60, T1),
+           addiu(S0, ZERO, 1), beq(ZERO, ZERO, -1), NOP]
+    sim = make_sim(mode, main, [ERET, NOP])
+    run_until(sim, mode, 100, done)
+    t3, t4, t5 = (reg(sim, sim.gpr_map[r]) for r in (T3, T4, T5))
+    check(done(sim) and t3 == 0x18, f"+0x28: 0x318 written reads back with the status bits clear (0x{t3:X})", fails)
+    check(t4 == 0x318, f"the neighbouring word +0x2C keeps what was written (0x{t4:X})", fails)
+    check(t5 == 0x01234567 & ~0x037FFF00, f"+0x88: only bits 8-25 read clear (0x{t5:X})", fails)
 
 
 def ge_handler():
@@ -249,7 +266,7 @@ def scenario_observers(fails):
           "poke of the physical THR stores without printing a character", fails)
 
 
-SCENARIOS = [scenario_pmu, scenario_vcap, scenario_ge, scenario_ge_masked, scenario_ge_writeback,
+SCENARIOS = [scenario_pmu, scenario_vcap, scenario_ve, scenario_ge, scenario_ge_masked, scenario_ge_writeback,
              scenario_ge_partial_ack]
 
 
