@@ -17,6 +17,7 @@ GitHub Pages after every push.
   python run_all_tests.py --slow     plus the multi-minute firmware runs
   python run_all_tests.py -k remote  only scripts whose name contains 'remote'
   python run_all_tests.py --timeout 1800   kill a test after 30 minutes
+  python run_all_tests.py --slow --jobs 2  two tests at a time (output per test, not streamed)
 """
 
 import ast
@@ -41,7 +42,8 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
          ("urz0195", "Cabletech URZ0195"), ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
-              "run_dump_maciej_remote.py")
+              "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
+              "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):
@@ -134,15 +136,21 @@ def _collect_artifact(line, result, img_dir):
     return False
 
 
-def run_test_file(test_file_path, timeout=None):
-    """Run a single test file, streaming its output, and return its result record."""
+_print_lock = threading.Lock()
+
+
+def run_test_file(test_file_path, timeout=None, stream=True):
+    """Run a single test file and return its result record.  Its output is
+    streamed as it comes (stream=True) or printed as one block at the end
+    (parallel runs)."""
     test_name = os.path.basename(test_file_path)
     stem = os.path.splitext(test_name)[0]
     img_dir = str(REPORT_DIR / "img" / stem)
 
-    print(f"\n{'=' * 80}")
-    print(f"Running: {test_name}")
-    print(f"{'=' * 80}\n", flush=True)
+    if stream:
+        print(f"\n{'=' * 80}")
+        print(f"Running: {test_name}")
+        print(f"{'=' * 80}\n", flush=True)
 
     # Each test runs in its own Python process: a test that crashes the
     # interpreter (a native fault inside Unicorn) fails on its own instead of
@@ -166,8 +174,9 @@ def run_test_file(test_file_path, timeout=None):
             if _collect_artifact(line.rstrip("\r\n"), result, img_dir):
                 continue
             lines.append(line)
-            sys.stdout.write(line)
-            sys.stdout.flush()
+            if stream:
+                sys.stdout.write(line)
+                sys.stdout.flush()
 
     th = threading.Thread(target=reader, daemon=True)
     th.start()
@@ -193,6 +202,10 @@ def run_test_file(test_file_path, timeout=None):
             result["checks"].append({"ok": m.group(1) == "PASS", "text": m.group(2).strip()})
     result["passed"] = exit_code == 0
     result["tags"] = _tags(test_file_path, result)
+    if not stream:
+        with _print_lock:
+            print(f"\n{'=' * 80}\n{test_name}: {'PASS' if result['passed'] else 'FAIL'} "
+                  f"({result['elapsed']:.0f}s)\n{'=' * 80}\n{result['output']}", flush=True)
     return result
 
 
@@ -225,6 +238,7 @@ def main():
     timeout = None
     if "--timeout" in args:
         timeout = float(args[args.index("--timeout") + 1])
+    jobs = int(args[args.index("--jobs") + 1]) if "--jobs" in args else 1
     patterns = [a.lower() for i, a in enumerate(args) if i > 0 and args[i - 1] == "-k"]
 
     print("\n" + "=" * 80)
@@ -244,7 +258,15 @@ def main():
     for test_file in test_files:
         print(f"  - {os.path.basename(test_file)}")
 
-    results = [run_test_file(t, timeout) for t in test_files]
+    if jobs > 1:
+        # Parallel: the simulations are CPU bound and independent (firmware time
+        # follows each emulation thread's own CPU time), so N at once on N cores
+        # cuts the wall time of the slow suite; outputs are printed per test.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            results = list(pool.map(lambda t: run_test_file(t, timeout, stream=False), test_files))
+    else:
+        results = [run_test_file(t, timeout) for t in test_files]
 
     print("\n" + "=" * 80)
     print("Test Summary")
@@ -255,7 +277,7 @@ def main():
         print(f"  {status} - {r['name']}{extra}  {r['elapsed']:.0f}s")
     print("\n" + "-" * 80)
 
-    note = ("default suite" if not include_slow else "with --slow")
+    note = ("default suite" if not include_slow else "with --slow") + (f", {jobs} jobs" if jobs > 1 else "")
     if patterns:
         note += ", filtered: " + ", ".join(patterns)
     write_report(results, note)

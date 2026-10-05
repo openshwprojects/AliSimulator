@@ -280,6 +280,21 @@ then check that the init got past the PMU handshake and the VCAP busy bit
 spin), and the slow dump_maciej test also that its UI's graphics-engine
 commands complete through the GE interrupt without timeouts.
 
+The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
+the display layer and compare it pixel for pixel with a golden PNG kept in the
+repository (`screen_regression.py` is the shared body; a golden is remade with
+`--make-golden`): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
+about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
+banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
+its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
+(the URZ0083Q's first-install wizard after its 12-17 minute database scan,
+with the TM1628 panel reading "noCH"). `run_dump_maciej_remote.py` drives the
+Opticum's wizard with the IR remote through the language and aspect-ratio
+pages into the channel search and checks that the progress screen keeps
+changing. `--jobs 2` runs two tests at a time (the simulations are independent;
+firmware time follows each emulation thread's own CPU time), which is what the
+workflow does.
+
 Mechanism tests that need no firmware dump: `test_isa_mode_tracking.py`
 (MIPS32/MIPS16 switches, breakpoints inside MIPS16 code),
 `test_flash_window_isolation.py` (SPI responses vs flash contents, page program,
