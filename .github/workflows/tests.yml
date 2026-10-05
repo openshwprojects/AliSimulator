@@ -1,13 +1,26 @@
-name: Tests
+name: Self-tests
 
 on:
   push:
   pull_request:
 
+# The HTML report (report/index.html, with the screens the tests rendered)
+# is published to GitHub Pages; the repository's Pages source must be set to
+# "GitHub Actions" once (Settings -> Pages).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two Pages deploys at once; let a run finish rather than cancelling.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,10 +28,51 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install unicorn capstone
+        run: pip install unicorn capstone numpy pillow
 
-      - name: Run all tests
-        run: python run_all_tests.py
+      # The report is written even when tests fail - a failing report is the
+      # useful one; the real outcome is reflected after it is uploaded.  --slow
+      # adds the multi-minute firmware runs, which are the ones that render
+      # screens.
+      - name: Run all tests (writes report/index.html)
+        id: tests
+        run: |
+          set +e
+          python run_all_tests.py --slow
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Upload report as a workflow artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-test-report
+          path: report
+
+      # Pushes only: pull requests (especially from forks) cannot deploy Pages.
+      - name: Upload report as the Pages artifact
+        if: ${{ always() && github.event_name == 'push' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: report
+
+      - name: Reflect the test outcome
+        if: ${{ always() }}
+        run: exit ${{ steps.tests.outputs.exit_code }}
+
+  deploy:
+    needs: test
+    # always(): publish the report even if the test job failed.  Push-only.
+    if: ${{ always() && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the report to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

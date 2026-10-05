@@ -1,0 +1,15 @@
+EN25Q32B.bin (with INFO.txt and the two photos: the contents of CABLETECH URZ0083Q.RAR)
+
+Source: elektroda.pl forum, "CABLETECH URZ0083Q Wsad pamięci EFEON Q32B-104HIP",
+post #1 by Fairgrounds, 14 May 2014 ("zgrane ze sprawnego dekodera" = read from a
+working decoder). Attachment "CABLETECH URZ0083Q.RAR" (4.74 MB); downloading it
+requires an elektroda account.
+  https://www.elektroda.pl/rtvforum/topic2842886.html#13677891
+
+Device: Cabletech URZ0083Q DVB-T receiver, PCB 6390-M3801-VER1.0 (ALi M3801),
+SPI flash eFeon Q32B-104HIP (read by the programmer as EN25Q32B).
+Size 4194304 bytes, SHA-1 b417d177a667d3540c335031401e68eeb2b63a27
+
+Flash layout (chunk headers): bootloader 0x000000, HDCPKey 0x01FE00 ("Demo M3801"),
+maincode 0x020000 (version "URZ0083Q", 2013-4-2), Radioback 0x320000, defaultdb
+0x330000, userdb 0x34FF80 -- the same layout as dump.bin (Comsat TE 1050 HD).

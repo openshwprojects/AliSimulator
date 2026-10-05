@@ -4,6 +4,7 @@ Terminates with success once digits [0x00, 0x3F, 0x37, 0x00] are received.
 """
 import sys
 import time
+import report_artifacts
 from simulator import AliMipsSimulator
 from tm1650_decoder import TM1650Decoder
 
@@ -67,6 +68,7 @@ def main():
     
     duration = time.time() - start_time
     
+    report_artifacts.panel(tm1650.digits, "front panel (TM1650) when the test stopped", tm1650.get_display_text())
     if test_passed[0]:
         display = tm1650.get_display_text()
         print(f"\n[PASS] TM1650 display shows [{display}] after {duration:.2f}s")

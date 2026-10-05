@@ -1,0 +1,30 @@
+Ali_3801_Globo_DVBT_dump SPI 4mb.bin
+
+Source: elektroda.pl forum, thread "Jak skompilować i uruchomić własny firmware dla
+ALI M3801 i innych układów z tunerów?" (English: "How to compile and run custom
+firmware for ALI M3801 and other chips from tuners?"), page 2, post #40 by
+JacekTorun, 5 July 2026. Attachment "Ali_3801_Globo_DVBT_dump SPI 4mb.bin" (4 MB);
+downloading it requires an elektroda account.
+  https://www.elektroda.pl/rtvforum/topic4156384-30.html#21933067
+  https://www.elektroda.com/rtvforum/topic4156384-30.html#21933067 (machine translation)
+
+Device: Globo STB HD N3 DVB-T set-top box, ALi M3801. The SPI flash (4 MB) was
+desoldered and read with a programmer.
+Size 4194304 bytes, SHA-1 ef46dee13875ce21193b9ffe58c031aebd83c54b
+
+Flash layout (chunk headers): bootloader 0x000000, HDCPKey 0x04FE00, maincode
+0x050000 (name 406000000003002, version "M3801 DVBT", 2014-6-23), Radioback
+0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 -- the same layout and maincode
+name as dump_maciej.bin (Opticum STB HD N2).
+
+UART log of the real box from the same post (the forum collapses repeated
+spaces and shows "@" before a domain-like word as "(_at_)"):
+APP init!
+bl_panel_init!
+bl_flash_init!
+bl_verify_sw
+success!
+MC: APP init ok
+<< SDK4.0ba.4.0_20101217 >>
+Libcore version 8.13.0(_at_)SDK4.0bd.8.13_20130731(gcc version 3.4.4 mipssde-6.06.01-20070420)(Vic.Wang@ Thu Aug 1 15:38:18 2013)
+Application version 1.0.0(_at_)SDK4.0ba.7.4_20120227

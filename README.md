@@ -1,6 +1,13 @@
 # AliSimulator
 
-Unicorn-based simulator for ALi M3329 (MIPS32 + MIPS16e) satellite receiver firmware dumps.
+Unicorn-based simulator for ALi set-top-box firmware dumps (MIPS32 + MIPS16e).
+The main targets, dump.bin and dump_maciej.bin, are DVB-T (terrestrial)
+receivers built for the ALi M3801 ("M3801 DVBT" in their maincode chunk
+headers); SRT Prima is from the same family. The firmware identifies the
+silicon as an S3811: its chip-ID function reads 0xB8000002 and knows 0x3811 but
+no 0x3801, and the simulator reports 0x3811, revision 0. The Echosonic dump
+(M3510A, DVB-S2) and the sat_main_ali3329 dump (M3329) are other chips, per
+their file names.
 
 ## Execution modes (simulator.py)
 
@@ -94,7 +101,22 @@ Single steps always use the exact hook. Both modes read the real ISA mode
 
 ## Simulated devices
 
-Besides UART, SPI flash, GPIO (I2C front panel) and the CP0 timer:
+Besides UART, SPI flash, GPIO and the CP0 timer:
+
+* **Front panel** (`front_panel.py` picks the decoder per dump): the LED
+  driver chip the firmware bit-bangs over GPIO. dump_maciej.bin and the Globo
+  N3 have a **TM1650** on I2C (SCL = GPIO 31, SDA = GPIO 9; `tm1650_decoder.py`:
+  4-digit display, key matrix KI1-7 × DIG1-4 answered on SDA). The Cabletech
+  URZ0083Q has a **TM1628-class 3-wire chip** (CLK = GPIO 31, DIO = GPIO 9,
+  STB = GPIO 11; `tm1628_decoder.py`: 14-byte display RAM with the board's own
+  digit / segment wiring -- " ON " at boot, "noCH" without channels -- and the
+  5-byte key read answered on DIO the way the firmware samples it, after each
+  CLK falling edge; its wizard reacts to KS9/K1 = down, KS9/K2 = up and
+  KS10/K1 = power). The Cabletech URZ0195's uPD16312-class chip (STB = GPIO 14,
+  LED port command) speaks the same protocol. `press_key()` on either decoder
+  presses a matrix position; `tv_gui.py` shows the display and the matrix as
+  buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
+  (about 90k timer ticks) before the first screen.
 
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
@@ -271,3 +293,24 @@ the SF_INS store, with the flash read hook installed between slices, also
 toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
 `run_all_tests.py` runs every test in its own Python process, so a native
 crash fails that test only.
+
+### Test report
+
+`run_all_tests.py` also writes `report/index.html` (`report.py`): one
+self-contained page with every test's verdict, wall time, description (the
+script's docstring), its `[PASS]` / `[FAIL]` lines, its whole output, and the
+images it rendered -- OSD screen captures embedded as PNG and front-panel LED
+displays drawn as 7-segment SVG. A test attaches those through
+`report_artifacts.py`: `image(path, caption)` for a PNG it saved (into
+`report_artifacts.out_dir()`, which the runner points at `report/img/<test>/`)
+and `panel(digits, caption, text)` for a display's segment bytes; the lines
+they print are picked up by the runner, so a test still runs on its own
+unchanged. Filter the cards by dump, kind (unit / regression / slow) and data
+(renders, crashed, timed out); `-k name` runs a subset, `--timeout seconds`
+kills a hung test.
+
+The GitHub Actions workflow (`.github/workflows/tests.yml`) runs
+`run_all_tests.py --slow` on every push, uploads `report/` as a workflow
+artifact and publishes it to GitHub Pages (the repository's Pages source must
+be set to "GitHub Actions" once, under Settings > Pages); the page is updated
+even when tests fail, and the job's result still reflects the tests.

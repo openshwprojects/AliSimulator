@@ -21,6 +21,7 @@ import numpy as np
 
 import ge_m36f
 import gma_capture
+import report_artifacts
 
 fails = []
 
@@ -114,6 +115,9 @@ def main():
     dev = bytearray(0x10000)
     struct.pack_into('<II', dev, 0x6300, 1, HEAD)
     rgb, info = gma_capture.capture(ram, bytes(dev), screen=(64, 64))
+    shot = report_artifacts.path("ge_m36f_capture.png")
+    gma_capture.save_png(shot, np.repeat(np.repeat(rgb, 4, axis=0), 4, axis=1))   # 4x for visibility
+    report_artifacts.image(shot, "the 64x64 test surface as the GMA layer shows it (4x)")
     check(info['layers'][0]['enabled'] and len(info['layers'][0]['heads']) == 1, "layer 0 head chain parsed")
     check(tuple(rgb[4, 3]) == (0, 255, 0) and tuple(rgb[0, 0]) == (0, 0, 0) and tuple(rgb[21, 22]) == (0, 0, 255),
           f"capture shows the drawn pixels (green fill {tuple(rgb[4, 3])}, blue icon row {tuple(rgb[21, 22])})")

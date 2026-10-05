@@ -3,6 +3,7 @@ Regression test: runs dump.bin until the simulator crashes or finishes.
 """
 import sys
 import time
+import report_artifacts
 from simulator import AliMipsSimulator
 from tm1650_decoder import TM1650Decoder
 
@@ -76,6 +77,7 @@ def main():
     print(f"GPIO register change events: {tm1650.gpio_event_count}")
     print(f"I2C transactions: {tm1650.i2c_transaction_count}")
     print(f"Final display: [{tm1650.get_display_text()}]")
+    report_artifacts.panel(tm1650.digits, "front panel (TM1650) at the end", tm1650.get_display_text())
     print(f"GPIO offsets seen: {sorted(f'0x{o:03X}' for o in tm1650._offsets_seen)}")
     
     # Show top toggling bits — CLK will have the most toggles

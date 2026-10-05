@@ -14,6 +14,7 @@ decoder and checks the bytes it clocks in.
 """
 import sys
 
+import report_artifacts
 from tm1650_decoder import TM1650Decoder
 
 SCL, SDA = 31, 9
@@ -91,6 +92,7 @@ def main():
     check(dec.key_reads_answered == 5 and dec.key_read_count == 5, f"five key reads seen ({dec.key_reads_answered}, {dec.key_read_count})")
     check(bus.display_write(0x68, 0x3F) and dec.digits[0] == 0x3F and dec.get_display_text()[0] == 'O',
           "a display write in between still decodes (digit 1 = 'O')")
+    report_artifacts.panel(dec.digits, "display after the write in between", dec.get_display_text())
     check(bus.key_read() == code & ~0x40, "and the key read after it answers the released code")
     check(TM1650Decoder.parse_key_byte(code | 0x40) == "0x4E PRESSED KI2/DIG3", "parse_key_byte names the key")
     print("[PASS] TM1650 key scan" if ok else "[FAIL] TM1650 key scan")

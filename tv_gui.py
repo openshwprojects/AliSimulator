@@ -16,9 +16,10 @@ MAINCODE CHANNELS VERSION CLS HEAP SENDMSG HMSG TIME GPIOCONFIG ADDDUMMY EXIT
 REBOOT).  Remote keys are not taken while the UART line has the focus.
 
 Under the remote: the front panel's 4-digit LED display (what the firmware
-writes to its TM1650 driver over bit-banged I2C, decoded by tm1650_decoder.py)
-and the TM1650 key matrix as buttons; the firmware's panel driver polls the
-key register and the decoder answers a pressed button once (dump_maciej
+writes to its LED-driver chip over bit-banged GPIO: a TM1650 on I2C or a
+TM1628-class 3-wire chip, chosen per dump in front_panel.py) and its key
+matrix as buttons; the firmware's panel driver polls the chip's key register
+and the decoder answers a pressed button once (dump_maciej
 reacts to KI1/DIG4 = up and KI2/DIG4 = down; each press is delivered as one
 key event, the firmware repeats a key for every poll it is held).
 
@@ -51,19 +52,15 @@ import tkinter as tk
 
 import numpy as np
 
+from front_panel import make_panel
 from simulator import AliMipsSimulator
-from tm1650_decoder import TM1650Decoder
 
-# Front panel: the TM1650 LED driver on the I2C bit-bang pins dump_maciej uses
-# (SCL = GPIO 31, SDA = GPIO 9) drives a 4-digit 7-segment display and scans a
-# key matrix of 7 rows (KI1-7) x 4 columns (DIG1-4).  The buttons below the
-# display press each matrix position; dump_maciej's panel driver reacts to
-# KI1/DIG4 (up / CH+) and KI2/DIG4 (down / CH-) only (every code was tried on
-# its wizard).  A board without a TM1650 shows a blank display and ignores them.
-PANEL_I2C = (31, 9)
-PANEL_LABELS = {(1, 4): "▲", (2, 4): "▼"}
-PANEL_KEYS = [(PANEL_LABELS.get((ki, dig), f"{ki}-{dig}"), TM1650Decoder.key_code(ki, dig, pressed=False))
-              for ki in range(1, 8) for dig in range(1, 5)]
+# Front panel: the dump's LED-driver chip (front_panel.py: a TM1650 on I2C or
+# a TM1628-class 3-wire chip, each on its bit-bang GPIO pins) drives a 4-digit
+# 7-segment display and scans a key matrix.  The buttons below the display
+# press each matrix position; dump_maciej's panel driver reacts to KI1/DIG4
+# (up / CH+) and KI2/DIG4 (down / CH-) only (every code was tried on its
+# wizard).  A board without the chip shows a blank display and ignores them.
 # 7-segment layout: bit0..6 = segments a (top), b, c, d (bottom), e, f, g (middle), bit7 = DP
 SEG_POLYS = {
     0: [(3, 0), (19, 0), (17, 3), (5, 3)],
@@ -163,7 +160,8 @@ class TvGui:
         self.view_button.grid(row=15, column=0, columnspan=3, pady=(10, 0), sticky="ew")
 
         # Front panel: the 4-digit LED display and its keys
-        self.tm1650 = None
+        self.panel, self.panel_keys, panel_desc = make_panel(dump, log_handler=lambda m: None)
+        self.panel.dump_enabled = False
         self.seg = tk.Canvas(pad, width=4 * 34 + 12, height=58, bg="#111", highlightthickness=0)
         self.seg.grid(row=12, column=0, columnspan=3, pady=(12, 2))
         self._seg_items = []
@@ -173,11 +171,11 @@ class TvGui:
                                                             fill=SEG_OFF, outline="") for s in range(7)]
                                    + [self.seg.create_oval(ox + 25, oy + 41, ox + 29, oy + 45, fill=SEG_OFF, outline="")])
         self._shown_digits = None
-        tk.Label(pad, text="panel keys KI1-7 × DIG1-4", bg="#222", fg="#888",
+        tk.Label(pad, text="panel: " + panel_desc, bg="#222", fg="#888", wraplength=200,
                  font=("TkDefaultFont", 7)).grid(row=13, column=0, columnspan=3)
         pf = tk.Frame(pad, bg="#222")
         pf.grid(row=14, column=0, columnspan=3)
-        for i, (label, code) in enumerate(PANEL_KEYS):
+        for i, (label, code) in enumerate(self.panel_keys):
             known = not label[0].isdigit()
             tk.Button(pf, text=label, width=4, bg="#4a4a4a" if known else "#2e2e2e", fg="white" if known else "#999",
                       activebackground="#666", relief="flat", font=("TkDefaultFont", 7),
@@ -204,7 +202,7 @@ class TvGui:
         if self.frame is not None:
             self._show(self.frame)
             self.frame = None
-        digits = tuple(self.tm1650.digits) if self.tm1650 is not None else None
+        digits = tuple(self.panel.digits)
         if digits != self._shown_digits:
             self._shown_digits = digits
             for d, items in enumerate(self._seg_items):
@@ -260,8 +258,7 @@ class TvGui:
         self.keys.put(key)
 
     def press_panel(self, code):
-        if self.tm1650 is not None:
-            self.tm1650.press_key(code)         # answered by the next key read (one key event)
+        self.panel.press_key(code)              # answered by the next key read (one key event)
 
     def save(self):
         self.keys.put("__save__")
@@ -277,10 +274,7 @@ class TvGui:
         sim.setI2CDump(False)
         uart = self.uart
         sim.setUartHandler(lambda c: uart.append(c))
-        tm1650 = TM1650Decoder(scl_gpio=PANEL_I2C[0], sda_gpio=PANEL_I2C[1], log_handler=lambda m: None)
-        tm1650.dump_enabled = False
-        sim.setGpioHandler(tm1650.on_gpio_write)
-        self.tm1650 = tm1650
+        sim.setGpioHandler(self.panel.on_gpio_write)
         sim.loadFile(self.dump)
         t0 = time.time()
         shown_ops, shown_at, last_ops, note, app = -1, 0.0, 0, "", False

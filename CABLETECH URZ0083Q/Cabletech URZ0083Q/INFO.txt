@@ -1,0 +1,5 @@
+CABLETECH URZ0083Q
+
+SPI FLASH: eFeon Q32B-104HIP (odczytany przez programator jako EN25Q32B/ Readed by programmer like EN25Q32B)
+
+PCB: 6390-M3801-VER1.0

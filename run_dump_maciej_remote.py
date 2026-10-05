@@ -21,6 +21,8 @@ import time
 
 import numpy as np
 
+import report_artifacts
+from front_panel import make_panel
 from simulator import AliMipsSimulator
 
 BOOT_LIMIT_S = 15 * 60
@@ -28,12 +30,15 @@ KEY_LIMIT_S = 3 * 60
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else None
+    out = sys.argv[1] if len(sys.argv) > 1 else report_artifacts.out_dir()
     print("=== dump_maciej: drive the OSD with the IR remote ===")
     sim = AliMipsSimulator(log_handler=lambda msg: None)
     sim.setSPIDump(False)
     sim.setI2CDump(False)
     sim.setUartHandler(lambda c: None)
+    panel, _keys, _desc = make_panel("dump_maciej.bin", log_handler=lambda m: None)
+    panel.dump_enabled = False
+    sim.setGpioHandler(panel.on_gpio_write)
     sim.loadFile("dump_maciej.bin")
     start = time.time()
 
@@ -54,7 +59,9 @@ def main():
         rgb = sim.capture_screen()
         if out:
             os.makedirs(out, exist_ok=True)
-            sim.capture_screen(os.path.join(out, f"remote_{name}.png"))
+            path = os.path.join(out, f"remote_{name}.png")
+            sim.capture_screen(path)
+            report_artifacts.image(path, f"screen: {name} ({sim.ge_ops} GE commands)")
         return rgb
 
     if not run_until_drawn(300, BOOT_LIMIT_S):
@@ -80,6 +87,7 @@ def main():
             ok = False
             break
         before = after
+    report_artifacts.panel(panel.digits, "front panel (TM1650) at the end", panel.get_display_text())
     if not ok:
         sys.exit(1)
     print(f"[PASS] the firmware's menus follow the IR remote ({time.time() - start:.0f}s total)")

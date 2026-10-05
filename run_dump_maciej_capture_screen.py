@@ -29,6 +29,8 @@ import time
 
 import numpy as np
 
+import report_artifacts
+from front_panel import make_panel
 from simulator import AliMipsSimulator
 
 BOOT_LIMIT_S = 15 * 60
@@ -74,6 +76,7 @@ def verify_against_golden(rgb, golden_path, diff_path=None):
             diff_vis[diff_mask] = [255, 0, 0]
             Image.fromarray(diff_vis).save(diff_path)
             print(f"saved difference map to {diff_path}")
+            report_artifacts.image(diff_path, "difference to the golden reference (red = differing pixels)")
         except Exception:
             pass
 
@@ -101,7 +104,8 @@ def main():
         ok = verify_against_golden(img, golden_path, f"{base}_diff.png")
         sys.exit(0 if ok else 1)
 
-    out = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "dump_maciej_screen.png"
+    out = (sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-")
+           else report_artifacts.path("dump_maciej_screen.png"))
     app_minutes = float(sys.argv[2]) if len(sys.argv) > 2 else 3.0
     base = os.path.splitext(out)[0]
     print("=== dump_maciej: capture and verify the OSD drawn through the graphics engine ===")
@@ -110,6 +114,9 @@ def main():
     sim.setI2CDump(False)
     uart = []
     sim.setUartHandler(lambda c: uart.append(c))
+    panel, _keys, _desc = make_panel("dump_maciej.bin", log_handler=lambda m: None)
+    panel.dump_enabled = False
+    sim.setGpioHandler(panel.on_gpio_write)
     sim.loadFile("dump_maciej.bin")
 
     start = time.time()
@@ -140,6 +147,7 @@ def main():
             sim.capture_screen(path)
             print(f"[{now - start:6.1f}s] {sim.ge_ops} GE commands ({sim.ge.primitives} primitives): "
                   f"new frame -> {path}")
+            report_artifacts.image(path, f"frame {frames} after {sim.ge_ops} GE commands ({now - start:.0f} s)")
         prev = rgb
 
     if prev is None:
@@ -150,6 +158,8 @@ def main():
     unsupported = dict(sim.ge.unsupported) if sim.ge else {}
     print(f"saved {out}: {rgb.shape[1]}x{rgb.shape[0]}, {colours} colours, {frames} distinct frame(s), "
           f"GE features not modelled: {unsupported or 'none'}")
+    report_artifacts.image(out, f"final screen: {colours} colours, {sim.ge_ops} GE commands")
+    report_artifacts.panel(panel.digits, "front panel (TM1650) at the end", panel.get_display_text())
     if colours < 16:
         print("[FAIL] the captured screen is (nearly) uniform")
         sys.exit(1)

@@ -9,6 +9,7 @@ import sys
 import numpy as np
 from PIL import Image
 
+import report_artifacts
 import run_dump_maciej_capture_screen as capture_mod
 
 EXPECTED_SHA256 = "94b48dc3e8a01a79569a681dc8bc3dab897f36c36d0e66d13bfcdbe6e69d5702"
@@ -32,6 +33,7 @@ def main():
         sys.exit(1)
 
     img = np.array(Image.open(golden_path).convert("RGB"))
+    report_artifacts.image(golden_path, "the golden reference (dump_maciej's first wizard screen)")
     check(img.shape == EXPECTED_SHAPE, f"image resolution is {EXPECTED_SHAPE[1]}x{EXPECTED_SHAPE[0]} (got {img.shape})")
 
     pixel_hash = hashlib.sha256(img.tobytes()).hexdigest()
