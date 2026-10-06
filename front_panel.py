@@ -36,6 +36,12 @@ PANELS = [
     # its bootloader prints "stb: 14 clock: 31 data: 9 / nec 16312 attach ok / digit: 4 seg: 16":
     # a uPD16312 / PT6312-class driver, the same 3-wire command set (digit layout not mapped yet)
     ("URZ0195", dict(chip="tm1628", clk=31, dio=9, stb=14, digit_addrs=(0, 2, 4, 6), labels={})),
+    # Cabletech URZ0194S: the URZ0083Q's bootloader build, remote (same wake code) and panel bus,
+    # but its digits use the standard segment layout (" ON ", "----", "noCH" come out as is) and
+    # its keys differ (found on its wizard): KS7/K1 = left and KS9/K1 = right step the highlighted
+    # value, KS8/K1 = menu (its main menu opens), KS8/K2 = down, KS9/K2 = power (standby "oFF ")
+    ("urz0194", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6),
+                     labels={(7, 1): "◀", (9, 1): "▶", (8, 1): "MENU", (8, 2): "▼", (9, 2): "PWR"})),
     # Strong SRT 8115 (MC6422-M3801): the same 3-wire bus and pins as the Cabletech URZ0083Q
     # (GPIO 31 clocks, 9 carries the data, 11 strobes); digit layout and keys not mapped yet
     ("srt8115", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6), labels={})),

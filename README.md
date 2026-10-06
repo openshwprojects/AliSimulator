@@ -289,8 +289,10 @@ about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
 its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
 (the URZ0083Q's first-install wizard after its 12-17 minute database scan,
-with the TM1628 panel reading "noCH") and `run_dump_srt8115_capture_screen.py`
-(the Strong SRT 8115's no-signal screen, about 15). `run_dump_maciej_remote.py` drives the
+with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
+(the Strong SRT 8115's no-signal screen, about 15) and
+`run_dump_urz0194s_capture_screen.py` (the Cabletech URZ0194S, the URZ0083Q's
+family with a newer application: the same wizard after an 11-minute scan). `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
 changing. The screen regressions take a `navigation` sequence too: remote keys
@@ -300,8 +302,9 @@ required to change the screen, the last screen compared with a second golden
 (`*_nav_golden.png`; the waits are GE-quiet based, and the final capture waits
 until the screen has become the golden one, so a slow machine or CI runner
 only takes longer): the Globo opens its main menu, moves the highlight and
-returns to live TV; the Cabletech moves its wizard highlight with its panel
-keys; the SRT 8115 opens and closes its main menu. dump.bin has no
+returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its panel
+keys and the URZ0194S steps its wizard's Region value with its (the whole
+wizard switches language); the SRT 8115 opens and closes its main menu. dump.bin has no
 navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
 none of the frame encodings tried (its key table, its bootloader's wake-code
 user codes 01 FE / 80 7F) changes its screen. How a firmware's key table

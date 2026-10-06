@@ -1,0 +1,24 @@
+CABLETECH_urz0194s_v1_0_8.bin
+
+Source: elektroda.pl forum, "CABLETECH URZ0194S wsad pamięci 25Q32FV", post #1 by Krzyś122333,
+4 February 2015 (brand CABLETECH, model URZ0194S, SPI flash 25Q32FV, "zgrane ze sprawnego
+dekodera" = read from a working decoder). Attachment "CABLETECH_urz0194s_v1_0_8.bin" (4 MB);
+downloading it requires an elektroda account.
+  https://www.elektroda.pl/rtvforum/topic2981605.html#14403424
+
+Device: Cabletech URZ0194S DVB-T receiver, ALi M3801 (the firmware's chip-ID table is the
+M3801 family's, its demodulator driver is the S3811's), firmware version 1.0.8.
+Size 4194304 bytes, SHA-1 82438d88edcaaf37da8086184c793cb126abe48d
+
+Flash layout (chunk headers): bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Oct 15 2012 --
+the same build as the Cabletech URZ0083Q's; its standby wake code 00FDBA45 is the URZ0083Q's
+too, so the same remote), HDCPKey 0x01FE00 ("Demo M3801"), maincode 0x020000 (version
+"URZ0194", 2013-9-16), Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80 -- the
+URZ0083Q / dump.bin layout.  A newer application on the URZ0083Q's hardware family.
+
+In the simulator (2026-10-06): the application (Libcore 8.1j.0@SDK4.0bd.8.1j_20130424) prints
+its banner 8 s after start, scans its flash channel database for about 11 minutes and then
+draws the same first-install wizard as the URZ0083Q ("Witaj": Region, Język, Tryb Wyświetlania,
+Proporcje Obrazu, Ok).  Its TM1628-class front panel sits on the URZ0083Q's pins (CLK 31, DIO 9,
+STB 11) but its digits use the standard 7-segment layout: " ON " at boot, "----" while the
+application starts, "noCH" (no channels) once the wizard is up.

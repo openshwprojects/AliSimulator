@@ -104,7 +104,8 @@ def ir16_to_nec(ir16):
 #          sent, address = hi, command = lo (standard NEC frame)
 #   ext00  Strong SRT 8115 (Libcore 8.7j): extended NEC whose two address
 #          bytes are both rev8(hi) (0x00 on its remote), command = ~rev8(lo)
-IR_CODINGS = [("dump_maciej", "nec"), ("Globo", "nec"), ("URZ0083Q", "plain"), ("srt8115", "ext00")]
+IR_CODINGS = [("dump_maciej", "nec"), ("Globo", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
+              ("srt8115", "ext00")]
 
 
 def coding_for(dump):

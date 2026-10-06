@@ -40,11 +40,12 @@ REPORT_DIR = ROOT / "report"
 # Scripts whose name does not say which dump they run: look for it in the source
 DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
-         ("urz0195", "Cabletech URZ0195"), ("srt8115", "Strong SRT 8115"), ("ali_sdk.bin", "ali_sdk.bin")]
+         ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
+         ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
-              "run_dump_srt8115_capture_screen.py")
+              "run_dump_srt8115_capture_screen.py", "run_dump_urz0194s_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):
