@@ -95,6 +95,40 @@ def ir16_to_nec(ir16):
     return (~_rev8(ir16 >> 8)) & 0xFF, (~_rev8(ir16)) & 0xFF
 
 
+# How a firmware's key table relates to the NEC frame bytes differs between
+# SDK generations (found by sending a table's MENU code in every plausible
+# form and watching the OSD, 2026-10-06):
+#   nec    dump_maciej / Globo (Libcore 8.9 / 8.13): see ir16_to_nec above --
+#          standard NEC, address = ~rev8(hi), command = ~rev8(lo)
+#   plain  Cabletech URZ0083Q (Libcore 8.1h): the table holds the bytes as
+#          sent, address = hi, command = lo (standard NEC frame)
+#   ext00  Strong SRT 8115 (Libcore 8.7j): extended NEC whose two address
+#          bytes are both rev8(hi) (0x00 on its remote), command = ~rev8(lo)
+IR_CODINGS = [("dump_maciej", "nec"), ("Globo", "nec"), ("URZ0083Q", "plain"), ("srt8115", "ext00")]
+
+
+def coding_for(dump):
+    """The IR coding of a dump (file name or path); 'nec' when unknown."""
+    import os
+    name = os.path.normpath(dump).lower()
+    for pattern, coding in IR_CODINGS:
+        if pattern.lower() in name:
+            return coding
+    return "nec"
+
+
+def frame_from_ir16(ir16, coding="nec"):
+    """(address, command, address_hi) of the NEC frame for a key-table code
+    under `coding` (address_hi None = standard NEC, the second byte is ~address)."""
+    hi, lo = ir16 >> 8, ir16 & 0xFF
+    if coding == "plain":
+        return hi, lo, None
+    if coding == "ext00":
+        return _rev8(hi), (~_rev8(lo)) & 0xFF, _rev8(hi)
+    address, command = ir16_to_nec(ir16)
+    return address, command, None
+
+
 def find_key_table(ram, min_entries=12):
     """Find the UI's remote key table (struct ir_key_map_t {IR_KEY_INFO
     key_info; UINT32 ui_vkey;}) in a RAM image (numpy uint8 array): runs of

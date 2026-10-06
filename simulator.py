@@ -115,6 +115,7 @@ class AliMipsSimulator:
         self._irc_frames = deque()    # NEC frames waiting to be received (any thread may append)
         self._irc_last_vt = -1e9      # emulation time the last frame was received
         self._ir_key_table = None     # {vkey: ir16} found in RAM by press_key()
+        self.ir_coding = "nec"        # how that table maps to NEC frames (ir_remote.IR_CODINGS)
         self.ir_keys_sent = 0         # IR frames delivered to the firmware
         self._in_run = False          # inside run(): hooks may stop the slice to deliver an IRQ
         self._run_tid = None          # thread running run()
@@ -738,6 +739,8 @@ class AliMipsSimulator:
 
     def loadFile(self, filename):
         self.log(f"Loading {filename}...")
+        import ir_remote
+        self.ir_coding = ir_remote.coding_for(filename)
         with open(filename, "rb") as f:
             code = f.read()
         
@@ -1433,13 +1436,14 @@ class AliMipsSimulator:
         self.log(f"[IR] {label}: {len(rlc)} RLC bytes")
         self._irc_update_line()
 
-    def ir_send_nec(self, address, command, label=None):
-        """Queue an NEC remote-control frame (address, command bytes) for the
+    def ir_send_nec(self, address, command, label=None, address_hi=None):
+        """Queue an NEC remote-control frame (address, command bytes; address_hi
+        for an extended-NEC second address byte instead of ~address) for the
         IR receiver.  Thread-safe: it is received at the next slice boundary
         of run(), at least IR_FRAME_GAP_S of emulation time after the previous
         frame and only while the firmware has the controller enabled."""
         import ir_remote
-        self._irc_frames.append((ir_remote.nec_rlc(address, command),
+        self._irc_frames.append((ir_remote.nec_rlc(address, command, address_hi),
                                  label or f"NEC 0x{address:02X}/0x{command:02X}"))
 
     def press_key(self, key):
@@ -1461,8 +1465,13 @@ class AliMipsSimulator:
                          if v in self._ir_key_table), vkey)
         if vkey not in self._ir_key_table:
             raise KeyError(f"key {key!r} (vkey {vkey}) is not in the firmware's key table")
-        address, command = ir_remote.ir16_to_nec(self._ir_key_table[vkey])
-        self.ir_send_nec(address, command, label=f"key {key}")
+        # the frame bytes a table code stands for depend on the firmware's SDK
+        # generation (ir_remote.IR_CODINGS; set from the dump's name by loadFile)
+        address, command, address_hi = ir_remote.frame_from_ir16(self._ir_key_table[vkey], self.ir_coding)
+        if address_hi is None:
+            self.ir_send_nec(address, command, label=f"key {key}")
+        else:
+            self.ir_send_nec(address, command, label=f"key {key}", address_hi=address_hi)
         return address, command
 
     def _hook_ic_status_read(self, uc, access, address, size, value, user_data):

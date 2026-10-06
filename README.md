@@ -293,7 +293,20 @@ with the TM1628 panel reading "noCH") and `run_dump_srt8115_capture_screen.py`
 (the Strong SRT 8115's no-signal screen, about 15). `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
-changing. `--jobs 2` runs two tests at a time (the simulations are independent;
+changing. The screen regressions take a `navigation` sequence too: remote keys
+(through the emulated IR receiver and the firmware's own key table) or front
+panel keys (through the panel decoder) pressed after the first screen, each
+required to change the screen, the last screen compared with a second golden
+(`*_nav_golden.png`): the Globo opens its main menu, moves the highlight and
+returns to live TV; the Cabletech moves its wizard highlight with its panel
+keys; the SRT 8115 opens and closes its main menu. dump.bin has no
+navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
+none of the frame encodings tried (its key table, its bootloader's wake-code
+user codes 01 FE / 80 7F) changes its screen. How a firmware's key table
+maps to the NEC frame bytes differs between SDK generations
+(`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
+bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
+Cabletech, an extended-NEC address for the SRT 8115). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.
 

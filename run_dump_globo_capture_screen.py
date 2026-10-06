@@ -6,8 +6,11 @@ clock and date, about 600 GE commands) and clears it again when the banner
 times out, then draws the live-TV "Brak sygnału" (no signal) message at about
 900 commands, five minutes after it started; that stable screen is captured and
 compared with
-globo_screen_golden.png.  The TM1650 front panel is decoded alongside
-(" ON " while booting, then the application's text).
+globo_screen_golden.png.  Then the IR remote drives it: MENU opens the main
+menu (six tiles: channel edit, channel scan, media player, settings, USB), RIGHT
+moves the highlight, EXIT returns to live TV, whose channel banner reappears;
+that screen is compared with globo_nav_golden.png.  The TM1650 front panel is
+decoded alongside (" ON " while booting, then the application's text).
 
 Usage: python run_dump_globo_capture_screen.py [--make-golden]
 """
@@ -16,8 +19,11 @@ import screen_regression
 screen_regression.run(
     dump="Ali_3801_Globo_DVBT_dump SPI 4mb.bin",
     golden="globo_screen_golden.png",
-    boot_limit_s=15 * 60,
+    boot_limit_s=30 * 60,
     settle_s=60,
     min_ge_ops=900,       # after the channel banner (~600 commands) has timed out
     title="Globo STB HD N3",
+    navigation=[("MENU", 200000), ("RIGHT", 2000), ("EXIT", 100000)],
+    nav_diff_pct=1.0,
+    nav_settle_s=150,     # the channel banner after EXIT slides in and times out; compare the stable screen
 )

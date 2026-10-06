@@ -5,8 +5,12 @@ flash channel database for some 8 minutes before it draws its first screen at
 about 12 minutes: its live-TV "Brak sygnału" (no signal) icon and text, some 40
 GE commands, then a slow trickle of redraws.  The
 screen is captured and compared with srt8115_screen_golden.png with a small
-tolerance; the TM1628-class front panel on the Cabletech's pins is decoded
-alongside (its digit wiring is not mapped yet).
+tolerance.  Then the IR remote (this firmware's extended-NEC coding, see
+ir_remote.IR_CODINGS) drives it: MENU opens the main menu ("Edytuj kanały":
+TV / radio channel lists, delete all, favourite lists) and EXIT closes it
+again; the final screen is compared with srt8115_nav_golden.png.  The
+TM1628-class front panel on the Cabletech's pins is decoded alongside (its
+digit wiring is not mapped yet).
 
 Usage: python run_dump_srt8115_capture_screen.py [--make-golden]
 """
@@ -15,9 +19,10 @@ import screen_regression
 screen_regression.run(
     dump="srt8115.BIN",
     golden="srt8115_screen_golden.png",
-    boot_limit_s=30 * 60,
+    boot_limit_s=60 * 60,     # 6-20 min alone, much longer on a loaded machine / CI runner
     settle_s=90,
     min_ge_ops=35,
     max_diff_pct=1.0,
     title="Strong SRT 8115",
+    navigation=[("MENU", 100000), ("EXIT", 100000)],
 )

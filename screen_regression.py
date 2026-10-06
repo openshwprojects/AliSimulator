@@ -10,6 +10,13 @@ The golden is made with `--make-golden` (or MAKE_GOLDEN=1): the captured screen
 is saved as the reference and the run passes.  A firmware whose screen keeps
 changing a little (a blinking element, a clock) compares with a tolerance,
 max_diff_pct.
+
+A `navigation` sequence then drives the UI: each step is a remote-control key
+name (sent through the emulated IR receiver and the firmware's own key table,
+see ir_remote.py) or ("panel", code) for a front-panel key (answered by the
+panel decoder's key read), with the least number of pixels the step must
+change.  Every step's screen goes to the report and the last one is compared
+with <name>_nav_golden.png (also made by --make-golden).
 """
 import os
 import sys
@@ -40,7 +47,7 @@ class SimulatorCrash(Exception):
 
 
 def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
-        panel_text=None, title=None, retries=1):
+        panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `golden` (a PNG in the golden/ directory).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -51,7 +58,8 @@ def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_
     for attempt in range(retries + 1):
         try:
             _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
-                 panel_text, title)
+                 panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
+                 nav_settle_s)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -61,7 +69,8 @@ def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_
         return
 
 
-def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title):
+def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
+         navigation, nav_diff_pct, nav_settle_s):
     make_golden = "--make-golden" in sys.argv or os.environ.get("MAKE_GOLDEN") == "1"
     name = os.path.splitext(os.path.basename(golden))[0].replace("_screen_golden", "")
     sim = AliMipsSimulator(log_handler=lambda m: None)
@@ -156,28 +165,92 @@ def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_col
     if panel_text is not None:
         check(panel.get_display_text() == panel_text,
               f"front panel shows [{panel.get_display_text()}] (expected [{panel_text}])")
-    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden", golden)
-    if make_golden:
-        gma_capture.save_png(golden_path, rgb)
-        print(f"  [PASS] golden reference written: {golden_path}")
-    elif not os.path.exists(golden_path):
-        check(False, f"golden reference {golden} missing (run with --make-golden)")
-    else:
+    def against_golden(rgb, golden_name, allowed_pct, what):
+        golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden", golden_name)
+        if make_golden:
+            gma_capture.save_png(golden_path, rgb)
+            print(f"  [PASS] golden reference written: {golden_path}")
+            return
+        if not os.path.exists(golden_path):
+            check(False, f"golden reference {golden_name} missing (run with --make-golden)")
+            return
         from PIL import Image
         gold = np.array(Image.open(golden_path).convert("RGB"))
         try:
             n, pct, maxd, mask = compare(rgb, gold)
         except ValueError as e:
             check(False, f"golden comparison: {e}")
-        else:
-            check(pct <= max_diff_pct, f"screen matches the golden reference {golden}: {n} pixels differ "
-                                       f"({pct:.2f}%, allowed {max_diff_pct:.2f}%, max channel diff {maxd})")
-            if n:
-                diff = np.zeros_like(rgb)
-                diff[mask] = [255, 0, 0]
-                diff_path = report_artifacts.path(f"{name}_diff.png")
-                gma_capture.save_png(diff_path, diff)
-                report_artifacts.image(diff_path, f"difference to the golden reference: {n} pixels "
-                                                  f"({pct:.2f}%), red = differing")
+            return
+        check(pct <= allowed_pct, f"{what} matches the golden reference {golden_name}: {n} pixels differ "
+                                  f"({pct:.2f}%, allowed {allowed_pct:.2f}%, max channel diff {maxd})")
+        if n:
+            diff = np.zeros_like(rgb)
+            diff[mask] = [255, 0, 0]
+            diff_path = report_artifacts.path(f"{os.path.splitext(golden_name)[0]}_diff.png")
+            gma_capture.save_png(diff_path, diff)
+            report_artifacts.image(diff_path, f"difference of the {what} to {golden_name}: {n} pixels "
+                                              f"({pct:.2f}%), red = differing")
+
+    against_golden(rgb, golden, max_diff_pct, "screen")
+
+    # navigation: drive the UI with the remote / the front panel
+    def run_for(seconds):
+        t = time.time()
+        while time.time() - t < seconds:
+            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+
+    def settle(max_s, quiet_s, min_s=0):
+        """Run until the GE has issued no command for quiet_s seconds (at
+        least min_s, at most max_s): a redraw or a banner's timeout takes
+        more wall time the busier the machine is, so a fixed wait captured
+        half-drawn menus and banners that had not gone yet."""
+        t0 = time.time()
+        last_ops, last_change = sim.ge_ops, t0
+        while time.time() - t0 < max_s:
+            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+            now = time.time()
+            if sim.ge_ops != last_ops:
+                last_ops, last_change = sim.ge_ops, now
+            elif now - last_change >= quiet_s and now - t0 >= min_s:
+                return True
+        return False
+
+    previous = rgb
+    for i, (key, min_px) in enumerate(navigation, 1):
+        ops = sim.ge_ops
+        try:
+            if isinstance(key, tuple):                   # ("panel", code): a front-panel key
+                panel.press_key(key[1], hold_reads=2)
+                label = f"panel key {key[1]}"
+            else:
+                addr, cmd = sim.press_key(key)
+                label = f"{key} (NEC 0x{addr:02X}/0x{cmd:02X})"
+        except Exception as e:
+            check(False, f"navigation step {i}: cannot press {key!r}: {e}")
+            break
+        t = time.time()
+        while time.time() - t < 60 and sim.ge_ops - ops < 2:      # wait for the redraw to start
+            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+        settle(120, 8, min_s=20)                                 # and to finish
+        after = sim.capture_screen()
+        changed = int((after != previous).any(axis=2).sum())
+        path = report_artifacts.path(f"{name}_nav_{i}_{str(key[1] if isinstance(key, tuple) else key).replace('+', 'plus').replace('-', 'minus')}.png")
+        gma_capture.save_png(path, after)
+        report_artifacts.image(path, f"navigation step {i}: {label}: {sim.ge_ops - ops} GE commands, "
+                                     f"{changed} pixels changed")
+        check(changed >= min_px, f"navigation step {i}: {label} changed the screen "
+                                 f"({changed} pixels, need {min_px}; {sim.ge_ops - ops} GE commands)")
+        print(f"[{time.time() - start:6.1f}s] navigation {i}: {label}: {sim.ge_ops - ops} GE commands, "
+              f"{changed} pixels changed, panel [{panel.get_display_text()}]")
+        previous = after
+    if navigation:
+        if nav_settle_s:                 # let a banner or an animation finish before the comparison
+            settle(nav_settle_s, 20)
+            previous = sim.capture_screen()
+            path = report_artifacts.path(f"{name}_nav_final.png")
+            gma_capture.save_png(path, previous)
+            report_artifacts.image(path, f"screen {nav_settle_s:.0f} s after the last navigation step")
+        report_artifacts.panel(panel.digits, "front panel after the navigation", panel.get_display_text())
+        against_golden(previous, f"{name}_nav_golden.png", nav_diff_pct, "screen after the navigation")
     print(f"\n[{'PASS' if ok else 'FAIL'}] {title or dump} screen regression ({time.time() - start:.0f} s total)")
     sys.exit(0 if ok else 1)

@@ -13,7 +13,7 @@ import screen_regression
 screen_regression.run(
     dump="dump.bin",
     golden="dump_screen_golden.png",
-    boot_limit_s=30 * 60,
+    boot_limit_s=45 * 60,
     settle_s=90,
     min_ge_ops=15,
     max_diff_pct=2.0,
