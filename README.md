@@ -113,7 +113,8 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   5-byte key read answered on DIO the way the firmware samples it, after each
   CLK falling edge; its wizard reacts to KS9/K1 = down, KS9/K2 = up and
   KS10/K1 = power). The Cabletech URZ0195's uPD16312-class chip (STB = GPIO 14,
-  LED port command) speaks the same protocol. `press_key()` on either decoder
+  LED port command) and the Strong SRT 8115's chip (the Cabletech's pins) speak
+  the same protocol. `press_key()` on either decoder
   presses a matrix position; `tv_gui.py` shows the display and the matrix as
   buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
   (about 90k timer ticks) before the first screen.
@@ -281,14 +282,15 @@ spin), and the slow dump_maciej test also that its UI's graphics-engine
 commands complete through the GE interrupt without timeouts.
 
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
-the display layer and compare it pixel for pixel with a golden PNG kept in the
-repository (`screen_regression.py` is the shared body; a golden is remade with
+the display layer and compare it pixel for pixel with a golden PNG kept in `golden/`
+(`screen_regression.py` is the shared body; a golden is remade with
 `--make-golden`): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
 its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
 (the URZ0083Q's first-install wizard after its 12-17 minute database scan,
-with the TM1628 panel reading "noCH"). `run_dump_maciej_remote.py` drives the
+with the TM1628 panel reading "noCH") and `run_dump_srt8115_capture_screen.py`
+(the Strong SRT 8115's no-signal screen, about 15). `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
 changing. `--jobs 2` runs two tests at a time (the simulations are independent;

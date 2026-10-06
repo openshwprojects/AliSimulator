@@ -2,7 +2,7 @@
 Shared body of the screen-capture regressions (run_dump_*_capture_screen.py):
 boot a firmware dump with its front panel (front_panel.py), wait until its OSD
 has been drawn through the GE model, capture what the display layer shows,
-compare it with the dump's golden PNG, and attach the frames, the final screen,
+compare it with the dump's golden PNG (golden/), and attach the frames, the final screen,
 a difference map and the front-panel display to the test report
 (report_artifacts.py).
 
@@ -42,8 +42,8 @@ class SimulatorCrash(Exception):
 def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
-    compare with `golden` (a PNG next to the scripts).  Exits the process with
-    the test's result.  A run the simulator itself crashes (the asynchronous
+    compare with `golden` (a PNG in the golden/ directory).  Exits the process
+    with the test's result.  A run the simulator itself crashes (the asynchronous
     slice-stop race, see README "Things learned": a hooked CP0 instruction
     running natively ends in a jump to a stale register) is retried `retries`
     times from a fresh boot before it counts as a failure."""
@@ -156,7 +156,7 @@ def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_col
     if panel_text is not None:
         check(panel.get_display_text() == panel_text,
               f"front panel shows [{panel.get_display_text()}] (expected [{panel_text}])")
-    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), golden)
+    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden", golden)
     if make_golden:
         gma_capture.save_png(golden_path, rgb)
         print(f"  [PASS] golden reference written: {golden_path}")

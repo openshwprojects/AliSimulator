@@ -1,0 +1,19 @@
+dump.bin
+
+Source: p.kaczmarek2's Comsat TE 1050 HD, read with a CH341 programmer (elektroda article
+"Wnętrze tunera Comsat TE 1050 HD, zgrywanie firmware, format partycji z pamięci Flash",
+December 2025); the same file is published as
+  https://github.com/openshwprojects/FlashDumps  (Sat/Comsat TE 1050 HD/Flash_For_M3801_ALI.bin)
+  https://github.com/openshwprojects/AliUnpacker (dump.bin)
+(identical git blob 5dc3133c8ce82df79ef28dcd69a727703272334a).
+  https://www.elektroda.pl/rtvforum/topic4155976.html
+  https://www.elektroda.com/news/news4155976.html (machine translation)
+
+Device: Comsat TE 1050 HD DVB-T receiver, ALi M3801, main board MC6379-VER1.0, SPI flash
+25Q32BSIG.  The application's system-information page names it "M3801", "MC6379-VER1.0",
+"TE 1050 HD", "DVB-T HD V1.1.5", "Jan 29 2013".
+
+Flash layout (chunk headers): bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Nov 26 2012),
+HDCPKey 0x01FE00 ("Demo M3801"), maincode 0x020000 (version "M3801 DVBT", 2013-2-1),
+Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80.  Application: Libcore
+8.1c.0@SDK4.0bd.8.7_20121127.

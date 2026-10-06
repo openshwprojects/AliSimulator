@@ -9,7 +9,8 @@ follow the firmware's GPIO writes and answer its key reads.
     HD N3 -- SCL = GPIO 31, SDA = GPIO 9; the panel driver reacts to the key
     matrix positions KI1/DIG4 (up) and KI2/DIG4 (down).
   * TM1628-class (3-wire: CLK, DIO, STB): Cabletech URZ0083Q (PCB
-    6390-M3801) -- CLK = GPIO 31, DIO = GPIO 9, STB = GPIO 11; digits in RAM
+    6390-M3801) and the Strong SRT 8115 (MC6422-M3801) -- CLK = GPIO 31, DIO =
+    GPIO 9, STB = GPIO 11; the Cabletech's digits in RAM
     0, 2, 4, 6 with its own segment wiring (" ON " at boot, "noCH" without
     channels); its panel driver reacts to KS9/K1 (down), KS9/K2 (up) and
     KS10/K1 (power -> standby, "oFF ").  The Cabletech URZ0195 has a
@@ -35,6 +36,9 @@ PANELS = [
     # its bootloader prints "stb: 14 clock: 31 data: 9 / nec 16312 attach ok / digit: 4 seg: 16":
     # a uPD16312 / PT6312-class driver, the same 3-wire command set (digit layout not mapped yet)
     ("URZ0195", dict(chip="tm1628", clk=31, dio=9, stb=14, digit_addrs=(0, 2, 4, 6), labels={})),
+    # Strong SRT 8115 (MC6422-M3801): the same 3-wire bus and pins as the Cabletech URZ0083Q
+    # (GPIO 31 clocks, 9 carries the data, 11 strobes); digit layout and keys not mapped yet
+    ("srt8115", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6), labels={})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 

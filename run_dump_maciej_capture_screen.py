@@ -2,7 +2,7 @@
 Screen capture self-test for dump_maciej.bin (slow, about 3 minutes): boots the
 firmware into its application, captures what its OSD shows through the ALi
 GE_M36F graphics engine into RAM, saves it as a PNG, and verifies pixel-by-pixel
-against the saved golden reference image (dump_maciej_screen_golden.png).
+against the saved golden reference image (golden/dump_maciej_screen_golden.png).
 
 Nothing here is extracted from the flash image.  The firmware draws its UI
 through the ALi GE_M36F graphics engine -- command lists of rectangle fills,
@@ -87,7 +87,7 @@ def verify_against_golden(rgb, golden_path, diff_path=None):
 
 
 def main():
-    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dump_maciej_screen_golden.png")
+    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden", "dump_maciej_screen_golden.png")
 
     if "--verify-only" in sys.argv:
         target = "dump_maciej_screen.png"

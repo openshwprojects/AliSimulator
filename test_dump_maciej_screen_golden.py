@@ -1,6 +1,6 @@
 """
 Unit test (fast): verifies integrity of the saved golden screen reference
-(dump_maciej_screen_golden.png) and tests the self-test image comparison logic.
+(golden/dump_maciej_screen_golden.png) and tests the self-test image comparison logic.
 """
 import hashlib
 import os
@@ -26,7 +26,7 @@ def check(cond, msg):
 
 def main():
     print("=== Unit test: dump_maciej golden screen reference integrity ===")
-    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dump_maciej_screen_golden.png")
+    golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden", "dump_maciej_screen_golden.png")
 
     check(os.path.exists(golden_path), f"golden image file exists ({os.path.basename(golden_path)})")
     if not os.path.exists(golden_path):
