@@ -25,5 +25,6 @@ screen_regression.run(
     title="Globo STB HD N3",
     navigation=[("MENU", 200000), ("RIGHT", 2000), ("EXIT", 100000)],
     nav_diff_pct=1.0,
-    nav_settle_s=150,     # the channel banner after EXIT slides in and times out; compare the stable screen
+    nav_settle_s=600,     # the channel banner after EXIT slides in and times out (firmware seconds, which take
+                          # minutes of wall time on a loaded machine); the stable screen is compared
 )

@@ -43,7 +43,9 @@ def compare(rgb, golden):
 
 
 class SimulatorCrash(Exception):
-    """The simulator stopped with an exception (a native Unicorn fault)."""
+    """The simulator stopped with an exception (a native Unicorn fault), or the
+    firmware stalled before drawing anything: both are the asynchronous
+    slice-stop race (see README "Things learned"), so the boot is retried."""
 
 
 def run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
@@ -101,10 +103,9 @@ def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_col
     while True:
         now = time.time()
         if drawn_t is None and now - start > boot_limit_s:
-            print(f"[FAIL] nothing drawn within {boot_limit_s:.0f} s (GE commands: {sim.ge_ops}, "
-                  f"UART: {''.join(uart)[-200:]!r})")
             report_artifacts.panel(panel.digits, "front panel at the end", panel.get_display_text())
-            sys.exit(1)
+            raise SimulatorCrash(f"nothing drawn within {boot_limit_s:.0f} s (GE commands: {sim.ge_ops}, "
+                                 f"UART: {''.join(uart)[-120:]!r})")
         if drawn_t is not None and now - drawn_t > settle_s:
             break
         try:
@@ -244,9 +245,31 @@ def _run(dump, golden, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_col
               f"{changed} pixels changed, panel [{panel.get_display_text()}]")
         previous = after
     if navigation:
-        if nav_settle_s:                 # let a banner or an animation finish before the comparison
-            settle(nav_settle_s, 20)
-            previous = sim.capture_screen()
+        if nav_settle_s:
+            # let a banner or an animation finish before the comparison: wait
+            # until the screen has become the golden one (a banner that has not
+            # timed out yet is itself static, so "GE quiet" would not do), or
+            # for the whole budget when there is no golden to wait for yet
+            nav_golden_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden",
+                                           f"{name}_nav_golden.png")
+            if not make_golden and os.path.exists(nav_golden_path):
+                from PIL import Image
+                gold = np.array(Image.open(nav_golden_path).convert("RGB"))
+                t0 = time.time()
+                while True:
+                    previous = sim.capture_screen()
+                    try:
+                        if compare(previous, gold)[1] <= nav_diff_pct:
+                            break
+                    except ValueError:
+                        break
+                    if time.time() - t0 >= nav_settle_s:
+                        break
+                    run_for(10)
+                print(f"[{time.time() - start:6.1f}s] final screen settled after {time.time() - t0:.0f} s")
+            else:
+                run_for(nav_settle_s)
+                previous = sim.capture_screen()
             path = report_artifacts.path(f"{name}_nav_final.png")
             gma_capture.save_png(path, previous)
             report_artifacts.image(path, f"screen {nav_settle_s:.0f} s after the last navigation step")

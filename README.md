@@ -297,7 +297,9 @@ changing. The screen regressions take a `navigation` sequence too: remote keys
 (through the emulated IR receiver and the firmware's own key table) or front
 panel keys (through the panel decoder) pressed after the first screen, each
 required to change the screen, the last screen compared with a second golden
-(`*_nav_golden.png`): the Globo opens its main menu, moves the highlight and
+(`*_nav_golden.png`; the waits are GE-quiet based, and the final capture waits
+until the screen has become the golden one, so a slow machine or CI runner
+only takes longer): the Globo opens its main menu, moves the highlight and
 returns to live TV; the Cabletech moves its wizard highlight with its panel
 keys; the SRT 8115 opens and closes its main menu. dump.bin has no
 navigation yet: its firmware drains the IR FIFO and takes the interrupt, but

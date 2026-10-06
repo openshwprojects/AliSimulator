@@ -34,6 +34,18 @@ KEY_LIMIT_S = 3 * 60
 
 
 def main():
+    # A boot the simulator itself crashes (the asynchronous slice-stop race,
+    # see README "Things learned") is retried once from scratch.
+    for attempt in (1, 2):
+        try:
+            return run()
+        except Exception as e:
+            if attempt == 2 or "UcError" not in type(e).__name__:
+                raise
+            print(f"[WARN] simulator crashed ({e}); booting again")
+
+
+def run():
     out = sys.argv[1] if len(sys.argv) > 1 else report_artifacts.out_dir()
     print("=== dump_maciej: drive the OSD with the IR remote ===")
     sim = AliMipsSimulator(log_handler=lambda msg: None)
