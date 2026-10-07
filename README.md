@@ -113,7 +113,9 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   5-byte key read answered on DIO the way the firmware samples it, after each
   CLK falling edge; its wizard reacts to KS9/K1 = down, KS9/K2 = up and
   KS10/K1 = power). The Cabletech URZ0195's uPD16312-class chip (STB = GPIO 14,
-  LED port command) and the Strong SRT 8115's chip (the Cabletech's pins) speak
+  LED port command; its digits in grids 4, 2, 3, 1 with their own segment
+  wiring, read off its firmware's font table: " ON ", "----", then the channel
+  number "0004") and the Strong SRT 8115's chip (the Cabletech's pins) speak
   the same protocol. `press_key()` on either decoder
   presses a matrix position; `tv_gui.py` shows the display and the matrix as
   buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
@@ -292,7 +294,11 @@ its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
 with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
 (the Strong SRT 8115's no-signal screen, about 15) and
 `run_dump_urz0194s_capture_screen.py` (the Cabletech URZ0194S, the URZ0083Q's
-family with a newer application: the same wizard after an 11-minute scan). `run_dump_maciej_remote.py` drives the
+family with a newer application: the same wizard after an 11-minute scan) and
+`run_dump_urz0195_capture_screen.py` (the Cabletech URZ0195 with its 2012
+firmware, which draws its channel banner and no-signal screen seconds after
+starting, with the panel reading "0004", about 12 minutes; the 2013 firmware
+of the same box has not drawn anything yet). `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
 changing. The screen regressions take a `navigation` sequence too: remote keys
@@ -304,14 +310,17 @@ until the screen has become the golden one, so a slow machine or CI runner
 only takes longer): the Globo opens its main menu, moves the highlight and
 returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its panel
 keys and the URZ0194S steps its wizard's Region value with its (the whole
-wizard switches language); the SRT 8115 opens and closes its main menu. dump.bin has no
+wizard switches language); the SRT 8115 opens and closes its main menu; the
+URZ0195 (2012) opens its channel list with OK and moves the highlight down
+(its panel keys do nothing). dump.bin has no
 navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
 none of the frame encodings tried (its key table, its bootloader's wake-code
 user codes 01 FE / 80 7F) changes its screen. How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
-Cabletech, an extended-NEC address for the SRT 8115). `--jobs 2` runs two tests at a time (the simulations are independent;
+Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115 and
+the URZ0195's 2012 firmware). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.
 

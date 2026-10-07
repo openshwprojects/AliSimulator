@@ -14,6 +14,7 @@ checks the display RAM it keeps and the bytes it clocks in.
 """
 import sys
 
+import front_panel
 import report_artifacts
 from tm1628_decoder import TM1628Decoder
 
@@ -97,6 +98,22 @@ def main():
     check(dec.get_display_text() == "O42S", f"display text {dec.get_display_text()!r} == 'O42S'")
     report_artifacts.panel(dec.digits, "display after the fixed-address writes", dec.get_display_text())
     check(dec.frame_count == 7, f"{dec.frame_count} frames counted (7)")
+
+    print("=== TM1628 decoder: the Cabletech URZ0195's uPD16312 digit layout ===")
+    # front_panel.py's layout for the URZ0195 (digits in grids 4, 2, 3, 1 with the board's
+    # segment wiring), fed the frames its 2012 firmware really writes
+    spec = front_panel.panel_spec("urz0195_full_dump(ESMTF25L3204).bin")
+    dec2 = TM1628Decoder(clk_gpio=CLK, dio_gpio=DIO, stb_gpio=STB, digit_addrs=spec["digit_addrs"],
+                         seg_map=spec["seg_map"], log_handler=lambda m: None)
+    cpu2 = BitBang(dec2)
+    cpu2.frame(0x40)
+    for data, text, what in (((0x00, 0x00, 0xEE, 0x00, 0xCE, 0x00, 0x00, 0x00), " ON ", "the boot text"),
+                             ((0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00), "----", "while it tunes"),
+                             ((0x87, 0x00, 0xEE, 0x00, 0xEE, 0x00, 0xEE, 0x00), "OOO4", "channel 4 (\"0004\")"),
+                             ((0x2F, 0x00, 0xEE, 0x00, 0xEE, 0x00, 0xEE, 0x00), "OOOS", "channel 5 (\"0005\")")):
+        cpu2.frame(0xC0, *data)
+        check(dec2.get_display_text() == text, f"{what}: display text {dec2.get_display_text()!r} == {text!r}")
+    report_artifacts.panel(dec2.digits, "the URZ0195's display on channel 5", dec2.get_display_text())
 
     print("=== TM1628 decoder: key reads ===")
     check(cpu.read_keys() == [0, 0, 0, 0, 0], "no key: five zero bytes")

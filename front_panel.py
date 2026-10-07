@@ -14,7 +14,9 @@ follow the firmware's GPIO writes and answer its key reads.
     0, 2, 4, 6 with its own segment wiring (" ON " at boot, "noCH" without
     channels); its panel driver reacts to KS9/K1 (down), KS9/K2 (up) and
     KS10/K1 (power -> standby, "oFF ").  The Cabletech URZ0195 has a
-    uPD16312-class chip on the same bus with STB = GPIO 14.
+    uPD16312-class chip on the same bus with STB = GPIO 14, its digits in
+    grids 4, 2, 3, 1 with their own segment wiring (" ON ", "----", then the
+    channel number "0004"); its keys are not driven by the decoder yet.
 
 A dump that matches no entry gets the TM1650 on GPIO 31 / 9 (a board without
 one shows a blank display and ignores the keys).
@@ -34,8 +36,13 @@ PANELS = [
                       seg_map=(4, 2, 0, 6, 7, 3, 1, 5),
                       labels={(9, 1): "▼", (9, 2): "▲", (10, 1): "PWR"})),
     # its bootloader prints "stb: 14 clock: 31 data: 9 / nec 16312 attach ok / digit: 4 seg: 16":
-    # a uPD16312 / PT6312-class driver, the same 3-wire command set (digit layout not mapped yet)
-    ("URZ0195", dict(chip="tm1628", clk=31, dio=9, stb=14, digit_addrs=(0, 2, 4, 6), labels={})),
+    # a uPD16312 / PT6312-class driver with the same 3-wire command set.  Its 4 digits are the
+    # low bytes of grids 4, 2, 3, 1 (RAM 6, 2, 4, 0) with their own segment wiring -- read off the
+    # 2012 firmware's font table ('0' = 0xEE, '4' = 0x87, '-' = 0x01) and its texts: " ON " at
+    # boot, "----" while it tunes, then the channel number ("0004"), "oFF " in standby.  No panel
+    # key does anything on that firmware (all 40 key bits tried on its live-TV screen).
+    ("URZ0195", dict(chip="tm1628", clk=31, dio=9, stb=14, digit_addrs=(6, 2, 4, 0),
+                     seg_map=(3, 7, 1, 5, 6, 2, 0, 4), labels={})),
     # Cabletech URZ0194S: the URZ0083Q's bootloader build, remote (same wake code) and panel bus,
     # but its digits use the standard segment layout (" ON ", "----", "noCH" come out as is) and
     # its keys differ (found on its wizard): KS7/K1 = left and KS9/K1 = right step the highlighted

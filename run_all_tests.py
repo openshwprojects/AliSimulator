@@ -45,7 +45,8 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
-              "run_dump_srt8115_capture_screen.py", "run_dump_urz0194s_capture_screen.py")
+              "run_dump_srt8115_capture_screen.py", "run_dump_urz0194s_capture_screen.py",
+              "run_dump_urz0195_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):

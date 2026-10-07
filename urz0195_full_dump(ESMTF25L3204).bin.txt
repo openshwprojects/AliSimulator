@@ -1,0 +1,18 @@
+urz0195_full_dump(ESMTF25L3204).bin
+
+Source: elektroda.pl forum, "Szukam wsadu do dekodera Cabletech URZ0195, pamięć ESMT F25L32",
+post #1, 16 April 2019 (brand Cabletech, model URZ0195, SPI flash ESMT F25L32, "dekoder sprawny" =
+the decoder works). Attachment "urz0195_full_dump(ESMTF25L3204).bin" (4 MB); downloading it
+requires an elektroda account.
+  https://www.elektroda.pl/rtvforum/topic3573829.html#17909725
+
+Device: Cabletech URZ0195 DVB-T receiver, ALi M3801, with an OLDER firmware than
+cableteh_urz0195__w25q32bv.BIN (the other URZ0195 dump in this repository): a different
+bootloader build (Libcore 1.1.6, just.li, Fri Jul 13 2012, vs vic.wang Nov 26 2012) and
+maincode version "M3801 DVBT" of 2012-08-02 (vs 2013-10-23); the same remote (standby wake
+code 807F00FF) and the same uPD16312-class front panel driver.
+Size 4194304 bytes, SHA-1 43999953261d1753681986872811c9f0c20bec26
+
+Flash layout (chunk headers): bootloader 0x000000, HDCPKey 0x04FE00 ("Demo M3801"), maincode
+0x050000 (LZMA), Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 (2012-9-17) -- the
+dump_maciej.bin layout.

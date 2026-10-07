@@ -102,10 +102,12 @@ def ir16_to_nec(ir16):
 #          standard NEC, address = ~rev8(hi), command = ~rev8(lo)
 #   plain  Cabletech URZ0083Q (Libcore 8.1h): the table holds the bytes as
 #          sent, address = hi, command = lo (standard NEC frame)
-#   ext00  Strong SRT 8115 (Libcore 8.7j): extended NEC whose two address
-#          bytes are both rev8(hi) (0x00 on its remote), command = ~rev8(lo)
+#   ext00  Strong SRT 8115 (Libcore 8.7j) and the Cabletech URZ0195's 2012
+#          firmware (Libcore 8.1.0, "urz0195_full_dump"): extended NEC whose
+#          two address bytes are both rev8(hi) (0x00 on the Strong's remote,
+#          0x01 on the Cabletech's), command = ~rev8(lo)
 IR_CODINGS = [("dump_maciej", "nec"), ("Globo", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
-              ("srt8115", "ext00")]
+              ("srt8115", "ext00"), ("urz0195_full", "ext00")]
 
 
 def coding_for(dump):
