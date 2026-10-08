@@ -153,6 +153,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     rgb = sim.capture_screen(out)
     colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
     unsupported = dict(sim.ge.unsupported) if sim.ge else {}
+    lines, size = gma_capture.output_mode(bytes(sim.mmio_buffer[0:0x10000]))
+    mode = f"{size[0]}x{size[1]} ({lines} lines)" if size else f"{lines} lines"
+    print(f"display engine output: {mode}; the capture shows the OSD at its own 1280x720")
     print(f"saved {out}: {rgb.shape[1]}x{rgb.shape[0]}, {colours} colours, {sim.ge_ops} GE commands, "
           f"GE features not modelled: {unsupported or 'none'}")
     report_artifacts.image(out, f"final screen: {colours} colours, {sim.ge_ops} GE commands "

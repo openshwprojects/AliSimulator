@@ -113,18 +113,25 @@ DE_TIMING_REG = 0x600C              # b16-26 total lines of the output TV mode (
 OUTPUT_SIZE = {625: (720, 576), 525: (720, 480), 750: (1280, 720), 1125: (1920, 1080)}
 
 
+def output_mode(dev):
+    """(total lines, (width, height)) of the display engine's output TV mode,
+    (0, None) when its timing register is not programmed."""
+    lines = (struct.unpack_from('<I', dev, DE_TIMING_REG)[0] >> 16) & 0x7FF
+    return lines, OUTPUT_SIZE.get(lines)
+
+
 def output_scale(dev, screen=(1280, 720)):
     """(fx, fy): how much larger the OSD's own 1280 x 720 canvas is than the
     display engine's output frame.  A firmware driving another TV mode has
     the display engine scale its GMA layer to the output, and the region
     heads then hold OUTPUT coordinates: the Strong Prima VIII and SRT 8115
     drive PAL (720 x 576), the Prima's banner region being 77..643 x 32..543
-    (567 x 512) for a 1008 x 640 bitmap; the Cabletech URZ0195's 2012
-    firmware drives 1080i, its 1008 x 640 bitmap shown 1.5x larger in a
+    (567 x 512) for a 1008 x 640 bitmap; the Cabletechs drive 1080i (the
+    URZ0083Q / URZ0194S switch to it when their wizard starts, the URZ0195's
+    2012 firmware from the start), a 1008 x 640 bitmap shown 1.5x larger in a
     1512 x 960 window at (204, 60), centred in the 1920 x 1080 frame.  (1, 1)
     for 720p and when the timing register is not programmed."""
-    lines = (struct.unpack_from('<I', dev, DE_TIMING_REG)[0] >> 16) & 0x7FF
-    out = OUTPUT_SIZE.get(lines)
+    lines, out = output_mode(dev)
     if not out:
         return 1.0, 1.0
     return screen[0] / out[0], screen[1] / out[1]
@@ -157,7 +164,11 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0)):
                 vw = round((h['x1'] - h['x0'] + 1) * fx)
                 vh = round((h['y1'] - h['y0'] + 1) * fy)
                 pitch_px = h['pitch'] * 8 // ge_m36f.BPP.get(h['format'], 8) if h['pitch'] else 0
-                if vw <= pitch_px:
+                if vw <= pitch_px + 16:
+                    # (a window a few pixels wider than the bitmap is the firmware's own
+                    # rounding of the scaled size: the SRT 8115's 568-px PAL window
+                    # scales back to 1010 for its 1008-px bitmap, the Prima's 567 to 1008)
+                    vw = min(vw, pitch_px)
                     h = dict(h, x0=round(h['x0'] * fx), y0=round(h['y0'] * fy))
                     h['x1'], h['y1'] = h['x0'] + vw - 1, h['y0'] + vh - 1
                     h['scaled_back'] = (fx, fy)

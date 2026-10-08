@@ -331,10 +331,12 @@ the display layer and compare it pixel for pixel with the expected screen, a PNG
 kept in `tests/expected/` (`screen_regression.py` is the shared body; an
 expected screen is remade with `--make-expected`; `gma_capture.py` composites the GMA layers' regions, and
 for a firmware whose output mode is not 720p -- the Prima VIII and the SRT
-8115 drive PAL, the URZ0195's 2012 firmware 1080i, so the display engine
-scales the OSD layer to the output and the region heads hold output
-coordinates -- it undoes that scaling, read from the display engine's timing
-register, so the capture shows the whole OSD where the TV shows it): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
+8115 drive PAL, the Cabletechs 1080i (the URZ0195's 2012 firmware from the
+start, the URZ0083Q and URZ0194S once their wizard is up: its default "Tryb
+Wyświetlania" is 1080i@50HZ), so the display engine scales the OSD layer to
+the output and the region heads hold output coordinates -- it undoes that
+scaling, read from the display engine's timing register, so the capture shows
+the whole OSD where the TV shows it; each capture logs the output mode): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
 its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
