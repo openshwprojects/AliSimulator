@@ -9,6 +9,30 @@ no 0x3801, and the simulator reports 0x3811, revision 0. The Echosonic dump
 (M3510A, DVB-S2) and the sat_main_ali3329 dump (M3329) are other chips, per
 their file names.
 
+## Layout
+
+* `src/` -- the simulator (`simulator.py`, `mips16_decoder.py`, the slice
+  stopper and clocks) and the device models (`ge_m36f.py`, `gma_capture.py`,
+  the panel decoders, `front_panel.py`, `ir_remote.py`), plus the two GUIs:
+  `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
+  `python src/gui_simulator.py` (the debugger).
+* `dumps/` -- the firmware images, each with a `<name>.txt` note on where it
+  came from; a box that came with more (photos, an INFO file) has its own
+  folder; `dumps/other/` holds images of other ALi chips. Tests and tools name
+  a dump by its file name and `simulator.resolve_dump()` finds it in here.
+* `tests/` -- the self-tests: `test_*.py` (fast, no firmware or seconds of
+  it) and `run_dump_*.py` (the firmware runs), with their helpers
+  (`screen_regression.py`, `report_artifacts.py`, `report.py`). Run one
+  from anywhere (`python tests/run_dump_globo_capture_screen.py`), or all with
+  `python run_all_tests.py` at the root.
+* `tests/expected/` -- the expected screens of the screen regressions
+  (`<dump>_screen.png`, `<dump>_nav.png`), remade with `--make-expected`.
+* `docs/` -- pictures (the Opticum wizard's screens).
+* `tools/` -- one-off exploration and tracing scripts, kept for reference.
+* `cpp/` -- the C++ port of the emulator core (work in progress).
+* `refs/` (not in git) -- the ALi SDK sources and libraries the firmware was
+  built from, for reading. `report/` (not in git) is the test report.
+
 ## Execution modes (simulator.py)
 
 * **Fast mode (default)** - Unicorn runs the code natively in slices that end
@@ -103,6 +127,15 @@ Single steps always use the exact hook. Both modes read the real ISA mode
 
 Besides UART, SPI flash, GPIO and the CP0 timer:
 
+* **Flash size**: `AliMipsSimulator(rom_size=...)` takes 1 to 16 MB;
+  `flash_size_for(path)` picks it from a dump (4 MB unless the file is larger;
+  the Ferguson Ariva T650i's image is 8 MB). A part larger than 4 MB is laid
+  out the way the SDK's flash driver addresses it: offset 0 stays at
+  0xAFC00000 (and the reset vector 0xBFC00000), and its 4 MB segment n sits
+  4 MB × n below (offset 0x700000 at 0xAFB00000). The JEDEC id reports the
+  size (EF 40 16 for 4 MB, EF 40 17 for 8 MB) and, for an 8 MB part, the RES
+  electronic id (0x16) the bootloaders' device tables match.
+
 * **Front panel** (`front_panel.py` picks the decoder per dump): the LED
   driver chip the firmware bit-bangs over GPIO. dump_maciej.bin and the Globo
   N3 have a **TM1650** on I2C (SCL = GPIO 31, SDA = GPIO 9; `tm1650_decoder.py`:
@@ -116,8 +149,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   LED port command; its digits in grids 4, 2, 3, 1 with their own segment
   wiring, read off its firmware's font table: " ON ", "----", then the channel
   number "0004") and the Strong SRT 8115's chip (the Cabletech's pins) speak
-  the same protocol. `press_key()` on either decoder
-  presses a matrix position; `tv_gui.py` shows the display and the matrix as
+  the same protocol. The Ferguson Ariva T650i has an FD650K
+  (TM1650-compatible, the usual pins) whose digits are registers 0x6C, 0x6E,
+  0x6A, 0x68 from the left, with the segments on its own bits (read off the
+  font table its application builds in RAM): " On ", "Strt", "Find".
+  `press_key()` on either decoder
+  presses a matrix position; `src/tv_gui.py` shows the display and the matrix as
   buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
   (about 90k timer ticks) before the first screen.
 
@@ -135,6 +172,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   bits read clear — there are no VE events here. Without this, dump.bin
   rebooted two minutes after its first screen (the status word still held the
   0x318 the driver had written at init) and started over.
+* **Ethernet MAC** (`ETHERNET_MAC_0`, 0xB802C000; the Ferguson Ariva T650i's
+  network driver): the software-reset bit 3 of +0 reads back clear, and an
+  MDIO access started at +0x7C (bit 31) completes at once and reads 0xFFFF
+  from +0x82, what a bus without a PHY returns. Without them the driver spun
+  on the reset bit forever, and then waited a second of firmware time for
+  every PHY register it probed, holding the UI back for minutes.
 * **Graphics engine** (`GE_M36F`, 0xB800A000): nothing is drawn. A command
   written to +4 (1, 2 or 3) completes at once and sets its bit in the
   interrupt status +8 (0x4, 0x1, 0x2; write 1 to clear), which drives
@@ -263,9 +306,9 @@ then every 1000th.
 
 ## Tests
 
-Run the scripts individually (`python run_dump_maciej_to_bl_verify_sw.py`,
-`python run_dump_to_end.py`, `python test_boot_decodes_mips16.py`, ...) or all
-of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
+Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
+`python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
+or all of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
 --slow` adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 2 minutes, a minute of it
 the bootloader's unoptimised LZMA decompression), checks the
@@ -284,9 +327,14 @@ spin), and the slow dump_maciej test also that its UI's graphics-engine
 commands complete through the GE interrupt without timeouts.
 
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
-the display layer and compare it pixel for pixel with a golden PNG kept in `golden/`
-(`screen_regression.py` is the shared body; a golden is remade with
-`--make-golden`): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
+the display layer and compare it pixel for pixel with the expected screen, a PNG
+kept in `tests/expected/` (`screen_regression.py` is the shared body; an
+expected screen is remade with `--make-expected`; `gma_capture.py` composites the GMA layers' regions, and
+for a firmware whose output mode is not 720p -- the Prima VIII and the SRT
+8115 drive PAL, the URZ0195's 2012 firmware 1080i, so the display engine
+scales the OSD layer to the output and the region heads hold output
+coordinates -- it undoes that scaling, read from the display engine's timing
+register, so the capture shows the whole OSD where the TV shows it): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
 its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
@@ -298,29 +346,42 @@ family with a newer application: the same wizard after an 11-minute scan) and
 `run_dump_urz0195_capture_screen.py` (the Cabletech URZ0195 with its 2012
 firmware, which draws its channel banner and no-signal screen seconds after
 starting, with the panel reading "0004", about 12 minutes; the 2013 firmware
-of the same box has not drawn anything yet). `run_dump_maciej_remote.py` drives the
+of the same box has not drawn anything yet) and
+`run_dump_prima8_capture_screen.py` (the Strong Prima VIII flash dump -- unlike
+the manufacturer's update of the same box it carries a channel database --
+whose Bulgarian channel banner is up 3 minutes after the start, about 6
+minutes; the channel it names depends on timing, within the tolerance) and
+`run_dump_t650i_capture_screen.py` (the Ferguson Ariva T650i's 8 MB update
+image: with its empty channel database it runs the first-install automatic
+search and ends on "nie znaleziono kanału!", the panel reading "Find", about
+25 minutes). `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
 changing. The screen regressions take a `navigation` sequence too: remote keys
 (through the emulated IR receiver and the firmware's own key table) or front
 panel keys (through the panel decoder) pressed after the first screen, each
-required to change the screen, the last screen compared with a second golden
-(`*_nav_golden.png`; the waits are GE-quiet based, and the final capture waits
-until the screen has become the golden one, so a slow machine or CI runner
-only takes longer): the Globo opens its main menu, moves the highlight and
+required to change the screen, the last screen compared with a second expected
+screen (`*_nav.png`; each step waits for its own change to appear and then
+for the GE to go quiet, and the final capture waits until the screen has become
+the expected one, so a slow machine or CI runner only takes longer): the Globo opens its main menu, moves the highlight and
 returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its panel
 keys and the URZ0194S steps its wizard's Region value with its (the whole
 wizard switches language); the SRT 8115 opens and closes its main menu; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
-(its panel keys do nothing). dump.bin has no
-navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
+(its panel keys do nothing); the T650i closes its "no channel found"
+dialog (its "edytuj kanały" menu then opens by itself) and opens the
+favourites list from there. The Prima VIII has no navigation yet: with no
+signal its firmware steps through its channel list by itself and acts on
+remote keys only between those re-tunes (its EPG, popups and banner toggle
+were each seen once). dump.bin has no navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
 none of the frame encodings tried (its key table, its bootloader's wake-code
 user codes 01 FE / 80 7F) changes its screen. How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
-Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115 and
-the URZ0195's 2012 firmware). `--jobs 2` runs two tests at a time (the simulations are independent;
+Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
+Prima VIII, the URZ0195's 2012 firmware and the Ferguson T650i; a firmware may also number its
+virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.
 

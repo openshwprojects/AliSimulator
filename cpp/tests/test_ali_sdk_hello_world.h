@@ -88,7 +88,7 @@ inline bool TestAliSDKHelloWorld() {
 
   emu.setUartHandler([&verifier](char ch) { verifier.on_uart(ch); });
 
-  emu.loadFile("../ali_sdk.bin");
+  emu.loadFile("../dumps/ali_sdk.bin");
   emu.run(60000);
 
   return verifier.finish();

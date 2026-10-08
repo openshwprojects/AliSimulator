@@ -22,7 +22,7 @@ inline bool TestBootDumpCopiesToRam() {
   // Suppress UART output for this test
   emu.setUartHandler([](char) {});
 
-  emu.loadFile("../dump.bin");
+  emu.loadFile("../dumps/dump.bin");
 
   // Check address where ROM data should be copied to RAM
   const uint32_t check_addr = 0x81e8e170;

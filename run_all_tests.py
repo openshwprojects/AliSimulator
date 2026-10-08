@@ -31,28 +31,32 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import report
-import report_artifacts
-
 ROOT = Path(__file__).parent
+TESTS_DIR = ROOT / "tests"
 REPORT_DIR = ROOT / "report"
+sys.path[:0] = [str(TESTS_DIR), str(ROOT / "src")]     # the report helpers and the simulator's modules
+
+import report                                          # noqa: E402
+import report_artifacts                                # noqa: E402
 
 # Scripts whose name does not say which dump they run: look for it in the source
 DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
+         ("prima8", "Strong Prima VIII"), ("T650i", "Ferguson Ariva T650i"),
          ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
               "run_dump_srt8115_capture_screen.py", "run_dump_urz0194s_capture_screen.py",
-              "run_dump_urz0195_capture_screen.py")
+              "run_dump_urz0195_capture_screen.py", "run_dump_prima8_capture_screen.py",
+              "run_dump_t650i_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):
     """All test scripts: test_*.py (except util modules) plus the regression runs."""
     test_files = []
-    for file_path in ROOT.glob("test_*.py"):
+    for file_path in TESTS_DIR.glob("test_*.py"):
         if "util" not in file_path.stem:
             test_files.append(str(file_path))
     regressions = [
@@ -69,8 +73,8 @@ def discover_test_files(include_slow=False):
     if include_slow:
         regressions += list(SLOW_TESTS)       # minutes each
     for name in regressions:
-        if (ROOT / name).exists():
-            test_files.append(str(ROOT / name))
+        if (TESTS_DIR / name).exists():
+            test_files.append(str(TESTS_DIR / name))
     return sorted(test_files)
 
 
@@ -161,8 +165,10 @@ def run_test_file(test_file_path, timeout=None, stream=True):
     # a crash is not lost, and with faulthandler, which prints the Python stack
     # of a native crash.  ALISIM_REPORT_DIR tells report_artifacts where to put
     # the images the test renders.
+    # the tests import the simulator's modules from src/ and the helpers from tests/
+    pythonpath = [str(ROOT / "src"), str(TESTS_DIR)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
     env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONFAULTHANDLER="1", PYTHONIOENCODING="utf-8",
-               ALISIM_REPORT_DIR=img_dir)
+               ALISIM_REPORT_DIR=img_dir, PYTHONPATH=os.pathsep.join(pythonpath))
     result = {"name": test_name, "script": test_name, "description": _description(test_file_path),
               "passed": False, "elapsed": 0.0, "exit_code": None, "crashed": False, "timed_out": False,
               "checks": [], "output": "", "images": [], "panels": []}
