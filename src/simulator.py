@@ -789,6 +789,7 @@ class AliMipsSimulator:
 
     def loadFile(self, filename):
         filename = resolve_dump(filename)
+        self.dump_path = filename
         self.log(f"Loading {filename}...")
         import ir_remote
         self.ir_coding = ir_remote.coding_for(filename)
@@ -1522,6 +1523,43 @@ class AliMipsSimulator:
         import ir_remote
         self._irc_frames.append((ir_remote.nec_rlc(address, command, address_hi),
                                  label or f"NEC 0x{address:02X}/0x{command:02X}"))
+
+    def attach_tuner(self, chip=None, address=None):
+        """Put a tuner chip model (tuners.py) on the I2C bus: `chip` (a key of
+        tuners.MODELS) at the 7-bit `address`, or by default the one the loaded
+        dump's sidecar names (device.tunerModel, dump_catalog.py).  The driver
+        then sees a tuner that takes its settings and locks.  Returns the model
+        (None when the dump names none)."""
+        import tuners
+        if chip is None:
+            import dump_catalog
+            info = dump_catalog.load(self.dump_path) if getattr(self, "dump_path", None) else None
+            model = (info or {}).get("device", {}).get("tunerModel")
+            if not model:
+                return None
+            chip = model["chip"]
+            address = model["address"] if address is None else address
+        elif address is None:
+            raise ValueError("attach_tuner: give the tuner's 7-bit I2C address with its chip")
+        device = tuners.make(chip)
+        self.i2c_devices[address] = device
+        self.log(f"[I2C] tuner model {chip} at 0x{address:02X}")
+        return device
+
+    def set_signal(self, on=True):
+        """A receivable channel on every frequency: the dump's tuner model on
+        the I2C bus (attach_tuner) and the chip family's demodulator reporting
+        lock (chips/m3801.py, chips/m3821.py).  There is no transport stream
+        behind it, so the firmware finds a locked channel with nothing in it.
+        Returns (tuner model or None, demodulator modelled)."""
+        import tuners
+        tuner = next((d for d in self.i2c_devices.values() if tuners.is_tuner(d)), None)
+        if on and tuner is None:
+            tuner = self.attach_tuner()
+        demod = self.chip.set_signal(on)
+        if not demod:
+            self.log(f"[NIM] {self.chip.name}: no demodulator model, the firmware sees no lock")
+        return tuner, demod
 
     def press_key(self, key):
         """Press a remote-control key: a name of ir_remote.VKEYS ('UP', 'DOWN',

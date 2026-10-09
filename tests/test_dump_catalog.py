@@ -2,9 +2,10 @@
 Every firmware image under dumps/ has a sidecar (dump_catalog.py: <image>.json)
 whose facts agree with the file (name, size, SHA-1 when given), which says
 where the image came from (a source URL, or a note that the source is not
-recorded), has a description, and whose front-panel pins and IR coding agree
+recorded), has a description, whose front-panel pins and IR coding agree
 with the code's own tables (front_panel.PANELS, ir_remote.IR_CODINGS) -- so
-the sidecars stay the one place these facts are stated.  dumps/README.md,
+the sidecars stay the one place these facts are stated -- and whose
+tunerModel, if any, names a model tuners.py has at a valid 7-bit address.  dumps/README.md,
 rendered from the sidecars by tools/dump_table.py, must be up to date.
 """
 import os
@@ -16,6 +17,7 @@ import dump_catalog
 import dump_table
 import front_panel
 import ir_remote
+import tuners
 
 print("=== Test: every firmware image has a correct sidecar (dump_catalog.py) ===")
 failures = []
@@ -36,6 +38,12 @@ for path, data in entries:
         for pin in ("scl", "sda", "clk", "dio", "stb"):
             if pin in spec and spec[pin] != panel.get(pin):
                 failures.append(f"{rel}: panel {pin} is {panel.get(pin)} in the sidecar, {spec[pin]} in front_panel.PANELS")
+    model = data["device"].get("tunerModel")
+    if model is not None:
+        if model.get("chip") not in tuners.MODELS:
+            failures.append(f"{rel}: tunerModel chip {model.get('chip')!r} is not one of tuners.MODELS")
+        if not isinstance(model.get("address"), int) or not 0x08 <= model["address"] <= 0x77:
+            failures.append(f"{rel}: tunerModel address {model.get('address')!r} is not a 7-bit I2C address")
     coding = ir_remote.coding_for(path)
     if data["device"].get("irCoding") != coding:
         failures.append(f"{rel}: irCoding {data['device'].get('irCoding')!r} in the sidecar, "

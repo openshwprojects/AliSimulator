@@ -33,7 +33,8 @@ their file names.
   and both applications draw their home menu through the M3801's own GE and
   display layer (`run_dump_r265lite_capture_screen.py`,
   `run_dump_r265lite_120_capture_screen.py`; firmware 1.2.0's first waits for
-  a start bit of the block at 0xB802A000 to clear; the dumped flash's own
+  a start bit of the block at 0xB802A000 to clear, most likely an HDMI DDC
+  transfer; the dumped flash's own
   main code is damaged, see its sidecar). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).
@@ -196,9 +197,26 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   timing out and retrying ten times, as it did before the model. With
   `sim.i2c_ack_all` every address answers and reads give zeros, so a tuner
   driver runs its whole register sequence, which the `[I2C]` log lines show --
-  the way to tell which tuner a board has: dump.bin's application wakes one
-  at 0x60 at start (registers 0x0B and 0x12 set to 1) and only writes its
-  register table at the first tune.
+  the way to tell which tuner a board has (each dump's sidecar names it:
+  mostly the MaxLinear MxL603 family, an MxL5007T in the 2012 URZ0195
+  firmware, a Rafael R820T in the Globo N3).
+* **Tuners and signal** (`tuners.py`): chip models of the MxL603 family,
+  the MxL5007T and the R820T that keep what the driver writes and report
+  their synthesizers locked (MaxLinear: lock registers 0x2B / 0xD8 read
+  through the 0xFB prefix; R820T: status read from register 0, bit-reversed,
+  PLL lock in register 2). `sim.attach_tuner()` puts the dump's tuner (its
+  sidecar's `tunerModel`) on the bus; `sim.set_signal(True)` does that and
+  makes the chip family's demodulator report lock: the M3801's internal
+  COFDM demodulator (`chips/m3801.py`, registers at 0xB803E000, whose
+  `get_lock()` tests bit 5 of register 0x1D) and the M3821's DVB-T / T2 one
+  (`chips/m3821.py`, at 0xB804C000: the standard in register 0x2FF, DVB-T
+  lock in bit 6 of 0x1D, the T2 state in 0x67 and 0x11D). Neither is on by
+  default, so the screen regressions keep their no-signal screens. There is
+  no transport stream behind the lock: the Globo N3 with a signal shows its
+  channel banner and then a clear black picture instead of its red "Brak
+  sygnału" box (`run_dump_globo_signal.py`), and the R265 Lite's manual scan
+  page shows 100 % signal strength and 30 % quality instead of 0 % and 0 %
+  (`run_dump_r265lite_signal_capture_screen.py`).
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
   Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read

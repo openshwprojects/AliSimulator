@@ -35,7 +35,7 @@
     "application": true,
     "display": true,
     "panelText": [" ON "],
-    "note": "Boots into its application (run_dump_r265lite_app_banner.py) and draws its home menu (run_dump_r265lite_capture_screen.py); remote keys reach it (run_dump_r265lite_remote_key.py); the panel chip gets \" ON \" from the bootloader (run_dump_r265lite_panel_on.py)."
+    "note": "Boots into its application (run_dump_r265lite_app_banner.py) and draws its home menu (run_dump_r265lite_capture_screen.py); remote keys reach it (run_dump_r265lite_remote_key.py); the panel chip gets \" ON \" from the bootloader (run_dump_r265lite_panel_on.py).  With sim.set_signal(True) -- the tuner model at 0x60 and the internal demodulator's lock -- its manual scan page shows 100 % signal strength and 30 % quality instead of 0 % and 0 % (run_dump_r265lite_signal_capture_screen.py)."
   },
   "desc": [
     "In the simulator (2026-10-09, chips/m3821.py): the bootloader prints \"NOR1\", \"2\", \"X\" and \"\\x01\" like the dump, stage 2's chain check passes, it decompresses the application and enters it.  The application (ALi SDK 4.0, \"Libcore 19.9.d\", built 2019-04-23) wants the chip ID word 0xB8000000 to read 0x38210010 (the M3822P variant; a plain 0x3821 makes it reboot through the watchdog), moves the exception vectors with CP0 EBase, re-trains the DDR controller (the same registers stage 1 uses), reads the flash through the SPI controller's byte-stream mode and DMA engine (the window at 0xB802E0C8 and 0xB802E058..; SF_INS stays in normal read mode) and bit-bangs I2C on GPIO bank 0xB80000D4 (the HD2015 panel on bits 25 / 26, through the direction register: that is its key scan).",

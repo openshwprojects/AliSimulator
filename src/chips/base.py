@@ -26,6 +26,11 @@ class ChipFamily:
         (after whatever the chip's boot ROM did before handing over)."""
         self.sim.mu.reg_write(UC_MIPS_REG_PC, self.sim.base_addr)
 
+    def set_signal(self, on):
+        """Make the family's demodulator report a locked channel (on) or not.
+        Returns False when the family has no demodulator model."""
+        return False
+
     def code_ranges(self):
         """Memory besides RAM and flash that holds code: [(address, length)] in the
         0x80000000 view, scanned for CP0 instruction sites like RAM is."""

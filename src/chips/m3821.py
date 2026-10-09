@@ -32,7 +32,11 @@ write index (MirrorRegisters); then it draws its OSD through the same
 graphics engine (0xB800A000, ge_m36f.py) and display layer (0xB8006300,
 gma_capture.py) as the M3801 boxes, so nothing of the display is this
 family's own.  Firmware 1.2.0's application also waits, before it draws,
-for a start bit it sets in the block at 0xB802A000 to clear (install()).
+for a start bit it sets in the block at 0xB802A000 to clear (install(); most
+likely the HDMI transmitter's DDC reading the TV's EDID: the block's +0x08
+bit 0 is polled like a hot-plug line and the flash carries an HDCPKey
+chunk).  Demodulator models the internal DVB-T / T2 demodulator's lock for
+sim.set_signal().
 """
 import ctypes
 
@@ -265,6 +269,40 @@ class MirrorRegisters:
                 uc.mem_write(0xB8000000 + target, bytes(uc.mem_read(0xB8000000 + source, n)))
 
 
+class Demodulator:
+    """The chip's own DVB-T / T2 demodulator ("NIM_S3821_0"), registers memory-
+    mapped at 0xB804C000 + register (the nim_device's base address).  Its
+    get_lock() (R265 Lite 1.1.5, 0x804B3558) reads the standard from the upper
+    nibble of register 0x2FF (written by the driver, so RAM keeps it) and then,
+    for DVB-T (1, 2), tests bit 6 of register 0x1D (0x804B34CC); for DVB-T2
+    (4) it wants the low nibble of register 0x67 at 0xA or above and, from the
+    two bytes at 0x11D, the second below the first minus one (0x804B33DC).
+    With `signal` on those registers read that way."""
+    BASE = 0x4C000
+    LOCK = {0x01D: lambda v: v | 0x40,            # DVB-T locked
+            0x067: lambda v: (v & 0xF0) | 0x0F,    # DVB-T2 state machine: locked
+            0x11D: lambda v: 0x20,
+            0x11E: lambda v: 0x00}
+
+    def __init__(self, sim):
+        self.signal = False
+        self.lock_reads = 0
+        for reg in self.LOCK:
+            sim._mmio_on('r', self._read, self.BASE + reg, self.BASE + reg)
+
+    def _read(self, uc, access, address, size, value, user_data):
+        self.lock_reads += 1
+        if not self.signal:
+            return
+        start = (address & 0xFFFFFF) - self.BASE
+        data = bytearray(uc.mem_read(address, size))
+        for i in range(size):
+            f = self.LOCK.get(start + i)
+            if f:
+                data[i] = f(data[i]) & 0xFF
+        uc.mem_write(address, bytes(data))
+
+
 class ReadyBits:
     """Status bits the application polls (with 100 us delays) until the hardware
     reports ready, which the simulator's hardware is at once: register offset in
@@ -307,6 +345,7 @@ class M3821(ChipFamily):
         self.ddr = DdrTraining(sim)
         self.spi = SpiStream(sim)
         self.dma = DmaRings(sim)
+        self.demod = Demodulator(sim)
         self.ready = ReadyBits(sim, {
             0x000633: 0x80,     # the PLL at 0xB8000600..: locked (polled after it is programmed)
         })
@@ -314,9 +353,10 @@ class M3821(ChipFamily):
             0x00203A: (0x002038, 2),    # the sound engine's read index has caught up with the write index
         })
         # Start bits the application sets and then waits to see cleared (the simulator's
-        # _SELF_COMPLETING mechanism): bit 4 of +0x6F of the block at 0xB802A000, which both
-        # firmwares reset and set up at start (1.1.5 then polls its +0x08 now and then) and
-        # whose +0x6F firmware 1.2.0 spins on before it draws anything.
+        # _SELF_COMPLETING mechanism): bit 4 of +0x6F of the block at 0xB802A000 (most likely
+        # the HDMI transmitter: both firmwares set it up at start and poll +0x08 bit 0 like a
+        # hot-plug line), whose +0x6F firmware 1.2.0 spins on before it draws anything --
+        # probably a DDC transfer of the TV's EDID (288 more operations at +0x70 / +0x72).
         sim._SELF_COMPLETING = {**sim._SELF_COMPLETING, 0x2A06F: (0x10, 0x00, 0x10)}
         sim._mmio_on('r', sim._hook_selfcomplete_read, 0x2A06C, 0x2A06F)
 
@@ -329,3 +369,7 @@ class M3821(ChipFamily):
 
     def code_ranges(self):
         return [(0x80000000 + SRAM_PHYS, BOOT_COPY)]
+
+    def set_signal(self, on):
+        self.demod.signal = bool(on)
+        return True

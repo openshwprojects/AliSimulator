@@ -52,19 +52,21 @@ class SimulatorCrash(Exception):
 
 
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
-        panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0):
+        panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
+        signal=False):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
     slice-stop race, see README "Things learned": a hooked CP0 instruction
     running natively ends in a jump to a stale register) is retried `retries`
-    times from a fresh boot before it counts as a failure."""
+    times from a fresh boot before it counts as a failure.  signal=True boots
+    with sim.set_signal(True): the dump's tuner model and a locked demodulator."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s)
+                 nav_settle_s, signal)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -75,7 +77,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s):
+         navigation, nav_diff_pct, nav_settle_s, signal):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -88,6 +90,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     sim.setGpioHandler(panel.on_gpio_write)
     sim.loadFile(dump)
     print(f"front panel: {panel_desc}")
+    if signal:
+        tuner, demod = sim.set_signal(True)
+        print(f"signal: tuner model {type(tuner).__name__ if tuner else None}, demodulator locked: {demod}")
 
     start = time.time()
     app_t = drawn_t = None
