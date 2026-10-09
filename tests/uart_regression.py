@@ -20,12 +20,28 @@ ECHO_CHARS = 1000           # UART characters echoed to stdout before the echo i
 
 
 def run(dump, stop_at=None, expected=(), ordered=False, max_instructions=2_000_000, title=None,
-        truncate_to=None, setup=None):
+        truncate_to=None, setup=None, retries=0):
     """Boot `dump` (its first truncate_to bytes when given; setup(sim) runs
     before the load), run until `stop_at` appears on the UART or
-    max_instructions passed, then check for the expected strings."""
+    max_instructions passed, then check for the expected strings.  A boot the
+    simulator itself stops with an exception (the asynchronous slice-stop
+    race, see README "Things learned") is retried `retries` times from a
+    fresh simulator before the checks."""
     title = title or f"{dump} prints {stop_at!r}"
     print(f"=== Regression Test: {title} ===")
+    for attempt in range(retries + 1):
+        text, error, elapsed = _boot(dump, stop_at, max_instructions, truncate_to, setup)
+        if error is None or attempt == retries:
+            break
+        print(f"\n[WARN] simulator stopped ({error}); booting again (retry {attempt + 1} of {retries})")
+    if error is not None:
+        print(f"\nSimulator stopped: {error}")
+    print(f"\n\nTest finished in {elapsed:.2f}s")
+    _check(text, expected, ordered, title)
+
+
+def _boot(dump, stop_at, max_instructions, truncate_to, setup):
+    """One boot: (UART text, the exception that stopped the simulator or None, seconds)."""
     sim = AliMipsSimulator(log_handler=lambda msg: None)
     sim.setSPIDump(False)
     sim.setI2CDump(False)
@@ -55,13 +71,15 @@ def run(dump, stop_at=None, expected=(), ordered=False, max_instructions=2_000_0
 
     print("Running simulator...", flush=True)
     start = time.time()
+    error = None
     try:
         sim.run(max_instructions=max_instructions)
     except Exception as e:
-        print(f"\nSimulator stopped: {e}")
-    text = "".join(uart)
-    print(f"\n\nTest finished in {time.time() - start:.2f}s")
+        error = e
+    return "".join(uart), error, time.time() - start
 
+
+def _check(text, expected, ordered, title):
     ok = True
     if ordered:
         # the lines as printed: no control characters, no blank lines
