@@ -10,7 +10,9 @@ inline SVG), so it reads the same opened from disk, as a CI artifact and
 published to GitHub Pages.
 
 Modelled on the BekenSimulator report (tests/report.py there): summary cards,
-tag filters, one expandable card per test with tabs.
+tag filters, one expandable card per test: its assertions, its renders (each
+screen capture on its own row at the card's width, with the front-panel
+display the test reported right after it beside it) and its output.
 """
 import os
 import sys
@@ -76,33 +78,52 @@ def _data_uri(path):
         return "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
 
 
-def _images_html(r):
-    """The Images tab: screen captures (embedded) and LED displays (SVG)."""
-    items = []
-    for img in r.get("images", []):
-        cap = html.escape(img.get("caption") or os.path.basename(img["path"]))
-        if img.get("missing"):
-            items.append('<figure class="shot missing"><div class="nofile">file not found</div>'
-                         '<figcaption>%s<br><code>%s</code></figcaption></figure>'
-                         % (cap, html.escape(os.path.basename(img["path"]))))
-            continue
-        try:
-            src = _data_uri(img["path"])
-        except OSError:
-            items.append('<figure class="shot missing"><div class="nofile">unreadable</div>'
-                         '<figcaption>%s</figcaption></figure>' % cap)
-            continue
-        items.append('<figure class="shot"><a href="%s" target="_blank"><img src="%s" alt="%s" loading="lazy"></a>'
-                     '<figcaption>%s</figcaption></figure>' % (src, src, cap, cap))
-    for p in r.get("panels", []):
-        text = html.escape(p.get("text") or "")
-        cap = html.escape(p.get("caption") or "front panel")
-        items.append('<figure class="shot panel">%s<figcaption>%s%s</figcaption></figure>'
-                     % (panel_svg(p["digits"], 1.4), cap,
-                        (' <code class="ptext">[%s]</code>' % text) if text else ""))
-    if not items:
-        return '<p class="empty">This test attached no images (see report_artifacts.py).</p>'
-    return '<div class="gallery">%s</div>' % "".join(items)
+def _image_figure(img):
+    """A screen capture (the PNG embedded), or a placeholder for a missing file."""
+    cap = html.escape(img.get("caption") or os.path.basename(img["path"]))
+    if img.get("missing"):
+        return ('<figure class="shot missing"><div class="nofile">file not found</div>'
+                '<figcaption>%s<br><code>%s</code></figcaption></figure>'
+                % (cap, html.escape(os.path.basename(img["path"]))))
+    try:
+        src = _data_uri(img["path"])
+    except OSError:
+        return ('<figure class="shot missing"><div class="nofile">unreadable</div>'
+                '<figcaption>%s</figcaption></figure>' % cap)
+    return ('<figure class="shot"><img src="%s" alt="%s" loading="lazy"><figcaption>%s</figcaption></figure>'
+            % (src, cap, cap))
+
+
+def _panel_figure(p):
+    """A front-panel LED display (SVG) with its decoded text."""
+    text = html.escape(p.get("text") or "")
+    cap = html.escape(p.get("caption") or "front panel")
+    return ('<figure class="shot panel">%s<figcaption>%s%s</figcaption></figure>'
+            % (panel_svg(p["digits"], 2.0), cap, (' <code class="ptext">[%s]</code>' % text) if text else ""))
+
+
+def _renders_html(r):
+    """The test's renders, one row each: a screen capture at the card's width
+    with, beside it, the front-panel display the test reported right after it
+    (a box without a display reports none); a display reported on its own
+    gets its own row.  The runner numbers both kinds in the order the test
+    printed them ("order")."""
+    items = [("image", i) for i in r.get("images", [])] + [("panel", p) for p in r.get("panels", [])]
+    items.sort(key=lambda kind_item: kind_item[1].get("order", 0))
+    rows = []
+    i = 0
+    while i < len(items):
+        kind, item = items[i]
+        if kind == "panel":
+            rows.append('<div class="render">%s</div>' % _panel_figure(item))
+        else:
+            beside = ""
+            if i + 1 < len(items) and items[i + 1][0] == "panel":
+                i += 1
+                beside = _panel_figure(items[i][1])
+            rows.append('<div class="render">%s%s</div>' % (_image_figure(item), beside))
+        i += 1
+    return '<div class="renders">%s</div>' % "".join(rows)
 
 
 def _tag_class(tag):
@@ -156,14 +177,10 @@ def _test_card(r):
       <div class="body">
         <p class="desc">{desc}</p>
         <div class="meta"><span class="args"><code>python {script}</code></span></div>
-        <div class="checks"><div class="checks-title">Assertions</div><ul>{checks}</ul></div>
-        <div class="tabbar">
-          <button class="tab-btn active" type="button" data-tab="log">Output</button>
-          <button class="tab-btn{img_dis}" type="button" data-tab="images">Images{img_n}</button>
-          <button class="copy-btn" type="button">Copy</button>
-        </div>
-        <div class="tab-panel" data-panel="log"><pre class="log">{log}</pre></div>
-        <div class="tab-panel hidden" data-panel="images">{images}</div>
+        <div class="checks"><div class="stitle">Assertions</div><ul>{checks}</ul></div>
+        {renders}
+        <div class="stitle logbar"><span>Output</span><button class="copy-btn" type="button">Copy</button></div>
+        <pre class="log">{log}</pre>
       </div>
     </details>
     """.format(
@@ -176,9 +193,8 @@ def _test_card(r):
         desc=html.escape(r.get("description") or "(no description)"),
         script=html.escape(r["script"]),
         checks=checks_html,
-        img_dis="" if n_img else " disabled", img_n=(" (%d)" % n_img) if n_img else "",
+        renders=('<div class="stitle">Images (%d)</div>%s' % (n_img, _renders_html(r))) if n_img else "",
         log=_highlight(r.get("output", ""), checks),
-        images=_images_html(r),
     )
 
 
@@ -275,7 +291,7 @@ _PAGE = """<!doctype html>
   * {{ box-sizing:border-box; }}
   body {{ margin:0; background:var(--bg); color:var(--fg);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }}
-  .wrap {{ max-width:1040px; margin:0 auto; padding:28px 18px 60px; }}
+  .wrap {{ max-width:1360px; margin:0 auto; padding:28px 18px 60px; }}
   header h1 {{ margin:0 0 4px; font-size:22px; }}
   .sub {{ color:var(--muted); font-size:13px; margin-bottom:18px; }}
   .sub a {{ color:var(--accent); text-decoration:none; }}
@@ -329,7 +345,8 @@ _PAGE = """<!doctype html>
   .desc {{ color:var(--fg); margin:12px 0; white-space:pre-line; }}
   .meta {{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }}
   .args code {{ color:var(--muted); font-size:12px; }}
-  .checks-title {{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:14px 0 6px; }}
+  .stitle {{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:14px 0 6px; }}
+  .logbar {{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; }}
   .checks ul {{ list-style:none; margin:0; padding:0; }}
   .checks li {{ display:flex; gap:8px; align-items:baseline; padding:2px 0; font-size:13.5px; }}
   .checks li.none {{ color:var(--muted); font-style:italic; }}
@@ -337,15 +354,6 @@ _PAGE = """<!doctype html>
   .checks li.found .chk {{ color:var(--pass); }}
   .checks li.missing {{ color:var(--fail); }}
   .checks li.missing .chk {{ color:var(--fail); }}
-  .tabbar {{ display:flex; align-items:center; gap:4px; margin:16px 0 0; border-bottom:1px solid var(--line); }}
-  .tab-btn {{ font-size:12px; padding:6px 12px; border:1px solid transparent; border-bottom:none; background:none;
-    color:var(--muted); cursor:pointer; border-radius:6px 6px 0 0; }}
-  .tab-btn:hover:not(.disabled) {{ color:var(--fg); }}
-  .tab-btn.active {{ background:var(--bg); border-color:var(--line); color:var(--fg); font-weight:700; margin-bottom:-1px; }}
-  .tab-btn.disabled {{ opacity:.45; cursor:default; }}
-  .tabbar .copy-btn {{ margin-left:auto; }}
-  .tab-panel {{ padding-top:10px; }}
-  .tab-panel.hidden {{ display:none; }}
   .copy-btn {{ font-size:12px; padding:3px 10px; border-radius:6px; border:1px solid var(--line); background:var(--card);
     color:var(--fg); cursor:pointer; }}
   .copy-btn:hover {{ border-color:var(--accent); color:var(--accent); }}
@@ -357,11 +365,14 @@ _PAGE = """<!doctype html>
   .lpass {{ color:var(--pass); font-weight:700; }}
   .lfail {{ color:var(--fail); font-weight:700; }}
   .empty {{ color:var(--muted); font-size:13px; }}
-  .gallery {{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }}
-  .shot {{ margin:0; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; max-width:100%; }}
-  .shot img {{ display:block; max-width:480px; width:100%; height:auto; border-radius:4px; background:#000; }}
-  .shot figcaption {{ font-size:12px; color:var(--muted); margin-top:6px; max-width:480px; }}
-  .shot.panel {{ display:flex; flex-direction:column; align-items:center; }}
+  .renders {{ display:flex; flex-direction:column; gap:12px; }}
+  .render {{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }}
+  .shot {{ margin:0; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px;
+    flex:1 1 420px; min-width:0; }}
+  .shot img {{ display:block; width:100%; height:auto; border-radius:4px; background:#000; }}
+  .shot figcaption {{ font-size:12px; color:var(--muted); margin-top:6px; }}
+  .shot.panel {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; }}
+  .shot.missing {{ flex:0 0 auto; }}
   .shot.missing .nofile {{ width:200px; height:60px; display:flex; align-items:center; justify-content:center;
     color:var(--fail); font-size:12px; border:1px dashed var(--fail); border-radius:4px; }}
   .ptext {{ color:var(--fg); }}
@@ -395,8 +406,8 @@ _PAGE = """<!doctype html>
 
 
 # Page behaviour: the live "generated N ago" counter, tag filtering (same
-# group OR-ed, groups AND-ed), tab switching and the Copy buttons.  A plain
-# string, so its braces need no escaping for .format().
+# group OR-ed, groups AND-ed) and the Copy buttons.  A plain string, so its
+# braces need no escaping for .format().
 _SCRIPT = """<script>
 (function () {
   function fmtAgo(ms) {
@@ -484,17 +495,6 @@ _SCRIPT = """<script>
   apply();
 })();
 
-document.querySelectorAll('.tab-btn').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    if (btn.classList.contains('disabled')) return;
-    var body = btn.closest('.body');
-    body.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-    body.querySelectorAll('.tab-panel').forEach(function (p) {
-      p.classList.toggle('hidden', p.getAttribute('data-panel') !== btn.getAttribute('data-tab'));
-    });
-  });
-});
 document.querySelectorAll('.copy-btn').forEach(function (btn) {
   btn.addEventListener('click', function () {
     var body = btn.closest('.body');

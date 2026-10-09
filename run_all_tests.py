@@ -121,7 +121,8 @@ def _collect_artifact(line, result, img_dir):
     if line.startswith(report_artifacts.IMAGE_TAG):
         body = line[len(report_artifacts.IMAGE_TAG):].strip()
         path, _, caption = body.partition("\t")
-        entry = {"path": path, "caption": caption, "missing": not os.path.isfile(path)}
+        entry = {"path": path, "caption": caption, "missing": not os.path.isfile(path),
+                 "order": len(result["images"]) + len(result["panels"])}    # its place among the test's renders
         if not entry["missing"]:
             try:
                 os.makedirs(img_dir, exist_ok=True)
@@ -141,7 +142,8 @@ def _collect_artifact(line, result, img_dir):
             digits = [int(h, 16) for h in hexes.split()]
         except ValueError:
             digits = []
-        result["panels"].append({"digits": digits, "text": text, "caption": caption})
+        result["panels"].append({"digits": digits, "text": text, "caption": caption,
+                                 "order": len(result["images"]) + len(result["panels"])})
         return True
     return False
 

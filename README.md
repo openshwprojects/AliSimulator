@@ -426,8 +426,9 @@ crash fails that test only.
 `run_all_tests.py` also writes `report/index.html` (`report.py`): one
 self-contained page with every test's verdict, wall time, description (the
 script's docstring), its `[PASS]` / `[FAIL]` lines, its whole output, and the
-images it rendered -- OSD screen captures embedded as PNG and front-panel LED
-displays drawn as 7-segment SVG. A test attaches those through
+images it rendered -- OSD screen captures embedded as PNG, each on its own row
+at the card's width, and front-panel LED displays drawn as 7-segment SVG, a
+display beside the capture the test reported it with. A test attaches those through
 `report_artifacts.py`: `image(path, caption)` for a PNG it saved (into
 `report_artifacts.out_dir()`, which the runner points at `report/img/<test>/`)
 and `panel(digits, caption, text)` for a display's segment bytes; the lines
