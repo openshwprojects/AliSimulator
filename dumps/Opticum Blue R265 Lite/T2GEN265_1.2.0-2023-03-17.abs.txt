@@ -11,6 +11,15 @@ Its bootloader chunk still says "M3821b-0.1.0 2016-07-29" but is a different bui
 0xD620 bytes at flash 0x3800 (0x24A10), and the differences start at 0x260.
 
 In the simulator (2026-10-09): stage 1 enters at 0x9FE00800 like the old one but prints
-nothing, and stage 2 ends up in its exception handler (0x810011CC: fp = 0xDEADBEAD), which
-halts in the watchdog reboot loop at 0x810011AC after writing 0xB8018500 / 0xB8018504.
-What the new bootloader needs from the chip has not been investigated.
+nothing.  Stage 2 (MIPS16 code with a page allocator) reads the flash like the application
+does, through the SPI controller's byte-stream mode (chips/m3821.py SpiStream) -- but it
+keeps bit 24 of the mode register 0xB802E0C8 set between transactions and holds the chip
+select with bits 26..25 only, and it copies the whole 1.7 MB maincode chunk word by word
+through the flash window (no DMA), which the simulator's per-access hook makes the slow
+part of the boot (about 30 s).  Before the model knew that, every window read returned the
+flash's first bytes, a chunk length came out negative and the allocator wrote through the
+stage 2 code until it jumped to 0 and the exception handler (0x810011CC: fp = 0xDEADBEAD)
+rebooted through the watchdog (0xB8018500 / 0xB8018504).  Now the application starts and
+prints "MC: APP  init ok", "Libcore version 19.17.0@SDK4.0gc.19.17..." and "Application
+version 1.0.0@SDK4.0gc.19.17..." (regression run_dump_r265lite_120_app_banner.py); it
+then behaves like firmware 1.1.5's application (see that note).

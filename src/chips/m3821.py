@@ -77,7 +77,8 @@ class DdrTraining:
 class SpiStream:
     """The byte-stream mode of the M3821's SPI flash controller (base
     0xB802E000), which the application's flash driver uses for everything but
-    memory-mapped reads.  With bits 26..24 of the register at +0xC8 set the
+    memory-mapped reads.  With bits 26..25 of the register at +0xC8 set (the
+    application sets and clears 26..24, the 2023 bootloader keeps 24) the
     controller holds the chip select and the flash window becomes a byte
     stream: every store clocks its bytes out to the part (the command, then
     address and data bytes), every load clocks reply bytes in, and clearing
@@ -88,7 +89,7 @@ class SpiStream:
     of the status at +0xA0 (write 1 to clear) once it is done.  SF_INS / FMT /
     DUM / CFG stay in normal read mode throughout, so the simulator's flash
     window hooks defer to this stream while it is on (simulator._spi_stream)."""
-    MODE, MODE_BITS = 0x2E0C8, 0x07000000
+    MODE, MODE_BITS = 0x2E0C8, 0x06000000      # (the 2023 bootloader leaves bit 24 set between transactions)
     DMA_ADDR, DMA_LEN, DMA_CTRL, DMA_STATUS = 0x2E058, 0x2E060, 0x2E064, 0x2E0A0
     DMA_TO_PART = 0x80
     # commands with 3 address bytes -> dummy bytes between the address and the data
@@ -148,7 +149,12 @@ class SpiStream:
         self._reset()
 
     def _write_mode(self, uc, access, address, size, value, user_data):
-        on = bool(value & self.MODE_BITS)
+        # The register as the store leaves it: the application writes the word, the
+        # 2023 bootloader only its top byte.
+        shift = 8 * (address & 3)
+        mask = ((1 << (8 * size)) - 1) << shift
+        word = int.from_bytes(uc.mem_read(0xB8000000 + self.MODE, 4), 'little') & ~mask | (value << shift) & mask
+        on = bool(word & self.MODE_BITS)
         if on == self.active:
             return                  # (also the replay of this store after the hook change below)
         self.active = on
