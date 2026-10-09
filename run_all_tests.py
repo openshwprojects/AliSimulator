@@ -44,7 +44,7 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
          ("prima8", "Strong Prima VIII"), ("T650i", "Ferguson Ariva T650i"),
-         ("ali_sdk.bin", "ali_sdk.bin")]
+         ("r265lite", "Opticum Blue R265 Lite"), ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
@@ -64,7 +64,7 @@ def discover_test_files(include_slow=False):
         "run_dump_to_print_check_program.py", "run_dump_with_bad_flash_id.py",
         "run_dump_maciej_to_bl_verify_sw.py", "run_dump_Prima_to_check_program.py",
         "run_dump_Prima_to_print_success.py", "run_dump_urz0195_2012_to_print_success.py",
-        "run_dump_maciej_to_I2C_display_ON.py",
+        "run_dump_r265lite_boot.py", "run_dump_maciej_to_I2C_display_ON.py",
         "run_dump_maciej_to_verify_uart_buffer.py", "run_dump_maciej_without_uart_interrupt.py",
         "run_dump_maciej_to_check_uart_overflow.py", "run_dump_no_main_app.py",
         # the firmware boots into its main application, whose RTOS runs on CP0

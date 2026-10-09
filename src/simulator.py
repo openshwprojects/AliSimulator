@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 from mips16_decoder import MIPS16Decoder
 from tm1650_decoder import GPIO_DO_OFFSETS, PanelDecoder
+import chips
 
 class ISAMode(Enum):
     """ISA mode enumeration"""
@@ -318,6 +319,10 @@ class AliMipsSimulator:
 
         self._init_unicorn()
         self._init_capstone()
+        # The chip family (chips/): its chip ID, boot flow and devices on top of
+        # the common ones; loadFile() switches to the family of the image it loads
+        self.chip = chips.M3801(self)
+        self.chip.install()
 
 
         self.gpr_map = [
@@ -414,8 +419,7 @@ class AliMipsSimulator:
 
         # Set UART LSR (THR empty) so the firmware's putc does not wait
         self.mu.mem_write(0xB8018305, b'\x20')
-        # Chip ID 0x3811 at 0xB8000002
-        self.mu.mem_write(0xB8000002, b'\x11\x38')
+        # (the chip ID at 0xB8000002 is the chip family's: chips/)
 
         # Hooks
         self.mu.hook_add(UC_HOOK_MEM_UNMAPPED | UC_HOOK_MEM_FETCH_PROT | UC_HOOK_MEM_READ_PROT,
@@ -800,8 +804,12 @@ class AliMipsSimulator:
         self._spi_response, self._spi_resp_idx, self._last_flash_read_page = [], 0, -1
         self._update_flash_read_hooks()
 
-        # Set PC to start address
-        self.mu.reg_write(UC_MIPS_REG_PC, self.base_addr)
+        # The image's chip family: its boot flow, and its devices if it differs
+        # from the current one (chips/)
+        family = chips.detect(self.rom_image)
+        if not isinstance(self.chip, family):
+            self.chip = family(self)
+            self.chip.install()
 
         # Re-initialize globals if re-running
         self.instruction_count = 0
@@ -833,6 +841,8 @@ class AliMipsSimulator:
         # Install the hooks now as well: some test scripts drive sim.mu.emu_start()
         # directly instead of run(), and still need CP0 emulation.
         self._sync_hooks()
+        # The reset state: the PC, after whatever the chip's boot ROM does first
+        self.chip.start()
 
     def loadFileTruncated(self, filename, max_bytes):
         """Load a ROM file but keep only the first max_bytes.
@@ -2724,7 +2734,7 @@ class AliMipsSimulator:
             sites |= {base + off for off in self._rom_sites}
         full = ranges is None
         if full:
-            ranges = [(0x80000000, min(self.ram_size, self._RAM_CODE_LIMIT))]
+            ranges = [(0x80000000, min(self.ram_size, self._RAM_CODE_LIMIT))] + self.chip.code_ranges()
         for start, length in ranges:
             try:
                 ram = self.mu.mem_read(start, length)

@@ -16,6 +16,15 @@ their file names.
   the panel decoders, `front_panel.py`, `ir_remote.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
+* `src/chips/` -- the chip families, one module each (`m3801.py`, `m3821.py`):
+  what differs between ALi generations (the chip ID, how the CPU gets from
+  reset to the flash's bootloader, extra memory, that generation's devices).
+  `loadFile()` picks the family from the image's bootloader chunk header; the
+  M3801 is the default and everything `simulator.py` models by itself. The
+  M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
+  boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
+  0x9FE00800) and a DDR-training model; its stage 1, DDR training and stage 2
+  run, as far as that dump's damaged main code allows (see its note).
 * `dumps/` -- the firmware images, each with a `<name>.txt` note on where it
   came from; a box that came with more (photos, an INFO file) has its own
   folder; `dumps/other/` holds images of other ALi chips. Tests and tools name
