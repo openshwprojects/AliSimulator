@@ -1,0 +1,42 @@
+{
+  "file": "ali_sdk.bin",
+  "device": {
+    "brand": null,
+    "model": null,
+    "type": "test program (not a flash dump)",
+    "board": null,
+    "soc": "ALi M3801 (it reads the chip id, \"chip id raw: 3811\")",
+    "family": "M3801",
+    "demod": null,
+    "tuner": null,
+    "flash": null,
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "test program",
+    "version": null,
+    "date": "2026-01-18",
+    "size": 39856,
+    "sha1": "924f7c13ca37a8408ee757ed5d4ccd8369b86e84",
+    "layout": "bare MIPS32 code that starts by setting up CP0 Status"
+  },
+  "source": {
+    "url": null,
+    "site": null,
+    "author": null,
+    "date": "2026-01-18",
+    "login": null,
+    "note": "The \"ALi SDK hello world\" of the tests, added on 2026-01-18 for the tests that need a tiny firmware of known behaviour; its sources and the toolchain that built it are not in this repository"
+  },
+  "simulator": {
+    "boots": true,
+    "application": null,
+    "display": null,
+    "panelText": null,
+    "note": "Used by tests/test_ali_sdk_hello_world.py, test_ali_sdk_hello_world_breakpoint.py and test_cp0_timer_interrupt.py."
+  },
+  "desc": [
+    "It prints \"Booting...\", \"Main function\", its stack and heap limits, a floating-point result, \"chip id raw: 3811\" and \"Menu!\" on the UART."
+  ]
+}

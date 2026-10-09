@@ -1,0 +1,44 @@
+{
+  "file": "M3822P.bin",
+  "device": {
+    "brand": "Opticum",
+    "model": "Blue R265 Lite",
+    "type": "DVB-T2 / HEVC receiver",
+    "board": null,
+    "soc": "ALi M3822P",
+    "family": "M3821",
+    "demod": "internal (NIM_S3821)",
+    "tuner": "MaxLinear MxL608 (reported for this board; the firmware probes MxL608 / R850 / R836, see T2GEN265_1.1.5-2022-08-01.abs)",
+    "flash": "4 MB SPI",
+    "panel": {"chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)", "scl": 57, "sda": 58},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode name \"N(420000000003002\" 2020-2-10 (damaged)",
+    "date": "2020-02-10",
+    "size": 4194304,
+    "sha1": "66755f5bd236f4b15ec067b0a7f31be36c6ebc3d",
+    "layout": "the M3801's NCRC chunk chain: bootloader 0x000000 (chunk 0x23010010, area 0x5FE00), HDCPKey 0x05FE00 (version \"00000001\"), maincode 0x060000 (chunk 0x01FE0101, 1.85 MB), Radioback 0x2B0000, defaultdb 0x2C0000, userdb 0x2DFF80"
+  },
+  "source": {
+    "url": "https://github.com/openshwprojects/FlashDumps/tree/main/Sat/Opticum%20Blue%20R265%20Lite",
+    "site": "github.com/openshwprojects/FlashDumps",
+    "author": "openshwprojects",
+    "date": null,
+    "login": false,
+    "note": "The file name is the SoC's marking; added here on 2026-10-09"
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": [" ON "],
+    "note": "The maincode chunk is damaged in the dump: stage 2 of the bootloader computes its CRC, takes its recovery path and halts at 0x81009E08 (run_dump_r265lite_boot.py) -- the box this flash came from halts there too.  The intact images of the same box are the two T2GEN265 update files."
+  },
+  "desc": [
+    "The M3821 family: the bootloader chunk's version string is \"M3821b-0.1.0\", 2016-07-29; stage 1 writes 0x15503821 to 0xB80010B4.",
+    "Unlike the M3801 images the bootloader chunk is built for the chip's boot ROM: a descriptor table at 0x470 (a register script: the clock block 0xB8001000.., the DDR controller 0xB803E02C..), a \"HEAD\" record at 0x250 (stage 1 at flash 0x800, 0x1DFC bytes; stage 2 at flash 0x3800, 0x24A10 bytes, loaded to 0xA1000000), and stage 1 expects to run from a boot SRAM at 0x9FE00000 (entry 0x9FE00800).  See chips/m3821.py.",
+    "In the simulator (2026-10-09): stage 1 prints \"NOR1\" on the UART (the 16550 at 0xB8018300 as on the M3801), programs the clock tree, trains the DDR controller (0xB803E000..; the simulator answers the training status and pattern words), prints \"2\", copies stage 2 to RAM, prints \"X\" and enters it.  Stage 2 prints \"\\x01\", drives the SPI flash controller at 0xB802E098 (the M3329E-style register base the simulator models) and walks the chunk chain.  Its first check is a CRC of every chunk that is not marked \"NCRC\" (CRC-32/MPEG-2: polynomial 0x04C11DB7 MSB first, init 0xFFFFFFFF, no final xor, over [chunk + 0x10, + length)): for the maincode chunk it computes 0x511F164E but the chunk stores 0xFB1E4E28, so it takes its recovery path (a chunk 0x00FF0000, absent) and halts at 0x81009E08.  The bytes it read are exactly the flash's, the CRC routine is pure software, and the same CRC reproduces the stored words of the Radioback and defaultdb chunks, so the maincode chunk is damaged in the dump and the box this flash came from halts there too.  The maincode is LZMA (props 0x6C, the M3801 images' settings); Python's decoder also fails 0x77000 bytes into the stream, after 1.48 MB of output that starts with a jump to 0x800A1000.  The intact images of the same box are T2GEN265_1.1.5-2022-08-01.abs and T2GEN265_1.2.0-2023-03-17.abs (the official update files): the 1.1.5 image has this dump's bootloader byte for byte and boots into the application."
+  ]
+}

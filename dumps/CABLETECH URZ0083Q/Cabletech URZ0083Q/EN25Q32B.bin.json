@@ -1,0 +1,44 @@
+{
+  "file": "EN25Q32B.bin",
+  "device": {
+    "brand": "Cabletech",
+    "model": "URZ0083Q",
+    "type": "DVB-T receiver",
+    "board": "6390-M3801-VER1.0",
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: the application writes the MxL603 register table at start (3.7 M instructions in), the Cabletech URZ0194S's sequence",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "eFeon Q32B-104HIP (read by the programmer as EN25Q32B; 4 MB SPI)",
+    "panel": {"chip": "TM1628-class 3-wire", "clk": 31, "dio": 9, "stb": 11},
+    "irCoding": "plain"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"URZ0083Q\" 2013-4-2",
+    "date": "2013-04-02",
+    "size": 4194304,
+    "sha1": "b417d177a667d3540c335031401e68eeb2b63a27",
+    "layout": "bootloader 0x000000, HDCPKey 0x01FE00 (\"Demo M3801\"), maincode 0x020000, Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80 -- the dump.bin layout"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic2842886.html#13677891",
+    "site": "elektroda.pl",
+    "author": "Fairgrounds",
+    "date": "2014-05-14",
+    "login": true,
+    "note": "Thread \"CABLETECH URZ0083Q Wsad pamięci EFEON Q32B-104HIP\", post #1 (\"zgrane ze sprawnego dekodera\" = read from a working decoder): attachment \"CABLETECH URZ0083Q.RAR\" (4.74 MB) with this image, INFO.txt and two board photos (the photos are not kept in git)"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON ", "noCH"],
+    "note": "Scans its flash channel database for 12-17 minutes, then draws its first-install wizard (run_dump_cabletech_capture_screen.py); the 3-wire panel reads \" ON \" at boot and \"noCH\" without channels, and its wizard reacts to the panel's keys."
+  },
+  "desc": [
+    "Cabletech URZ0083Q DVB-T receiver on the ALi M3801 (PCB 6390-M3801-VER1.0), read from a working decoder.",
+    "INFO.txt in the same folder gives the flash part and the PCB marking."
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "file": "Ali_3801_Globo_DVBT_dump SPI 4mb.bin",
+  "device": {
+    "brand": "Globo",
+    "model": "STB HD N3",
+    "type": "DVB-T set-top box",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "Rafael Micro R820T (7-bit I2C address 0x1A, 0x34 as the write address byte, on the first hardware I2C master)",
+    "tunerModel": {"chip": "r820t", "address": 26},
+    "flash": "4 MB SPI (desoldered and read with a programmer)",
+    "panel": {"chip": "TM1650", "scl": 31, "sda": 9},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"M3801 DVBT\" 2014-6-23 (name 406000000003002)",
+    "date": "2014-06-23",
+    "size": 4194304,
+    "sha1": "ef46dee13875ce21193b9ffe58c031aebd83c54b",
+    "layout": "bootloader 0x000000, HDCPKey 0x04FE00, maincode 0x050000, Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 -- the dump_maciej.bin layout and maincode name"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic4156384-30.html#21933067",
+    "site": "elektroda.pl",
+    "author": "JacekTorun",
+    "date": "2026-07-05",
+    "login": true,
+    "note": "Thread \"Jak skompilować i uruchomić własny firmware dla ALI M3801 i innych układów z tunerów?\", page 2, post #40 (machine translation: https://www.elektroda.com/rtvforum/topic4156384-30.html#21933067)"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON "],
+    "note": "Keeps its channel list, so the application tunes a channel at start, shows a channel banner that times out and then its no-signal message (run_dump_globo_capture_screen.py)."
+  },
+  "desc": [
+    "Tuner: a Rafael Micro R820T on the chip's first hardware I2C master (0xB8018200, i2c_scb.py) at 7-bit address 0x1A (0x34 as the write address byte): when the application tunes its first channel (about 93 M instructions in) it writes the R820T initialisation array -- registers 0x05..0x1F = 83 32 75 C0 40 D6 6C F5 53 75 68 6C 83 80 00 0F 00 C0 30 48 CC 60 00 54 A6 4A C0, the public R820T driver's bytes but for two values -- then runs the filter and image calibrations (5- and 2-byte reads: the Rafael read protocol starts at register 0 and sends every byte bit-reversed) and its PLL, whose lock it checks in register 2 with a 3-byte read; on no lock it raises the VCO current (0x12: 0x88 -> 0x68) exactly like the Linux r820t driver.  The demodulator is the chip's own (\"NIM_S3811_0\").",
+    "UART log of the real box from the same post (the forum collapses repeated spaces and shows \"@\" before a domain-like word as \"(_at_)\"):",
+    "APP init! / bl_panel_init! / bl_flash_init! / bl_verify_sw / success! / MC: APP init ok / << SDK4.0ba.4.0_20101217 >> / Libcore version 8.13.0(_at_)SDK4.0bd.8.13_20130731(gcc version 3.4.4 mipssde-6.06.01-20070420)(Vic.Wang@ Thu Aug 1 15:38:18 2013) / Application version 1.0.0(_at_)SDK4.0ba.7.4_20120227"
+  ]
+}

@@ -1,7 +1,8 @@
 """
-Regression test: the Cabletech URZ0195's older flash image
-(cableteh_urz0195__w25q32bv.BIN, the 2012 firmware from the elektroda.pl forum,
-see its note in dumps/) boots through its bootloader: it prints the panel
+Regression test: the Cabletech URZ0195 flash image cableteh_urz0195__w25q32bv.BIN
+(from the elektroda.pl forum: a bootloader built in November 2012 and the
+2013-10-23 application -- the newer of the repository's two URZ0195 images, see
+its sidecar in dumps/) boots through its bootloader: it prints the panel
 configuration of its uPD16312-class LED driver (STB 14, CLK 31, DIO 9), checks
 the main code and ends with 'success!'.  Its application never draws through
 the graphics engine, so this image has no screen regression.

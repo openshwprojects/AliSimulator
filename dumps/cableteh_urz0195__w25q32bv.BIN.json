@@ -1,0 +1,45 @@
+{
+  "file": "cableteh_urz0195__w25q32bv.BIN",
+  "device": {
+    "brand": "Cabletech",
+    "model": "URZ0195",
+    "type": "DVB-T receiver",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: woken at 49 M instructions (0x0B and 0x12 set to 1), the MxL603 register table at 120 M -- while the same model's 2012 firmware (urz0195_full_dump(ESMTF25L3204).bin) drives an MxL5007T: two tuner generations in one box model",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "W25Q32BV (4 MB SPI)",
+    "panel": {"chip": "uPD16312-class 3-wire", "clk": 31, "dio": 9, "stb": 14},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"M3801 DVBT\" 2013-10-23",
+    "date": "2013-10-23",
+    "size": 4194304,
+    "sha1": "a02cf9db469c60234e26b911d78ed45d370d6a06",
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Nov 26 2012), HDCPKey 0x04FE00 (\"Demo M3801\"), maincode 0x050000, Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 (2012-12-12) -- the dump_maciej.bin layout with a 0x50000-byte bootloader area"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic2973485.html#14357941",
+    "site": "elektroda.pl",
+    "author": "Bell72",
+    "date": "2015-01-22",
+    "login": true,
+    "note": "Thread \"Dekoder CABLETECH URZ0195 - wsad pamięci\", post #1: attachment \"cableteh_urz0195__w25q32bv.BIN\" (the file name's typo is the poster's)"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": null,
+    "note": "Boots into its application, which had issued no graphics-engine command 14 minutes after its banner; no screen regression."
+  },
+  "desc": [
+    "The newer of the two URZ0195 dumps in this repository (the other is urz0195_full_dump(ESMTF25L3204).bin, with an older firmware).  The forum names the chip in later threads about this model; the firmware's chip-ID table is the M3801 family's.",
+    "UART log in the simulator (2026-10-05): the bootloader prints its panel configuration (\"stb: 14 clock: 31 data: 9\", \"nec 16312 attach ok\", \"digit: 4 seg: 16 data_count: 8\" -- a uPD16312-class 3-wire LED driver on GPIO 14 / 31 / 9), then bl_flash_init!, bl_verify_sw, check_program!, success!, and the application prints its banner: Libcore version 8.1c.0@SDK4.0bd.8.7_20121127 (the same Libcore build as dump.bin's application), Application version 1.0.0@SDK4.0bd.8.7_20121127byAdministrator.",
+    "Simulator run with the 16312 decoder (tm1628_decoder.py on CLK 31 / DIO 9 / STB 14): the bootloader sends 87, 40, C0 + 8 zero bytes, 41 FD (LED port), 08, 40, 8F, then C0 00 00 EE 00 CE 00 00 00 (two digits lit; this chip's segment wiring is not mapped yet, so the decoded text is wrong), and the application repeats the sequence.  14 minutes after the banner (178k timer ticks) it had issued no graphics-engine command yet; an earlier run jumped to address 0 after 13 minutes (the simulator's known asynchronous-stop race)."
+  ]
+}

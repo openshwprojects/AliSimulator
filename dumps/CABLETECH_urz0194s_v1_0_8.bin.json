@@ -1,0 +1,44 @@
+{
+  "file": "CABLETECH_urz0194s_v1_0_8.bin",
+  "device": {
+    "brand": "Cabletech",
+    "model": "URZ0194S",
+    "type": "DVB-T receiver",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: the application writes the MxL603 register table at start (3.8 M instructions in: 0xFF=0, 0x14=0x13, 0x6D=0x8A then 0x0A, 0xDF=0x19, 0x45=0x1B, 0xA9=0x59, 0xAA=0x6A, 0xBE=0x4C ... the Strong SRT 8115's sequence), puts the chip in standby (0x12=0) and wakes it again (0x0B and 0x12 set to 1)",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "25Q32FV (4 MB SPI)",
+    "panel": {"chip": "TM1628-class 3-wire", "clk": 31, "dio": 9, "stb": 11},
+    "irCoding": "plain"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "1.0.8 (maincode \"URZ0194\" 2013-9-16)",
+    "date": "2013-09-16",
+    "size": 4194304,
+    "sha1": "82438d88edcaaf37da8086184c793cb126abe48d",
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Oct 15 2012 -- the URZ0083Q's build), HDCPKey 0x01FE00 (\"Demo M3801\"), maincode 0x020000, Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80 -- the URZ0083Q / dump.bin layout"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic2981605.html#14403424",
+    "site": "elektroda.pl",
+    "author": "Krzyś122333",
+    "date": "2015-02-04",
+    "login": true,
+    "note": "Thread \"CABLETECH URZ0194S wsad pamięci 25Q32FV\", post #1 (\"zgrane ze sprawnego dekodera\" = read from a working decoder): attachment \"CABLETECH_urz0194s_v1_0_8.bin\""
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON ", "----", "noCH"],
+    "note": "The application (Libcore 8.1j.0@SDK4.0bd.8.1j_20130424) prints its banner 8 s after start, scans its flash channel database for about 11 minutes and then draws the same first-install wizard as the URZ0083Q (run_dump_urz0194s_capture_screen.py)."
+  },
+  "desc": [
+    "The firmware's chip-ID table is the M3801 family's and its demodulator driver is the S3811's.  Its bootloader's standby wake code 00FDBA45 is the URZ0083Q's too, so the same remote: a newer application on the URZ0083Q's hardware family.",
+    "In the simulator (2026-10-06): the wizard \"Witaj\" (Region, Język, Tryb Wyświetlania, Proporcje Obrazu, Ok).  Its TM1628-class front panel sits on the URZ0083Q's pins (CLK 31, DIO 9, STB 11) but its digits use the standard 7-segment layout: \" ON \" at boot, \"----\" while the application starts, \"noCH\" (no channels) once the wizard is up."
+  ]
+}

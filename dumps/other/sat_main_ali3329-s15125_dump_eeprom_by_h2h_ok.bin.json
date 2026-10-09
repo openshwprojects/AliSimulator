@@ -1,0 +1,42 @@
+{
+  "file": "sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin",
+  "device": {
+    "brand": null,
+    "model": "satellite receiver main board \"s15125\"",
+    "type": "satellite receiver",
+    "board": "s15125",
+    "soc": "ALi M3329",
+    "family": "other",
+    "demod": "the firmware's NIM_M3327 driver",
+    "tuner": null,
+    "flash": "512 KB (a 4 Mbit part)",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "bootloader 1.1.0, 2005-2-25",
+    "date": "2005-02-25",
+    "size": 524288,
+    "sha1": "bcd6bb7a5d3c25935b331894f60eef873b71c890",
+    "layout": "the ALi chunk chain with a bootloader chunk at 0 (id 0xE3000010, next chunk at 0x4000)"
+  },
+  "source": {
+    "url": null,
+    "site": null,
+    "author": "h2h (the nick of whoever dumped it)",
+    "date": "2026-02-19",
+    "login": null,
+    "note": "Not recorded: added to this repository on 2026-02-19 under dumps/other with the file name it came with (read from a working unit, \"ok\")"
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "An older chip than the families the simulator models; no test runs it."
+  },
+  "desc": [
+    "Its application names a \"Djtuner driver\" and the NIM_M3327 front end."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "file": "srt8115.BIN",
+  "device": {
+    "brand": "Strong",
+    "model": "SRT 8115",
+    "type": "DVB-T receiver",
+    "board": "MC6422-M3801",
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family (MxL603 / pin-compatible MxL608) at I2C 0x60 on the first hardware I2C master: woken at start (registers 0x0B and 0x12 set to 1), and at the first tune (288 M instructions in) the application writes the MxL603 register table -- 0xFF=0 (soft reset), 0x14=0x13, 0x6D=0x8A then 0x0A, 0xDF=0x19, 0x45=0x1B, 0xA9=0x59, 0xAA=0x6A, 0xBE=0x4C, 0xCF=0x25, 0xD0=0x34, 0x77=0xE7, 0x78=0xE3, 0x6F=0x51, 0x7B=0x84, 0x7C=0x9F, 0x56=0x41, 0xCD=0x64, 0xC3=0x2C, 0x9D=0x61, 0xF7=0x52, 0x58=0x81 ... -- reads registers through the 0xFB prefix and then polls the lock status (register 0x2B) and the signal level (0x5F, 0x60, 0x96, 0xB6)",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "25Q32BSIG (4 MB SPI)",
+    "panel": {"chip": "TM1628-class 3-wire", "clk": 31, "dio": 9, "stb": 11},
+    "irCoding": "ext00"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"SRT8115\" 2013-10-10",
+    "date": "2013-10-10",
+    "size": 4194304,
+    "sha1": "38d1722933cc41714343690277f2a8c499be353c",
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Nov 26 2012 -- the same bootloader build as dump.bin's), HDCPKey 0x01FE00 (\"Demo M3801\"), maincode 0x020000, Radioback 0x350000, defaultdb 0x360000, userdb 0x37FF80 -- the dump.bin / SRT Prima layout"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic3123357.html#15195863",
+    "site": "elektroda.pl",
+    "author": null,
+    "date": "2015-11-29",
+    "login": true,
+    "note": "Thread \"Strong srt8115 wsad do układu 25Q32BSIG\", post #1 (\"bin skopiowany z działającego tunera dvbt\" = copied from a working DVB-T tuner): attachment \"srt8115.BIN\""
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON "],
+    "note": "Boots into its application and draws (run_dump_srt8115_capture_screen.py); its panel speaks the Cabletech URZ0195's protocol on the URZ0083Q's pins."
+  },
+  "desc": [
+    "The attachment \"Strong srt8115 MC6422-M3801.BIN\" of the elektroda thread \"Aktualizacja BIOS w telewizorze Strong SRT8115 MC6422-M3801\" (topic3612217, 5 September 2019) is byte-identical to this file (same SHA-1), so it is not kept separately."
+  ]
+}

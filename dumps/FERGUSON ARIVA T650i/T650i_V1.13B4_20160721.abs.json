@@ -1,0 +1,44 @@
+{
+  "file": "T650i_V1.13B4_20160721.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva T650i",
+    "type": "DVB-T HD receiver with Ethernet and web services (YouTube etc.)",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family at I2C 0x63 (an address strap option) on the first hardware I2C master: woken at 76 M instructions, the MxL603 register table when the automatic search tunes its first channel (188 M), then the search's re-tunes (10374 transfers in 700 M instructions)",
+    "tunerModel": {"chip": "mxl603", "address": 99},
+    "flash": "8 MB SPI",
+    "panel": {"chip": "FD650K (TM1650-compatible)", "scl": 31, "sda": 9},
+    "irCoding": "ext00"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.13B4 (maincode and OTA loader V1.13B5)",
+    "date": "2016-07-21",
+    "size": 8388608,
+    "sha1": "ea4978aabdaa1c890f01f8c297edde61deb409b3",
+    "layout": "8 MB part: bootloader 0x000000 (\"HTJ4\" 63004-01047, Libcore 1.1.6@Auto_20100413, vic.wang Aug 25 2012), HDCPKey 0x01FE00, OTAloader 0x020000 (V1.13B5), OTAparam 0x0FFE00, maincode 0x100000 (V1.13B5, LZMA-alone, 0x29693F -> 0xA7AC14 bytes; Libcore 8.1c.0@SDK4.0bd.8.7_20121127 = dump.bin's library, Application 1.0.0@SDK4.0bd.8.3_20120828), radioback 0x700000, data1 0x71FF80, \"T650i\" 0x730000 (an MPEG still, the boot picture), data2 0x74FF80, defaultdb 0x770000, userdb 0x78FF80 (empty)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T650i%2Ffirmware",
+    "site": "ferguson-digital.eu",
+    "author": "Ferguson",
+    "date": "2016-07-21",
+    "login": false,
+    "note": "Ferguson's official download area: T650i_V1.13B4_20160721.zip (2.94 MB) also holds a changelog (1.10B1 .. 1.13B4: new YouTube / Vimeo / Dailymotion APIs, \"Wybieram TV\", timer and subtitle fixes) and upgrade guides in EN / DE / PL; only the .abs image is kept here"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" On ", "Strt", "Find"],
+    "note": "A manufacturer update image, not a dump: a complete 8 MB layout with an empty channel database, so the application runs the first-install automatic search and ends on its \"no channel found\" dialog (run_dump_t650i_capture_screen.py, ~18 min)."
+  },
+  "desc": [
+    "The upper 4 MB are reached the SDK way, at 0xAFC00000 - 4 MB + offset (simulator.py _flash_offset).",
+    "In the simulator (2026-10-08): the bootloader identifies the flash as an 8 MB part (RES id 0x16, its table's \"16@56\" entry), unpacks the maincode (~4-6 min) and prints \"success!\"; the front panel is an FD650K (\"PAN_FD650K\", TM1650-compatible on GPIO 31 / 9) showing \" On \", then \"Strt\" and \"Find\".  The application rewrites three sectors in the upper 4 MB at start, resets its Ethernet MAC (ETHERNET_MAC_0, 0xB802C000) and probes the PHY over MDIO (no PHY: reads 0xFFFF), then -- the channel database being empty -- runs the first-install automatic search (\"Przeszukiwanie auto\", Polish UI, Ferguson's black / orange skin): its progress screen from ~7 min, \"nie znaleziono kanału!\" (no channel found) with a \"tak\" button at 100 % after ~18 min (217 GE commands)."
+  ]
+}

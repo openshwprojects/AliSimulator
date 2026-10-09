@@ -1,0 +1,42 @@
+{
+  "file": "SRT_Prima_VIII_V1.0.6_20160114.abs",
+  "device": {
+    "brand": "Strong",
+    "model": "Prima VIII",
+    "type": "DVB-T HD receiver",
+    "board": "MC6501-M3801 VER1.0",
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "probably a Silicon Labs Si2144 option: the image's only tuner-name string is \"Si2144\", and at start (4 M instructions in) the application reads a single status byte at I2C 0x60 over and over (447 reads in 300 M instructions, no write) -- a Silicon Labs tuner's clear-to-send poll, which a chip answering zeros never satisfies; the box's own 2015 firmware (dumps/STRONG PRIMA VIII/) drives an MxL603 family chip at the same address",
+    "flash": "4 MB SPI (the box of dumps/STRONG PRIMA VIII/)",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.6",
+    "date": "2016-01-14",
+    "size": 4194304,
+    "sha1": "63861e2ebc24bc2e99df66c9511dc4d9eb6223fd",
+    "layout": "a complete 4 MB flash image with the M3801 chunk chain: the bootloader chunk at 0 (1.0.0, 2009-06-18, next chunk at 0x01FE00) like the box's flash dump, newer main code, no user database"
+  },
+  "source": {
+    "url": null,
+    "site": null,
+    "author": null,
+    "date": null,
+    "login": null,
+    "note": "Not recorded: Strong's firmware update for the Prima VIII, the \"update v1.0.6\" the owner of dumps/STRONG PRIMA VIII/ says he downloaded (see that dump).  Added to this repository on 2026-01-20 (\"Create SRT_Prima_VIII_V1.0.6_20160114.abs\") without a note of where it was downloaded from."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": null,
+    "panelText": null,
+    "note": "run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader (\"bl_flash_init!\", \"bl_verify_sw\", \"check_program!\", \"success!\") into the main application; no screen regression yet."
+  },
+  "desc": [
+    "Despite the .abs name it is a complete 4 MB flash image."
+  ]
+}

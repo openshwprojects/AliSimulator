@@ -34,13 +34,20 @@ their file names.
   display layer (`run_dump_r265lite_capture_screen.py`,
   `run_dump_r265lite_120_capture_screen.py`; firmware 1.2.0's first waits for
   a start bit of the block at 0xB802A000 to clear; the dumped flash's own
-  main code is damaged, see the notes there). The
+  main code is damaged, see its sidecar). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).
-* `dumps/` -- the firmware images, each with a `<name>.txt` note on where it
-  came from; a box that came with more (photos, an INFO file) has its own
-  folder; `dumps/other/` holds images of other ALi chips. Tests and tools name
-  a dump by its file name and `simulator.resolve_dump()` finds it in here.
+* `dumps/` -- the firmware images, each with a `<name>.json` sidecar: the
+  box (SoC, demodulator, tuner, flash part, front-panel chip and pins, IR
+  coding), the image (dump or update, version, size, SHA-1, chunk layout),
+  where it came from (URL, author, whether a login is needed), what the
+  simulator makes of it, and `desc`, the notes as paragraphs
+  (`src/dump_catalog.py` reads them; `tests/test_dump_catalog.py` checks each
+  against its file and the code's panel / IR tables; `tools/dump_table.py`
+  renders them all as `dumps/README.md`). A box that came with more (photos,
+  an INFO file) has its own folder; `dumps/other/` holds images of other ALi
+  chips. Tests and tools name a dump by its file name and
+  `simulator.resolve_dump()` finds it in here.
 * `tests/` -- the self-tests: `test_*.py` (fast, no firmware or seconds of
   it) and `run_dump_*.py` (the firmware runs), with their helpers
   (`screen_regression.py`, `uart_regression.py`, `app_reach_check.py`,

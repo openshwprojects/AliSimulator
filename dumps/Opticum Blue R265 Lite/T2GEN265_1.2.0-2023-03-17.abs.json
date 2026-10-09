@@ -1,0 +1,45 @@
+{
+  "file": "T2GEN265_1.2.0-2023-03-17.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "Blue R265 Lite (also sold as Skymaster STB 2GEN, STB M265 and STB N2)",
+    "type": "DVB-T2 / HEVC receiver",
+    "board": null,
+    "soc": "ALi M3822P",
+    "family": "M3821",
+    "demod": "internal (NIM_S3821)",
+    "tuner": "MaxLinear MxL608 (reported for this board; the firmware probes the same five I2C addresses as 1.1.5)",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "4 MB SPI",
+    "panel": {"chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)", "scl": 57, "sda": 58},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.2.0 (maincode 00000121, 2023-3-17; application Libcore 19.17.0, built 2021-07-28)",
+    "date": "2023-03-17",
+    "size": 4194304,
+    "sha1": "fa1ebef2b65dd95dbdc44f7aa639fb29ad5023d1",
+    "layout": "the same chunk chain as T2GEN265_1.1.5-2022-08-01.abs; the maincode chunk is intact (CRC ok, 6.29 MB decompressed); the bootloader chunk still says \"M3821b-0.1.0 2016-07-29\" but is a different build (stage 1 0x19A0 bytes, stage 2 0xD620 bytes at flash 0x3800; the differences start at 0x260)"
+  },
+  "source": {
+    "url": "https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip",
+    "site": "update.skymaster.de",
+    "author": "Skymaster (the Polish distributor)",
+    "date": "2026-10-09",
+    "login": false,
+    "note": "The newer image of the same official update package as T2GEN265_1.1.5-2022-08-01.abs"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON "],
+    "note": "Boots through its 2023 bootloader into its application (run_dump_r265lite_120_app_banner.py, ~35 s: stage 2 copies the maincode through the flash window word by word) and draws the same home menu as 1.1.5 (run_dump_r265lite_120_capture_screen.py)."
+  },
+  "desc": [
+    "In the simulator (2026-10-09): stage 1 enters at 0x9FE00800 like the old one but prints nothing.  Stage 2 (MIPS16 code with a page allocator) reads the flash like the application does, through the SPI controller's byte-stream mode (chips/m3821.py SpiStream) -- but it keeps bit 24 of the mode register 0xB802E0C8 set between transactions and holds the chip select with bits 26..25 only, and it copies the whole 1.7 MB maincode chunk word by word through the flash window (no DMA), which the simulator's per-access hook makes the slow part of the boot (about 30 s).  Before the model knew that, every window read returned the flash's first bytes, a chunk length came out negative and the allocator wrote through the stage 2 code until it jumped to 0 and the exception handler (0x810011CC: fp = 0xDEADBEAD) rebooted through the watchdog (0xB8018500 / 0xB8018504).",
+    "Now the application starts and prints \"MC: APP  init ok\", \"Libcore version 19.17.0@SDK4.0gc.19.17...\" and \"Application version 1.0.0@SDK4.0gc.19.17...\" (regression run_dump_r265lite_120_app_banner.py); it then behaves like firmware 1.1.5's application (see that image), with two differences: it probes the same five tuner addresses on the I2C master at 0xB8018B00, but about 6 M instructions apart (a retry loop per address) instead of back to back; and before drawing it runs a sequence on the block at 0xB802A000 that 1.1.5 only sets up -- a 7-byte table written five times to +0x62, 6 bytes at +0x90.., \"TSM5\" at +0x27.., then it sets bit 4 of +0x6F and waits for the hardware to clear it, forever in RAM (16.9 M reads of +0x6F in 200 M instructions, no GE command in 900 s).  chips/m3821.py clears that bit on the next read (the simulator's _SELF_COMPLETING mechanism), after which the block sees 288 more operations (+0x70 / +0x72) and the application draws the same home menu as 1.1.5 (363 GE commands) about 4 minutes in; regression run_dump_r265lite_120_capture_screen.py (expected/r265lite_120_screen.png and _nav.png, byte-identical to firmware 1.1.5's expected screens).",
+    "Its stage 2 trips the simulator's sporadic fast-mode slice race more often than other images (an unmapped read at PC 0 about one observer run in three); a rerun is the practical answer."
+  ]
+}

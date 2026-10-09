@@ -1,0 +1,44 @@
+{
+  "file": "dump_maciej.bin",
+  "device": {
+    "brand": "Opticum",
+    "model": "STB HD N2",
+    "type": "DVB-T set-top box",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "unknown: the application touches no hardware I2C master in 300 M instructions (nothing to tune without channels); the Globo STB HD N3 runs the same maincode (name 406000000003002) and has a Rafael R820T",
+    "flash": "EN25Q32SB (4 MB SPI)",
+    "panel": {"chip": "TM1650", "scl": 31, "sda": 9},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"M3801 DVBT\" 2013-6-17 (name 406000000003002)",
+    "date": "2013-06-17",
+    "size": 4194308,
+    "sha1": null,
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, jessie.wei, Fri Jun 15 2012), HDCPKey 0x04FE00, maincode 0x050000 (LZMA), Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80; the last 4 bytes (5F E3 28 52) are the UART console's CRC, not flash contents"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic4156384.html#21794256",
+    "site": "elektroda.pl",
+    "author": "maciej_333",
+    "date": "2015-12-30",
+    "login": true,
+    "note": "Thread \"Jak skompilować i uruchomić własny firmware dla ALI M3801 i innych układów z tunerów?\", page 1, post #15: attachment \"dump.bin\" (machine translation: https://www.elektroda.com/rtvforum/topic4156384.html#21794256)"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON "],
+    "note": "Its LZMA bootloader takes about a minute of emulation; the application draws its first-install wizard (run_dump_maciej_capture_screen.py) and its TM1650 shows \" ON \" (run_dump_maciej_to_I2C_display_ON.py)."
+  },
+  "desc": [
+    "The flash of maciej_333's Opticum STB HD N2, read through the bootloader's UART console (\"dump\" command), which sends the 4 MB flash followed by a 4-byte CRC -- hence the file's 4194308 bytes.",
+    "Application: Libcore 8.9.0@SDK4.0bd.8.9_20130409.",
+    "The attachment \"opticum_hd_n2_upgraded.bin\" of post #12 in the same thread (the box after the firmware update maciej_333 found on chomikuj.pl, read with a programmer) is byte-identical to the first 4 MB of this file, so it is not kept separately: the update installed the same firmware the box already had."
+  ]
+}

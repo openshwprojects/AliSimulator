@@ -1,0 +1,43 @@
+{
+  "file": "urz0195_full_dump(ESMTF25L3204).bin",
+  "device": {
+    "brand": "Cabletech",
+    "model": "URZ0195",
+    "type": "DVB-T receiver",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL5007T (I2C 0x60 on the first hardware I2C master): at start (46 M instructions in) the application resets it (0xFF), writes the MxL5007T driver's register pairs (0x02=0x03, 0x03=0x48, 0x05=0x04, 0x06=0x11, 0x2E=0x15, 0x30=0x10, 0x45=0x58, 0x48=0x19, 0x52=0x03, 0x53=0x44, 0x6A=0x4B, 0x76=0x00, 0x78=0x18, 0x7A=0x17, 0x85=0x06), then its tune sequence (0x0F=0, the frequency in 0x0C..0x0E, 0x1F..0x22, 0x80, 0x0F=1) and polls the lock status in register 0xD8 through the 0xFB prefix -- the Linux mxl5007t driver's tables and steps",
+    "tunerModel": {"chip": "mxl5007t", "address": 96},
+    "flash": "ESMT F25L32 (4 MB SPI)",
+    "panel": {"chip": "uPD16312-class 3-wire", "clk": 31, "dio": 9, "stb": 14},
+    "irCoding": "ext00"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"M3801 DVBT\" 2012-08-02",
+    "date": "2012-08-02",
+    "size": 4194304,
+    "sha1": "43999953261d1753681986872811c9f0c20bec26",
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, just.li, Fri Jul 13 2012), HDCPKey 0x04FE00 (\"Demo M3801\"), maincode 0x050000 (LZMA), Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 (2012-9-17) -- the dump_maciej.bin layout"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic3573829.html#17909725",
+    "site": "elektroda.pl",
+    "author": null,
+    "date": "2019-04-16",
+    "login": true,
+    "note": "Thread \"Szukam wsadu do dekodera Cabletech URZ0195, pamięć ESMT F25L32\", post #1 (\"dekoder sprawny\" = the decoder works): attachment \"urz0195_full_dump(ESMTF25L3204).bin\""
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON ", "----", "0004"],
+    "note": "Boots into its application and draws (run_dump_urz0195_capture_screen.py, expected urz0195_2012_screen.png); its uPD16312-class panel shows \" ON \", \"----\", then the channel number \"0004\"."
+  },
+  "desc": [
+    "The older of the two URZ0195 dumps in this repository: a different bootloader build than cableteh_urz0195__w25q32bv.BIN's (Libcore 1.1.6, just.li, Fri Jul 13 2012, vs vic.wang Nov 26 2012) and maincode of 2012-08-02 (vs 2013-10-23); the same remote (standby wake code 807F00FF) and the same uPD16312-class front panel driver."
+  ]
+}

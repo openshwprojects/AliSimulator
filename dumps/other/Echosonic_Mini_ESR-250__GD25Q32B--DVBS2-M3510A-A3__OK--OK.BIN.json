@@ -1,0 +1,42 @@
+{
+  "file": "Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN",
+  "device": {
+    "brand": "Echosonic",
+    "model": "Mini ESR-250",
+    "type": "DVB-S2 satellite receiver",
+    "board": "revision A3",
+    "soc": "ALi M3510A",
+    "family": "other",
+    "demod": "internal (the firmware's NIM_S3501 driver)",
+    "tuner": null,
+    "flash": "GigaDevice GD25Q32B (4 MB SPI)",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "bootloader \"3510-r1362\", 2015-02-02",
+    "date": "2015-02-02",
+    "size": 4194304,
+    "sha1": "33ce167f0070858b346e02089b7189c988e321bf",
+    "layout": "the ALi NCRC chunk chain, bootloader chunk at 0 (next chunk at 0x06EE00)"
+  },
+  "source": {
+    "url": null,
+    "site": null,
+    "author": null,
+    "date": "2026-01-20",
+    "login": null,
+    "note": "Not recorded: added to this repository on 2026-01-20 under dumps/other with the file name it came with, which says what it is (read from a working unit, \"OK\")"
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "Another chip than the M3801 / M3821 families the simulator models; no test runs it."
+  },
+  "desc": [
+    "Its application names a satellite front end (NIM_S3501 / S3503 tuner-demodulator drivers, \"Tuner 1 has no satellite select!\")."
+  ]
+}

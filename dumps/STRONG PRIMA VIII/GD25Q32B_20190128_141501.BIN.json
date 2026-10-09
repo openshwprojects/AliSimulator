@@ -1,0 +1,46 @@
+{
+  "file": "GD25Q32B_20190128_141501.BIN",
+  "device": {
+    "brand": "Strong",
+    "model": "Prima VIII",
+    "type": "DVB-T HD receiver (sold in Bulgaria: Bulgarian UI)",
+    "board": "MC6501-M3801 VER1.0",
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: woken at start (0x0B and 0x12 set to 1), the MxL603 register table at the first tune (169 M instructions in, the owner's channel list)",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "GigaDevice GD25Q32B (4 MB SPI)",
+    "panel": null,
+    "irCoding": "ext00"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "maincode \"Prima_viii\" 2015-4-21 (0x285F8C bytes, not LZMA-alone); defaultdb 1.1.0 2015-4-21",
+    "date": "2019-01-28",
+    "size": 4194304,
+    "sha1": "46f3d074bf984a00ebb03ee4ea451a2ddc1dd690",
+    "layout": "bootloader 0x000000 (1.0.0, 2009-06-18, Libcore 1.1.6@Auto_20100413), HDCPKey 0x01FE00 (\"Demo M3801\"), maincode 0x020000, Radioback 0x350000 (byte-identical to srt8115.BIN's), defaultdb 0x360000, userdb 0x37FF80 -- the dump.bin / srt8115.BIN layout"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic3549956.html#17756835",
+    "site": "elektroda.pl",
+    "author": "bakardjiev",
+    "date": "2019-02-05",
+    "login": true,
+    "note": "Thread \"[Rozwiązano] Szukam pełnego firmware do DVB-T HD STRONG PRIMA VIII MC6501-M3801 VER1.0\", post #1: attachment GD25Q32B_20190128_141501.rar (2.32 MB, the 4 MB flash read of 28 January 2019).  Post #2 points to a working Prima VIII dump on remont-aud.net (registration needed) instead."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots and draws (run_dump_prima8_capture_screen.py): the channel banner of the owner's channel list, re-tuned every minute or two with no signal.  No GPIO front-panel traffic in the first 90 s, so no panel decoder applies."
+  },
+  "desc": [
+    "The owner wrote: \"I have a DVB-T HD STRONG PRIMA VIII, Motherboard MC6501-M3801 VER1.0 ... i download update v1.0.6 but just update - no full flash. With my dump i have a black screen (GD25Q32B)\".  In the simulator it boots and draws, so the box's problem was probably elsewhere.  SRT_Prima_VIII_V1.0.6_20160114.abs in this repository is the manufacturer's update for the same box (newer firmware, no user database).",
+    "Application banner: Libcore version 8.32.0@SDK4.0bd.8.32_20141126, Application version 1.0.0@SDK4.0bd.8.32_20141126.",
+    "In the simulator (2026-10-07): bootloader \"success!\" at 7 s, application banner right after, first GE commands at ~2 min, the channel banner \"NOVA TV / няма информация / 0002\" (the owner's channel list: BNT1, BNT2, BNT HD, BG on AIR, NOVA TV ...) at ~3 min, redrawn continually: with no signal on any channel the firmware steps through its channel list by itself (BTV 0001, NOVA TV 0002, ... BNT HD 0010 after 15 min), a channel every minute or two, and remote keys are acted on only between those re-tunes (none reliably from a fresh boot).",
+    "The firmware runs in a PAL SD output mode: its OSD region head is 77..643 x 32..543 of a 720 x 576 frame with a 1008 x 640 bitmap, i.e. the display engine scales the 1280 x 720 OSD layer down (gma_capture.py undoes that since this dump).  IR remote: the extended-NEC coding (\"ext00\", address bytes 00 00); the key table (40 entries) numbers keys differently from the other firmwares: 42 = EPG (programme grid), 16 = EXIT, 3 = banner off, 37 = EPG info window, 60 / 61 / 67 = \"no favourite channel\" / \"USB removed\" / \"no such channel\" popups, 15 (MENU elsewhere) = nothing."
+  ]
+}

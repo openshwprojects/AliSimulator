@@ -1,0 +1,45 @@
+{
+  "file": "dump.bin",
+  "device": {
+    "brand": "Comsat",
+    "model": "TE 1050 HD",
+    "type": "DVB-T HD receiver",
+    "board": "MC6379-VER1.0",
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "MaxLinear MxL603 family, by its wake-up: at start the application sets registers 0x0B and 0x12 of a chip at I2C 0x60 to 1 (the MxL603's tuner-enable and start-tune registers), exactly what the Strong SRT 8115's and Cabletech URZ0195's firmwares do before their first tune writes the MxL603 table; this firmware never tunes without channels, so the table itself was not seen",
+    "tunerModel": {"chip": "mxl603", "address": 96},
+    "flash": "25Q32BSIG (4 MB SPI)",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "DVB-T HD V1.1.5 (maincode \"M3801 DVBT\" 2013-2-1)",
+    "date": "2013-02-01",
+    "size": 4194304,
+    "sha1": null,
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Nov 26 2012), HDCPKey 0x01FE00 (\"Demo M3801\"), maincode 0x020000, Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80"
+  },
+  "source": {
+    "url": "https://www.elektroda.pl/rtvforum/topic4155976.html",
+    "site": "elektroda.pl",
+    "author": "p.kaczmarek2",
+    "date": "2025-12",
+    "login": false,
+    "note": "The article \"Wnętrze tunera Comsat TE 1050 HD, zgrywanie firmware, format partycji z pamięci Flash\" (machine translation: https://www.elektroda.com/news/news4155976.html); the same file is published as https://github.com/openshwprojects/FlashDumps (Sat/Comsat TE 1050 HD/Flash_For_M3801_ALI.bin) and https://github.com/openshwprojects/AliUnpacker (dump.bin), identical git blob 5dc3133c8ce82df79ef28dcd69a727703272334a"
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "The simulator's first target; its application draws its first screen after a long start (run_dump_capture_screen.py, boot limit 45 min)."
+  },
+  "desc": [
+    "p.kaczmarek2's Comsat TE 1050 HD, read with a CH341 programmer for the elektroda article of December 2025 on the box's inside, the firmware read-out and the flash partition format.",
+    "The application's system-information page names it \"M3801\", \"MC6379-VER1.0\", \"TE 1050 HD\", \"DVB-T HD V1.1.5\", \"Jan 29 2013\".  Application: Libcore 8.1c.0@SDK4.0bd.8.7_20121127.",
+    "Tuner: the application initialises the chip's two hardware I2C masters (0xB8018200, 0xB8018700; i2c_scb.py) at start and, on the first, wakes a tuner at I2C address 0x60 (registers 0x0B and 0x12 set to 0x01) -- and nothing more until a channel is tuned, which it never does with its empty channel list; the demodulator is the chip's own (the firmware's \"NIM_S3811_0\").  The driver names no tuner in its strings (none of the M3801 firmwares does); the register table it writes at the first tune would identify the chip."
+  ]
+}
