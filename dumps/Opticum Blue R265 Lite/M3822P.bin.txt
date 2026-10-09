@@ -31,4 +31,6 @@ CRC reproduces the stored words of the Radioback and defaultdb chunks, so the ma
 chunk is damaged in the dump and the box this flash came from halts there too.  The
 maincode is LZMA (props 0x6C, the M3801 images' settings); Python's decoder also fails
 0x77000 bytes into the stream, after 1.48 MB of output that starts with a jump to
-0x800A1000.  An intact M3821 image is needed to get further.
+0x800A1000.  The intact images of the same box are T2GEN265_1.1.5-2022-08-01.abs and
+T2GEN265_1.2.0-2023-03-17.abs (the official update files, see their notes): the 1.1.5
+image has this dump's bootloader byte for byte and boots into the application.

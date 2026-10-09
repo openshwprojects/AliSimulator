@@ -23,8 +23,14 @@ their file names.
   M3801 is the default and everything `simulator.py` models by itself. The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
-  0x9FE00800) and a DDR-training model; its stage 1, DDR training and stage 2
-  run, as far as that dump's damaged main code allows (see its note).
+  0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash
+  controller's byte-stream mode and DMA engine and the status bits the
+  application polls; with the box's official firmware image (1.1.5) the
+  bootloader, the LZMA decompression and the application's start-up run to its
+  UART banner and its main loop (no display model for this generation yet; the
+  dumped flash's own main code is damaged, see the notes there). The
+  simulator itself gained CP0 EBase for it (the application moves the
+  exception vectors).
 * `dumps/` -- the firmware images, each with a `<name>.txt` note on where it
   came from; a box that came with more (photos, an INFO file) has its own
   folder; `dumps/other/` holds images of other ALi chips. Tests and tools name

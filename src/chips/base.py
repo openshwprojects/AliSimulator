@@ -5,7 +5,8 @@ from unicorn.mips_const import UC_MIPS_REG_PC
 class ChipFamily:
     """What a family adds to the common simulator: override what differs."""
     name = "ALi"
-    chip_id = 0x0000            # the 16-bit chip ID at 0xB8000002 the firmware's chip-ID function reads
+    chip_id = 0x0000            # the chip ID word at 0xB8000000 the firmware's chip-ID function
+    chip_variant = 0x0000       # reads: the 16-bit ID in the upper half, variant bits in the lower
 
     def __init__(self, sim):
         self.sim = sim
@@ -18,7 +19,7 @@ class ChipFamily:
     def install(self):
         """Memory and devices of this family, on top of the common ones; called
         once when the simulator (or loadFile) switches to the family."""
-        self.sim.poke(0xB8000002, self.chip_id.to_bytes(2, 'little'))
+        self.sim.poke(0xB8000000, ((self.chip_id << 16) | self.chip_variant).to_bytes(4, 'little'))
 
     def start(self):
         """The reset state once an image is in the flash: where the CPU starts

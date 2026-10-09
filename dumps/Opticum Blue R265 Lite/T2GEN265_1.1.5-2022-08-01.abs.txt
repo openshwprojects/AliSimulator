@@ -1,0 +1,34 @@
+T2GEN265_1.1.5-2022-08-01.abs
+
+Source: the official USB update package for the Opticum Blue R265 Lite, which Skymaster
+(the Polish distributor) serves from its update site (fetched on 2026-10-09):
+  https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip
+The zip holds this image and T2GEN265_1.2.0-2023-03-17.abs; the packages offered there for
+the Skymaster STB 2GEN, STB M265 and STB N2 are byte-identical (the same M3822P board).
+Size 4194304 bytes, SHA-1 3df227cce48fd502bf5906a6ed0987bfcc0302c0.
+
+Despite the .abs name it is a complete 4 MB flash image with the same chunk chain as the
+M3822P.bin dump (bootloader 0x000000, HDCPKey 0x05FE00, maincode 0x060000, Radioback
+0x2B0000, defaultdb 0x2C0000, userdb 0x2DFF80): the bootloader area is byte-identical to
+the dump's (the first difference is inside the HDCPKey chunk, a per-unit key) and the
+maincode chunk is intact (version 00000115, 2022-8-1, CRC-32/MPEG-2 ok; LZMA props 0x6C,
+7.24 MB decompressed, loaded by stage 2 at 0x80000200 with its entry at 0x800A1000).
+
+In the simulator (2026-10-09, chips/m3821.py): the bootloader prints "NOR1", "2", "X" and
+"\x01" like the dump, stage 2's chain check passes, it decompresses the application and
+enters it.  The application (ALi SDK 4.0, "Libcore 19.9.d", built 2019-04-23) wants the
+chip ID word 0xB8000000 to read 0x38210010 (the M3822P variant; a plain 0x3821 makes it
+reboot through the watchdog), moves the exception vectors with CP0 EBase, re-trains the
+DDR controller (the same registers stage 1 uses), reads the flash through the SPI
+controller's byte-stream mode and DMA engine (the window at 0xB802E0C8 and 0xB802E058..;
+SF_INS stays in normal read mode) and bit-bangs I2C on GPIO bank 0xB80000D0 (SDA bit 25).
+It prints on the UART:
+  MC: APP  init ok
+  << SDK4.0ba.4.0_20101217 >>
+  Libcore version 19.9.d@SDK4.0gc.19.9d_20190423(gcc version 3.4.4 mipssde-6.06.01-20070420)(...)
+  Application version 1.0.0@SDK4.0gc.19.9d_20190423by
+and then runs its tasks (six, a 1 ms CP0 timer tick that the simulator's 100 MHz Count
+stretches to 3 ms, bit-banged I2C transactions, flash reads of the databases) until the
+main task waits in its 12-second message loop and the idle task runs.  Nothing is drawn: the M3821's display path, its IR receiver and the
+HD2015 front-panel chip (on the bit-banged I2C) are not modelled yet.  The production
+build prints nothing beyond the banner.

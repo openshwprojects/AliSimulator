@@ -128,6 +128,7 @@ class AliMipsSimulator:
         self.cp0_status = 0x10400000  # Must match Unicorn's initial CP0 Status
         self.cp0_cause = 0            # stored Cause bits; MFC0 reads _cause_value() (adds TI/IP7, IP3)
         self.cp0_epc = 0
+        self.cp0_ebase = 0x80000000   # EBase (reg 15 sel 1): the exception vectors while Status.BEV = 0
 
         # CP0 timer (Count == Compare -> Cause.TI / IP7), see "CP0 timer" below.
         self._timer_enabled = True    # property timer_enabled
@@ -299,6 +300,7 @@ class AliMipsSimulator:
         self._spi_fmt = 0x0D       # SF_FMT: default = HIT_CODE|HIT_ADDR|HIT_DATA (normal read)
         self._spi_dum = 0x00       # SF_DUM: dummy/data register
         self._spi_cfg = 0x00       # SF_CFG: config register
+        self._spi_stream = None    # a chip family's byte-stream mode of the flash window (chips/m3821.py)
         self._spi_status = 0x00    # Flash status register (bit0=WIP, bits[5:2]=BP)
         self._spi_wel = False      # Write Enable Latch
         self._spi_response = []    # queued response bytes for memory-mapped reads
@@ -766,6 +768,7 @@ class AliMipsSimulator:
         0x05: "Read Status", 0xAB: "Release Power Down",
         0x90: "Read Mfr/Dev ID", 0x06: "WREN", 0x04: "WRDI",
         0x01: "Write Status", 0x02: "Page Program", 0xAD: "AAI Program",
+        0x3B: "Dual Read", 0x6B: "Quad Read", 0x32: "Quad Page Program",
         0x20: "Sector Erase 4K", 0x52: "Block Erase 32K",
         0xD8: "Block Erase 64K", 0xC7: "Chip Erase", 0x60: "Chip Erase",
     }
@@ -1623,11 +1626,22 @@ class AliMipsSimulator:
         where = f"PC=0x{pc:08X}" if self._code_hook_h is not None else f"block at 0x{pc:08X}"
         self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [{where}]")
         self._spi_resp_idx = 0
+        self._spi_response = self._spi_command_response(cmd)
+        if cmd == 0x06:      # Write Enable
+            self._spi_wel = True
+            self._spi_status |= 0x02
+        elif cmd == 0x04:    # Write Disable
+            self._spi_wel = False
+            self._spi_status &= ~0x02
+
+    def _spi_command_response(self, cmd):
+        """The bytes the part answers a command with (the ID and status reads);
+        WRSR / reads / program / erase have none."""
         if cmd == 0x9F:      # JEDEC Read ID: 3 bytes, padded to 4 for word reads
-            self._spi_response = list(self._spi_jedec_id) + [0x00]
-        elif cmd == 0x05:    # Read Status Register: bit0=WIP, bit1=WEL, bits[5:2]=BP
-            self._spi_response = [self._spi_status]
-        elif cmd == 0xAB:    # Release from Deep Power Down / Read Electronic ID
+            return list(self._spi_jedec_id) + [0x00]
+        if cmd == 0x05:      # Read Status Register: bit0=WIP, bit1=WEL, bits[5:2]=BP
+            return [self._spi_status]
+        if cmd == 0xAB:      # Release from Deep Power Down / Read Electronic ID
             if self.rom_size > 0x400000:
                 # a real part clocks its electronic ID out after the 3 dummy
                 # bytes, repeatedly: W25Q64 / MX25L6405 answer 0x16 (one below
@@ -1636,22 +1650,26 @@ class AliMipsSimulator:
                 # 4 MB entry ("0x16, 16") matches the JEDEC read instead, and
                 # 4 MB parts keep the response the 4 MB dumps have booted with
                 res = (self._spi_jedec_id[2] - 1) & 0xFF
-                self._spi_response = [res, res, res, res]
-            else:
-                self._spi_response = [self._spi_jedec_id[2], 0x00, 0x00, 0x00]
-        elif cmd == 0x90:    # Read Manufacturer/Device ID
-            self._spi_response = [self._spi_jedec_id[0], self._spi_jedec_id[2],
-                                  self._spi_jedec_id[0], self._spi_jedec_id[2]]
-        elif cmd == 0x06:    # Write Enable
-            self._spi_wel = True
-            self._spi_status |= 0x02
-            self._spi_response = []
-        elif cmd == 0x04:    # Write Disable
-            self._spi_wel = False
-            self._spi_status &= ~0x02
-            self._spi_response = []
-        else:                # WRSR / reads / program / erase: no response bytes
-            self._spi_response = []
+                return [res, res, res, res]
+            return [self._spi_jedec_id[2], 0x00, 0x00, 0x00]
+        if cmd == 0x90:      # Read Manufacturer/Device ID
+            return [self._spi_jedec_id[0], self._spi_jedec_id[2],
+                    self._spi_jedec_id[0], self._spi_jedec_id[2]]
+        return []
+
+    def _spi_response_bytes(self, size):
+        """The next `size` bytes the part clocks out for a flash-window load:
+        the stream's while a chip family's byte-stream mode is on, else what is
+        left of the last SF_INS command's response, then 0x00 (idle, not busy)."""
+        stream = self._spi_stream
+        if stream is not None and stream.active:
+            return stream.read(size)
+        resp = bytearray(size)
+        for i in range(size):
+            if self._spi_resp_idx < len(self._spi_response):
+                resp[i] = self._spi_response[self._spi_resp_idx]
+                self._spi_resp_idx += 1
+        return bytes(resp)
 
     def _spi_write_fmt(self, value):
         self._spi_fmt = value
@@ -1687,8 +1705,12 @@ class AliMipsSimulator:
         Note: SF_HIT_ADDR may or may not be set. In CONT_RD mode the firmware
         sets FMT=0x0D (DATA|ADDR|CODE) for the first read, then FMT=0x09
         (DATA|CODE) for sequential reads without address phase.
+
+        A chip family's byte-stream mode (chips/m3821.py) takes the window
+        over while it is on, whatever SF_INS says.
         """
-        return self._spi_ins in (0x03, 0x0B)
+        stream = self._spi_stream
+        return self._spi_ins in (0x03, 0x0B) and not (stream is not None and stream.active)
 
     def _flash_offset(self, address):
         """Offset into the flash image for any mirror of the memory-mapped flash.
@@ -1787,16 +1809,10 @@ class AliMipsSimulator:
             self._rom_inject(uc, address, off, rp[2])   # replay: the same response bytes again
             self._rom_dirty.append((off, size))
             return
-        resp = bytearray(size)
-        for i in range(size):
-            if self._spi_resp_idx < len(self._spi_response):
-                resp[i] = self._spi_response[self._spi_resp_idx]
-                self._spi_resp_idx += 1
-            else:
-                resp[i] = 0x00      # no more response data: flash idle / not busy
-        self._rom_inject(uc, address, off, bytes(resp))
+        resp = self._spi_response_bytes(size)
+        self._rom_inject(uc, address, off, resp)
         self._rom_dirty.append((off, size))
-        self._dev_note(uc, 'spi', address, bytes(resp), exact=True)    # (memory hook: exact PC)
+        self._dev_note(uc, 'spi', address, resp, exact=True)    # (memory hook: exact PC)
         if self._spi_response:
             self._spi_log(f"  RESP [{size}B]: {' '.join(f'{b:02X}' for b in resp)}")
 
@@ -1821,7 +1837,20 @@ class AliMipsSimulator:
         if self._spi_is_passthrough():
             return  # Normal mode — a write to the flash window has no effect
 
-        cmd = self._spi_ins
+        data = value.to_bytes(size, 'little')
+        stream = self._spi_stream
+        if stream is not None and stream.active:
+            # the bytes go out to the part (once: a stop at this store replays it)
+            if self._dev_replay_of(uc, 'spi_stream', address, data) is None:
+                self._dev_note(uc, 'spi_stream', address, data, exact=True)
+                stream.write(data)
+            return
+        self._spi_execute(self._spi_ins, off, data)
+
+    def _spi_execute(self, cmd, off, data):
+        """Carry out a command that changes the part: WREN / WRDI, WRSR (the
+        status is data[0]), an erase of the block at flash offset off (or of
+        the chip), a page program / AAI of data at off."""
         cmd_name = self._SPI_CMD_NAMES.get(cmd, f"0x{cmd:02X}")
         if cmd == 0x06:      # WREN — trigger
             self._spi_wel = True
@@ -1832,11 +1861,11 @@ class AliMipsSimulator:
             self._spi_status &= ~0x02
             self._spi_log(f"  EXEC {cmd_name}")
         elif cmd == 0x01:    # WRSR — write status register
-            if self._spi_wel:
-                self._spi_status = value & 0xFF
+            if self._spi_wel and data:
+                self._spi_status = data[0]
                 self._spi_wel = False
                 self._spi_status &= ~0x02  # Clear WEL after write
-                self._spi_log(f"  EXEC {cmd_name} = 0x{value & 0xFF:02X}")
+                self._spi_log(f"  EXEC {cmd_name} = 0x{data[0]:02X}")
         elif cmd in (0xC7, 0x60, 0xD8, 0x52, 0x20):   # erase
             if not self._spi_wel:
                 self._spi_log(f"  EXEC {cmd_name} without WEL (applied anyway)")
@@ -1849,13 +1878,14 @@ class AliMipsSimulator:
                 self._spi_log(f"  EXEC {cmd_name} @ flash[0x{off & ~(blk - 1):06X}]")
             self._spi_wel = False
             self._spi_status &= ~0x02
-        elif cmd in (0x02, 0xAD):                        # page program / AAI
+        elif cmd in (0x02, 0x32, 0xAD):                  # page program (quad: 0x32) / AAI
             if not self._spi_wel:
                 self._spi_log(f"  EXEC {cmd_name} without WEL (applied anyway)")
-            for i in range(size):
-                self._flash_program(off + i, (value >> (8 * i)) & 0xFF)
-            self._spi_log(f"  EXEC {cmd_name} @ flash[0x{off:06X}] = 0x{value & ((1 << (8 * size)) - 1):0{2 * size}X}")
-            if cmd == 0x02:
+            for i, byte in enumerate(data):
+                self._flash_program(off + i, byte)
+            shown = f"0x{int.from_bytes(data, 'little'):0{2 * len(data)}X}" if len(data) <= 4 else f"{len(data)} bytes"
+            self._spi_log(f"  EXEC {cmd_name} @ flash[0x{off:06X}] = {shown}")
+            if cmd != 0xAD:
                 self._spi_wel = False
                 self._spi_status &= ~0x02
 
@@ -2216,12 +2246,13 @@ class AliMipsSimulator:
             uc.emu_stop()
 
     def _emulate_cop0(self, uc, address, w, in_delay_slot):
-        """Emulate MFC0/MTC0 of Count, Status, Cause, EPC and ERET with the
-        simulated CP0 state.  Returns True if the PC was redirected past the
+        """Emulate MFC0/MTC0 of Count, Status, Cause, EPC and EBase and ERET with
+        the simulated CP0 state.  Returns True if the PC was redirected past the
         instruction (i.e. Unicorn will not execute it)."""
         rs = (w >> 21) & 0x1F
         rt = (w >> 16) & 0x1F
         rd = (w >> 11) & 0x1F
+        sel = w & 0x7
         funct = w & 0x3F
         if rs == 0x00:                      # MFC0 rt, rd
             if rd == 9:
@@ -2234,6 +2265,7 @@ class AliMipsSimulator:
                 self._timer_update()
                 val = self._cause_value()
             elif rd == 14: val = self.cp0_epc
+            elif rd == 15 and sel == 1: val = self.cp0_ebase
             else:
                 return False                # other registers: let Unicorn handle
             if in_delay_slot:
@@ -2264,6 +2296,8 @@ class AliMipsSimulator:
                 self.cp0_cause = (self.cp0_cause & ~0x08C00300) | (val & 0x08C00300)
             elif rd == 14:
                 self.cp0_epc = val
+            elif rd == 15 and sel == 1:     # EBase: bits 29..12 writable, 31..30 read as 0b10
+                self.cp0_ebase = 0x80000000 | (val & 0x3FFFF000)
             else:
                 return False
             if in_delay_slot:
@@ -2473,7 +2507,7 @@ class AliMipsSimulator:
             self.ic_irq_count += 1
             if self.ic_irq_count <= 8 or self.ic_irq_count % 1000 == 0:
                 self.log(f"[IC IRQ] #{self.ic_irq_count} lines 0x{self._ic_lines:X} from 0x{epc & ~1:08X}")
-        return (0xBFC00200 if bev else 0x80000000) + (0x200 if iv else 0x180)
+        return (0xBFC00200 if bev else self.cp0_ebase) + (0x200 if iv else 0x180)
 
     def _reschedule_slice(self):
         """Fast mode, inside a run() slice: an MTC0 Count / Compare / Status /
@@ -2619,10 +2653,11 @@ class AliMipsSimulator:
     # Fast mode: hook management
     # ------------------------------------------------------------------
     # MIPS32 encodings of MFC0/MTC0 rt, {Count, Compare, Status, Cause, EPC}
-    # (sel 0) and ERET, little-endian, matched at any byte offset and then
-    # filtered to 4-byte alignment.  Data or MIPS16 code matching by accident
-    # is harmless: the site hook re-checks the ISA mode and the encoding.
-    _CP0_SITE_RE = re.compile(rb'\x00[\x48\x58\x60\x68\x70][\x00-\x1f\x80-\x9f]\x40|\x18\x00\x00\x42')
+    # (sel 0), EBase (reg 15 sel 1) and ERET, little-endian, matched at any
+    # byte offset and then filtered to 4-byte alignment.  Data or MIPS16 code
+    # matching by accident is harmless: the site hook re-checks the ISA mode
+    # and the encoding.
+    _CP0_SITE_RE = re.compile(rb'(?:\x00[\x48\x58\x60\x68\x70]|\x01\x78)[\x00-\x1f\x80-\x9f]\x40|\x18\x00\x00\x42')
     _RAM_CODE_LIMIT = 0x02000000        # scan/track the first 32MB of RAM for code
     _VIRGIN_CHUNK = 0x00100000          # 1MB first-execution chunks
 
@@ -2682,9 +2717,9 @@ class AliMipsSimulator:
         if self._tb_flush_needed:
             self._flush_tb()
 
-    # (word & 0xFFE0FFFF) of MFC0/MTC0 rt, {Count, Compare, Status, Cause, EPC} sel 0
-    _CP0_WORDS = frozenset([0x40000000 | (rd << 11) for rd in (9, 11, 12, 13, 14)] +
-                           [0x40800000 | (rd << 11) for rd in (9, 11, 12, 13, 14)])
+    # (word & 0xFFE0FFFF) of MFC0/MTC0 rt, {Count, Compare, Status, Cause, EPC} sel 0 and EBase (15 sel 1)
+    _CP0_WORDS = frozenset([op | (rd << 11) | sel for op in (0x40000000, 0x40800000)
+                            for rd, sel in ((9, 0), (11, 0), (12, 0), (13, 0), (14, 0), (15, 1))])
     _ERET_WORD = 0x42000018
 
     def _find_cp0_sites(self, data, base):
