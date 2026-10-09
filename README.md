@@ -24,12 +24,14 @@ their file names.
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash
-  controller's byte-stream mode and DMA engine and the status bits the
-  application polls; with the box's official firmware images (1.1.5 and 1.2.0)
-  the bootloader, the LZMA decompression and the application's start-up run to
-  its UART banner and its main loop, remote keys reach it through the same IR
-  controller as the M3801's and its HD2015 panel chip decodes as a TM1650 (no
-  display model for this generation yet; the dumped flash's own main code is
+  controller's byte-stream mode and DMA engine, an 8-channel descriptor-ring
+  DMA engine (0xB800F000), the sound engine's read index and the status bits
+  the application polls; with the box's official firmware images (1.1.5 and
+  1.2.0) the bootloader, the LZMA decompression and the application's start-up
+  run to its UART banner and its main loop, remote keys reach it through the
+  same IR controller as the M3801's, its HD2015 panel chip decodes as a TM1650,
+  and it draws its home menu through the M3801's own GE and display layer
+  (`run_dump_r265lite_capture_screen.py`; the dumped flash's own main code is
   damaged, see the notes there). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).

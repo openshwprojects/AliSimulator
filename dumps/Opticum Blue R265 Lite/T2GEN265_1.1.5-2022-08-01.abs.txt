@@ -38,4 +38,16 @@ finds the application's key table in RAM; regression run_dump_r265lite_remote_ke
 the HD2015 front-panel chip (TM1650-compatible, SCL = GPIO 57, SDA = GPIO 58, front_panel.py)
 gets " ON " from stage 2 of the bootloader (run_dump_r265lite_panel_on.py) -- the box has no
 display soldered, the chip only scans its three buttons, which the application was not seen
-polling.  Nothing is drawn yet: the M3821's display engine is not modelled.
+polling.
+Display: the application draws through the same graphics engine (0xB800A000, ge_m36f.py)
+and display layer (0xB8006300, gma_capture.py) as the M3801 boxes -- nothing of the display
+is this generation's own.  What kept it from drawing were two things its start-up waits on:
+the 8-channel descriptor-ring DMA engine at 0xB800F000 (its large copies; the index it reads
+back at +0x30 + channel must reach the one it submits at +0x28 + channel) and the sound
+engine at 0xB8002000 (it fills a PCM ring with silence and waits until the read index at
++0x3A catches up with the write index at +0x38); both are in chips/m3821.py.  With them the
+home menu is complete at 364 GE commands, about 5 minutes into a run: six tiles in Polish
+("Edycja kanałów" highlighted, "Skan kanałów", "Media player", "Ustawienia systemu", "Dysk
+USB" with "Zainstaluj szybki dysk USB.") over an INFO hint bar, 99 colours at the OSD's
+1280x720 (tests/expected/r265lite_screen.png, regression run_dump_r265lite_capture_screen.py,
+which then moves the highlight with the remote's RIGHT and DOWN).

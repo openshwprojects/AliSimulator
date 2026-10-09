@@ -25,7 +25,13 @@ The application (ALi SDK 4.0, "libcore 19.9") wants the chip ID word at
 0xB8000000 to carry the M3822P variant bits (chip_variant), moves the
 exception vectors with CP0 EBase, and talks to the flash through the SPI
 controller's byte-stream mode and DMA engine (SpiStream) instead of the
-M3801 driver's SF_INS command register.
+M3801 driver's SF_INS command register.  Its start-up runs its large
+memory copies through an 8-channel descriptor-ring DMA engine (DmaRings)
+and fills the sound engine's PCM ring, whose read index must follow the
+write index (MirrorRegisters); then it draws its OSD through the same
+graphics engine (0xB800A000, ge_m36f.py) and display layer (0xB8006300,
+gma_capture.py) as the M3801 boxes, so nothing of the display is this
+family's own.
 """
 import ctypes
 
@@ -185,6 +191,81 @@ class SpiStream:
         uc.mem_write(0xB8000000 + self.DMA_STATUS, int(self.dma_done).to_bytes(4, 'little'))
 
 
+class DmaRings:
+    """The 8-channel descriptor-ring DMA engine at 0xB800F000 the firmware's
+    large memory copies go through.  Per channel: the ring's physical base at
+    +0x00 + 4 * ch (16-byte descriptors: source, destination, flags | length - 1,
+    0), its length minus one at +0x20 + ch, the ring index after the last
+    descriptor submitted written to +0x28 + ch, and the index the engine has
+    reached read back from +0x30 + ch, which the firmware polls (with 100 us
+    delays) until it equals what it submitted; +0x48 / +0x4A hold the channels'
+    enable bits and bit 0 of +0x4B resets the engine and clears itself.  The
+    simulator copies a descriptor's bytes the moment it is submitted."""
+    BASE = 0xF000
+    RING, RING_LEN, SUBMIT, DONE, RESET = 0x00, 0x20, 0x28, 0x30, 0x4B
+    CHANNELS = 8
+
+    def __init__(self, sim):
+        self.sim = sim
+        self.done = [0] * self.CHANNELS
+        self.submissions = 0            # logged ones
+        b = self.BASE
+        sim._mmio_on('w', self._write_submit, b + self.SUBMIT, b + self.SUBMIT + self.CHANNELS - 1)
+        sim._mmio_on('r', self._read_done, b + self.DONE, b + self.DONE + self.CHANNELS - 1)
+        sim._mmio_on('r', self._read_reset, b + self.RESET, b + self.RESET)
+
+    def _reg(self, offset, size):
+        return int.from_bytes(self.sim.peek(0xB8000000 + self.BASE + offset, size), 'little')
+
+    def _write_submit(self, uc, access, address, size, value, user_data):
+        sim = self.sim
+        for i in range(size):                       # (a word write submits to several channels)
+            ch = (address & 0xFFFFFF) - self.BASE - self.SUBMIT + i
+            if not 0 <= ch < self.CHANNELS:
+                continue
+            count = (value >> (8 * i)) & 0xFF
+            ring = self._reg(self.RING + 4 * ch, 4) & 0x0FFFFFF0
+            length = self._reg(self.RING_LEN + ch, 1) + 1
+            while self.done[ch] != count:
+                desc = sim.peek(0x80000000 + ring + 16 * (self.done[ch] % length), 16)
+                src, dst, word = (int.from_bytes(desc[o:o + 4], 'little') for o in (0, 4, 8))
+                src, dst, n = src & 0x0FFFFFFF, dst & 0x0FFFFFFF, (word & 0x1FFFFFFF) + 1
+                ok = max(src, dst) + n <= sim.ram_size
+                if self.submissions < 16:
+                    self.submissions += 1
+                    sim.log(f"[DMA] ch{ch} #{self.done[ch]}: 0x{src:08X} -> 0x{dst:08X}, {n} bytes (ring 0x{ring:08X} x{length})"
+                            + ("" if ok else " -- outside RAM, skipped"))
+                if ok:
+                    sim.mu.mem_write(0x80000000 + dst, bytes(sim.mu.mem_read(0x80000000 + src, n)))
+                self.done[ch] = (self.done[ch] + 1) & 0xFF
+
+    def _read_done(self, uc, access, address, size, value, user_data):
+        ch = (address & 0xFFFFFF) - self.BASE - self.DONE
+        uc.mem_write(address, bytes(self.done[ch:ch + size]))
+
+    def _read_reset(self, uc, access, address, size, value, user_data):
+        uc.mem_write(address, bytes([uc.mem_read(address, 1)[0] & ~1]))     # reset finished at once
+
+
+class MirrorRegisters:
+    """Status registers that follow another register at once: the hardware
+    has consumed everything the firmware queued.  The sound engine at
+    0xB8002000 streams PCM from a ring in RAM (base +0x30, size +0x34): the
+    firmware fills it (silence at boot, through the DMA rings), writes the
+    write index to +0x38 and waits until the read index at +0x3A catches up.
+    {register offset: (register it mirrors, size in bytes)}."""
+    def __init__(self, sim, mirrors):
+        self.mirrors = mirrors
+        for offset, (_source, size) in mirrors.items():
+            sim._mmio_on('r', self._read, offset, offset + size - 1)
+
+    def _read(self, uc, access, address, size, value, user_data):
+        offset = address & 0xFFFFFF
+        for target, (source, n) in self.mirrors.items():
+            if target <= offset < target + n:
+                uc.mem_write(0xB8000000 + target, bytes(uc.mem_read(0xB8000000 + source, n)))
+
+
 class ReadyBits:
     """Status bits the application polls (with 100 us delays) until the hardware
     reports ready, which the simulator's hardware is at once: register offset in
@@ -226,8 +307,12 @@ class M3821(ChipFamily):
             sim.mu.mem_map_ptr(seg + SRAM_PHYS, SRAM_SIZE, UC_PROT_ALL, ptr)
         self.ddr = DdrTraining(sim)
         self.spi = SpiStream(sim)
+        self.dma = DmaRings(sim)
         self.ready = ReadyBits(sim, {
             0x000633: 0x80,     # the PLL at 0xB8000600..: locked (polled after it is programmed)
+        })
+        self.mirrors = MirrorRegisters(sim, {
+            0x00203A: (0x002038, 2),    # the sound engine's read index has caught up with the write index
         })
 
     def start(self):

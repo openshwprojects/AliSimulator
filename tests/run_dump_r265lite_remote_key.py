@@ -2,8 +2,8 @@
 """A remote-control key reaches the Opticum Blue R265 Lite firmware: the M3821 application
 configures the same M6303 IR controller (0xB8018100, interrupt line 19) as the M3801 boxes,
 press_key() finds its key table in RAM, and its interrupt handler drains the run-length
-FIFO and acknowledges the controller.  (What the application then draws cannot be checked
-until this generation's display engine is modelled.)
+FIFO and acknowledges the controller.  (That a key moves the home menu's highlight is
+checked by the slow run_dump_r265lite_capture_screen.py.)
 """
 import os
 import sys
