@@ -1,0 +1,46 @@
+{
+  "file": "J1100223_URZ0083_v1.0.18.abs",
+  "device": {
+    "brand": "Cabletech",
+    "model": "URZ0083",
+    "type": "DVB-T HD receiver (2011)",
+    "board": "MC6238 (the change list's \"J1100223_MC6238_URZ0083_v1.0.18\")",
+    "soc": "ALi M3601E",
+    "family": "M36xx (not modelled)",
+    "demod": "ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.0.18 (maincode \"Demo M3606\" 2011-9-2)",
+    "date": "2011-09-02",
+    "size": 2097152,
+    "sha1": "09b79c8db6af067e3c6dca76784efda318441751",
+    "layout": "bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-2), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-2)"
+  },
+  "source": {
+    "url": "https://www.gutek.com.pl/pobierz/softy/urz0083/v1018.rar",
+    "site": "gutek.com.pl",
+    "author": "Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek",
+    "date": "2026-10-10",
+    "login": false,
+    "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v1018.rar; downloaded on 2026-10-10"
+  },
+  "simulator": {
+    "boots": null,
+    "application": null,
+    "display": null,
+    "panelText": null,
+    "note": "Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family)."
+  },
+  "desc": [
+    "Cabletech URZ0083 firmware V1.0.18, the manufacturer's USB update image as Gutek's site mirrors it (v1018.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",
+    "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-2), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-2); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 5.0.0@SDK4.0ba.5.0_20110425.",
+    "Gutek's list: \"Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)\" -- not for the URZ0083E; the later URZ0083Q (dumps/CABLETECH URZ0083Q/) is an ALi M3801 board.",
+    "Change list (lista_zmian.txt, Polish): J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.",
+    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it)."
+  ]
+}

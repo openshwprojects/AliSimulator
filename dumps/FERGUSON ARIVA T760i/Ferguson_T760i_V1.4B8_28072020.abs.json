@@ -1,0 +1,47 @@
+{
+  "file": "Ferguson_T760i_V1.4B8_28072020.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva T760i",
+    "type": "DVB-T2 HD receiver with Wi-Fi / Ethernet and web services",
+    "board": "the bootloader chunk (\"HATB1\") has the T750i's version \"66019-01047\"",
+    "soc": "ALi C3505 (the maincode's \"ALI_C3505:0x%x\" chip-id print, \"Ali3505\", c3505_phy_set)",
+    "family": "M3505 (not modelled)",
+    "demod": "AltoBeam ATBM7812, external (the firmware's nim_atbm7812 driver, NIM_ATBM7812_0; the tuner sits behind its I2C gateway)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)"
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.4B8 (maincode \"V1.4B8\" 2020-7-28)",
+    "date": "2020-07-28",
+    "size": 8388608,
+    "sha1": "28cde8bafc331042969afcb1cc9a49c0a6e9f4a5",
+    "layout": "HATB1 0x000000 (66019-01047, 2020-7-28), HDCPKey 0x02FE00 (1.0.0, 2016-7-14), maincode 0x030000 (V1.4B8, 2020-7-28), seecode 0x480000 (V1.4B8, 2020-7-28), radioback 0x5F0000 (1.0.0, 2016-7-14), seeback 0x60FF80 (1.0.0, 2016-7-14), T760i 0x620000 (1.0.0, 2016-7-14), data 0x63FF80 (1.0.0, 2016-7-14), defaultdb 0x690000 (1.0.0, 2016-12-8), userdb 0x6AFF80 (1.0.0, 2020-7-28)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T760i/firmware/Ferguson_T760i_V1.4B8_28072020.zip",
+    "site": "ferguson-digital.eu",
+    "author": "Ferguson",
+    "date": "2020-07-28",
+    "login": false,
+    "note": "Ferguson's official download area (https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T760i%2Ffirmware): Ferguson_T760i_V1.4B8_28072020.zip (3.41 MB) also holds upgrade guides in EN / DE / PL; only the .abs image is kept here; downloaded on 2026-10-10"
+  },
+  "simulator": {
+    "boots": null,
+    "application": null,
+    "display": null,
+    "panelText": null,
+    "note": "Not run yet (a family chips/ does not model; it would be treated as the default M3801)."
+  },
+  "desc": [
+    "Ferguson Ariva T760i firmware V1.4B8, the manufacturer's USB update image from Ferguson's download area (Ferguson_T760i_V1.4B8_28072020.zip).",
+    "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- HATB1 0x000000 (66019-01047, 2020-7-28), HDCPKey 0x02FE00 (1.0.0, 2016-7-14), maincode 0x030000 (V1.4B8, 2020-7-28), seecode 0x480000 (V1.4B8, 2020-7-28), radioback 0x5F0000 (1.0.0, 2016-7-14), seeback 0x60FF80 (1.0.0, 2016-7-14), T760i 0x620000 (1.0.0, 2016-7-14), data 0x63FF80 (1.0.0, 2016-7-14), defaultdb 0x690000 (1.0.0, 2016-12-8), userdb 0x6AFF80 (1.0.0, 2020-7-28); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 17.15.0@SDK4.0ia.17.15_20171115; Libcore version 1.1.5a@SDK_20111126.",
+    "Like the T750i it has a \"seecode\" chunk (the SEE co-processor's code, Libcore 1.1.5a@SDK_20111126); the maincode's Libcore is 17.15.0@SDK4.0ia.17.15_20171115.  The chip is not an M3821: the C3505 is a later ALi generation (a DVB-S2 SoC; here the external AltoBeam ATBM7812 receives DVB-T2), so the simulator has no family for it yet.",
+    "Not run in the simulator yet."
+  ]
+}

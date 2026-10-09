@@ -1,0 +1,46 @@
+{
+  "file": "THT501-V1.1.1_20120428.abs",
+  "device": {
+    "brand": "Thomson",
+    "model": "THT501",
+    "type": "DVB-T HD receiver with USB recording (made for Thomson by Strong)",
+    "board": null,
+    "soc": "ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader \"DVBT---0.1.0\" of 2011-08-03 and HDCPKey \"Demo s3602\")",
+    "family": "M36xx (not modelled)",
+    "demod": "ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.1.1 (maincode \"501\" 2012-4-28)",
+    "date": "2012-04-28",
+    "size": 2097152,
+    "sha1": "54b0cd31938362427ba142e13b4a26abc35c66be",
+    "layout": "bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-4-28), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-28)"
+  },
+  "source": {
+    "url": "https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v111.rar",
+    "site": "gutek.com.pl",
+    "author": "Thomson (Strong), mirrored by Gutek",
+    "date": "2026-10-10",
+    "login": false,
+    "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, \"Thomson THT501\"), the archive thomson_tht501_v111.rar; downloaded on 2026-10-10"
+  },
+  "simulator": {
+    "boots": null,
+    "application": null,
+    "display": null,
+    "panelText": null,
+    "note": "Not run yet (a family chips/ does not model; it would be treated as the default M3801)."
+  },
+  "desc": [
+    "Thomson THT501 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v111.rar, with a Polish USB update guide and the release notes from V1.1.1 on).",
+    "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-4-28), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-28); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 6.4.f@SDK4.0ba.6.4f_20120131; SDK6.4-Mico1.2-Thomson1.1.1.",
+    "The front-panel driver is \"PAN_HWSCAN_0\" (LEDs / digits scanned straight from the SoC's GPIO).",
+    "Release notes (THT501_Release_notes_PL.txt, Polish), V1.1.1 of 2012-04-28: HDMI resolution change fixed; recordings named after the event, manual renaming fixed, a message when REC is pressed without a USB device; .srt subtitle size; a progress bar in the info banner; HDMI output 720p by default; volume steps; LCN on for Poland; signal bar; Polish / German / Czech OSD fixes; channel sort / edit with a PIN; first / second audio selection; auto scan for Poland; time zones follow the language.",
+    "Not run in the simulator yet."
+  ]
+}

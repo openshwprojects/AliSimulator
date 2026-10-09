@@ -1,0 +1,48 @@
+{
+  "file": "Ferguson_T750i_V1.20B2_18092019.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva T750i",
+    "type": "DVB-T2 HD receiver with Ethernet and web services",
+    "board": "the bootloader chunk's version reads \"66019-01047\" (the T650i's is \"63004-01047\")",
+    "soc": "ALi M3821 family (the maincode's demodulator drivers are NIM_S3821_0 / NIM_S3821_T2_*: the M3821's own DVB-T2 COFDM)",
+    "family": "M3821 (not detected: chips.detect looks for \"M3821\" in the bootloader chunk's version)",
+    "demod": "internal S3821 (NIM_S3821_0, DVB-T / DVB-T2)",
+    "tuner": "MaxLinear MxL603 (the maincode's tuner driver names it)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)"
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.20B2 (maincode \"V1.20B2\" 20190918-180158)",
+    "date": "2019-09-18",
+    "size": 8388608,
+    "sha1": "64fcaaf412d3c77ebbaa4fb8d66887713a77831c",
+    "layout": "HAT24 0x000000 (66019-01047, 20150930-172959), HDCPKey 0x01FE00 (1.0.0, 20170502-094524), OTAloader 0x020000 (V1.20B2, 20151112-203754), ota_see 0x0DEE00 (V1.20B2, 20151020-173032), OTAparam 0x10EE00 (1.0.0, 20190918-180159), MemCfg 0x10F000 (00000001, 20190918-180158), maincode 0x110000 (V1.20B2, 20190918-180158), seecode 0x560000 (V1.20B2, 20190918-180158), radioback 0x6D0000 (1.0.0, 20150923-151837), seeback 0x6EFF80 (1.0.0, 20150923-151837), T750i 0x700000 (1.0.0, 20150923-151837), data 0x71FF80 (1.0.0, 20150923-151836), defaultdb 0x770000 (1.0.0, 20150923-151837), userdb 0x78FF80 (1.0.0, 20190918-180159)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T750i/firmware/T750i_20190918_V1.20B2.zip",
+    "site": "ferguson-digital.eu",
+    "author": "Ferguson",
+    "date": "2019-09-18",
+    "login": false,
+    "note": "Ferguson's official download area (https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T750i%2Ffirmware): T750i_20190918_V1.20B2.zip (4.01 MB) also holds nothing else; only the .abs image is kept here; downloaded on 2026-10-10"
+  },
+  "simulator": {
+    "boots": null,
+    "application": null,
+    "display": null,
+    "panelText": null,
+    "note": "Not run yet (the M3821 family, but chips.detect would pick the M3801: its bootloader chunk does not say \"M3821\")."
+  },
+  "desc": [
+    "Ferguson Ariva T750i firmware V1.20B2, the manufacturer's USB update image from Ferguson's download area (T750i_20190918_V1.20B2.zip).",
+    "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- HAT24 0x000000 (66019-01047, 20150930-172959), HDCPKey 0x01FE00 (1.0.0, 20170502-094524), OTAloader 0x020000 (V1.20B2, 20151112-203754), ota_see 0x0DEE00 (V1.20B2, 20151020-173032), OTAparam 0x10EE00 (1.0.0, 20190918-180159), MemCfg 0x10F000 (00000001, 20190918-180158), maincode 0x110000 (V1.20B2, 20190918-180158), seecode 0x560000 (V1.20B2, 20190918-180158), radioback 0x6D0000 (1.0.0, 20150923-151837), seeback 0x6EFF80 (1.0.0, 20150923-151837), T750i 0x700000 (1.0.0, 20150923-151837), data 0x71FF80 (1.0.0, 20150923-151836), defaultdb 0x770000 (1.0.0, 20150923-151837), userdb 0x78FF80 (1.0.0, 20190918-180159); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 13.6.0@SDK4.0ga.13.6_20141202; Libcore version 1.1.5a@SDK_20111126.",
+    "The image carries a second CPU's code: \"seecode\" (V1.20B2, the SEE -- ALi's secure co-processor -- with its own Libcore 1.1.5a@SDK_20111126), and the image has an OTA loader with its own SEE part (\"OTAloader\" / \"ota_see\", Libcore 13.6.0@SDK4.0ga.13.6_20141202), \"MemCfg\" and a \"T750i\" chunk (the boot picture).  The R265 Lite's M3822P images have no SEE chunk, so this is the first M3821-family image that needs the SEE CPU's mailbox (or a stand-in for it).",
+    "The front panel is an FD650K (\"PAN_FD650K\", as on the T650i); its GPIO pins are not known yet.",
+    "Not run in the simulator yet."
+  ]
+}

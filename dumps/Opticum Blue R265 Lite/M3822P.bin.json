@@ -25,9 +25,9 @@
     "url": "https://github.com/openshwprojects/FlashDumps/tree/main/Sat/Opticum%20Blue%20R265%20Lite",
     "site": "github.com/openshwprojects/FlashDumps",
     "author": "openshwprojects",
-    "date": null,
+    "date": "2024-08-30",
     "login": false,
-    "note": "The file name is the SoC's marking; added here on 2026-10-09"
+    "note": "The file name is the SoC's marking; committed to FlashDumps on 2024-08-30 (\"Create M3822P.bin\", 23b0fdc9), added here on 2026-10-09"
   },
   "simulator": {
     "boots": true,
