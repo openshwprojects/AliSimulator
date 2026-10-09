@@ -1,6 +1,7 @@
 """
 Unit test (fast): verifies integrity of the saved expected screen
-(tests/expected/dump_maciej_screen.png) and tests the self-test image comparison logic.
+(tests/expected/dump_maciej_screen.png) and the screen regressions' image
+comparison (screen_regression.compare).
 """
 import os
 import sys
@@ -11,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 import report_artifacts
-import run_dump_maciej_capture_screen as capture_mod
+import screen_regression
 
 EXPECTED_SHA256 = "94b48dc3e8a01a79569a681dc8bc3dab897f36c36d0e66d13bfcdbe6e69d5702"
 EXPECTED_SHAPE = (720, 1280, 3)
@@ -27,7 +28,7 @@ def check(cond, msg):
 
 def main():
     print("=== Unit test: dump_maciej expected screen integrity ===")
-    expected_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expected", "dump_maciej_screen.png")
+    expected_path = os.path.join(screen_regression.EXPECTED_DIR, "dump_maciej_screen.png")
 
     check(os.path.exists(expected_path), f"expected screen file exists ({os.path.basename(expected_path)})")
     if not os.path.exists(expected_path):
@@ -44,25 +45,25 @@ def main():
     check(colours >= 16, f"image contains rich UI elements ({colours} unique colours)")
 
     # Test image comparison logic
-    diff_count, pct, max_diff, _ = capture_mod.compare_images(img, img)
-    check(diff_count == 0 and pct == 0.0 and max_diff == 0, "compare_images on identical image returns 0 diff")
+    diff_count, pct, max_diff, _ = screen_regression.compare(img, img)
+    check(diff_count == 0 and pct == 0.0 and max_diff == 0, "compare on identical image returns 0 diff")
 
     # Test mismatch detection
     mutated = img.copy()
     mutated[100, 100] = (255 - mutated[100, 100, 0], 0, 0)
-    diff_count, pct, max_diff, _ = capture_mod.compare_images(img, mutated)
-    check(diff_count == 1 and max_diff > 0, f"compare_images detects pixel mutations (diff: {diff_count})")
+    diff_count, pct, max_diff, _ = screen_regression.compare(img, mutated)
+    check(diff_count == 1 and max_diff > 0, f"compare detects pixel mutations (diff: {diff_count})")
 
     try:
-        capture_mod.compare_images(img, img[:100, :100])
-        check(False, "compare_images on mismatched shape should raise ValueError")
+        screen_regression.compare(img, img[:100, :100])
+        check(False, "compare on mismatched shape should raise ValueError")
     except ValueError:
-        check(True, "compare_images rejects mismatched shape with ValueError")
+        check(True, "compare rejects mismatched shape with ValueError")
 
     if fails:
         print(f"\n[FAIL] {len(fails)} check(s) failed")
         sys.exit(1)
-    print("\n[PASS] expected screen reference and self-test comparison logic verified")
+    print("\n[PASS] expected screen reference and the screen comparison verified")
     sys.exit(0)
 
 

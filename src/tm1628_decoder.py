@@ -33,25 +33,22 @@ get_display_text() / .digits present the digits in the TM1650 decoder's order
 while its application starts and "noCH" with no channels; RAM 1 and 11 (grid
 1 SEG14, grid 6 SEG9) are indicator LEDs.
 """
-from tm1650_decoder import TM1650Decoder
+from tm1650_decoder import PanelDecoder
 
 
-class TM1628Decoder:
+class TM1628Decoder(PanelDecoder):
+    TAG = '[TM1628]'
     RAM_SIZE = 14
     KEY_BYTES = 5
 
-    SEG_TO_CHAR = TM1650Decoder.SEG_TO_CHAR
-
-    STANDARD_SEG_MAP = (0, 1, 2, 3, 4, 5, 6, 7)      # bit of a, b, c, d, e, f, g, DP in a RAM byte
-
     def __init__(self, clk_gpio=31, dio_gpio=9, stb_gpio=11, digit_addrs=(0, 2, 4, 6),
-                 seg_map=STANDARD_SEG_MAP, log_handler=None, on_frame=None):
-        self.clk_offset, self.clk_bit = TM1650Decoder._gpio_to_offset_bit(clk_gpio)
-        self.dio_offset, self.dio_bit = TM1650Decoder._gpio_to_offset_bit(dio_gpio)
-        self.stb_offset, self.stb_bit = TM1650Decoder._gpio_to_offset_bit(stb_gpio)
+                 seg_map=PanelDecoder.STANDARD_SEG_MAP, log_handler=None, on_frame=None):
+        super().__init__(log_handler)
+        self.clk_offset, self.clk_bit = self._gpio_to_offset_bit(clk_gpio)
+        self.dio_offset, self.dio_bit = self._gpio_to_offset_bit(dio_gpio)
+        self.stb_offset, self.stb_bit = self._gpio_to_offset_bit(stb_gpio)
         self.digit_addrs = tuple(digit_addrs)
         self.seg_map = tuple(seg_map)
-        self.log_handler = log_handler
         self.on_frame = on_frame            # on_frame(list of bytes) for every completed frame
 
         # Bus state
@@ -80,40 +77,17 @@ class TM1628Decoder:
         self.key_reads_answered = 0
 
         # Stats
-        self.gpio_event_count = 0
         self.frame_count = 0
         self.key_read_count = 0
         self._frame_serial = 0
-        self._offsets_seen = set()
-        self._prev_reg_values = {}
-        self._bit_toggle_counts = {}
-        self.dump_enabled = True
-
-    def log(self, msg):
-        if not self.dump_enabled and not msg.startswith('[TM1628]'):
-            return
-        if self.log_handler:
-            self.log_handler(msg)
-        else:
-            print(msg)
 
     # ---- the CPU side: GPIO DO writes ----------------------------------------
     def on_gpio_write(self, address, size, value):
         """Called for every GPIO DO register write (any bank)."""
         offset = address & 0xFFF
-        prev = self._prev_reg_values.get(offset, 0)
-        if value == prev:
+        changed = self._gpio_changed(offset, value)
+        if not changed:
             return
-        changed = value ^ prev
-        self._prev_reg_values[offset] = value
-        if offset not in self._offsets_seen:
-            self._offsets_seen.add(offset)
-            self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
-        for bit in range(32):
-            if changed & (1 << bit):
-                key = (offset, bit)
-                self._bit_toggle_counts[key] = self._bit_toggle_counts.get(key, 0) + 1
-        self.gpio_event_count += 1
 
         # STB edges frame the command; CLK rising edges clock DIO (LSB first)
         if offset == self.stb_offset and changed & (1 << self.stb_bit):
@@ -222,15 +196,7 @@ class TM1628Decoder:
         return di_value
 
     # ---- what the display shows ------------------------------------------------
-    def _segments(self, byte):
-        """A RAM byte in the standard layout (bit 0..6 = a..g, bit 7 = DP)."""
-        return sum(((byte >> src) & 1) << seg for seg, src in enumerate(self.seg_map))
-
     @property
     def digits(self):
         """Segment bytes of the 4 digits (RAM bytes digit_addrs), standard layout."""
         return [self._segments(self.ram[a]) if a < self.RAM_SIZE else 0 for a in self.digit_addrs]
-
-    def get_display_text(self):
-        """The 4 digits as characters (unknown segment patterns show as '?')."""
-        return ''.join(self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits)

@@ -70,6 +70,28 @@ def make_bp_hook(sim, ignore_bp_addr_holder):
     return hook_breakpoints
 
 
+def run_to(sim, addr):
+    """Run to addr (stop_instr), reporting the progress every 10000
+    instructions as the GUI's log would; False if it was not reached."""
+    print(f"  Running to 0x{addr:08X}...")
+    sim.stop_instr = addr
+    original_log = sim.log_callback
+
+    def progress_log(msg):
+        if sim.instruction_count % 10000 == 0 and sim.instruction_count > 0:
+            print(f"    ... {sim.instruction_count} instructions, PC=0x{sim.mu.reg_read(UC_MIPS_REG_PC):08X}")
+    sim.log_callback = progress_log
+    sim.run(max_instructions=500000)
+    sim.log_callback = original_log
+    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
+    if pc != addr:
+        print(f"  {RED}FAIL: Could not reach 0x{addr:08X}, stopped at 0x{pc:08X} after {sim.instruction_count} instrs{RESET}")
+        return False
+    print(f"  Reached 0x{pc:08X} after {sim.instruction_count} instructions")
+    sim.stop_instr = None
+    return True
+
+
 def test_step_over_breakpoint_at_lui():
     """
     Test the exact scenario from the bug report:
@@ -89,27 +111,8 @@ def test_step_over_breakpoint_at_lui():
     
     # Step 1: Run to RUN_TO_ADDR (a few instructions before BP)
     # Use stop_instr which is handled internally by sim.run()
-    print(f"  Running to 0x{RUN_TO_ADDR:08X}...")
-    sim.stop_instr = RUN_TO_ADDR
-
-    # Add progress callback
-    original_log = sim.log_callback
-    def progress_log(msg):
-        if sim.instruction_count % 10000 == 0 and sim.instruction_count > 0:
-            pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-            print(f"    ... {sim.instruction_count} instructions, PC=0x{pc:08X}")
-    sim.log_callback = progress_log
-
-    sim.run(max_instructions=500000)
-
-    sim.log_callback = original_log
-    
-    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    if pc != RUN_TO_ADDR:
-        print(f"  {RED}FAIL: Could not reach 0x{RUN_TO_ADDR:08X}, stopped at 0x{pc:08X} after {sim.instruction_count} instrs{RESET}")
+    if not run_to(sim, RUN_TO_ADDR):
         return False
-    print(f"  Reached 0x{pc:08X} after {sim.instruction_count} instructions")
-    sim.stop_instr = None
     
     # Step 2: Add breakpoint at BP_ADDR
     print(f"  Adding breakpoint at 0x{BP_ADDR:08X}...")
@@ -183,32 +186,14 @@ def test_step_without_fix():
     sim.mu.hook_add(UC_HOOK_CODE, buggy_hook)
     
     # Run to the BP address
-    print(f"  Running to 0x{BP_ADDR:08X}...")
-    sim.stop_instr = BP_ADDR
-
-    original_log = sim.log_callback
-    def progress_log(msg):
-        if sim.instruction_count % 10000 == 0 and sim.instruction_count > 0:
-            pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-            print(f"    ... {sim.instruction_count} instructions, PC=0x{pc:08X}")
-    sim.log_callback = progress_log
-
-    sim.run(max_instructions=500000)
-
-    sim.log_callback = original_log
-    
-    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    if pc != BP_ADDR:
-        print(f"  {RED}FAIL: Could not reach 0x{BP_ADDR:08X}, stopped at 0x{pc:08X}{RESET}")
+    if not run_to(sim, BP_ADDR):
         return False
-    print(f"  Reached 0x{pc:08X} after {sim.instruction_count} instructions")
-    sim.stop_instr = None
     
     # Add breakpoint
     sim.addBreakpoint(BP_ADDR)
     
     # Try to step - with the buggy hook, emu_start will be stopped immediately
-    old_pc = pc
+    old_pc = sim.mu.reg_read(UC_MIPS_REG_PC)
     try:
         sim.step()
     except:
@@ -238,26 +223,8 @@ def test_run_resumes_from_breakpoint():
     sim.loadFile("dump.bin")
     
     # Run to BP_ADDR
-    print(f"  Running to 0x{BP_ADDR:08X}...")
-    sim.stop_instr = BP_ADDR
-
-    original_log = sim.log_callback
-    def progress_log(msg):
-        if sim.instruction_count % 10000 == 0 and sim.instruction_count > 0:
-            pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-            print(f"    ... {sim.instruction_count} instructions, PC=0x{pc:08X}")
-    sim.log_callback = progress_log
-
-    sim.run(max_instructions=500000)
-
-    sim.log_callback = original_log
-    
-    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    if pc != BP_ADDR:
-        print(f"  {RED}FAIL: Could not reach 0x{BP_ADDR:08X}, stopped at 0x{pc:08X}{RESET}")
+    if not run_to(sim, BP_ADDR):
         return False
-    print(f"  Reached 0x{pc:08X} after {sim.instruction_count} instructions")
-    sim.stop_instr = None
     
     # Add breakpoint at current PC
     sim.addBreakpoint(BP_ADDR)

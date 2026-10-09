@@ -64,6 +64,19 @@ PANELS = [
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 
+# 7-segment geometry of one digit for drawing a display (tv_gui.py's canvas,
+# report.py's SVG): bit 0..6 = a (top), b, c, d (bottom), e, f, g (middle) as
+# polygons in a 26 x 48 box; bit 7 = DP, a dot at (27, 43).
+SEG_POLYS = {
+    0: [(3, 0), (19, 0), (17, 3), (5, 3)],
+    1: [(20, 1), (23, 4), (23, 18), (20, 21), (18, 18), (18, 4)],
+    2: [(20, 23), (23, 26), (23, 40), (20, 43), (18, 40), (18, 26)],
+    3: [(3, 44), (19, 44), (17, 41), (5, 41)],
+    4: [(0, 23), (3, 26), (3, 40), (0, 43), (-2, 40), (-2, 26)],
+    5: [(0, 1), (3, 4), (3, 18), (0, 21), (-2, 18), (-2, 4)],
+    6: [(3, 22), (19, 22), (17, 24), (5, 24), (3, 22), (5, 20), (17, 20), (19, 22)],
+}
+
 
 def panel_spec(dump):
     """The panel spec of a dump (file name or path)."""

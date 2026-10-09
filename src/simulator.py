@@ -14,6 +14,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
 from mips16_decoder import MIPS16Decoder
+from tm1650_decoder import GPIO_DO_OFFSETS, PanelDecoder
 
 class ISAMode(Enum):
     """ISA mode enumeration"""
@@ -700,19 +701,9 @@ class AliMipsSimulator:
         """
         self.gpio_callback = handler
         if sda_gpio is not None:
-            # Map gpio number to DI offset and bit mask
-            if sda_gpio < 32:
-                self._i2c_sda_di_offset = 0x050
-            elif sda_gpio < 64:
-                self._i2c_sda_di_offset = 0x0D0
-                sda_gpio -= 32
-            elif sda_gpio < 96:
-                self._i2c_sda_di_offset = 0x0E4
-                sda_gpio -= 64
-            else:
-                self._i2c_sda_di_offset = 0x0F0
-                sda_gpio -= 96
-            self._i2c_sda_mask = 1 << sda_gpio
+            do_offset, bit = PanelDecoder._gpio_to_offset_bit(sda_gpio)
+            self._i2c_sda_di_offset = do_offset - 4          # the bank's DI register
+            self._i2c_sda_mask = 1 << bit
 
     def setI2CDump(self, enabled):
         """Enable or disable I2C/GPIO trace logging. TM1650 results always shown."""
@@ -1242,24 +1233,12 @@ class AliMipsSimulator:
                 # bit0=1 means no interrupt pending
                 uc.mem_write(address, bytes([0x01]))
 
-    # GPIO DO register offsets for I2C/panel decoding
-    _GPIO_DO_OFFSETS = {0x054, 0x0D4, 0x0E8, 0x0F4}
-
-    # GPIO DI (data-in) → DO (data-out) loopback mapping
-    # When firmware reads DI, return the DO value (pin loopback)
-    _GPIO_DI_TO_DO = {
-        0x050: 0x054,  # GPIO bank 0
-        0x0D0: 0x0D4,  # GPIO bank 1
-        0x0E4: 0x0E8,  # GPIO bank 2
-        0x0F0: 0x0F4,  # GPIO bank 3
-    }
-    # Corresponding DIR register offsets
-    _GPIO_DI_TO_DIR = {
-        0x050: 0x058,  # GPIO bank 0
-        0x0D0: 0x0D8,  # GPIO bank 1
-        0x0E4: 0x0EC,  # GPIO bank 2
-        0x0F0: 0x0F8,  # GPIO bank 3
-    }
+    # The GPIO banks (tm1650_decoder.GPIO_DO_OFFSETS gives each bank's DO register; its DI register
+    # is DO - 4, its DIR register DO + 4): a DO write goes to the panel decoder, a DI read returns
+    # the DO value (pin loopback) for the output bits
+    _GPIO_DO_OFFSETS = set(GPIO_DO_OFFSETS)
+    _GPIO_DI_TO_DO = {do - 4: do for do in GPIO_DO_OFFSETS}
+    _GPIO_DI_TO_DIR = {do - 4: do + 4 for do in GPIO_DO_OFFSETS}
 
     def _notify_gpio(self, address, size, value):
         """Notify GPIO callback if this write targets a GPIO DO register."""
@@ -2843,15 +2822,19 @@ class AliMipsSimulator:
             self._stop_reason = 'deadline'
             self._orig_emu_stop()
 
+    def _mips16_bytes(self, pc):
+        """The bytes of the MIPS16 instruction at pc: 2, or 4 for JAL / JALX and EXTENDed ones."""
+        insn_bytes = self.mu.mem_read(pc, 2)
+        if ((int.from_bytes(insn_bytes, 'little') >> 11) & 0x1F) in (0x1E, 0x03):
+            insn_bytes = self.mu.mem_read(pc, 4)
+        return bytes(insn_bytes)
+
     def _decode_for_display(self, pc, m16):
         """(mnemonic, operands, size) of the instruction at pc in the given mode."""
         try:
             if m16:
-                insn_bytes = self.mu.mem_read(pc, 2)
-                op = (int.from_bytes(insn_bytes, 'little') >> 11) & 0x1F
-                if op in (0x1E, 0x03):          # EXTEND or JAL/JALX
-                    insn_bytes = self.mu.mem_read(pc, 4)
-                mnemonic, operands = MIPS16Decoder.decode(bytes(insn_bytes), pc)
+                insn_bytes = self._mips16_bytes(pc)
+                mnemonic, operands = MIPS16Decoder.decode(insn_bytes, pc)
                 return mnemonic, operands, len(insn_bytes)
             insn_bytes = self.mu.mem_read(pc, 4)
             disasm = list(self.md.disasm(bytes(insn_bytes), pc))
@@ -3344,6 +3327,18 @@ class AliMipsSimulator:
         except Exception as e:
             self.log(f"Error skipping instruction: {e}")
 
+    def _instr_row(self, addr, code, mnemonic, operands, pc, breakpoints):
+        """One entry of get_instructions_around_pc()."""
+        return {'address': addr, 'bytes': ' '.join(f'{b:02x}' for b in code), 'mnemonic': mnemonic,
+                'operands': operands, 'loop_count': self.visit_counts.get(addr, 0),
+                'is_current': addr == pc, 'is_breakpoint': addr in breakpoints}
+
+    def _mips16_row(self, addr, pc, breakpoints):
+        """(entry, size) of the MIPS16 instruction at addr for get_instructions_around_pc()."""
+        code = self._mips16_bytes(addr)
+        mnemonic, operands = MIPS16Decoder.decode(code, addr)
+        return self._instr_row(addr, code, mnemonic, operands, pc, breakpoints), len(code)
+
     def get_instructions_around_pc(self, pc, before=10, after=10, forced_mips16_addresses=None, breakpoints=None):
         if not self.mu: return []
         instructions = []
@@ -3426,34 +3421,8 @@ class AliMipsSimulator:
                         in_mips16_region = True
 
                     if is_mips16:
-                        # It's MIPS16! Decode it properly
-                        # Read first 2 bytes to check instruction type
-                        first_word = self.mu.mem_read(curr, 2)
-                        word1 = int.from_bytes(first_word, byteorder='little')
-                        major_op = (word1 >> 11) & 0x1F
-                        is_4byte = (major_op == 0x03 or major_op == 0x1E)  # JAL/JALX opcode or EXTEND
-                        
-                        # Read appropriate number of bytes
-                        if is_4byte:
-                            valid_bytes = self.mu.mem_read(curr, 4)
-                            instr_size = 4
-                        else:
-                            valid_bytes = first_word
-                            instr_size = 2
-                        
-                        # Decode MIPS16 instruction (with address for JAL target calculation)
-                        mnemonic, operands = MIPS16Decoder.decode(valid_bytes, curr)
-                        bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
-                        
-                        temp_instrs.append({
-                            'address': curr,
-                            'bytes': bytes_str,
-                            'mnemonic': mnemonic,
-                            'operands': operands,
-                            'loop_count': self.visit_counts.get(curr, 0),
-                            'is_current': (curr == pc),
-                            'is_breakpoint': (curr in breakpoints)
-                        })
+                        row, instr_size = self._mips16_row(curr, pc, breakpoints)
+                        temp_instrs.append(row)
                         curr += instr_size
                         if curr == pc: valid_sequence = True
                         if curr > pc and not valid_sequence: break
@@ -3470,49 +3439,16 @@ class AliMipsSimulator:
                     if not disasm:
                         # Fallback: treat as MIPS16 instruction
                         try:
-                            # Read first 2 bytes to check instruction type
-                            first_word = self.mu.mem_read(curr, 2)
-                            word1 = int.from_bytes(first_word, 'little')
-                            major_op = (word1 >> 11) & 0x1F
-                            is_4byte = (major_op == 0x03 or major_op == 0x1E)
-                            
-                            # Read appropriate number of bytes
-                            if is_4byte:
-                                valid_bytes = self.mu.mem_read(curr, 4)
-                                instr_size = 4
-                            else:
-                                valid_bytes = first_word
-                                instr_size = 2
-                            
-                            mnemonic, operands = MIPS16Decoder.decode(valid_bytes, curr)
-                            bytes_str = ' '.join(f'{b:02x}' for b in valid_bytes)
-                            
-                            temp_instrs.append({
-                                'address': curr,
-                                'bytes': bytes_str,
-                                'mnemonic': mnemonic,
-                                'operands': operands,
-                                'loop_count': self.visit_counts.get(curr, 0),
-                                'is_current': (curr == pc),
-                                'is_breakpoint': (curr in breakpoints)
-                            })
+                            row, instr_size = self._mips16_row(curr, pc, breakpoints)
+                            temp_instrs.append(row)
                             curr += instr_size
                         except:
                             curr += 4  # Skip if read fails
                         continue
                         
                     instr = disasm[0]
-                    
-                    item = {
-                        'address': curr,
-                        'bytes': ' '.join(f'{b:02x}' for b in instr.bytes),
-                        'mnemonic': instr.mnemonic,
-                        'operands': instr.op_str,
-                        'loop_count': self.visit_counts.get(curr, 0),
-                        'is_current': (curr == pc),
-                        'is_breakpoint': (curr in breakpoints)
-                    }
-                    temp_instrs.append(item)
+                    temp_instrs.append(self._instr_row(curr, instr.bytes, instr.mnemonic, instr.op_str,
+                                                       pc, breakpoints))
                     
                     if curr == pc:
                         valid_sequence = True
@@ -3547,32 +3483,8 @@ class AliMipsSimulator:
             curr = max(0, pc - 20)  # Show a bit before PC
             for i in range(25):  # Show ~50 bytes
                 try:
-                    # Read first 2 bytes to check instruction type
-                    first_word = self.mu.mem_read(curr, 2)
-                    word1 = int.from_bytes(first_word, byteorder='little')
-                    major_op = (word1 >> 11) & 0x1F
-                    is_4byte = (major_op == 0x03 or major_op == 0x1E)
-                    
-                    # Read appropriate number of bytes
-                    if is_4byte:
-                        code = self.mu.mem_read(curr, 4)
-                        instr_size = 4
-                    else:
-                        code = first_word
-                        instr_size = 2
-                    
-                    mnemonic, operands = MIPS16Decoder.decode(code, curr)
-                    bytes_str = ' '.join(f'{b:02x}' for b in code)
-                    
-                    best_instrs.append({
-                        'address': curr,
-                        'bytes': bytes_str,
-                        'mnemonic': mnemonic,
-                        'operands': operands,
-                        'loop_count': self.visit_counts.get(curr, 0),
-                        'is_current': (curr == pc),
-                        'is_breakpoint': (curr in breakpoints)
-                    })
+                    row, instr_size = self._mips16_row(curr, pc, breakpoints)
+                    best_instrs.append(row)
                     curr += instr_size
                 except:
                     curr += 2

@@ -52,7 +52,7 @@ import tkinter as tk
 
 import numpy as np
 
-from front_panel import make_panel
+from front_panel import SEG_POLYS, make_panel
 from simulator import AliMipsSimulator, flash_size_for
 
 # Front panel: the dump's LED-driver chip (front_panel.py: a TM1650 on I2C or
@@ -61,16 +61,7 @@ from simulator import AliMipsSimulator, flash_size_for
 # press each matrix position; dump_maciej's panel driver reacts to KI1/DIG4
 # (up / CH+) and KI2/DIG4 (down / CH-) only (every code was tried on its
 # wizard).  A board without the chip shows a blank display and ignores them.
-# 7-segment layout: bit0..6 = segments a (top), b, c, d (bottom), e, f, g (middle), bit7 = DP
-SEG_POLYS = {
-    0: [(3, 0), (19, 0), (17, 3), (5, 3)],
-    1: [(20, 1), (23, 4), (23, 18), (20, 21), (18, 18), (18, 4)],
-    2: [(20, 23), (23, 26), (23, 40), (20, 43), (18, 40), (18, 26)],
-    3: [(3, 44), (19, 44), (17, 41), (5, 41)],
-    4: [(0, 23), (3, 26), (3, 40), (0, 43), (-2, 40), (-2, 26)],
-    5: [(0, 1), (3, 4), (3, 18), (0, 21), (-2, 18), (-2, 4)],
-    6: [(3, 22), (19, 22), (17, 24), (5, 24), (3, 22), (5, 20), (17, 20), (19, 22)],
-}
+# 7-segment layout: front_panel.SEG_POLYS (bit 0..6 = segments a..g, bit 7 = DP)
 SEG_ON, SEG_OFF = "#ff3b30", "#2a1210"
 
 # (label, key name, grid row, column) of the on-screen remote

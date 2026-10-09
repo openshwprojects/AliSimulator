@@ -10,6 +10,9 @@ class MIPS16Decoder:
                      't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7',
                      's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7',
                      't8', 't9', 'k0', 'k1', 'gp', 'sp', 's8', 'ra']
+
+    # EXTENDed register-relative loads and stores: op2 -> mnemonic (see decode())
+    EXT_LOAD_STORE = {0x13: "lw", 0x14: "lbu", 0x15: "lhu", 0x18: "sb", 0x19: "sh", 0x1B: "sw"}
     
     @staticmethod
     def reg_3bit(idx):
@@ -77,89 +80,16 @@ class MIPS16Decoder:
                  insn = word2
                  op2 = (insn >> 11) & 0x1F
                  
-                 # LBU (0x14) extended
-                 if op2 == 0x14:
-                     # LBU format: 10100 ry rx offset(5)
-                     # Full Offset = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     
-                     # Sign extend 16-bit offset
+                 # Extended register-relative loads / stores (op2 0x13 LW, 0x14 LBU, 0x15 LHU,
+                 # 0x18 SB, 0x19 SH, 0x1B SW): ry, offset(rx) with the 16-bit signed offset
+                 # reassembled from the EXTEND prefix (bits 15:11, 10:5) and the 5-bit immediate
+                 if op2 in MIPS16Decoder.EXT_LOAD_STORE:
+                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | (insn & 0x1F)
                      if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                         
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     
-                     # MIPS16 LBU is ry, offset(rx)
-                     return ("lbu", f"{ry},{hex(full_imm)}({rx})")
-                     # Note: hex() handles negative sign correctly (-0x...)
-
-                 # LHU (0x15) extended - Load Halfword Unsigned
-                 if op2 == 0x15:
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     return ("lhu", f"{ry},{hex(full_imm)}({rx})")
-
-                 # LW (0x13) extended
-                 if op2 == 0x13:
-                     # LW format: 10011 ry rx offset(5)
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     
-                     if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                         
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     
-                     return ("lw", f"{ry},{hex(full_imm)}({rx})")
-                 
-                 # SB (0x18) extended - Store Byte
-                 if op2 == 0x18:
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     return ("sb", f"{ry},{hex(full_imm)}({rx})")
-
-                 # SH (0x19) extended - Store Halfword
-                 if op2 == 0x19:
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     return ("sh", f"{ry},{hex(full_imm)}({rx})")
-
-                 # SW (0x1B) extended - Store Word (reg-rel)
-                 if op2 == 0x1B:
-                     imm5 = insn & 0x1F
-                     full_imm = (ext_15_11 << 11) | (ext_10_5 << 5) | imm5
-                     if full_imm & 0x8000:
-                         full_imm -= 0x10000
-                     rx_code = (insn >> 8) & 0x7
-                     ry_code = (insn >> 5) & 0x7
-                     rx = MIPS16Decoder.reg_3bit(rx_code)
-                     ry = MIPS16Decoder.reg_3bit(ry_code)
-                     return ("sw", f"{ry},{hex(full_imm)}({rx})")
+                         full_imm -= 0x10000              # hex() keeps the sign (-0x...)
+                     rx = MIPS16Decoder.reg_3bit((insn >> 8) & 0x7)
+                     ry = MIPS16Decoder.reg_3bit((insn >> 5) & 0x7)
+                     return (MIPS16Decoder.EXT_LOAD_STORE[op2], f"{ry},{hex(full_imm)}({rx})")
                  
                  # I8 (0x0C) extended - SAVE/RESTORE with extended encoding
                  if op2 == 0x0C:

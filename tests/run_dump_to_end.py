@@ -87,12 +87,7 @@ def main():
         print(f"\n=== GPIO Bit Toggle Ranking (top 15) ===")
         sorted_bits = sorted(tm1650._bit_toggle_counts.items(), key=lambda x: -x[1])
         for (off, bit), count in sorted_bits[:15]:
-            if off == 0x054: gpio = bit
-            elif off == 0x0D4: gpio = 32 + bit
-            elif off == 0x0E8: gpio = 64 + bit
-            elif off == 0x0F4: gpio = 96 + bit
-            else: gpio = -1
-            print(f"  GPIO#{gpio:3d} (reg 0x{off:03X} bit {bit:2d}): {count:5d} toggles")
+            print(f"  GPIO#{tm1650.gpio_number(off, bit):3d} (reg 0x{off:03X} bit {bit:2d}): {count:5d} toggles")
 
 if __name__ == "__main__":
     main()

@@ -22,7 +22,8 @@ their file names.
   a dump by its file name and `simulator.resolve_dump()` finds it in here.
 * `tests/` -- the self-tests: `test_*.py` (fast, no firmware or seconds of
   it) and `run_dump_*.py` (the firmware runs), with their helpers
-  (`screen_regression.py`, `report_artifacts.py`, `report.py`). Run one
+  (`screen_regression.py`, `uart_regression.py`, `app_reach_check.py`,
+  `report_artifacts.py`, `report.py`). Run one
   from anywhere (`python tests/run_dump_globo_capture_screen.py`), or all with
   `python run_all_tests.py` at the root.
 * `tests/expected/` -- the expected screens of the screen regressions

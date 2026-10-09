@@ -20,19 +20,9 @@ import html
 import re
 from datetime import datetime, timezone
 
-TITLE = "AliSimulator · Self-Test Report"
+from front_panel import SEG_POLYS          # the 7-segment geometry, drawn here as SVG and by tv_gui.py
 
-# 7-segment geometry of one digit, as in tv_gui.py: bit 0..6 = a (top), b, c,
-# d (bottom), e, f, g (middle), bit 7 = DP.  Polygons in a 26 x 48 box.
-_SEG_POLYS = {
-    0: [(3, 0), (19, 0), (17, 3), (5, 3)],
-    1: [(20, 1), (23, 4), (23, 18), (20, 21), (18, 18), (18, 4)],
-    2: [(20, 23), (23, 26), (23, 40), (20, 43), (18, 40), (18, 26)],
-    3: [(3, 44), (19, 44), (17, 41), (5, 41)],
-    4: [(0, 23), (3, 26), (3, 40), (0, 43), (-2, 40), (-2, 26)],
-    5: [(0, 1), (3, 4), (3, 18), (0, 21), (-2, 18), (-2, 4)],
-    6: [(3, 22), (19, 22), (17, 24), (5, 24), (3, 22), (5, 20), (17, 20), (19, 22)],
-}
+TITLE = "AliSimulator · Self-Test Report"
 
 
 def _fmt_secs(s):
@@ -70,7 +60,7 @@ def panel_svg(digits, scale=1.0):
     parts = []
     for d, v in enumerate(list(digits)[:4]):
         ox = 10 + d * 34
-        for s, poly in _SEG_POLYS.items():
+        for s, poly in SEG_POLYS.items():
             pts = " ".join("%d,%d" % (ox + x, 6 + y) for x, y in poly)
             parts.append('<polygon points="%s" class="%s"/>' % (pts, "on" if (v >> s) & 1 else "off"))
         parts.append('<circle cx="%d" cy="%d" r="2.2" class="%s"/>'

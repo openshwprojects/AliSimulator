@@ -16,18 +16,17 @@ the bytes as written to registers 0x68..0x6E.
 """
 
 
-class TM1650Decoder:
-    # TM1650 register addresses
-    ADDR_DISPLAY_CTRL = 0x48
-    ADDR_DIG1 = 0x68
-    ADDR_DIG2 = 0x6A
-    ADDR_DIG3 = 0x6C
-    ADDR_DIG4 = 0x6E
-    # Key scan read command: 0x4F on FD650/HD2015-style chips, 0x49 on original TM1650.
-    # LSB=1 means I2C read; the data byte is driven by the display chip, not the CPU.
-    KEY_READ_ADDRS = (0x4F, 0x49)
+GPIO_DO_OFFSETS = (0x054, 0x0D4, 0x0E8, 0x0F4)    # the DO (data-out) register of GPIO bank 0..3 (32 pins
+                                                  # each); the bank's DI register is DO - 4, DIR is DO + 4
 
-    DIGIT_ADDRS = {0x68: 0, 0x6A: 1, 0x6C: 2, 0x6E: 3}
+
+class PanelDecoder:
+    """What the LED-driver decoders share: the GPIO pins as (DO register
+    offset, bit), the bookkeeping of the DO writes the simulator reports to
+    on_gpio_write(), the log with the chip's tag, and the 7-segment digits
+    (.digits of the subclass, standard layout: bit 0..6 = a..g, bit 7 = DP)
+    as text."""
+    TAG = ''                            # '[TM1650]': the messages still shown with dump_enabled off
 
     # 7-segment to character map (standard encoding, bit7=DP ignored)
     SEG_TO_CHAR = {
@@ -43,13 +42,85 @@ class TM1650Decoder:
 
     STANDARD_SEG_MAP = (0, 1, 2, 3, 4, 5, 6, 7)      # bit of a, b, c, d, e, f, g, DP in a digit byte
 
+    def __init__(self, log_handler=None):
+        self.log_handler = log_handler
+        # Stats
+        self.gpio_event_count = 0
+        self._offsets_seen = set()
+        self._prev_reg_values = {}
+        self._bit_toggle_counts = {}
+        self.dump_enabled = True
+
+    @staticmethod
+    def _gpio_to_offset_bit(gpio_num):
+        """GPIO pin number -> (DO register offset, bit position)."""
+        bank = min(gpio_num // 32, len(GPIO_DO_OFFSETS) - 1)
+        return GPIO_DO_OFFSETS[bank], gpio_num - 32 * bank
+
+    @staticmethod
+    def gpio_number(offset, bit):
+        """(DO register offset, bit position) -> GPIO pin number, -1 for another register."""
+        return GPIO_DO_OFFSETS.index(offset) * 32 + bit if offset in GPIO_DO_OFFSETS else -1
+
+    def log(self, msg):
+        if not self.dump_enabled and not msg.startswith(self.TAG):
+            return                      # dump off: only the chip's own messages
+        if self.log_handler:
+            self.log_handler(msg)
+        else:
+            print(msg)
+
+    def _gpio_changed(self, offset, value):
+        """Note a GPIO register write: the bits that changed (0: none), with
+        the toggles counted and the first one of every bit logged."""
+        prev = self._prev_reg_values.get(offset, 0)
+        changed = value ^ prev
+        if not changed:
+            return 0
+        self._prev_reg_values[offset] = value
+        if offset not in self._offsets_seen:
+            self._offsets_seen.add(offset)
+            self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
+        for bit in range(32):
+            if changed & (1 << bit):
+                key = (offset, bit)
+                self._bit_toggle_counts[key] = self._bit_toggle_counts.get(key, 0) + 1
+                if self._bit_toggle_counts[key] <= 1:
+                    self.log(f"[GPIO] off=0x{offset:03X} bit{bit} (GPIO#{self.gpio_number(offset, bit)}) -> "
+                             f"{(value >> bit) & 1} (toggle #{self._bit_toggle_counts[key]})")
+        self.gpio_event_count += 1
+        return changed
+
+    def _segments(self, byte):
+        """A digit byte in the standard layout (bit 0..6 = a..g, bit 7 = DP)."""
+        return sum(((byte >> src) & 1) << seg for seg, src in enumerate(self.seg_map))
+
+    def get_display_text(self):
+        """The 4 digits as characters (unknown segment patterns show as '?')."""
+        return ''.join(self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits)
+
+
+class TM1650Decoder(PanelDecoder):
+    TAG = '[TM1650]'
+    # TM1650 register addresses
+    ADDR_DISPLAY_CTRL = 0x48
+    ADDR_DIG1 = 0x68
+    ADDR_DIG2 = 0x6A
+    ADDR_DIG3 = 0x6C
+    ADDR_DIG4 = 0x6E
+    # Key scan read command: 0x4F on FD650/HD2015-style chips, 0x49 on original TM1650.
+    # LSB=1 means I2C read; the data byte is driven by the display chip, not the CPU.
+    KEY_READ_ADDRS = (0x4F, 0x49)
+
+    DIGIT_ADDRS = {0x68: 0, 0x6A: 1, 0x6C: 2, 0x6E: 3}
+
     def __init__(self, scl_gpio=61, sda_gpio=74, log_handler=None, on_transaction=None,
-                 digit_order=(0, 1, 2, 3), seg_map=STANDARD_SEG_MAP):
+                 digit_order=(0, 1, 2, 3), seg_map=PanelDecoder.STANDARD_SEG_MAP):
+        super().__init__(log_handler)
         self.digit_order = tuple(digit_order)
         self.seg_map = tuple(seg_map)
         self.scl_offset, self.scl_bit = self._gpio_to_offset_bit(scl_gpio)
         self.sda_offset, self.sda_bit = self._gpio_to_offset_bit(sda_gpio)
-        self.log_handler = log_handler
         self.on_transaction = on_transaction
 
         # I2C state
@@ -74,79 +145,16 @@ class TM1650Decoder:
         self._answer = 0x00
 
         # Stats
-        self.gpio_event_count = 0
         self.i2c_transaction_count = 0
         self.key_read_count = 0
         self._last_key_value = None
-        self._offsets_seen = set()
-        self._prev_reg_values = {}
-        self._bit_toggle_counts = {}
         self._i2c_trace_count = 0
-        self.dump_enabled = True
-
-
-    @staticmethod
-    def _gpio_to_offset_bit(gpio_num):
-        """Convert GPIO pin number to (DO register offset, bit position)."""
-        if gpio_num < 32:
-            return 0x054, gpio_num
-        elif gpio_num < 64:
-            return 0x0D4, gpio_num - 32
-        elif gpio_num < 96:
-            return 0x0E8, gpio_num - 64
-        else:
-            return 0x0F4, gpio_num - 96
-
-    def log(self, msg):
-        if not self.dump_enabled:
-            # When dump is disabled, only show [TM1650] results
-            if not msg.startswith('[TM1650]'):
-                return
-        if self.log_handler:
-            self.log_handler(msg)
-        else:
-            print(msg)
 
     def on_gpio_write(self, address, size, value):
         """Called when a GPIO register is written. Auto-detects I2C pins."""
         offset = address & 0xFFF
-
-        # Track previous values per register offset
-        prev = self._prev_reg_values.get(offset, 0)
-        if value == prev:
+        if not self._gpio_changed(offset, value):
             return
-
-        # Find which bits changed
-        changed_bits = value ^ prev
-        self._prev_reg_values[offset] = value
-
-        # Count toggles per (offset, bit) and log first occurrence of each offset
-        if offset not in self._offsets_seen:
-            self._offsets_seen.add(offset)
-            self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
-
-        for bit in range(32):
-            if changed_bits & (1 << bit):
-                key = (offset, bit)
-                self._bit_toggle_counts[key] = self._bit_toggle_counts.get(key, 0) + 1
-                # Calculate the actual GPIO pin number
-                if offset == 0x054:
-                    gpio_num = bit
-                elif offset == 0x0D4:
-                    gpio_num = 32 + bit
-                elif offset == 0x0E8:
-                    gpio_num = 64 + bit
-                elif offset == 0x0F4:
-                    gpio_num = 96 + bit
-                else:
-                    gpio_num = -1
-
-                # Log first transition of each bit for debugging
-                if self._bit_toggle_counts[key] <= 1:
-                    bval = (value >> bit) & 1
-                    self.log(f"[GPIO] off=0x{offset:03X} bit{bit} (GPIO#{gpio_num}) -> {bval} (toggle #{self._bit_toggle_counts[key]})")
-
-        self.gpio_event_count += 1
 
         # Also try I2C decode with current scl/sda config
         scl = self.prev_scl
@@ -364,17 +372,7 @@ class TM1650Decoder:
         state = "PRESSED" if pressed else "released"
         return f"0x{b:02X} {state} KI{ki}/DIG{dig}"
 
-    def _segments(self, byte):
-        """A digit byte in the standard layout (bit 0..6 = a..g, bit 7 = DP)."""
-        return sum(((byte >> src) & 1) << seg for seg, src in enumerate(self.seg_map))
-
     @property
     def digits(self):
         """Segment bytes of the 4 display positions, left to right, standard layout."""
         return [self._segments(self.raw[i]) for i in self.digit_order]
-
-    def get_display_text(self):
-        """Return current display as a 4-char string."""
-        return ''.join(
-            self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits
-        )
