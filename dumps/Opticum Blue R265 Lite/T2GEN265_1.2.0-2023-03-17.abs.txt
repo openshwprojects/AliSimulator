@@ -1,9 +1,10 @@
 T2GEN265_1.2.0-2023-03-17.abs
 
-The newer image of the same official update package as T2GEN265_1.1.5-2022-08-01.abs
-(see that note for the source).  Size 4194304 bytes, SHA-1
-fa1ebef2b65dd95dbdc44f7aa639fb29ad5023d1.  Same chunk chain; the maincode chunk is
-intact (version 00000121, 2023-3-17, CRC ok, 6.29 MB decompressed).
+The newer image of the same official update package as T2GEN265_1.1.5-2022-08-01.abs:
+Skymaster's update site for the Opticum Blue R265 Lite (fetched on 2026-10-09),
+  https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip
+Size 4194304 bytes, SHA-1 fa1ebef2b65dd95dbdc44f7aa639fb29ad5023d1.  Same chunk chain;
+the maincode chunk is intact (version 00000121, 2023-3-17, CRC ok, 6.29 MB decompressed).
 
 Its bootloader chunk still says "M3821b-0.1.0 2016-07-29" but is a different build: the
 "HEAD" record at 0x250 gives stage 1 0x19A0 bytes (0x1DFC in the 2016 build) and stage 2

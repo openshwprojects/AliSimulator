@@ -1,0 +1,11 @@
+Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN
+
+Source: not recorded.  Added to this repository on 2026-01-20 under dumps/other with the
+file name it came with, which says what it is: the SPI flash (GigaDevice GD25Q32B, 4 MB)
+of an Echosonic Mini ESR-250, a DVB-S2 satellite receiver on the ALi M3510A (board
+revision A3), read from a working unit ("OK").  Size 4194304 bytes, SHA-1
+33ce167f0070858b346e02089b7189c988e321bf.
+
+Layout: the ALi NCRC chunk chain, bootloader chunk at 0 (version "3510-r1362", 2015-02-02,
+next chunk at 0x06EE00).  Another chip than the M3801 / M3821 families the simulator models;
+no test runs it (README: "other chips").

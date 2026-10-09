@@ -1,0 +1,9 @@
+ali_sdk.bin
+
+Not a flash dump: a 39856-byte test program (bare MIPS32 code that starts by setting up CP0
+Status), the "ALi SDK hello world" of the tests, added on 2026-01-18 for the tests that need a
+tiny firmware of known behaviour: tests/test_ali_sdk_hello_world.py,
+test_ali_sdk_hello_world_breakpoint.py and test_cp0_timer_interrupt.py.  It prints
+"Booting...", "Main function", its stack and heap limits, a floating-point result,
+"chip id raw: 3811" and "Menu!" on the UART.  Its sources and the toolchain that built it are
+not in this repository.  SHA-1 924f7c13ca37a8408ee757ed5d4ccd8369b86e84.

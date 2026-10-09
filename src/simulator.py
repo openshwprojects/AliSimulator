@@ -1627,12 +1627,14 @@ class AliMipsSimulator:
         self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [{where}]")
         self._spi_resp_idx = 0
         self._spi_response = self._spi_command_response(cmd)
-        if cmd == 0x06:      # Write Enable
-            self._spi_wel = True
-            self._spi_status |= 0x02
-        elif cmd == 0x04:    # Write Disable
-            self._spi_wel = False
-            self._spi_status &= ~0x02
+        if cmd in (0x06, 0x04):     # Write Enable / Disable
+            self._spi_set_wel(cmd == 0x06)
+
+    def _spi_set_wel(self, on):
+        """The part's write-enable latch (status bit 1): set by WREN, cleared by
+        WRDI and by every command it enabled (WRSR, erase, page program)."""
+        self._spi_wel = on
+        self._spi_status = (self._spi_status | 0x02) if on else (self._spi_status & ~0x02)
 
     def _spi_command_response(self, cmd):
         """The bytes the part answers a command with (the ID and status reads);
@@ -1852,19 +1854,13 @@ class AliMipsSimulator:
         status is data[0]), an erase of the block at flash offset off (or of
         the chip), a page program / AAI of data at off."""
         cmd_name = self._SPI_CMD_NAMES.get(cmd, f"0x{cmd:02X}")
-        if cmd == 0x06:      # WREN — trigger
-            self._spi_wel = True
-            self._spi_status |= 0x02
-            self._spi_log(f"  EXEC {cmd_name}")
-        elif cmd == 0x04:    # WRDI — trigger
-            self._spi_wel = False
-            self._spi_status &= ~0x02
+        if cmd in (0x06, 0x04):     # WREN / WRDI — trigger
+            self._spi_set_wel(cmd == 0x06)
             self._spi_log(f"  EXEC {cmd_name}")
         elif cmd == 0x01:    # WRSR — write status register
             if self._spi_wel and data:
                 self._spi_status = data[0]
-                self._spi_wel = False
-                self._spi_status &= ~0x02  # Clear WEL after write
+                self._spi_set_wel(False)
                 self._spi_log(f"  EXEC {cmd_name} = 0x{data[0]:02X}")
         elif cmd in (0xC7, 0x60, 0xD8, 0x52, 0x20):   # erase
             if not self._spi_wel:
@@ -1876,8 +1872,7 @@ class AliMipsSimulator:
                 blk = {0xD8: 0x10000, 0x52: 0x8000, 0x20: 0x1000}[cmd]
                 self._flash_erase(off & ~(blk - 1), blk)
                 self._spi_log(f"  EXEC {cmd_name} @ flash[0x{off & ~(blk - 1):06X}]")
-            self._spi_wel = False
-            self._spi_status &= ~0x02
+            self._spi_set_wel(False)
         elif cmd in (0x02, 0x32, 0xAD):                  # page program (quad: 0x32) / AAI
             if not self._spi_wel:
                 self._spi_log(f"  EXEC {cmd_name} without WEL (applied anyway)")
@@ -1886,8 +1881,7 @@ class AliMipsSimulator:
             shown = f"0x{int.from_bytes(data, 'little'):0{2 * len(data)}X}" if len(data) <= 4 else f"{len(data)} bytes"
             self._spi_log(f"  EXEC {cmd_name} @ flash[0x{off:06X}] = {shown}")
             if cmd != 0xAD:
-                self._spi_wel = False
-                self._spi_status &= ~0x02
+                self._spi_set_wel(False)
 
     # ------------------------------------------------------------------
     # ISA mode tracking (MIPS32 vs MIPS16e)
