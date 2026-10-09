@@ -22,4 +22,15 @@ stage 2 code until it jumped to 0 and the exception handler (0x810011CC: fp = 0x
 rebooted through the watchdog (0xB8018500 / 0xB8018504).  Now the application starts and
 prints "MC: APP  init ok", "Libcore version 19.17.0@SDK4.0gc.19.17..." and "Application
 version 1.0.0@SDK4.0gc.19.17..." (regression run_dump_r265lite_120_app_banner.py); it
-then behaves like firmware 1.1.5's application (see that note).
+then behaves like firmware 1.1.5's application (see that note), with two differences:
+  * it probes the same five tuner addresses on the I2C master at 0xB8018B00, but about
+    6 M instructions apart (a retry loop per address) instead of back to back;
+  * before drawing, it runs a sequence on the block at 0xB802A000 that 1.1.5 only sets up:
+    a 7-byte table written five times to +0x62, 6 bytes at +0x90.., "TSM5" at +0x27.., then
+    it sets bit 4 of +0x6F and waits for the hardware to clear it -- forever in RAM (16.9 M
+    reads of +0x6F in 200 M instructions, no GE command in 900 s).  chips/m3821.py clears
+    that bit on the next read (the simulator's _SELF_COMPLETING mechanism), after which the
+    block sees 288 more operations (+0x70 / +0x72) and the application draws the same home
+    menu as 1.1.5 (363 GE commands) about 4 minutes in; regression
+    run_dump_r265lite_120_capture_screen.py (expected/r265lite_120_screen.png and _nav.png,
+    byte-identical to firmware 1.1.5's expected screens).

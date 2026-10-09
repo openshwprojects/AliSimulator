@@ -31,7 +31,8 @@ and fills the sound engine's PCM ring, whose read index must follow the
 write index (MirrorRegisters); then it draws its OSD through the same
 graphics engine (0xB800A000, ge_m36f.py) and display layer (0xB8006300,
 gma_capture.py) as the M3801 boxes, so nothing of the display is this
-family's own.
+family's own.  Firmware 1.2.0's application also waits, before it draws,
+for a start bit it sets in the block at 0xB802A000 to clear (install()).
 """
 import ctypes
 
@@ -312,6 +313,12 @@ class M3821(ChipFamily):
         self.mirrors = MirrorRegisters(sim, {
             0x00203A: (0x002038, 2),    # the sound engine's read index has caught up with the write index
         })
+        # Start bits the application sets and then waits to see cleared (the simulator's
+        # _SELF_COMPLETING mechanism): bit 4 of +0x6F of the block at 0xB802A000, which both
+        # firmwares reset and set up at start (1.1.5 then polls its +0x08 now and then) and
+        # whose +0x6F firmware 1.2.0 spins on before it draws anything.
+        sim._SELF_COMPLETING = {**sim._SELF_COMPLETING, 0x2A06F: (0x10, 0x00, 0x10)}
+        sim._mmio_on('r', sim._hook_selfcomplete_read, 0x2A06C, 0x2A06F)
 
     def start(self):
         """What the boot ROM does: the bootloader area into the SRAM, enter it."""

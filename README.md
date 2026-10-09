@@ -30,9 +30,11 @@ their file names.
   1.2.0) the bootloader, the LZMA decompression and the application's start-up
   run to its UART banner and its main loop, remote keys reach it through the
   same IR controller as the M3801's, its HD2015 panel chip decodes as a TM1650,
-  and it draws its home menu through the M3801's own GE and display layer
-  (`run_dump_r265lite_capture_screen.py`; the dumped flash's own main code is
-  damaged, see the notes there). The
+  and both applications draw their home menu through the M3801's own GE and
+  display layer (`run_dump_r265lite_capture_screen.py`,
+  `run_dump_r265lite_120_capture_screen.py`; firmware 1.2.0's first waits for
+  a start bit of the block at 0xB802A000 to clear; the dumped flash's own
+  main code is damaged, see the notes there). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).
 * `dumps/` -- the firmware images, each with a `<name>.txt` note on where it
