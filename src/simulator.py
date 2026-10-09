@@ -466,6 +466,12 @@ class AliMipsSimulator:
         for base in (0x00098, 0x2E098):
             self._mmio_on('w', self._hook_spi_write, base, base + 3)
             self._mmio_on('r', self._hook_spi_read, base, base + 3)
+        # The hardware I2C masters the tuner / EEPROM drivers use (i2c_scb.py):
+        # the slaves are sim.i2c_devices, none answers unless sim.i2c_ack_all
+        import i2c_scb
+        self.i2c_devices = {}
+        self.i2c_ack_all = False
+        self.i2c_masters = [i2c_scb.I2cMaster(self, base, f"SCB{i}") for i, base in enumerate(self.I2C_SCB_BASES)]
 
         # SPI flash memory-mapped data (SYS_FLASH_BASE_ADDR, the physical
         # 0x0F000000 / 0x1F000000 windows; the firmware uses both 0xAFC00000
@@ -834,6 +840,8 @@ class AliMipsSimulator:
         self._irc_last_vt = -1e9
         self._ir_key_table = None
         self.ir_keys_sent = 0
+        for master in self.i2c_masters:
+            master.reset()
         self.timer_irq_count = self.ic_irq_count = self.ge_ops = 0
         self._last_eret_vt = -1e9
         self._dev_replays = {}
@@ -1460,6 +1468,8 @@ class AliMipsSimulator:
     # interrupt-controller line 19 (OS IRQ 27) while enabled in IER (+6).
     _IC_IRC = 19
     IR_FRAME_GAP_S = 0.25            # emulation time between two frames (NEC repeats every 108 ms)
+    I2C_SCB_BASES = (0x18200, 0x18700, 0x18B00)  # the hardware I2C masters (i2c_scb.py; the M3801's
+                                                 # SCB0 / SCB1 and the M3821's), window offsets
 
     def _hook_irc_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)

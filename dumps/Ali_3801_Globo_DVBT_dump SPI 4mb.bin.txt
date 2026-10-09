@@ -17,6 +17,15 @@ Flash layout (chunk headers): bootloader 0x000000, HDCPKey 0x04FE00, maincode
 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 -- the same layout and maincode
 name as dump_maciej.bin (Opticum STB HD N2).
 
+Tuner: a Rafael Micro R820T on the chip's first hardware I2C master (0xB8018200,
+i2c_scb.py) at 7-bit address 0x34: when the application tunes its first channel (about
+93 M instructions in) it writes the R820T initialisation array -- registers 0x05..0x1F =
+83 32 75 C0 40 D6 6C F5 53 75 68 6C 83 80 00 0F 00 C0 30 48 CC 60 00 54 A6 4A C0, the public
+R820T driver's bytes but for two values -- then its band, filter and PLL registers, and
+polls the lock status with 2-byte reads (the Rafael read protocol: from register 0, bit
+reversed).  With no tuner model the lock never comes and the box shows "no signal", as
+it did before.  The demodulator is the chip's own ("NIM_S3811_0").
+
 UART log of the real box from the same post (the forum collapses repeated
 spaces and shows "@" before a domain-like word as "(_at_)"):
 APP init!

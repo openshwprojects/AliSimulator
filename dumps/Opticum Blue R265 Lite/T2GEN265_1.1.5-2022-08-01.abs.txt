@@ -22,7 +22,15 @@ reboot through the watchdog), moves the exception vectors with CP0 EBase, re-tra
 DDR controller (the same registers stage 1 uses), reads the flash through the SPI
 controller's byte-stream mode and DMA engine (the window at 0xB802E0C8 and 0xB802E058..;
 SF_INS stays in normal read mode) and bit-bangs I2C on GPIO bank 0xB80000D4 (the HD2015
-panel on bits 25 / 26, the tuner on another pin pair of the same bank).
+panel on bits 25 / 26, through the direction register: that is its key scan).
+Tuner: the application carries three tuner drivers (its strings: MaxLinear MxL608, Rafael
+R836 and R850; the demodulator is the chip's own, "NIM_S3821_0") and picks one by probing
+the hardware I2C master at 0xB8018B00 (i2c_scb.py) at start: a one-byte write of 0x00 to
+the 7-bit addresses 0x60, 0x7C, 0x3A, 0x1A and 0x1C in turn, until one acknowledges.  No
+model answers, so none does; with sim.i2c_ack_all the first, 0x60, is taken.  Which chip
+the board really has is not in the image; a web search (2026-10-09) found an elektroda.pl
+teardown of the R265 Lite listing "M3822P + MXL608", with the same pair reported for the
+Comsat TE 2050 HD and Edision Picco T265 -- the MxL608 answers at 0x60, the first address.
 It prints on the UART:
   MC: APP  init ok
   << SDK4.0ba.4.0_20101217 >>

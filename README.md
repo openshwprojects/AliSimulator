@@ -13,7 +13,7 @@ their file names.
 
 * `src/` -- the simulator (`simulator.py`, `mips16_decoder.py`, the slice
   stopper and clocks) and the device models (`ge_m36f.py`, `gma_capture.py`,
-  the panel decoders, `front_panel.py`, `ir_remote.py`), plus the two GUIs:
+  the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
 * `src/chips/` -- the chip families, one module each (`m3801.py`, `m3821.py`):
@@ -178,6 +178,18 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
   (about 90k timer ticks) before the first screen.
 
+* **I2C masters** (`i2c_scb.py`, the SDK's "SCB": 0xB8018200 and 0xB8018700
+  on the M3801, 0xB8018B00 on the M3821; the tuner and the other board chips
+  hang on them, the LED driver does not). A transfer completes at once and its
+  slave is looked up in `sim.i2c_devices` ({7-bit address: device};
+  `RegisterSlave` is a chip with a register file). An address nobody models
+  gets no ACK, which the driver reports as an error at once instead of
+  timing out and retrying ten times, as it did before the model. With
+  `sim.i2c_ack_all` every address answers and reads give zeros, so a tuner
+  driver runs its whole register sequence, which the `[I2C]` log lines show --
+  the way to tell which tuner a board has: dump.bin's application wakes one
+  at 0x60 at start (registers 0x0B and 0x12 set to 1) and only writes its
+  register table at the first tune.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
   Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read
