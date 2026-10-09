@@ -253,8 +253,12 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                                      f"{changed} pixels changed")
         check(changed >= min_px, f"navigation step {i}: {label} changed the screen "
                                  f"({changed} pixels, need {min_px}; {sim.ge_ops - ops} GE commands)")
+        # (the IR receiver's state: a frame waits in the queue until the firmware has drained
+        # the previous one's FIFO and acknowledged its interrupt, see simulator._irc_service)
         print(f"[{time.time() - start:6.1f}s] navigation {i}: {label}: {sim.ge_ops - ops} GE commands, "
-              f"{changed} pixels changed, panel [{panel.get_display_text()}]")
+              f"{changed} pixels changed, panel [{panel.get_display_text()}]; IR frames delivered "
+              f"{sim.ir_keys_sent}, queued {len(sim._irc_frames)}, FIFO {len(sim._irc_fifo)} bytes, "
+              f"status 0x{sim._irc_status:02X}, IRCCFG 0x{sim.peek(0xB8018100, 1)[0]:02X}")
         previous = after
     if navigation:
         if nav_settle_s:

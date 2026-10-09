@@ -14,8 +14,11 @@ once the application's start-up has run its large copies through the
 chips/m3821.py.  That screen is compared with r265lite_screen.png; the HD2015
 front panel (a TM1650 on GPIO 57 / 58, no display soldered on the box) must
 still show stage 2's " ON ".  Then the IR remote (press_key, the application's
-own key table) moves the highlight with RIGHT and DOWN; the result is compared
-with r265lite_nav.png.
+own key table) moves the highlight down to "Ustawienia systemu" with DOWN and
+opens that tile's description with INFO; the result is compared with
+r265lite_nav.png.  (The menu refuses a move onto a greyed-out tile: "Media
+player" and "Dysk USB" are disabled without a USB device, so RIGHT then DOWN
+is ignored.)
 
 Usage: python run_dump_r265lite_capture_screen.py [--make-expected]
 """
@@ -33,5 +36,5 @@ screen_regression.run(
     min_colours=16,
     panel_text=" ON ",
     title="Opticum Blue R265 Lite",
-    navigation=[("RIGHT", 1000), ("DOWN", 1000)],
+    navigation=[("DOWN", 1000), ("INFO", 1000)],
 )

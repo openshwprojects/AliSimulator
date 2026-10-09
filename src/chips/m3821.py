@@ -199,10 +199,12 @@ class DmaRings:
     descriptor submitted written to +0x28 + ch, and the index the engine has
     reached read back from +0x30 + ch, which the firmware polls (with 100 us
     delays) until it equals what it submitted; +0x48 / +0x4A hold the channels'
-    enable bits and bit 0 of +0x4B resets the engine and clears itself.  The
-    simulator copies a descriptor's bytes the moment it is submitted."""
+    enable bits.  (The block the M3801 SDK calls VCAP_M36F: bit 0 of its +0x4B
+    is the self-clearing reset the simulator answers for every chip,
+    _SELF_COMPLETING.)  The simulator copies a descriptor's bytes the moment it
+    is submitted."""
     BASE = 0xF000
-    RING, RING_LEN, SUBMIT, DONE, RESET = 0x00, 0x20, 0x28, 0x30, 0x4B
+    RING, RING_LEN, SUBMIT, DONE = 0x00, 0x20, 0x28, 0x30
     CHANNELS = 8
 
     def __init__(self, sim):
@@ -212,7 +214,6 @@ class DmaRings:
         b = self.BASE
         sim._mmio_on('w', self._write_submit, b + self.SUBMIT, b + self.SUBMIT + self.CHANNELS - 1)
         sim._mmio_on('r', self._read_done, b + self.DONE, b + self.DONE + self.CHANNELS - 1)
-        sim._mmio_on('r', self._read_reset, b + self.RESET, b + self.RESET)
 
     def _reg(self, offset, size):
         return int.from_bytes(self.sim.peek(0xB8000000 + self.BASE + offset, size), 'little')
@@ -242,9 +243,6 @@ class DmaRings:
     def _read_done(self, uc, access, address, size, value, user_data):
         ch = (address & 0xFFFFFF) - self.BASE - self.DONE
         uc.mem_write(address, bytes(self.done[ch:ch + size]))
-
-    def _read_reset(self, uc, access, address, size, value, user_data):
-        uc.mem_write(address, bytes([uc.mem_read(address, 1)[0] & ~1]))     # reset finished at once
 
 
 class MirrorRegisters:

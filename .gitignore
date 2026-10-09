@@ -5,6 +5,11 @@ refs/
 # expected screens live in tests/expected/)
 report/
 /dump_maciej_screen*.png
+# a screen regression run directly (not through run_all_tests.py) saves its
+# frames, screens and navigation steps in the current directory
+/*_frame_??.png
+/*_screen.png
+/*_nav_*.png
 *_diff.png
 remote_*.png
 tv_*.png
