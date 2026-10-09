@@ -21,6 +21,7 @@ GitHub Pages after every push.
 """
 
 import ast
+import json
 import os
 import re
 import shutil
@@ -122,9 +123,23 @@ def _collect_artifact(line, result, img_dir):
     image file is copied next to the report).  Returns True if it was one."""
     if line.startswith(report_artifacts.IMAGE_TAG):
         body = line[len(report_artifacts.IMAGE_TAG):].strip()
-        path, _, caption = body.partition("\t")
+        path, _, rest = body.partition("\t")
+        caption, _, extra = rest.partition("\t")
         entry = {"path": path, "caption": caption, "missing": not os.path.isfile(path),
                  "order": len(result["images"]) + len(result["panels"])}    # its place among the test's renders
+        if extra:
+            try:
+                extra = json.loads(extra)
+            except ValueError:
+                extra = {}
+            if extra.get("panel"):
+                try:
+                    entry["panel"] = {"digits": [int(h, 16) for h in extra["panel"].split()],
+                                      "text": extra.get("panelText", "")}
+                except ValueError:
+                    pass
+            if extra.get("tuner"):
+                entry["tuner"] = extra["tuner"]
         if not entry["missing"]:
             try:
                 os.makedirs(img_dir, exist_ok=True)

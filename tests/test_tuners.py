@@ -130,5 +130,31 @@ check(r820t.reads[5] == 1, "R820T: the model counts reads by length")
 check(all(tuners.is_tuner(tuners.make(c)) for c in tuners.MODELS) and not tuners.is_tuner(i2c_scb.AckAll()),
       "is_tuner() recognises every model and nothing else")
 
+# the frequency each driver tuned to, from the register writes the firmwares made (dump sidecars)
+m = tuners.make("mxl603")
+check(m.frequency() is None and tuners.describe(m) == "MxL603: not tuned", "MxL603: no frequency before a tune")
+m.write(bytes([0x0F, 0x22, 0x10, 0x80, 0x11, 0x76]))           # Cabletech URZ0194S: UHF channel 21, 8 MHz
+check(tuners.describe(m) == "MxL603: 474.000 MHz / 8 MHz", f"MxL603: 0x7680 / 64 -> {tuners.describe(m)}")
+m = tuners.make("mxl5007t")
+m.write(bytes([0x0F, 0x00, 0x0C, 0x3F, 0x0D, 0x80]))           # URZ0195 (2012): its tune sequence
+m.write(bytes([0x0E, 0x8E, 0x1F, 0x87, 0x20, 0x1F]))
+check(tuners.describe(m) == "MxL5007T: 570.000 MHz / 8 MHz", f"MxL5007T: 0x8E80 / 64 -> {tuners.describe(m)}")
+r = tuners.make("r820t", xtal_hz=16_000_000, if_hz=4_570_000)
+check(r.frequency() is None, "R820T: no frequency before the driver programs the PLL")
+r.write(bytes([0x05, 0xA3]))                                   # Globo N3: image-rejection calibration, input off
+r.write(bytes([0x10, 0x24]))
+r.write(bytes([0x14, 0x4D]))
+r.write(bytes([0x12, 0x88]))                                   # SDM off
+check(tuners.describe(r) == "R820T: calibrating (LO 528.000 MHz)", f"R820T: the first ring point -> {tuners.describe(r)}")
+r.write(bytes([0x05, 0x03]))                                   # the channel: input on, then its PLL
+r.write(bytes([0x10, 0x64]))
+r.write(bytes([0x14, 0x16]))
+r.write(bytes([0x12, 0x80]))
+r.write(bytes([0x16, 0x88]))
+r.write(bytes([0x15, 0xFC]))
+f = r.frequency()
+check(abs(f["rf_hz"] - 198_500_000) < 1_000 and abs(f["lo_hz"] - 203_070_000) < 1_000,
+      f"R820T: N 101, SDM 0x88FC, divider 16 -> {tuners.describe(r)} (VHF channel 8)")
+
 print(f"\n[{'PASS' if ok else 'FAIL'}] tuner models")
 sys.exit(0 if ok else 1)

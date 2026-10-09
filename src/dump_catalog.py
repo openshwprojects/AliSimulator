@@ -7,8 +7,9 @@ manufacturer's update, version, size, SHA-1, chunk layout), where it came from
 (URL, site, author, date, whether a login is needed) and what the simulator
 makes of it (boots / application / display, the panel's texts) -- and `desc`,
 the notes on it as a list of paragraphs.  device.tunerModel, where the tuner
-is known, is {"chip", "address" (7-bit, decimal)}: the tuner model to put on
-its I2C bus (tuners.py).  tests/test_dump_catalog.py checks
+is known, is {"chip", "address" (7-bit, decimal)[, "xtalHz", "ifHz"]}: the
+tuner model to put on its I2C bus (tuners.py) and, for an R820T, the
+firmware's crystal and IF its frequency is decoded with.  tests/test_dump_catalog.py checks
 every sidecar against its image and against the code's own tables
 (front_panel.PANELS, ir_remote.IR_CODINGS), and tools/dump_table.py renders
 them as dumps/README.md.

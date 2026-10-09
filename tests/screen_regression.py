@@ -1,10 +1,12 @@
 """
 Shared body of the screen-capture regressions (run_dump_*_capture_screen.py):
-boot a firmware dump with its front panel (front_panel.py), wait until its OSD
+boot a firmware dump with its front panel (front_panel.py) and its tuner model
+(tuners.py, from its sidecar; no signal unless asked), wait until its OSD
 has been drawn through the GE model, capture what the display layer shows,
-compare it with the dump's expected screen (a PNG in tests/expected/), and attach the frames, the final screen,
-a difference map and the front-panel display to the test report
-(report_artifacts.py).
+compare it with the dump's expected screen (a PNG in tests/expected/), and attach the frames, the final screen
+and a difference map to the test report (report_artifacts.py) -- every
+capture with the front-panel display and the tuner's frequency of that
+moment, which the report shows beside it.
 
 The expected screen is made with `--make-expected` (or MAKE_EXPECTED=1): the captured
 screen is saved as the expected one and the run passes.  A firmware whose screen keeps
@@ -25,6 +27,7 @@ import time
 
 import numpy as np
 
+import dump_catalog
 import gma_capture
 import report_artifacts
 from front_panel import make_panel
@@ -53,20 +56,23 @@ class SimulatorCrash(Exception):
 
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
-        signal=False):
+        signal=False, tuner=True):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
     slice-stop race, see README "Things learned": a hooked CP0 instruction
     running natively ends in a jump to a stale register) is retried `retries`
-    times from a fresh boot before it counts as a failure.  signal=True boots
-    with sim.set_signal(True): the dump's tuner model and a locked demodulator."""
+    times from a fresh boot before it counts as a failure.  tuner=True puts the
+    dump's tuner model on the I2C bus (sim.attach_tuner: a tuner that takes its
+    settings, but no signal -- the demodulator stays unlocked), so every capture
+    can show the frequency it is tuned to; signal=True boots with
+    sim.set_signal(True): the tuner and a locked demodulator."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal)
+                 nav_settle_s, signal, tuner)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -77,7 +83,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s, signal):
+         navigation, nav_diff_pct, nav_settle_s, signal, tuner):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -91,8 +97,26 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     sim.loadFile(dump)
     print(f"front panel: {panel_desc}")
     if signal:
-        tuner, demod = sim.set_signal(True)
-        print(f"signal: tuner model {type(tuner).__name__ if tuner else None}, demodulator locked: {demod}")
+        model, demod = sim.set_signal(True)
+        print(f"signal: tuner model {type(model).__name__ if model else None}, demodulator locked: {demod}")
+    elif tuner:
+        model = sim.attach_tuner()
+        print(f"tuner model: {type(model).__name__ if model else None} (no signal)")
+    info = dump_catalog.load(dump)
+    sidecar_panel = bool(info and info["device"].get("panel"))
+
+    def has_panel():
+        """Whether the box has a display to show beside a capture: its sidecar
+        names a panel chip, or the decoder has seen the firmware drive one."""
+        return sidecar_panel or getattr(panel, "i2c_transaction_count", 0) or getattr(panel, "frame_count", 0)
+
+    def shot(path, caption):
+        """Report a capture with the box's state at that moment: the front
+        panel (when it has one) and the tuner's frequency (with a model)."""
+        show = has_panel()
+        report_artifacts.image(path, caption, panel=panel.digits if show else None,
+                               panel_text=panel.get_display_text() if show else None,
+                               tuner=sim.tuner_info())
 
     start = time.time()
     app_t = drawn_t = None
@@ -111,7 +135,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     while True:
         now = time.time()
         if drawn_t is None and now - start > boot_limit_s:
-            report_artifacts.panel(panel.digits, "front panel at the end", panel.get_display_text())
+            if has_panel():
+                report_artifacts.panel(panel.digits, "front panel at the end", panel.get_display_text())
             raise SimulatorCrash(f"nothing drawn within {boot_limit_s:.0f} s (GE commands: {sim.ge_ops}, "
                                  f"UART: {''.join(uart)[-120:]!r})")
         if drawn_t is not None and now - drawn_t > settle_s:
@@ -150,8 +175,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
             path = report_artifacts.path(f"{name}_frame_{frames:02d}.png")
             gma_capture.save_png(path, rgb)
             print(f"[{time.time() - start:6.1f}s] {sim.ge_ops} GE commands: new frame -> {path}")
-            report_artifacts.image(path, f"frame {frames} after {sim.ge_ops} GE commands "
-                                         f"({time.time() - start:.0f} s)")
+            shot(path, f"frame {frames} after {sim.ge_ops} GE commands ({time.time() - start:.0f} s)")
         prev = rgb
 
     out = report_artifacts.path(f"{name}_screen.png")
@@ -163,10 +187,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     print(f"display engine output: {mode}; the capture shows the OSD at its own 1280x720")
     print(f"saved {out}: {rgb.shape[1]}x{rgb.shape[0]}, {colours} colours, {sim.ge_ops} GE commands, "
           f"GE features not modelled: {unsupported or 'none'}")
-    report_artifacts.image(out, f"final screen: {colours} colours, {sim.ge_ops} GE commands "
-                                f"({time.time() - start:.0f} s)")
-    report_artifacts.panel(panel.digits, "front panel at the end (" + " -> ".join(
-        f"[{t}]" for t in panel_texts) + ")", panel.get_display_text())
+    shot(out, f"final screen: {colours} colours, {sim.ge_ops} GE commands ({time.time() - start:.0f} s)")
+    print("front panel: " + (" -> ".join(f"[{t}]" for t in panel_texts) if has_panel() else "none")
+          + f"; tuner: {sim.tuner_info() or 'no model'}")
 
     def check(cond, msg):
         nonlocal ok
@@ -254,8 +277,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         changed = int((after != previous).any(axis=2).sum())
         path = report_artifacts.path(f"{name}_nav_{i}_{str(key[1] if isinstance(key, tuple) else key).replace('+', 'plus').replace('-', 'minus')}.png")
         gma_capture.save_png(path, after)
-        report_artifacts.image(path, f"navigation step {i}: {label}: {sim.ge_ops - ops} GE commands, "
-                                     f"{changed} pixels changed")
+        shot(path, f"navigation step {i}: {label}: {sim.ge_ops - ops} GE commands, {changed} pixels changed")
         check(changed >= min_px, f"navigation step {i}: {label} changed the screen "
                                  f"({changed} pixels, need {min_px}; {sim.ge_ops - ops} GE commands)")
         # (the IR receiver's state: a frame waits in the queue until the firmware has drained
@@ -292,8 +314,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                 previous = sim.capture_screen()
             path = report_artifacts.path(f"{name}_nav_final.png")
             gma_capture.save_png(path, previous)
-            report_artifacts.image(path, f"screen {nav_settle_s:.0f} s after the last navigation step")
-        report_artifacts.panel(panel.digits, "front panel after the navigation", panel.get_display_text())
+            shot(path, f"screen {nav_settle_s:.0f} s after the last navigation step")
         against_expected(previous, f"{name}_nav.png", nav_diff_pct, "screen after the navigation")
     print(f"\n[{'PASS' if ok else 'FAIL'}] {title or dump} screen regression ({time.time() - start:.0f} s total)")
     sys.exit(0 if ok else 1)

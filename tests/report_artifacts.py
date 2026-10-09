@@ -7,8 +7,12 @@ front-panel LED display; run_all_tests.py picks these up from the test's
 output and shows them in report/index.html (report.py).  Both print one
 machine-readable line to stdout:
 
-  [REPORT_IMAGE] <path>\t<caption>
+  [REPORT_IMAGE] <path>\t<caption>[\t<json: panel, panelText, tuner>]
   [REPORT_PANEL] <hex segment bytes>\t<text>\t<caption>
+
+An image can carry the state of the box when it was taken -- the front
+panel's segment bytes and text, and the tuner's frequency line
+(simulator.tuner_info()) -- which the report shows beside it.
 
 so a test needs nothing but this module, and run on its own the lines are
 just two more log lines.  out_dir() is where a test should save such files:
@@ -35,9 +39,21 @@ def path(name):
     return os.path.join(out_dir(), name)
 
 
-def image(file_path, caption=""):
-    """Report a saved image (PNG) with a one-line caption."""
-    print(f"{IMAGE_TAG} {os.path.abspath(file_path)}\t{_one_line(caption)}", flush=True)
+def image(file_path, caption="", panel=None, panel_text=None, tuner=None):
+    """Report a saved image (PNG) with a one-line caption; panel (segment
+    bytes, as panel() takes them) / panel_text and tuner (a frequency line)
+    describe the box at that moment and are shown beside the image."""
+    extra = {}
+    if panel is not None:
+        extra["panel"] = " ".join(f"{int(d) & 0xFF:02X}" for d in panel)
+        extra["panelText"] = _one_line(panel_text or "")
+    if tuner:
+        extra["tuner"] = _one_line(tuner)
+    line = f"{IMAGE_TAG} {os.path.abspath(file_path)}\t{_one_line(caption)}"
+    if extra:
+        import json
+        line += "\t" + json.dumps(extra, ensure_ascii=False)
+    print(line, flush=True)
 
 
 def panel(digits, caption="", text=None):

@@ -210,8 +210,15 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   COFDM demodulator (`chips/m3801.py`, registers at 0xB803E000, whose
   `get_lock()` tests bit 5 of register 0x1D) and the M3821's DVB-T / T2 one
   (`chips/m3821.py`, at 0xB804C000: the standard in register 0x2FF, DVB-T
-  lock in bit 6 of 0x1D, the T2 state in 0x67 and 0x11D). Neither is on by
-  default, so the screen regressions keep their no-signal screens. There is
+  lock in bit 6 of 0x1D, the T2 state in 0x67 and 0x11D). Each model's
+  `frequency()` decodes what the driver tuned it to (MxL603 / MxL5007T: the
+  channel word / 64 MHz; R820T: the PLL with the firmware's crystal and IF,
+  "calibrating" while the antenna input is off for its image-rejection
+  calibration), and `sim.tuner_info()` gives that as one line. The screen
+  regressions attach the dump's tuner without a signal (`screen_regression`'s
+  `tuner=True`), so they keep their no-signal screens and every capture in the
+  report shows the frequency it was taken at; the simulator itself attaches
+  nothing unless asked. There is
   no transport stream behind the lock: the Globo N3 with a signal shows its
   channel banner and then a clear black picture instead of its red "Brak
   sygnału" box (`run_dump_globo_signal.py`), and the R265 Lite's manual scan
@@ -466,11 +473,14 @@ crash fails that test only.
 self-contained page with every test's verdict, wall time, description (the
 script's docstring), its `[PASS]` / `[FAIL]` lines, its whole output, and the
 images it rendered -- OSD screen captures embedded as PNG, each on its own row
-at the card's width, and front-panel LED displays drawn as 7-segment SVG, a
-display beside the capture the test reported it with. A test attaches those through
-`report_artifacts.py`: `image(path, caption)` for a PNG it saved (into
+at the card's width, with a column on its right: the tuner's frequency above
+the front-panel display drawn as 7-segment SVG, both as they were when the
+screen was captured. A test attaches those through
+`report_artifacts.py`: `image(path, caption, panel=, panel_text=, tuner=)` for
+a PNG it saved (into
 `report_artifacts.out_dir()`, which the runner points at `report/img/<test>/`)
-and `panel(digits, caption, text)` for a display's segment bytes; the lines
+with the box's state at that moment, and `panel(digits, caption, text)` for a
+display on its own; the lines
 they print are picked up by the runner, so a test still runs on its own
 unchanged. Filter the cards by dump, kind (unit / regression / slow) and data
 (renders, crashed, timed out); `-k name` runs a subset, `--timeout seconds`

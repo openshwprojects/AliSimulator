@@ -1539,12 +1539,26 @@ class AliMipsSimulator:
                 return None
             chip = model["chip"]
             address = model["address"] if address is None else address
+            config = {k: model[c] for k, c in (("xtal_hz", "xtalHz"), ("if_hz", "ifHz")) if c in model}
         elif address is None:
             raise ValueError("attach_tuner: give the tuner's 7-bit I2C address with its chip")
-        device = tuners.make(chip)
+        else:
+            config = {}
+        device = tuners.make(chip, **config)
         self.i2c_devices[address] = device
         self.log(f"[I2C] tuner model {chip} at 0x{address:02X}")
         return device
+
+    def tuner(self):
+        """The tuner model on the I2C bus (tuners.py), or None."""
+        import tuners
+        return next((d for d in self.i2c_devices.values() if tuners.is_tuner(d)), None)
+
+    def tuner_info(self):
+        """What the tuner is tuned to, one line (tuners.describe), or None
+        without a tuner model."""
+        import tuners
+        return tuners.describe(self.tuner())
 
     def set_signal(self, on=True):
         """A receivable channel on every frequency: the dump's tuner model on
@@ -1552,8 +1566,7 @@ class AliMipsSimulator:
         lock (chips/m3801.py, chips/m3821.py).  There is no transport stream
         behind it, so the firmware finds a locked channel with nothing in it.
         Returns (tuner model or None, demodulator modelled)."""
-        import tuners
-        tuner = next((d for d in self.i2c_devices.values() if tuners.is_tuner(d)), None)
+        tuner = self.tuner()
         if on and tuner is None:
             tuner = self.attach_tuner()
         demod = self.chip.set_signal(on)

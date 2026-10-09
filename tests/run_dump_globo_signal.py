@@ -21,6 +21,7 @@ import numpy as np
 
 import gma_capture
 import report_artifacts
+from front_panel import make_panel
 from simulator import AliMipsSimulator, flash_size_for
 
 DUMP = "Ali_3801_Globo_DVBT_dump SPI 4mb.bin"
@@ -32,6 +33,9 @@ sim = AliMipsSimulator(rom_size=flash_size_for(DUMP), log_handler=lambda m: None
 sim.setSPIDump(False)
 sim.setI2CDump(False)
 sim.setUartHandler(lambda c: None)
+panel, _keys, _desc = make_panel(DUMP, log_handler=lambda m: None)
+panel.dump_enabled = False
+sim.setGpioHandler(panel.on_gpio_write)
 sim.loadFile(DUMP)
 tuner, demod = sim.set_signal(True)
 print(f"tuner model: {type(tuner).__name__ if tuner else None}, demodulator modelled: {demod}")
@@ -44,7 +48,8 @@ rgb = sim.capture_screen()
 out = report_artifacts.path("globo_signal_screen.png")
 gma_capture.save_png(out, rgb)
 report_artifacts.image(out, f"screen at {sim.instruction_count:,} instructions with a signal: "
-                            f"{sim.ge_ops} GE commands")
+                            f"{sim.ge_ops} GE commands", panel=panel.digits,
+                       panel_text=panel.get_display_text(), tuner=sim.tuner_info())
 red = int(((rgb[:, :, 0] > 200) & (rgb[:, :, 1] < 60) & (rgb[:, :, 2] < 60)).sum())
 print(f"{time.time() - start:.0f}s, {sim.instruction_count:,} instructions, {sim.ge_ops} GE commands, "
       f"R820T reads by length {dict(tuner.reads) if tuner else '-'}, demodulator lock reads {sim.chip.demod.lock_reads}")
@@ -63,6 +68,9 @@ check(tuner is not None and tuner.reads[5] >= 1, "the R820T driver ran its filte
 check(tuner is not None and tuner.reads[3] >= 1 and tuner.regs[0x12] & 0xE0 != 0x60,
       "the driver checked the PLL and found it locked (it never raised the VCO current, register 0x12)")
 check(sim.chip.demod.lock_reads > 0, f"the demodulator's lock register was read ({sim.chip.demod.lock_reads} times)")
+freq = tuner.frequency() if tuner else None
+check(freq is not None and not freq["calibrating"] and abs(freq["rf_hz"] - 198_500_000) < 10_000,
+      f"the tuner is on channel \"41. WP\": VHF channel 8, 198.500 MHz ({sim.tuner_info()})")
 check(banner_seen, f"the channel banner was drawn ({BANNER_OPS}+ GE commands)")
 check(red == 0, f"no red \"Brak sygnału\" box on the screen ({red} red pixels)")
 print(f"\n[{'PASS' if ok else 'FAIL'}] Globo STB HD N3 with a signal ({time.time() - start:.0f} s)")

@@ -11,8 +11,9 @@ published to GitHub Pages.
 
 Modelled on the BekenSimulator report (tests/report.py there): summary cards,
 tag filters, one expandable card per test: its assertions, its renders (each
-screen capture on its own row at the card's width, with the front-panel
-display the test reported right after it beside it) and its output.
+screen capture on its own row at the card's width, with a column on its
+right: the tuner's frequency above the front-panel display, both as they were
+when the screen was captured) and its output.
 """
 import os
 import sys
@@ -102,12 +103,31 @@ def _panel_figure(p):
             % (panel_svg(p["digits"], 2.0), cap, (' <code class="ptext">[%s]</code>' % text) if text else ""))
 
 
+def _side_html(img, panel=None):
+    """The column right of a capture: what the tuner was tuned to when it was
+    taken, above the front-panel display at that moment (the image's own, or
+    a display the test reported right after it); empty when neither applies."""
+    parts = []
+    if img.get("tuner"):
+        chip, _, value = img["tuner"].partition(": ")     # tuners.describe(): "<chip>: <frequency or state>"
+        if not value:
+            chip, value = "tuner", chip
+        parts.append('<div class="tuner" title="what the tuner was tuned to when the screen was captured">'
+                     '<span class="tchip">%s</span><span class="tval">%s</span></div>'
+                     % (html.escape(chip), html.escape(value)))
+    panel = img.get("panel") or panel
+    if panel:
+        parts.append(_panel_figure(panel))
+    return '<div class="side">%s</div>' % "".join(parts) if parts else ""
+
+
 def _renders_html(r):
     """The test's renders, one row each: a screen capture at the card's width
-    with, beside it, the front-panel display the test reported right after it
-    (a box without a display reports none); a display reported on its own
-    gets its own row.  The runner numbers both kinds in the order the test
-    printed them ("order")."""
+    and, in a column on its right, the tuner's frequency above the front-panel
+    display -- both as they were when the screen was captured (a box without
+    a display has none; an older test reports a display right after its
+    capture instead).  A display reported on its own gets its own row.  The
+    runner numbers both kinds in the order the test printed them ("order")."""
     items = [("image", i) for i in r.get("images", [])] + [("panel", p) for p in r.get("panels", [])]
     items.sort(key=lambda kind_item: kind_item[1].get("order", 0))
     rows = []
@@ -117,11 +137,11 @@ def _renders_html(r):
         if kind == "panel":
             rows.append('<div class="render">%s</div>' % _panel_figure(item))
         else:
-            beside = ""
-            if i + 1 < len(items) and items[i + 1][0] == "panel":
+            following = None
+            if not item.get("panel") and i + 1 < len(items) and items[i + 1][0] == "panel":
                 i += 1
-                beside = _panel_figure(items[i][1])
-            rows.append('<div class="render">%s%s</div>' % (_image_figure(item), beside))
+                following = items[i][1]
+            rows.append('<div class="render">%s%s</div>' % (_image_figure(item), _side_html(item, following)))
         i += 1
     return '<div class="renders">%s</div>' % "".join(rows)
 
@@ -372,6 +392,12 @@ _PAGE = """<!doctype html>
   .shot img {{ display:block; width:100%; height:auto; border-radius:4px; background:#000; }}
   .shot figcaption {{ font-size:12px; color:var(--muted); margin-top:6px; }}
   .shot.panel {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; }}
+  .side {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:stretch; gap:10px; }}
+  .tuner {{ background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+    text-align:center; white-space:nowrap; }}
+  .tuner .tchip {{ display:block; font-size:11px; color:var(--muted); letter-spacing:.03em; }}
+  .tuner .tval {{ display:block; font:700 17px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--fg); }}
   .shot.missing {{ flex:0 0 auto; }}
   .shot.missing .nofile {{ width:200px; height:60px; display:flex; align-items:center; justify-content:center;
     color:var(--fail); font-size:12px; border:1px dashed var(--fail); border-radius:4px; }}
