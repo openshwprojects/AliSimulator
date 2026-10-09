@@ -9,7 +9,9 @@ follow the firmware's GPIO writes and answer its key reads.
     HD N3 -- SCL = GPIO 31, SDA = GPIO 9; the panel driver reacts to the key
     matrix positions KI1/DIG4 (up) and KI2/DIG4 (down).  The Ferguson Ariva
     T650i's FD650K is TM1650-compatible on the same pins, with its own digit
-    order and segment wiring.
+    order and segment wiring.  The Opticum Blue R265 Lite (M3822P, the M3821
+    family) has an HD2015 -- TM1650-compatible too -- on SCL = GPIO 57, SDA =
+    GPIO 58 (bank 0xB80000D4 bits 25 / 26); its firmware writes " ON " at boot.
   * TM1628-class (3-wire: CLK, DIO, STB): Cabletech URZ0083Q (PCB
     6390-M3801) and the Strong SRT 8115 (MC6422-M3801) -- CLK = GPIO 31, DIO =
     GPIO 9, STB = GPIO 11; the Cabletech's digits in RAM
@@ -27,6 +29,12 @@ import os
 
 from tm1628_decoder import TM1628Decoder
 from tm1650_decoder import TM1650Decoder
+
+# Opticum Blue R265 Lite (M3822P): an HD2015 -- TM1650-compatible -- on GPIO bank 1 (0xB80000D4),
+# SCL = GPIO 57, SDA = GPIO 58; no display is soldered on this box, the chip only scans its three
+# buttons, but the firmware still writes " ON " at boot (digits in the standard layout).  Both
+# the flash dump (M3822P.bin) and the update images (T2GEN265_*.abs) are this board.
+_R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={})
 
 # (substring of the dump's path, case-insensitive) -> panel spec
 PANELS = [
@@ -61,6 +69,8 @@ PANELS = [
     # when the application starts (keys not mapped yet)
     ("T650i", dict(chip="tm1650", scl=31, sda=9, digit_order=(2, 3, 1, 0),
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+    ("M3822P", _R265_LITE),
+    ("T2GEN265", _R265_LITE),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 

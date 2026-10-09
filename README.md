@@ -27,8 +27,10 @@ their file names.
   controller's byte-stream mode and DMA engine and the status bits the
   application polls; with the box's official firmware images (1.1.5 and 1.2.0)
   the bootloader, the LZMA decompression and the application's start-up run to
-  its UART banner and its main loop (no display model for this generation yet;
-  the dumped flash's own main code is damaged, see the notes there). The
+  its UART banner and its main loop, remote keys reach it through the same IR
+  controller as the M3801's and its HD2015 panel chip decodes as a TM1650 (no
+  display model for this generation yet; the dumped flash's own main code is
+  damaged, see the notes there). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).
 * `dumps/` -- the firmware images, each with a `<name>.txt` note on where it

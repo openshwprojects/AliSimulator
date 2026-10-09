@@ -65,6 +65,7 @@ def discover_test_files(include_slow=False):
         "run_dump_maciej_to_bl_verify_sw.py", "run_dump_Prima_to_check_program.py",
         "run_dump_Prima_to_print_success.py", "run_dump_urz0195_2012_to_print_success.py",
         "run_dump_r265lite_boot.py", "run_dump_r265lite_app_banner.py", "run_dump_r265lite_120_app_banner.py",
+        "run_dump_r265lite_panel_on.py", "run_dump_r265lite_remote_key.py",
         "run_dump_maciej_to_I2C_display_ON.py",
         "run_dump_maciej_to_verify_uart_buffer.py", "run_dump_maciej_without_uart_interrupt.py",
         "run_dump_maciej_to_check_uart_overflow.py", "run_dump_no_main_app.py",

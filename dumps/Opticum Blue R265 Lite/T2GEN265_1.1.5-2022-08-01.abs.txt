@@ -21,7 +21,8 @@ chip ID word 0xB8000000 to read 0x38210010 (the M3822P variant; a plain 0x3821 m
 reboot through the watchdog), moves the exception vectors with CP0 EBase, re-trains the
 DDR controller (the same registers stage 1 uses), reads the flash through the SPI
 controller's byte-stream mode and DMA engine (the window at 0xB802E0C8 and 0xB802E058..;
-SF_INS stays in normal read mode) and bit-bangs I2C on GPIO bank 0xB80000D0 (SDA bit 25).
+SF_INS stays in normal read mode) and bit-bangs I2C on GPIO bank 0xB80000D4 (the HD2015
+panel on bits 25 / 26, the tuner on another pin pair of the same bank).
 It prints on the UART:
   MC: APP  init ok
   << SDK4.0ba.4.0_20101217 >>
@@ -29,6 +30,12 @@ It prints on the UART:
   Application version 1.0.0@SDK4.0gc.19.9d_20190423by
 and then runs its tasks (six, a 1 ms CP0 timer tick that the simulator's 100 MHz Count
 stretches to 3 ms, bit-banged I2C transactions, flash reads of the databases) until the
-main task waits in its 12-second message loop and the idle task runs.  Nothing is drawn: the M3821's display path, its IR receiver and the
-HD2015 front-panel chip (on the bit-banged I2C) are not modelled yet.  The production
-build prints nothing beyond the banner.
+main task waits in its 12-second message loop and the idle task runs; every ~40 s it polls
+the tuner over the bit-banged I2C and reprograms its display engine (0xB8034000..).  The
+production build prints nothing beyond the banner.
+Input works: the IR receiver is the M3801's M6303 controller at 0xB8018100 (press_key()
+finds the application's key table in RAM; regression run_dump_r265lite_remote_key.py), and
+the HD2015 front-panel chip (TM1650-compatible, SCL = GPIO 57, SDA = GPIO 58, front_panel.py)
+gets " ON " from stage 2 of the bootloader (run_dump_r265lite_panel_on.py) -- the box has no
+display soldered, the chip only scans its three buttons, which the application was not seen
+polling.  Nothing is drawn yet: the M3821's display engine is not modelled.
