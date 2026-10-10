@@ -13,6 +13,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Comsat TE 1050 HD", "chips": ["ALi M3801", "MxL603"],
+            "shows": ["boots to screen"]}
+
 screen_regression.run(
     dump="dump.bin",
     expected="dump_screen.png",

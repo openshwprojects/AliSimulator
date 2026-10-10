@@ -508,18 +508,27 @@ crash fails that test only.
 self-contained page with every test's verdict, wall time, description (the
 script's docstring), its `[PASS]` / `[FAIL]` lines, its whole output, and the
 images it rendered -- OSD screen captures embedded as PNG, each on its own row
-at the card's width, with a column on its right: the tuner's frequency above
-the front-panel display drawn as 7-segment SVG, both as they were when the
-screen was captured. A test attaches those through
+with a column on its right: the tuner's frequency above the front-panel
+display drawn as 7-segment SVG, both as they were when the screen was
+captured (a click shows a screen at full size). The page starts with the
+featured runs, opened: one full run per box, a script that declares
+`FEATURED = {"device": ..., "chips": [...], "shows": [...]}` (read from its
+source, not run), titled "<device> with <SoC> + <panel chip> + <tuner>" over
+what the run shows ("Boots to screen, reacts to remote, shows channel
+scan"), its screens first, its description and output folded. Every other
+test follows as a closed card. A test attaches those through
 `report_artifacts.py`: `image(path, caption, panel=, panel_text=, tuner=)` for
 a PNG it saved (into
 `report_artifacts.out_dir()`, which the runner points at `report/img/<test>/`)
 with the box's state at that moment, and `panel(digits, caption, text)` for a
 display on its own; the lines
 they print are picked up by the runner, so a test still runs on its own
-unchanged. Filter the cards by dump, kind (unit / regression / slow) and data
-(renders, crashed, timed out); `-k name` runs a subset, `--timeout seconds`
-kills a hung test.
+unchanged. Filter the other tests by dump, kind (unit / regression / slow)
+and data (renders, crashed, timed out); `-k name` runs a subset, `--timeout
+seconds` kills a hung test. The results also go to `report/results.json`;
+`run_all_tests.py --report-only` renders the page again from them (with the
+scripts' current docstrings and `FEATURED`) without running anything, for a
+change to the page itself.
 
 The GitHub Actions workflow (`.github/workflows/tests.yml`) runs
 `run_all_tests.py --slow` on every push, uploads `report/` as a workflow

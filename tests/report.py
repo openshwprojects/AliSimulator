@@ -9,11 +9,17 @@ displays as segment bytes.  This module turns that into a single HTML file
 inline SVG), so it reads the same opened from disk, as a CI artifact and
 published to GitHub Pages.
 
+The page starts with the featured runs, opened: one full run per box (a test
+whose script declares FEATURED), titled "<box> with <SoC> + <panel chip> +
+<tuner>" over what the run shows.  Its screens come first, each capture on
+its own row with a column on its right: the tuner's frequency above the
+front-panel display, both as they were when the screen was captured (a click
+shows the screen at full size); then its assertions, with its description
+and output folded.  Every other test follows as a closed card behind tag
+filters, its description cut to a few lines.
+
 Modelled on the BekenSimulator report (tests/report.py there): summary cards,
-tag filters, one expandable card per test: its assertions, its renders (each
-screen capture on its own row at the card's width, with a column on its
-right: the tuner's frequency above the front-panel display, both as they were
-when the screen was captured) and its output.
+tag filters, one expandable card per test.
 """
 import os
 import sys
@@ -26,6 +32,7 @@ from datetime import datetime, timezone
 from front_panel import SEG_POLYS          # the 7-segment geometry, drawn here as SVG and by tv_gui.py
 
 TITLE = "AliSimulator · Self-Test Report"
+DESC_LINES = 3          # a closed card's description shows this many lines until "more"
 
 
 def _fmt_secs(s):
@@ -109,12 +116,14 @@ def _side_html(img, panel=None):
     a display the test reported right after it); empty when neither applies."""
     parts = []
     if img.get("tuner"):
-        chip, _, value = img["tuner"].partition(": ")     # tuners.describe(): "<chip>: <frequency or state>"
+        # tuners.describe(): "<model>: <frequency or state>"; the model is the
+        # protocol's (an MxL608 is driven as an MxL603), so it goes in the tooltip
+        model, _, value = img["tuner"].partition(": ")
         if not value:
-            chip, value = "tuner", chip
-        parts.append('<div class="tuner" title="what the tuner was tuned to when the screen was captured">'
-                     '<span class="tchip">%s</span><span class="tval">%s</span></div>'
-                     % (html.escape(chip), html.escape(value)))
+            model, value = "", model
+        parts.append('<div class="tuner" title="what the tuner%s was tuned to when the screen was captured">'
+                     '<span class="tchip">tuner</span><span class="tval">%s</span></div>'
+                     % (" (the %s model)" % html.escape(model) if model else "", html.escape(value)))
     panel = img.get("panel") or panel
     if panel:
         parts.append(_panel_figure(panel))
@@ -122,12 +131,12 @@ def _side_html(img, panel=None):
 
 
 def _renders_html(r):
-    """The test's renders, one row each: a screen capture at the card's width
-    and, in a column on its right, the tuner's frequency above the front-panel
-    display -- both as they were when the screen was captured (a box without
-    a display has none; an older test reports a display right after its
-    capture instead).  A display reported on its own gets its own row.  The
-    runner numbers both kinds in the order the test printed them ("order")."""
+    """The test's renders, one row each: a screen capture and, in a column on
+    its right, the tuner's frequency above the front-panel display -- both as
+    they were when the screen was captured (a box without a display has none;
+    an older test reports a display right after its capture instead).  A
+    display reported on its own gets its own row.  The runner numbers both
+    kinds in the order the test printed them ("order")."""
     items = [("image", i) for i in r.get("images", [])] + [("panel", p) for p in r.get("panels", [])]
     items.sort(key=lambda kind_item: kind_item[1].get("order", 0))
     rows = []
@@ -155,17 +164,45 @@ def _tags_html(r):
                    for t in r.get("tags", []))
 
 
-def _test_card(r):
-    ok = r["passed"]
-    status_cls = "pass" if ok else "fail"
-    status_txt = "PASS" if ok else ("CRASH" if r.get("crashed") else "FAIL")
+def _status(r):
+    """(card class, status badge) of a result."""
+    if r["passed"]:
+        return "pass", "PASS"
+    return "fail", "CRASH" if r.get("crashed") else "FAIL"
+
+
+def _checks_html(r):
+    """The test's [PASS] / [FAIL] lines as a list."""
     checks = r.get("checks") or []
-    checks_html = "".join(
-        '<li class="%s"><span class="chk">%s</span>%s</li>'
-        % ("found" if c["ok"] else "missing", "✓" if c["ok"] else "✗", html.escape(c["text"]))
-        for c in checks)
     if not checks:
-        checks_html = '<li class="none">no [PASS] / [FAIL] lines; the verdict is the exit code (%d)</li>' % r.get("exit_code", 0)
+        return ('<li class="none">no [PASS] / [FAIL] lines; the verdict is the exit code (%s)</li>'
+                % r.get("exit_code", 0))
+    return "".join('<li class="%s"><span class="chk">%s</span>%s</li>'
+                   % ("found" if c["ok"] else "missing", "✓" if c["ok"] else "✗", html.escape(c["text"]))
+                   for c in checks)
+
+
+def _log_html(r, title="Output"):
+    """The test's whole output, with a Copy button."""
+    return ('<div class="stitle logbar"><span>%s</span><button class="copy-btn" type="button">Copy</button></div>'
+            '<pre class="log">%s</pre>' % (title, _highlight(r.get("output", ""), r.get("checks") or [])))
+
+
+def _desc_html(text):
+    """The description; a long one shows its first DESC_LINES lines and a
+    switch for the rest."""
+    text = text or "(no description)"
+    if text.count("\n") < DESC_LINES and len(text) <= 80 * DESC_LINES:
+        return '<p class="desc">%s</p>' % html.escape(text)
+    return '<p class="desc clamp">%s</p><button class="more-btn" type="button">more</button>' % html.escape(text)
+
+
+def _timed(r):
+    return ' <span class="warn">(timed out)</span>' if r.get("timed_out") else ""
+
+
+def _test_card(r):
+    status_cls, status_txt = _status(r)
     n_img = len(r.get("images", [])) + len(r.get("panels", []))
     first = next((i for i in r.get("images", []) if not i.get("missing")), None)
     thumb = ""
@@ -176,7 +213,6 @@ def _test_card(r):
             thumb = ""
     elif r.get("panels"):
         thumb = '<span class="thumb-svg">%s</span>' % panel_svg(r["panels"][-1]["digits"], 0.55)
-    timed = ' <span class="warn">(timed out)</span>' if r.get("timed_out") else ""
     return """
     <details class="card {status_cls}" data-tags="{tagdata}">
       <summary>
@@ -195,27 +231,107 @@ def _test_card(r):
         {thumb}
       </summary>
       <div class="body">
-        <p class="desc">{desc}</p>
-        <div class="meta"><span class="args"><code>python {script}</code></span></div>
+        {desc}
+        <div class="meta"><span class="args"><code>python tests/{script}</code></span></div>
         <div class="checks"><div class="stitle">Assertions</div><ul>{checks}</ul></div>
         {renders}
-        <div class="stitle logbar"><span>Output</span><button class="copy-btn" type="button">Copy</button></div>
-        <pre class="log">{log}</pre>
+        {log}
       </div>
     </details>
     """.format(
         status_cls=status_cls, status_txt=status_txt,
-        name=html.escape(r["name"]), secs=_fmt_secs(r["elapsed"]), timed=timed,
+        name=html.escape(r["name"]), secs=_fmt_secs(r["elapsed"]), timed=_timed(r),
         imgs=("%d image%s" % (n_img, "" if n_img == 1 else "s")) if n_img else "",
         tags=_tags_html(r),
         tagdata=html.escape("|".join("%s:%s" % (t.get("group", "feature"), t["name"]) for t in r.get("tags", []))),
         thumb=thumb,
+        desc=_desc_html(r.get("description")),
+        script=html.escape(r["script"]),
+        checks=_checks_html(r),
+        renders=('<div class="stitle">Images (%d)</div>%s' % (n_img, _renders_html(r))) if n_img else "",
+        log=_log_html(r),
+    )
+
+
+def featured_title(f):
+    """A featured run's title: "<device> with <chip> + <chip> ..."."""
+    chips = " + ".join(f.get("chips") or [])
+    return f["device"] + (" with " + chips if chips else "")
+
+
+def featured_subtitle(f):
+    """What a featured run shows, as one line: "Boots to screen, reacts to remote"."""
+    text = ", ".join(f.get("shows") or [])
+    return text[:1].upper() + text[1:]
+
+
+def _anchor(r):
+    return "run-" + re.sub(r"[^A-Za-z0-9_-]", "-", os.path.splitext(r["script"])[0])
+
+
+def _featured_card(r):
+    """A featured run, opened: the box and its chips over what the run shows,
+    its screens, its assertions, then its description and output folded."""
+    f = r["featured"]
+    status_cls, status_txt = _status(r)
+    chips = " + ".join(html.escape(c) for c in f.get("chips") or [])
+    has_renders = r.get("images") or r.get("panels")
+    return """
+    <details class="card featured {status_cls}" id="{anchor}" open>
+      <summary>
+        <span class="dot"></span>
+        <span class="head">
+          <span class="row1">
+            <span class="ftitle"><span class="dev">{device}</span>{chips}</span>
+            <span class="badges">
+              <span class="badge status">{status_txt}</span>
+              <span class="badge">{secs}{timed}</span>
+            </span>
+          </span>
+          <span class="fsub">{subtitle}</span>
+        </span>
+      </summary>
+      <div class="body">
+        {renders}
+        <div class="checks"><div class="stitle">Assertions</div><ul>{checks}</ul></div>
+        <details class="fold"><summary>About this run</summary>
+          <p class="desc">{desc}</p>
+          <div class="meta"><span class="args"><code>python tests/{script}</code></span><span class="tags">{tags}</span></div>
+        </details>
+        <details class="fold"><summary>Output</summary>{log}</details>
+      </div>
+    </details>
+    """.format(
+        status_cls=status_cls, status_txt=status_txt, anchor=_anchor(r),
+        device=html.escape(f["device"]),
+        chips=(' <span class="with">with</span> <span class="chips">%s</span>' % chips) if chips else "",
+        subtitle=html.escape(featured_subtitle(f)),
+        secs=_fmt_compact(r["elapsed"]), timed=_timed(r),
+        renders=_renders_html(r) if has_renders else
+        '<p class="empty">No screen was captured; see the output.</p>',
+        checks=_checks_html(r),
         desc=html.escape(r.get("description") or "(no description)"),
         script=html.escape(r["script"]),
-        checks=checks_html,
-        renders=('<div class="stitle">Images (%d)</div>%s' % (n_img, _renders_html(r))) if n_img else "",
-        log=_highlight(r.get("output", ""), checks),
+        tags=_tags_html(r),
+        log=_log_html(r, ""),
     )
+
+
+def _featured_section(featured, more):
+    """The featured runs with an index of their boxes (and, when `more`, a
+    link down to the other tests)."""
+    index = "".join('<a href="#%s" class="%s"><span class="fdot"></span>%s</a>'
+                    % (_anchor(r), _status(r)[0], html.escape(r["featured"]["device"])) for r in featured)
+    if more:
+        index += '<a href="#tests" class="more">Other tests ↓</a>'
+    return """
+  <section class="group featured-group">
+    <h2 class="gtitle">Featured runs <span class="gcount">{count}</span></h2>
+    <p class="ghint">One full run per box. Each row is a screen its firmware drew, with the tuner above the
+      front-panel display as they were at that moment; click a screen to see it at full size.</p>
+    <nav class="findex">{index}</nav>
+    {cards}
+  </section>""".format(count=len(featured), index=index, cards="".join(_featured_card(r) for r in featured))
 
 
 def _filters_html(results):
@@ -248,6 +364,16 @@ def _filters_html(results):
   </div>""" % "".join(blocks)
 
 
+def _others_section(others, title):
+    return """
+  <section class="group others" id="tests">
+    <h2 class="gtitle">{title} <span class="gcount">{count}</span></h2>
+    {filters}
+    {cards}
+  </section>""".format(title=title, count=len(others), filters=_filters_html(others),
+                       cards="".join(_test_card(r) for r in others))
+
+
 def generate(results, meta, out_path):
     """Render results to a single HTML file at out_path.  Returns out_path."""
     passed = sum(1 for r in results if r["passed"])
@@ -267,9 +393,13 @@ def generate(results, meta, out_path):
         generated_ms = str(int(datetime(*(int(x) for x in m.groups()), tzinfo=timezone.utc).timestamp() * 1000))
     dumps = sorted({t["name"] for r in results for t in r.get("tags", []) if t.get("group") == "dump"})
     n_img = sum(len(r.get("images", [])) + len(r.get("panels", [])) for r in results)
+    # the featured runs first, by box; then every other test in the runner's order
+    featured = sorted((r for r in results if r.get("featured")), key=lambda r: featured_title(r["featured"]).lower())
+    others = [r for r in results if not r.get("featured")]
+    sections = (_featured_section(featured, bool(others)) if featured else "") + \
+        (_others_section(others, "Other tests" if featured else "Tests") if others else "")
     page = _PAGE.format(
         title=html.escape(TITLE),
-        overall_cls="pass" if failed == 0 else "fail",
         passed=passed, failed=failed, total=len(results),
         runtime=_fmt_compact(meta.get("total_time", 0)),
         images=n_img,
@@ -278,8 +408,8 @@ def generate(results, meta, out_path):
         generated=html.escape(meta.get("generated_at", "")), generated_ms=generated_ms,
         commit_html=commit_html, run_html=run_html,
         note=html.escape(meta.get("note", "")),
-        filters=_filters_html(results),
-        cards="".join(_test_card(r) for r in results),
+        sections=sections,
+        desc_lines=DESC_LINES,
         script=_SCRIPT,
     )
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
@@ -317,12 +447,24 @@ _PAGE = """<!doctype html>
   .sub a {{ color:var(--accent); text-decoration:none; }}
   .ago {{ font-style:italic; opacity:.8; white-space:nowrap; }}
   .note {{ color:var(--muted); font-size:13px; margin:-10px 0 16px; }}
-  .summary {{ display:flex; gap:10px; flex-wrap:wrap; margin:0 0 22px; }}
+  .summary {{ display:flex; gap:10px; flex-wrap:wrap; margin:0 0 6px; }}
   .stat {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:96px; }}
   .stat .n {{ font-size:24px; font-weight:700; }}
   .stat .l {{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }}
   .stat.pass .n {{ color:var(--pass); }} .stat.fail .n {{ color:var(--fail); }}
-  .filters {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:0 0 16px; }}
+  .group {{ margin:28px 0 0; }}
+  .gtitle {{ font-size:18px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }}
+  .gcount {{ font-size:12px; font-weight:600; color:var(--muted); background:var(--card); border:1px solid var(--line);
+    border-radius:20px; padding:0 8px; }}
+  .ghint {{ color:var(--muted); font-size:13px; margin:0 0 10px; }}
+  .findex {{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 4px; }}
+  .findex a {{ font-size:12.5px; padding:2px 10px; border-radius:20px; border:1px solid var(--line); background:var(--card);
+    color:var(--fg); text-decoration:none; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }}
+  .findex a:hover {{ border-color:var(--accent); color:var(--accent); }}
+  .fdot {{ width:7px; height:7px; border-radius:50%; background:var(--pass); flex:0 0 auto; }}
+  .findex a.fail .fdot {{ background:var(--fail); }}
+  .findex a.more {{ color:var(--muted); background:transparent; }}
+  .filters {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:10px 0 16px; }}
   .fhead {{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }}
   .fhint {{ font-size:12px; color:var(--muted); }}
   .fclear {{ font-size:12px; padding:3px 10px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--fg); cursor:pointer; }}
@@ -337,13 +479,23 @@ _PAGE = """<!doctype html>
   .fstatus {{ margin-top:8px; font-size:12px; color:var(--muted); }}
   .card {{ background:var(--card); border:1px solid var(--line); border-radius:10px; margin:10px 0; overflow:hidden; }}
   .card.fail {{ border-color:var(--fail); }}
+  .card.featured {{ margin:14px 0; scroll-margin-top:12px; }}
+  .group.others {{ scroll-margin-top:12px; }}
   summary {{ display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; list-style:none; }}
   summary::-webkit-details-marker {{ display:none; }}
+  .card.featured > summary {{ align-items:flex-start; padding:14px 18px; }}
   .dot {{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; background:var(--pass); }}
   .card.fail .dot {{ background:var(--fail); }}
+  .card.featured .dot {{ margin-top:8px; }}
   .head {{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }}
+  .card.featured .head {{ gap:3px; }}
   .row1 {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
   .title {{ font-weight:600; flex:1; min-width:0; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:14px; }}
+  .ftitle {{ flex:1; min-width:0; font-size:18px; line-height:1.35; }}
+  .ftitle .dev {{ font-weight:700; }}
+  .ftitle .with {{ color:var(--muted); }}
+  .ftitle .chips {{ font-weight:600; }}
+  .fsub {{ font-size:14.5px; color:var(--muted); }}
   .thumb {{ height:44px; width:78px; object-fit:cover; border-radius:5px; border:1px solid var(--line); background:#000; flex:0 0 auto; }}
   .thumb-svg {{ flex:0 0 auto; display:inline-flex; }}
   .tags {{ display:flex; gap:5px; flex-wrap:wrap; }}
@@ -362,11 +514,22 @@ _PAGE = """<!doctype html>
   .card.fail .badge.status {{ background:var(--failbg); color:var(--fail); border-color:transparent; }}
   .warn {{ color:var(--fail); }}
   .body {{ padding:2px 16px 16px; border-top:1px solid var(--line); }}
+  .card.featured > .body {{ padding:14px 18px 14px; }}
   .desc {{ color:var(--fg); margin:12px 0; white-space:pre-line; }}
+  .desc.clamp {{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:{desc_lines}; line-clamp:{desc_lines};
+    overflow:hidden; margin-bottom:2px; }}
+  .more-btn {{ border:0; background:none; padding:0; margin:0 0 12px; color:var(--accent); cursor:pointer; font-size:13px; }}
   .meta {{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }}
   .args code {{ color:var(--muted); font-size:12px; }}
   .stitle {{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:14px 0 6px; }}
   .logbar {{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; }}
+  details.fold {{ margin-top:12px; border-top:1px solid var(--line); }}
+  details.fold > summary {{ display:block; padding:8px 0 0; font-size:12px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--muted); }}
+  details.fold > summary::before {{ content:"▸ "; }}
+  details.fold[open] > summary::before {{ content:"▾ "; }}
+  details.fold > summary:hover {{ color:var(--accent); }}
+  details.fold .logbar {{ margin-top:6px; }}
   .checks ul {{ list-style:none; margin:0; padding:0; }}
   .checks li {{ display:flex; gap:8px; align-items:baseline; padding:2px 0; font-size:13.5px; }}
   .checks li.none {{ color:var(--muted); font-style:italic; }}
@@ -385,14 +548,15 @@ _PAGE = """<!doctype html>
   .lpass {{ color:var(--pass); font-weight:700; }}
   .lfail {{ color:var(--fail); font-weight:700; }}
   .empty {{ color:var(--muted); font-size:13px; }}
-  .renders {{ display:flex; flex-direction:column; gap:12px; }}
-  .render {{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }}
+  .renders {{ display:flex; flex-direction:column; gap:14px; }}
+  .render {{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; }}
   .shot {{ margin:0; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px;
-    flex:1 1 420px; min-width:0; }}
-  .shot img {{ display:block; width:100%; height:auto; border-radius:4px; background:#000; }}
+    flex:0 1 676px; min-width:0; }}
+  .shot img {{ display:block; width:100%; height:auto; border-radius:4px; background:#000; cursor:zoom-in; }}
   .shot figcaption {{ font-size:12px; color:var(--muted); margin-top:6px; }}
-  .shot.panel {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; }}
-  .side {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:stretch; gap:10px; }}
+  .shot.panel {{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; max-width:100%; }}
+  .shot.panel svg {{ max-width:100%; height:auto; }}
+  .side {{ flex:0 1 auto; min-width:0; max-width:100%; display:flex; flex-direction:column; align-items:stretch; gap:10px; }}
   .tuner {{ background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px;
     text-align:center; white-space:nowrap; }}
   .tuner .tchip {{ display:block; font-size:11px; color:var(--muted); letter-spacing:.03em; }}
@@ -405,6 +569,15 @@ _PAGE = """<!doctype html>
   svg.seg .bg {{ fill:var(--seg-bg); }}
   svg.seg .on {{ fill:var(--seg-on); }}
   svg.seg .off {{ fill:var(--seg-off); }}
+  @media (max-width: 520px) {{
+    .tuner {{ white-space:normal; }}
+    .tuner .tval {{ font-size:15px; }}
+    .ftitle {{ font-size:16px; }}
+  }}
+  .lightbox {{ position:fixed; inset:0; z-index:20; background:rgba(0,0,0,.88); display:flex; align-items:center;
+    justify-content:center; padding:2vh 2vw; cursor:zoom-out; }}
+  .lightbox[hidden] {{ display:none; }}
+  .lightbox img {{ max-width:100%; max-height:100%; background:#000; }}
 </style>
 </head>
 <body>
@@ -422,18 +595,19 @@ _PAGE = """<!doctype html>
     <div class="stat"><div class="n">{images}</div><div class="l">Images</div></div>
     <div class="stat" title="{dumps_list}"><div class="n">{dumps}</div><div class="l">Dumps</div></div>
   </div>
-  {filters}
-  {cards}
+  {sections}
 </div>
+<div class="lightbox" hidden><img alt=""></div>
 {script}
 </body>
 </html>
 """
 
 
-# Page behaviour: the live "generated N ago" counter, tag filtering (same
-# group OR-ed, groups AND-ed) and the Copy buttons.  A plain string, so its
-# braces need no escaping for .format().
+# Page behaviour: the live "generated N ago" counter, tag filtering of the
+# other tests (same group OR-ed, groups AND-ed), the descriptions' "more"
+# switches, a screen at full size on a click and the Copy buttons.  A plain
+# string, so its braces need no escaping for .format().
 _SCRIPT = """<script>
 (function () {
   function fmtAgo(ms) {
@@ -460,10 +634,10 @@ _SCRIPT = """<script>
 })();
 
 (function () {
-  var bar = document.querySelector('.filters');
+  var bar = document.querySelector('.others .filters');
   if (!bar) return;
   var chips = Array.prototype.slice.call(bar.querySelectorAll('.fchip'));
-  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.others .card'));
   var status = bar.querySelector('.fstatus');
   var clear = bar.querySelector('.fclear');
   var sel = {};
@@ -519,6 +693,29 @@ _SCRIPT = """<script>
     apply();
   });
   apply();
+})();
+
+document.querySelectorAll('.more-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var cut = btn.previousElementSibling.classList.toggle('clamp');
+    btn.textContent = cut ? 'more' : 'less';
+  });
+});
+
+(function () {
+  var box = document.querySelector('.lightbox');
+  var big = box.querySelector('img');
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.tagName === 'IMG' && t.closest('.shot')) {
+      big.src = t.src;
+      big.alt = t.alt;
+      box.hidden = false;
+    } else if (!box.hidden && box.contains(t)) {
+      box.hidden = true;
+    }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') box.hidden = true; });
 })();
 
 document.querySelectorAll('.copy-btn').forEach(function (btn) {

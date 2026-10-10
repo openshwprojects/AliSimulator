@@ -10,14 +10,17 @@ It also writes report/index.html (report.py): one page with every test's
 verdict, timing, description (the script's docstring), its [PASS] / [FAIL]
 assertions and full output, and the images the test attached through
 report_artifacts.py -- the OSD screens it rendered and the front-panel LED
-displays it decoded.  The GitHub Actions workflow publishes that page to
-GitHub Pages after every push.
+displays it decoded.  A script that declares FEATURED -- the full run of one
+box: {"device", "chips", "shows"} -- is shown first, opened.  The results go
+to report/results.json too.  The GitHub Actions workflow publishes that page
+to GitHub Pages after every push.
 
   python run_all_tests.py            the default suite (a few minutes)
   python run_all_tests.py --slow     plus the multi-minute firmware runs
   python run_all_tests.py -k remote  only scripts whose name contains 'remote'
   python run_all_tests.py --timeout 1800   kill a test after 30 minutes
   python run_all_tests.py --slow --jobs 2  two tests at a time (output per test, not streamed)
+  python run_all_tests.py --report-only    the page again from report/results.json, runs nothing
 """
 
 import ast
@@ -94,6 +97,25 @@ def _description(path):
         return (ast.get_docstring(ast.parse(Path(path).read_text(encoding="utf-8"))) or "").strip()
     except Exception:
         return ""
+
+
+def _featured(path):
+    """The script's module-level FEATURED literal, read without running it:
+    {"device": the box, "chips": its SoC, panel chip, tuner, "shows": what the
+    run shows}.  The report puts such a run first, opened, under the title
+    "<device> with <chip> + <chip>".  None for any other script."""
+    try:
+        tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "FEATURED" for t in node.targets):
+            try:
+                value = ast.literal_eval(node.value)
+            except ValueError:
+                return None
+            return value if isinstance(value, dict) and value.get("device") else None
+    return None
 
 
 def _tags(path, result):
@@ -196,7 +218,7 @@ def run_test_file(test_file_path, timeout=None, stream=True):
     env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONFAULTHANDLER="1", PYTHONIOENCODING="utf-8",
                ALISIM_REPORT_DIR=img_dir, PYTHONPATH=os.pathsep.join(pythonpath))
     result = {"name": test_name, "script": test_name, "description": _description(test_file_path),
-              "passed": False, "elapsed": 0.0, "exit_code": None, "crashed": False, "timed_out": False,
+              "featured": _featured(test_file_path), "passed": False, "elapsed": 0.0, "exit_code": None, "crashed": False, "timed_out": False,
               "checks": [], "output": "", "images": [], "panels": []}
     lines = []
     start = time.time()
@@ -245,7 +267,8 @@ def run_test_file(test_file_path, timeout=None, stream=True):
 
 
 def write_report(results, note=""):
-    """Emit report/index.html; never fails the run itself."""
+    """Emit report/index.html, and the results behind it as
+    report/results.json (for --report-only); never fails the run itself."""
     try:
         run_id = os.environ.get("GITHUB_RUN_ID")
         run_url = None
@@ -262,13 +285,36 @@ def write_report(results, note=""):
         }
         path = report.generate(results, meta, str(REPORT_DIR / "index.html"))
         print(f"HTML report written: {path}")
+        with open(REPORT_DIR / "results.json", "w", encoding="utf-8") as f:
+            json.dump({"meta": meta, "results": results}, f, ensure_ascii=False, indent=1)
     except Exception as e:
         print(f"WARN: could not write the HTML report: {e!r}")
+
+
+def report_only():
+    """--report-only: report/index.html again from report/results.json (the
+    last run's results), each script's docstring and FEATURED read anew, so a
+    change to the page's layout or to a test's description shows without
+    running anything."""
+    if not (REPORT_DIR / "results.json").exists():
+        print(f"No {REPORT_DIR / 'results.json'}: run the tests first.")
+        sys.exit(1)
+    with open(REPORT_DIR / "results.json", encoding="utf-8") as f:
+        saved = json.load(f)
+    for r in saved["results"]:
+        script = TESTS_DIR / r["script"]
+        if script.exists():
+            r["description"], r["featured"] = _description(script), _featured(script)
+    path = report.generate(saved["results"], saved["meta"], str(REPORT_DIR / "index.html"))
+    print(f"HTML report written: {path}")
 
 
 def main():
     """Main test runner function."""
     args = sys.argv[1:]
+    if "--report-only" in args:
+        report_only()
+        return
     include_slow = "--slow" in args
     timeout = None
     if "--timeout" in args:

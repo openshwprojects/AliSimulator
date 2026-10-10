@@ -19,6 +19,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Globo STB HD N3", "chips": ["ALi M3801", "TM1650", "R820T"],
+            "shows": ["boots to screen", "reacts to remote"]}
+
 screen_regression.run(
     dump="Ali_3801_Globo_DVBT_dump SPI 4mb.bin",
     expected="globo_screen.png",

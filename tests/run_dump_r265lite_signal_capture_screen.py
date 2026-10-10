@@ -18,6 +18,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Opticum Blue R265 Lite (firmware 1.1.5)", "chips": ["ALi M3822P", "HD2015", "MxL608"],
+            "shows": ["boots to screen", "reacts to remote", "shows channel scan with a signal"]}
+
 screen_regression.run(
     dump="Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs",
     expected="r265lite_signal_screen.png",

@@ -26,6 +26,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Ferguson Ariva T650i", "chips": ["ALi M3801", "FD650K", "MxL603"],
+            "shows": ["boots to screen", "shows channel scan", "reacts to remote"]}
+
 screen_regression.run(
     dump="FERGUSON ARIVA T650i/T650i_V1.13B4_20160721.abs",
     expected="t650i_screen.png",

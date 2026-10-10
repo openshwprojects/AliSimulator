@@ -33,6 +33,10 @@ from simulator import AliMipsSimulator
 BOOT_LIMIT_S = 15 * 60
 KEY_LIMIT_S = 3 * 60
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Opticum STB HD N2", "chips": ["ALi M3801", "TM1650"],
+            "shows": ["boots to screen", "reacts to remote", "shows channel scan"]}
+
 
 def main():
     # A boot the simulator itself crashes (the asynchronous slice-stop race,
@@ -57,6 +61,7 @@ def run():
     panel.dump_enabled = False
     sim.setGpioHandler(panel.on_gpio_write)
     sim.loadFile("dump_maciej.bin")
+    sim.attach_tuner()          # the sidecar's tuner model, if it names one (no signal)
     start = time.time()
 
     def run_until_drawn(min_ops, limit, quiet_needed=6):
@@ -81,27 +86,30 @@ def run():
         while time.time() - t < seconds:
             sim.run(max_instructions=sim.instruction_count + 5_000_000)
 
-    def snap(name):
-        rgb = sim.capture_screen()
-        if out:
+    def snap(name, caption):
+        """The screen now; saved and attached to the report (with the front
+        panel and the tuner of that moment) when there is an output directory."""
+        path = os.path.join(out, f"remote_{name}.png") if out else None
+        if path:
             os.makedirs(out, exist_ok=True)
-            path = os.path.join(out, f"remote_{name}.png")
-            sim.capture_screen(path)
-            report_artifacts.image(path, f"screen: {name} ({sim.ge_ops} GE commands)")
+        rgb = sim.capture_screen(path)
+        if path:
+            report_artifacts.image(path, f"{caption} ({sim.ge_ops} GE commands)", panel=panel.digits,
+                                   panel_text=panel.get_display_text(), tuner=sim.tuner_info())
         return rgb
 
     if not run_until_drawn(300, BOOT_LIMIT_S):
         print(f"[FAIL] the wizard was not drawn (GE commands: {sim.ge_ops})")
         sys.exit(1)
     print(f"[{time.time() - start:6.1f}s] wizard drawn ({sim.ge_ops} GE commands)")
-    before = snap("0_start")
+    before = snap("0_start", "the first-install wizard after the boot")
     ok = True
-    # (key, minimum changed pixels, GE commands to wait for, quiet slices needed)
-    steps = (("DOWN", 2000, 1, 6),        # step 1: language highlight
-             ("OK", 20000, 1, 6),         # step 2: aspect-ratio list
-             ("DOWN", 1500, 1, 6),        # its highlight moves
-             ("OK", 20000, 40, 0))        # step 3: channel search, redraws continuously
-    for i, (key, min_px, min_ops, quiet) in enumerate(steps, 1):
+    # (key, what it does, minimum changed pixels, GE commands to wait for, quiet slices needed)
+    steps = (("DOWN", "the language highlight moves", 2000, 1, 6),
+             ("OK", "the wizard's step 2, the aspect-ratio list", 20000, 1, 6),
+             ("DOWN", "the aspect-ratio highlight moves", 1500, 1, 6),
+             ("OK", "step 3, the channel search, starts", 20000, 40, 0))     # it redraws continuously
+    for i, (key, what, min_px, min_ops, quiet) in enumerate(steps, 1):
         try:
             addr, cmd = sim.press_key(key)
         except Exception as e:
@@ -109,7 +117,7 @@ def run():
             sys.exit(1)
         ops = sim.ge_ops
         drawn = run_until_drawn(ops + min_ops, KEY_LIMIT_S, quiet)
-        after = snap(f"{i}_{key}")
+        after = snap(f"{i}_{key}", f"{key}: {what}")
         changed = int((after != before).any(axis=2).sum())
         print(f"[{time.time() - start:6.1f}s] {key} (NEC 0x{addr:02X}/0x{cmd:02X}): "
               f"{sim.ge_ops - ops} GE commands, {changed} pixels changed")
@@ -122,14 +130,13 @@ def run():
         # the channel search is running: its progress screen keeps changing
         ops = sim.ge_ops
         run_for(40)
-        after = snap("5_search_progress")
+        after = snap("5_search_progress", "the channel search 40 s later")
         changed = int((after != before).any(axis=2).sum())
         print(f"[{time.time() - start:6.1f}s] channel search 40 s later: {sim.ge_ops - ops} GE commands, "
               f"{changed} pixels changed")
         if sim.ge_ops - ops < 10 or changed < 200:
             print("[FAIL] the channel-search progress screen did not advance")
             ok = False
-    report_artifacts.panel(panel.digits, "front panel (TM1650) at the end", panel.get_display_text())
     if not ok:
         sys.exit(1)
     print(f"[PASS] the firmware's menus follow the IR remote ({time.time() - start:.0f}s total)")

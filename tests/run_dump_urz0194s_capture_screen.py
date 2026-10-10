@@ -24,6 +24,10 @@ from tm1628_decoder import TM1628Decoder
 
 RIGHT = TM1628Decoder.key_code(9, 1)         # steps the highlighted value (KS9/K2 is power)
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Cabletech URZ0194S", "chips": ["ALi M3801", "TM1628-class", "MxL603"],
+            "shows": ["boots to screen", "shows noCH on its panel", "reacts to panel keys"]}
+
 screen_regression.run(
     dump="CABLETECH_urz0194s_v1_0_8.bin",
     expected="urz0194s_screen.png",

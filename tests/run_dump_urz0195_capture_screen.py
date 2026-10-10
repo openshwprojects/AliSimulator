@@ -21,6 +21,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
 
+# this box's card at the top of the report (run_all_tests.py reads it from the source)
+FEATURED = {"device": "Cabletech URZ0195 (2012 firmware)", "chips": ["ALi M3801", "uPD16312-class", "MxL5007T"],
+            "shows": ["boots to screen", "shows its channel on the panel", "reacts to remote"]}
+
 screen_regression.run(
     dump="urz0195_full_dump(ESMTF25L3204).bin",
     expected="urz0195_2012_screen.png",
