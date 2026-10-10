@@ -29,7 +29,12 @@ their file names.
   applications start over through the bootloader -- and the T50's bootloader
   probes the RAM 128 MB up, where the family shows it again; the URZ0083's
   application then runs (`run_dump_urz0083_app_runs.py`) without drawing yet
-  (see the sidecars). The
+  (see the sidecars). The M3606's bootloader starts its SEE co-processor --
+  the second MIPS core of ALi's dual-CPU chips -- and waits for it:
+  `chips/see.py` runs the SEE's boot code for that handshake on a second
+  Unicorn instance sharing the RAM and the register block
+  (`run_dump_urz0086_see_start.py`), but not the SEE's own program, so the
+  application's first message to the SEE times out at its SDBBP assertion. The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash

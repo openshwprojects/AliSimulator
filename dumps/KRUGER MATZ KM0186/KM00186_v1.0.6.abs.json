@@ -30,11 +30,11 @@
     "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v106.rar; downloaded on 2026-10-10"
   },
   "simulator": {
-    "boots": false,
-    "application": false,
+    "boots": true,
+    "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader unpacks the code (it prints \"success!\") and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run."
+    "note": "As the M3602 family (2026-10-10): the bootloader starts the SEE co-processor -- chips/see.py runs its boot code at 0xA1E8D688, which copies the SEE's program into place, sets the started flag and parks the SEE -- prints \"success!\" and starts the application, which starts the SEE's own program at 0xA6000200 (not run) and, when its first message to the SEE times out, stops at its SDBBP assertion (~80 M instructions; Unicorn: unhandled exception 16)."
   },
   "desc": [
     "Kruger&Matz KM0186 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",

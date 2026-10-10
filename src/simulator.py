@@ -3000,8 +3000,16 @@ class AliMipsSimulator:
         else:
             # No full rescan for timer ticks (100-250 ms each): the vector chunk
             # is scanned when it first executes and the periodic rescan covers
-            # code written later.
+            # code written later -- except the vector's own page, scanned here:
+            # an application that writes its handler over the bootloader's takes
+            # its first tick before the periodic rescan sees the new code, and an
+            # EBase read that runs natively reports Unicorn's CPU number 0x3FF
+            # (the URZ0086's handler then takes its second-CPU path).
             vector = self._enter_interrupt(self.mu, epc)
+            if self._code_hook_h is None and (vector & 0x1FFFFFFF) < min(self.ram_size, self._RAM_CODE_LIMIT):
+                self._rescan_cp0_sites([(0x80000000 | (vector & 0x1FFFF000), 0x1000)])
+                if self._tb_flush_needed:
+                    self._flush_tb()
         self.mu.reg_write(UC_MIPS_REG_PC, vector)
         return vector
 

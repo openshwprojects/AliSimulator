@@ -17,6 +17,12 @@ first word: the RAM shows up again above its size here, as on a controller
 that ignores the upper address bits.  (It still resets itself after its
 flash checks -- see its sidecar.)
 
+The M3606 (URZ0086 / KM0186) has a SEE co-processor, which its bootloader
+starts and waits for: see.py runs the SEE's boot code for that handshake.
+The application then starts the SEE's own program, which is not run, so
+its first message to the SEE times out and it stops at its SDBBP
+assertion.
+
 Recognised by the chunk chain: the HDCPKey chunk's version "Demo s3602"
 (the M3801 images say "Demo M3801"), or a maincode chunk named after the
 SDK's M3602 / M3606 demo projects ("Demo M3602", "Demo M3606",
@@ -27,6 +33,7 @@ import ctypes
 from unicorn import UC_PROT_ALL, UcError
 
 from .base import ChipFamily, chunk_chain
+from .see import SeeStart
 
 RAM_WINDOW_END = 0x0F000000         # the flash window starts here (simulator.py)
 
@@ -56,3 +63,5 @@ class M3602(ChipFamily):
                     sim.mu.mem_map_ptr(seg + phys, size, UC_PROT_ALL, ptr)
                 except UcError:
                     pass            # mapped when this simulator had the family before
+        # The M3606's SEE co-processor: its start handshake (see.py)
+        self.see = SeeStart(sim)
