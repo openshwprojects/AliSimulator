@@ -30,11 +30,11 @@
     "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v119.rar; downloaded on 2026-10-10"
   },
   "simulator": {
-    "boots": null,
-    "application": null,
-    "display": null,
+    "boots": false,
+    "application": false,
+    "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602); not run yet."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints only its start marker (0x01) and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run."
   },
   "desc": [
     "Cabletech URZ0086 firmware V1.1.9, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v119.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",

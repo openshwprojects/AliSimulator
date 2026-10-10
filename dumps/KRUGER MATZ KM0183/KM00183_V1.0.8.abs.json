@@ -30,11 +30,11 @@
     "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v108.rar; downloaded on 2026-10-10"
   },
   "simulator": {
-    "boots": null,
-    "application": null,
-    "display": null,
+    "boots": true,
+    "application": true,
+    "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602); not run yet."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
   },
   "desc": [
     "Kruger&Matz KM0183 firmware V1.0.8, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v108.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",

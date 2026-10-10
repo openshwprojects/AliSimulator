@@ -17,9 +17,9 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `CABLETECH URZ0083Q/Cabletech URZ0083Q/EN25Q32B.bin` | Cabletech URZ0083Q | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2842886.html#13677891), Fairgrounds |
 | `CABLETECH URZ0086/URZ0086_V1.0.7.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v107.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH URZ0086/URZ0086_v1.1.0.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v110.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0086/URZ0086_v1.1.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0086/URZ0086_V1.1.9.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v119.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0086/URZ0086_V1.2.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v121.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0086/URZ0086_v1.1.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0086/URZ0086_V1.1.9.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v119.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0086/URZ0086_V1.2.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v121.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH_urz0194s_v1_0_8.bin` | Cabletech URZ0194S | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2981605.html#14403424), Krzyś122333 |
 | `cableteh_urz0195__w25q32bv.BIN` | Cabletech URZ0195 | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | uPD16312-class 3-wire (CLK 31, DIO 9, STB 14) | yes / yes / no | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2973485.html#14357941), Bell72 |
 | `dump.bin` | Comsat TE 1050 HD | ALi M3801 | MaxLinear MxL603 family, by its wake-up: at start the app... | - | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4155976.html), p.kaczmarek2 |
@@ -31,12 +31,12 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `FERGUSON ARIVA T760i/Ferguson_T760i_V1.5B0-22122020.abs` | Ferguson Ariva T760i | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, "Ali3505", c3505_phy_set) | - | FD650K (TM1650-compatible) | - / - / - | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T760i/firmware/Ferguson_T760i_V1.5B0-22122020.zip), Ferguson |
 | `FERGUSON ARIVA T760i/Ferguson_T760i_V1.5B0-28012021.abs` | Ferguson Ariva T760i | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, "Ali3505", c3505_phy_set) | - | FD650K (TM1650-compatible) | - / - / - | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T760i/firmware/Ferguson_T760i_V1.5B0-28012021.zip), Ferguson |
 | `FERGUSON ARIVA T760i/Ferguson_T760i_V1.5B4-14092021.abs` | Ferguson Ariva T760i | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, "Ali3505", c3505_phy_set) | - | FD650K (TM1650-compatible) | - / - / - | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T760i/firmware/Ferguson_T760i_V1.5B4-14092021.zip), Ferguson |
-| `KRUGER MATZ KM0183/J1100393-KM00183-MC6258-V1.0.4.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `KRUGER MATZ KM0183/KM00183_V1.0.6.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `KRUGER MATZ KM0183/KM00183_V1.0.8.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `KRUGER MATZ KM0186/KM00186_v1.0.6.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `KRUGER MATZ KM0186/KM00186_V1.0.9.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `KRUGER MATZ KM0186/KM00186_V1.1.1.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0183/J1100393-KM00183-MC6258-V1.0.4.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0183/KM00183_V1.0.6.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0183/KM00183_V1.0.8.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0186/KM00186_v1.0.6.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0186/KM00186_V1.0.9.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `KRUGER MATZ KM0186/KM00186_V1.1.1.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `Opticum Blue R265 Lite/M3822P.bin` | Opticum Blue R265 Lite | ALi M3822P | MaxLinear MxL608 (reported for this board; the firmware p... | HD2015 (TM1650-compatible; no display soldered, 3 buttons) (SCL 57, SDA 58) | yes / no / no | [github.com/openshwprojects/FlashDumps](https://github.com/openshwprojects/FlashDumps/tree/main/Sat/Opticum%20Blue%20R265%20Lite), openshwprojects |
 | `Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs` | Opticum Blue R265 Lite (also sold as Skymaster STB 2GEN, STB M265 and STB N2) | ALi M3822P | MaxLinear MxL608 (reported for this board; the firmware c... | HD2015 (TM1650-compatible; no display soldered, 3 buttons) (SCL 57, SDA 58) | yes / yes / yes | [update.skymaster.de](https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip), Skymaster (the Polish distributor) |
 | `Opticum Blue R265 Lite/T2GEN265_1.2.0-2023-03-17.abs` | Opticum Blue R265 Lite (also sold as Skymaster STB 2GEN, STB M265 and STB N2) | ALi M3822P | MaxLinear MxL608 (reported for this board; the firmware p... | HD2015 (TM1650-compatible; no display soldered, 3 buttons) (SCL 57, SDA 58) | yes / yes / yes | [update.skymaster.de](https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip), Skymaster (the Polish distributor) |
@@ -368,7 +368,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.1.1 (maincode "M3606 2Tuner" 2011-11-15), 2011-11-15, 4194304 bytes, SHA-1 ae41cd38d2d1108d85dfc1e52d84c8b7c90c6558
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-11-15), seecode 0x140000 (M3606 SEE, 2011-11-15), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-11-15)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader unpacks the code (it prints "success!") and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Cabletech URZ0086 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v111.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -393,7 +393,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.1.9 (maincode "M3606 2Tuner" 2012-5-23), 2012-05-23, 4194304 bytes, SHA-1 5b9405127cda0c9f06eb912f44d742d8d409ce26
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-5-23), seecode 0x140000 (M3606 SEE, 2012-5-23), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-5-23)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v119.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v119.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints only its start marker (0x01) and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Cabletech URZ0086 firmware V1.1.9, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v119.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -418,7 +418,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.2.1 (maincode "M3606 2Tuner" 2012-7-2), 2012-07-02, 4194304 bytes, SHA-1 05dc38c4310fdccbe056a2515bded7fe94e5cd08
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-7-2), seecode 0x140000 (M3606 SEE, 2012-7-2), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-7-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v121.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v121.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints only its start marker (0x01) and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Cabletech URZ0086 firmware V1.2.1, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v121.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -700,7 +700,7 @@ Not run in the simulator yet.
 * **Image:** update, V1.0.4 (maincode "Demo M3606" 2011-9-1), 2011-09-01, 2097152 bytes, SHA-1 27723bb273c871f7e0868d1c9b3ac017a1fcc9a2
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-1), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-1)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v104.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.5.0_GLS_T_64M_20110510") but starts over 1 time(s) within 100 M instructions.
 
 Kruger&Matz KM0183 firmware V1.0.4, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v104.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -723,7 +723,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.0.6 (maincode "Demo M3606" 2012-1-16), 2012-01-16, 2097152 bytes, SHA-1 4f5a7128658ef2f5a88e60b00272363d336efafb
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-1-16), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-1-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v106.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Kruger&Matz KM0183 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -748,7 +748,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.0.8 (maincode "Demo M3606" 2012-4-27), 2012-04-27, 2097152 bytes, SHA-1 e640613b000499bac0799d875eb53ae81786d8e8
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-4-27), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-27)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v108.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Kruger&Matz KM0183 firmware V1.0.8, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v108.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -772,7 +772,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.0.6 (maincode "M3606 2Tuner" 2011-11-15), 2011-11-15, 4194304 bytes, SHA-1 746234e502efae6c66e78a2b37e573cc06543dcf
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-11-15), seecode 0x140000 (M3606 SEE, 2011-11-15), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-11-15)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v106.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader unpacks the code (it prints "success!") and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Kruger&Matz KM0186 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -796,7 +796,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.0.9 (maincode "M3606 2Tuner" 2012-5-23), 2012-05-23, 4194304 bytes, SHA-1 8a0053813af891556290dd64078808135e1c6111
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-5-23), seecode 0x140000 (M3606 SEE, 2012-5-23), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-5-23)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v109.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints only its start marker (0x01) and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Kruger&Matz KM0186 firmware V1.0.9, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v109.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -820,7 +820,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Image:** update, V1.1.1 (maincode "M3606 2Tuner" 2012-7-2), 2012-07-02, 4194304 bytes, SHA-1 7e92f6027fbe6d3e61228cfe768fc28950e43a3b
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-7-2), seecode 0x140000 (M3606 SEE, 2012-7-2), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-7-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints only its start marker (0x01) and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Kruger&Matz KM0186 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v111.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
