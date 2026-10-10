@@ -20,13 +20,14 @@ ECHO_CHARS = 1000           # UART characters echoed to stdout before the echo i
 
 
 def run(dump, stop_at=None, expected=(), ordered=False, max_instructions=2_000_000, title=None,
-        truncate_to=None, setup=None, retries=0):
+        truncate_to=None, setup=None, retries=0, once=()):
     """Boot `dump` (its first truncate_to bytes when given; setup(sim) runs
     before the load), run until `stop_at` appears on the UART or
-    max_instructions passed, then check for the expected strings.  A boot the
-    simulator itself stops with an exception (the asynchronous slice-stop
-    race, see README "Things learned") is retried `retries` times from a
-    fresh simulator before the checks."""
+    max_instructions passed, then check for the expected strings, and that
+    each of `once` was printed exactly once (a firmware that starts over
+    prints its banner again).  A boot the simulator itself stops with an
+    exception (the asynchronous slice-stop race, see README "Things learned")
+    is retried `retries` times from a fresh simulator before the checks."""
     title = title or f"{dump} prints {stop_at!r}"
     print(f"=== Regression Test: {title} ===")
     for attempt in range(retries + 1):
@@ -37,7 +38,7 @@ def run(dump, stop_at=None, expected=(), ordered=False, max_instructions=2_000_0
     if error is not None:
         print(f"\nSimulator stopped: {error}")
     print(f"\n\nTest finished in {elapsed:.2f}s")
-    _check(text, expected, ordered, title)
+    _check(text, expected, ordered, title, once)
 
 
 def _boot(dump, stop_at, max_instructions, truncate_to, setup):
@@ -79,8 +80,12 @@ def _boot(dump, stop_at, max_instructions, truncate_to, setup):
     return "".join(uart), error, time.time() - start
 
 
-def _check(text, expected, ordered, title):
+def _check(text, expected, ordered, title, once=()):
     ok = True
+    for s in once:
+        n = text.count(s)
+        print(f"  [{'PASS' if n == 1 else 'FAIL'}] {s!r} printed {n} time(s), once expected")
+        ok &= n == 1
     if ordered:
         # the lines as printed: no control characters, no blank lines
         cleaned = text.replace("\r\n", "\n").replace("\r", "\n")

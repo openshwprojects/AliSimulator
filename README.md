@@ -16,11 +16,20 @@ their file names.
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
-* `src/chips/` -- the chip families, one module each (`m3801.py`, `m3821.py`):
-  what differs between ALi generations (the chip ID, how the CPU gets from
-  reset to the flash's bootloader, extra memory, that generation's devices).
-  `loadFile()` picks the family from the image's bootloader chunk header; the
+* `src/chips/` -- the chip families, one module each (`m3602.py`, `m3801.py`,
+  `m3821.py`): what differs between ALi generations (the chip ID, how the CPU
+  gets from reset to the flash's bootloader, extra memory, that generation's
+  devices). `loadFile()` picks the family from the image's chunk headers; the
   M3801 is the default and everything `simulator.py` models by itself. The
+  M36xx generation before it (M3601E / M3602 / M3606: the Cabletech URZ0083
+  and URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501 and Ferguson T50
+  update images, recognised by their HDCPKey chunk's "Demo s3602") boots the
+  same way and finds its first peripherals where the M3801's are, but its
+  firmware wants the chip ID 0x3602 -- with the M3801's 0x3811 the
+  applications start over through the bootloader -- and the T50's bootloader
+  probes the RAM 128 MB up, where the family shows it again; the URZ0083's
+  application then runs (`run_dump_urz0083_app_runs.py`) without drawing yet
+  (see the sidecars). The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash

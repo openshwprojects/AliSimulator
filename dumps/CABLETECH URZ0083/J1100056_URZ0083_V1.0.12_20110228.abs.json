@@ -6,7 +6,7 @@
     "type": "DVB-T HD receiver (2011)",
     "board": "MC6238 (the change list's \"J1100223_MC6238_URZ0083_v1.0.18\")",
     "soc": "ALi M3601E",
-    "family": "M36xx (not modelled)",
+    "family": "M3602 (chips/m3602.py)",
     "demod": "ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)",
     "tuner": null,
     "flash": "2 MB SPI",
@@ -30,16 +30,16 @@
     "note": "Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v1012.rar; downloaded on 2026-10-10"
   },
   "simulator": {
-    "boots": null,
-    "application": null,
-    "display": null,
+    "boots": true,
+    "application": true,
+    "display": false,
     "panelText": null,
-    "note": "Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family)."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.3.6_patch8_20101227\") and keeps running for the 100 M instructions run (6 GE commands, nothing drawn yet).  A 400 M instruction run shows it starting over every ~85 M instructions (the banner again at ~110, 195, 280 and 366 M), after 6 GE commands each time."
   },
   "desc": [
     "Cabletech URZ0083 firmware V1.0.12, the manufacturer's USB update image as Gutek's site mirrors it (v1012.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",
     "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-2-28), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-2-28); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 3.6.0@SDK4.0ba.3.6_patch8_20101227.",
     "Gutek's list: \"Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)\" -- not for the URZ0083E; the later URZ0083Q (dumps/CABLETECH URZ0083Q/) is an ALi M3801 board.",
-    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it)."
+    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py)."
   ]
 }

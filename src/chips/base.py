@@ -1,5 +1,24 @@
 """The interface of a chip family (see chips/__init__.py)."""
+import struct
+
 from unicorn.mips_const import UC_MIPS_REG_PC
+
+
+def chunk_chain(image, limit=40):
+    """The ALi chunk chain from offset 0 of a flash image: [(offset, name,
+    version)], each chunk header being id, length, offset of the next chunk,
+    CRC (big-endian words) and the name / version strings at +0x10 / +0x20."""
+    out, q = [], 0
+    while q + 0x40 <= len(image) and len(out) < limit:
+        cid, length, nxt, _crc = struct.unpack_from(">IIII", image, q)
+        if cid in (0, 0xFFFFFFFF) or length > len(image):
+            break
+        text = lambda o: bytes(image[q + o:q + o + 0x10]).split(b"\0", 1)[0].decode("latin-1")   # noqa: E731
+        out.append((q, text(0x10), text(0x20)))
+        if nxt == 0:
+            break
+        q += nxt
+    return out
 
 
 class ChipFamily:

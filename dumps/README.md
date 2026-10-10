@@ -6,17 +6,17 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 |---|---|---|---|---|---|---|
 | `Ali_3801_Globo_DVBT_dump SPI 4mb.bin` | Globo STB HD N3 | ALi M3801 | Rafael Micro R820T (7-bit I2C address 0x1A, 0x34 as the w... | TM1650 (SCL 31, SDA 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4156384-30.html#21933067), JacekTorun |
 | `ali_sdk.bin` | test program (not a flash dump) | ALi M3801 (it reads the chip id, "chip id raw: 3811") | - | - | yes / - / - | not recorded |
-| `CABLETECH URZ0083/J1100056_URZ0083_V1.0.12_20110228.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1012.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/J1100223_URZ0083_v1.0.16.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1016.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/J1100223_URZ0083_v1.0.18.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1018.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/URZ0083_v1.1.1.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/URZ0083_v1.1.2.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v112.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/URZ0083_V1.2.2.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v122.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/URZ0083_V1.2.3.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v123.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0083/URZ0083_V1.2.5.abs` | Cabletech URZ0083 | ALi M3601E | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v125.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/J1100056_URZ0083_V1.0.12_20110228.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1012.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/J1100223_URZ0083_v1.0.16.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1016.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/J1100223_URZ0083_v1.0.18.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1018.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/URZ0083_v1.1.1.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/URZ0083_v1.1.2.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v112.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/URZ0083_V1.2.2.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v122.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/URZ0083_V1.2.3.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v123.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0083/URZ0083_V1.2.5.abs` | Cabletech URZ0083 | ALi M3601E | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v125.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH URZ0083Q/Cabletech URZ0083Q/EN25Q32B.bin` | Cabletech URZ0083Q | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2842886.html#13677891), Fairgrounds |
-| `CABLETECH URZ0086/URZ0086_V1.0.7.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v107.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
-| `CABLETECH URZ0086/URZ0086_v1.1.0.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v110.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0086/URZ0086_V1.0.7.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v107.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `CABLETECH URZ0086/URZ0086_v1.1.0.abs` | Cabletech URZ0086 | ALi M3606 | - | - | no / no / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v110.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH URZ0086/URZ0086_v1.1.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH URZ0086/URZ0086_V1.1.9.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v119.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `CABLETECH URZ0086/URZ0086_V1.2.1.abs` | Cabletech URZ0086 | ALi M3606 | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v121.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
@@ -24,7 +24,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `cableteh_urz0195__w25q32bv.BIN` | Cabletech URZ0195 | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | uPD16312-class 3-wire (CLK 31, DIO 9, STB 14) | yes / yes / no | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2973485.html#14357941), Bell72 |
 | `dump.bin` | Comsat TE 1050 HD | ALi M3801 | MaxLinear MxL603 family, by its wake-up: at start the app... | - | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4155976.html), p.kaczmarek2 |
 | `dump_maciej.bin` | Opticum STB HD N2 | ALi M3801 | unknown: the application touches no hardware I2C master i... | TM1650 (SCL 31, SDA 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4156384.html#21794256), maciej_333 |
-| `FERGUSON ARIVA T50/ArivaT50_20111118_V102B214.abs` | Ferguson Ariva T50 | ALi M3602 (the maincode chunk's version reads "Demo M3602": ALi's SDK project) | - | - | - / - / - | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T50/firmware/ArivaT50_20111118_V102B214.zip), Ferguson |
+| `FERGUSON ARIVA T50/ArivaT50_20111118_V102B214.abs` | Ferguson Ariva T50 | ALi M3602 (the maincode chunk's version reads "Demo M3602": ALi's SDK project) | - | - | yes / no / no | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T50/firmware/ArivaT50_20111118_V102B214.zip), Ferguson |
 | `FERGUSON ARIVA T650i/T650i_V1.13B4_20160721.abs` | Ferguson Ariva T650i | ALi M3801 | MaxLinear MxL603 family at I2C 0x63 (an address strap opt... | FD650K (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T650i%2Ffirmware), Ferguson |
 | `FERGUSON ARIVA T750i/Ferguson_T750i_V1.20B2_18092019.abs` | Ferguson Ariva T750i | ALi M3821 family (the maincode's demodulator drivers are NIM_S3821_0 / NIM_S3821_T2_*: the M3821's own DVB-T2 COFDM) | MaxLinear MxL603 (the maincode's tuner driver names it) | FD650K (TM1650-compatible) | no / no / no | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T750i/firmware/T750i_20190918_V1.20B2.zip), Ferguson |
 | `FERGUSON ARIVA T760i/Ferguson_T760i_V1.4B8_28072020.abs` | Ferguson Ariva T760i | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, "Ali3505", c3505_phy_set) | - | FD650K (TM1650-compatible) | - / - / - | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T760i/firmware/Ferguson_T760i_V1.4B8_28072020.zip), Ferguson |
@@ -45,9 +45,9 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `srt8115.BIN` | Strong SRT 8115 | ALi M3801 | MaxLinear MxL603 family (MxL603 / pin-compatible MxL608)... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3123357.html#15195863), andrzej 4 |
 | `SRT_Prima_VIII_V1.0.6_20160114.abs` | Strong Prima VIII | ALi M3801 | probably a Silicon Labs Si2144 option: the image's only t... | - | yes / yes / - | not recorded |
 | `STRONG PRIMA VIII/GD25Q32B_20190128_141501.BIN` | Strong Prima VIII | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | - | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3549956.html#17756835), bakardjiev |
-| `THOMSON THT501/THT501-V1.0.9.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v109.rar), Thomson (Strong), mirrored by Gutek |
-| `THOMSON THT501/THT501-V1.1.1_20120428.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v111.rar), Thomson (Strong), mirrored by Gutek |
-| `THOMSON THT501/THT501_V1.1.5a_20120925.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | - / - / - | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v115a.rar), Thomson (Strong), mirrored by Gutek |
+| `THOMSON THT501/THT501-V1.0.9.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v109.rar), Thomson (Strong), mirrored by Gutek |
+| `THOMSON THT501/THT501-V1.1.1_20120428.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v111.rar), Thomson (Strong), mirrored by Gutek |
+| `THOMSON THT501/THT501_V1.1.5a_20120925.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | - | - | yes / yes / no | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v115a.rar), Thomson (Strong), mirrored by Gutek |
 | `urz0195_full_dump(ESMTF25L3204).bin` | Cabletech URZ0195 | ALi M3801 | MaxLinear MxL5007T (I2C 0x60 on the first hardware I2C ma... | uPD16312-class 3-wire (CLK 31, DIO 9, STB 14) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3573829.html#17909725), jmalko |
 
 ## `Ali_3801_Globo_DVBT_dump SPI 4mb.bin`
@@ -92,14 +92,14 @@ It prints "Booting...", "Main function", its stack and heap limits, a floating-p
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.12 (maincode "Demo M3606" 2011-2-28), 2011-02-28, 2097152 bytes, SHA-1 627a408898a69a9966ebaab9b0e0b7a60611c4df
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-2-28), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-2-28)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1012.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v1012.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.3.6_patch8_20101227") and keeps running for the 100 M instructions run (6 GE commands, nothing drawn yet).  A 400 M instruction run shows it starting over every ~85 M instructions (the banner again at ~110, 195, 280 and 366 M), after 6 GE commands each time.
 
 Cabletech URZ0083 firmware V1.0.12, the manufacturer's USB update image as Gutek's site mirrors it (v1012.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -107,7 +107,7 @@ Despite the .abs name it is a complete flash image: the ALi chunk chain from off
 
 Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the URZ0083E; the later URZ0083Q (dumps/CABLETECH URZ0083Q/) is an ALi M3801 board.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/J1100223_URZ0083_v1.0.16.abs`
@@ -115,14 +115,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.16 (maincode "Demo M3606" 2011-7-5), 2011-07-05, 2097152 bytes, SHA-1 3503b2f029b4cb6d2b043626a697c71ade4a43bd
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-7-5), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-7-5)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1016.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v1016.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.5.0_GLS_T_64M_20110510") but starts over 1 time(s) within 100 M instructions.
 
 Cabletech URZ0083 firmware V1.0.16, the manufacturer's USB update image as Gutek's site mirrors it (v1016.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -132,7 +132,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/J1100223_URZ0083_v1.0.18.abs`
@@ -140,14 +140,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.18 (maincode "Demo M3606" 2011-9-2), 2011-09-02, 2097152 bytes, SHA-1 09b79c8db6af067e3c6dca76784efda318441751
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-2), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v1018.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v1018.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.5.0_GLS_T_64M_20110510") but starts over 1 time(s) within 100 M instructions.
 
 Cabletech URZ0083 firmware V1.0.18, the manufacturer's USB update image as Gutek's site mirrors it (v1018.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -157,7 +157,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/URZ0083_v1.1.1.abs`
@@ -165,14 +165,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.1 (maincode "Demo M3606" 2011-9-21), 2011-09-21, 2097152 bytes, SHA-1 cdc26fb31366ed8278261437f58e9126a3f8f81e
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-21), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-21)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.5.0_GLS_T_64M_20110510") but starts over 1 time(s) within 100 M instructions.
 
 Cabletech URZ0083 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (v111.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -182,7 +182,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): URZ0083_v1.1.1.abs / - Poprawiono skalowanie obrazu przy odtwarzaniu materiałów z nośników zewnętrznych / - Zwiększono zakres wyboru rozdzielczości / J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/URZ0083_v1.1.2.abs`
@@ -190,14 +190,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.2 (maincode "Demo M3606" 2011-10-12), 2011-10-12, 2097152 bytes, SHA-1 d709969c2df20a0a8d1e802fb7af000379c02fcb
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-10-12), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-10-12)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v112.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v112.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.5.0_GLS_T_64M_20110510") but starts over 1 time(s) within 100 M instructions.
 
 Cabletech URZ0083 firmware V1.1.2, the manufacturer's USB update image as Gutek's site mirrors it (v112.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -207,7 +207,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): URZ0083_v1.1.2.abs / - Zwiększono czcionkę przy wyświetlaniu napisów z zewnętrznych nośników / URZ0083_v1.1.1.abs / - Poprawiono skalowanie obrazu przy odtwarzaniu materiałów z nośników zewnętrznych / - Zwiększono zakres wyboru rozdzielczości / J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/URZ0083_V1.2.2.abs`
@@ -215,14 +215,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.2.2 (maincode "Demo M3606" 2012-1-10), 2012-01-10, 2097152 bytes, SHA-1 b72cafe791f98cd54af69bbfd4d463b85fa0b870
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-1-10), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-1-10)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v122.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v122.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Cabletech URZ0083 firmware V1.2.2, the manufacturer's USB update image as Gutek's site mirrors it (v122.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -232,7 +232,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): URZ0083_v1.2.2.abs / -poprawiono polskie tłumaczenie w menu / -poprawiono kolor i tło czcionki w EPG / -usunięto wskaźnik poziomu sygnału w OSD przy zmianie kanałów / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -usunięto błąd rezerwacji miejsca na nośniku przy wyłączonej funkcji timeshift / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -inne drobne błędy / URZ0083_v1.1.2.abs / - Zwiększono czcionkę przy wyświetlaniu napisów z zewnętrznych nośników / URZ0083_v1.1.1.abs / - Poprawiono skalowanie obrazu przy odtwarzaniu materiałów z nośników zewnętrznych / - Zwiększono zakres wyboru rozdzielczości / J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/URZ0083_V1.2.3.abs`
@@ -240,14 +240,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.2.3 (maincode "Demo M3606" 2012-2-2), 2012-02-02, 2097152 bytes, SHA-1 d0a5e600c8463472f5c90fa0da3a6d8c5b05da5e
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-2-2), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-2-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v123.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v123.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Cabletech URZ0083 firmware V1.2.3, the manufacturer's USB update image as Gutek's site mirrors it (v123.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -257,7 +257,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): URZ0083_v1.2.3.abs / przywrócono odtwarzanie plików .flac / wyście z INFO w EPG klawiszem EXIT / inne drobne błędy / URZ0083_v1.2.2.abs / -poprawiono polskie tłumaczenie w menu / -poprawiono kolor i tło czcionki w EPG / -usunięto wskaźnik poziomu sygnału w OSD przy zmianie kanałów / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -usunięto błąd rezerwacji miejsca na nośniku przy wyłączonej funkcji timeshift / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -inne drobne błędy / URZ0083_v1.1.2.abs / - Zwiększono czcionkę przy wyświetlaniu napisów z zewnętrznych nośników / URZ0083_v1.1.1.abs / - Poprawiono skalowanie obrazu przy odtwarzaniu materiałów z nośników zewnętrznych / - Zwiększono zakres wyboru rozdzielczości / J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083/URZ0083_V1.2.5.abs`
@@ -265,14 +265,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0083
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6238 (the change list's "J1100223_MC6238_URZ0083_v1.0.18")
-* **SoC:** ALi M3601E (M36xx (not modelled))
+* **SoC:** ALi M3601E (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100, external (Gutek's review; the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.2.5 (maincode "Demo M3606" 2012-4-25), 2012-04-25, 2097152 bytes, SHA-1 90a76c50258d661c80dad2c46d150bcb80e75add
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-4-25), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-25)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/v125.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive v125.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).  By 600 M instructions it has issued 5 GE commands and the display layer shows nothing; its change list says that since V1.2.2 the box switches on into standby after a power loss, and the remote key vkey 19 (code 0x0065) did not wake it.  Its front panel is the SoC's own scanned LED panel ("PAN_HWSCAN_0"), which front_panel.py does not decode.
 
 Cabletech URZ0083 firmware V1.2.5, the manufacturer's USB update image as Gutek's site mirrors it (v125.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -282,7 +282,7 @@ Gutek's list: "Cabletech URZ0083 (UWAGA SOFTY NIE DO URZ0083E)" -- not for the U
 
 Change list (lista_zmian.txt, Polish): URZ0083_v1.2.5.abs / poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / inne drobne błędy / URZ0083_v1.2.3.abs / przywrócono odtwarzanie plików .flac / wyście z INFO w EPG klawiszem EXIT / inne drobne błędy / URZ0083_v1.2.2.abs / -poprawiono polskie tłumaczenie w menu / -poprawiono kolor i tło czcionki w EPG / -usunięto wskaźnik poziomu sygnału w OSD przy zmianie kanałów / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -usunięto błąd rezerwacji miejsca na nośniku przy wyłączonej funkcji timeshift / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -inne drobne błędy / URZ0083_v1.1.2.abs / - Zwiększono czcionkę przy wyświetlaniu napisów z zewnętrznych nośników / URZ0083_v1.1.1.abs / - Poprawiono skalowanie obrazu przy odtwarzaniu materiałów z nośników zewnętrznych / - Zwiększono zakres wyboru rozdzielczości / J1100223_MC6238_URZ0083_v1.0.18 / - wydłużony czas projekcji informacji o czasie nagrywania / J1100223_URZ0083_v1.0.16 / - Poprawione skalowanie formatu obrazu (16/9,4/3) / - Dekodowanie dźwięku Dolby E-AC3 / - Dodano obsługę polskich napisów przy odtwarzaniu filmów z nośników zewnętrznych.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0083Q/Cabletech URZ0083Q/EN25Q32B.bin`
@@ -311,14 +311,14 @@ INFO.txt in the same folder gives the flash part and the PCB marking.
 * **Box:** Cabletech URZ0086
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
 * **Board:** MC6245-M3606-VER1.0 (elektroda topic "Cabletech URZ0086. Potrzebny wsad pamięci")
-* **SoC:** ALi M3606 (M36xx (not modelled))
+* **SoC:** ALi M3606 (M3602 (chips/m3602.py))
 * **Demodulator:** unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.7 (maincode "M3606 2Tuner" 2011-7-16), 2011-07-16, 4194304 bytes, SHA-1 e7c05dd5c23a891f0dbd6abdf92547c31157eb06
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-7-16), seecode 0x140000 (M3606 SEE, 2011-7-16), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-7-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v107.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v107.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader unpacks the code (it prints "success!") and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Cabletech URZ0086 firmware V1.0.7, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v107.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -328,7 +328,7 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0086/URZ0086_v1.1.0.abs`
@@ -336,14 +336,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0086
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
 * **Board:** MC6245-M3606-VER1.0 (elektroda topic "Cabletech URZ0086. Potrzebny wsad pamięci")
-* **SoC:** ALi M3606 (M36xx (not modelled))
+* **SoC:** ALi M3606 (M3602 (chips/m3602.py))
 * **Demodulator:** unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.0 (maincode "M3606 2Tuner" 2011-11-10), 2011-11-10, 4194304 bytes, SHA-1 530a90e26488b004591d0cb24747f8d60de04313
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-11-10), seecode 0x140000 (M3606 SEE, 2011-11-10), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-11-10)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v110.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v110.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots no, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader unpacks the code (it prints "success!") and then waits for bit 0 of 0xB800020C -- the SEE co-processor reporting that it has started -- which the simulator does not run.
 
 Cabletech URZ0086 firmware V1.1.0, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v110.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -353,7 +353,7 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów.
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0086/URZ0086_v1.1.1.abs`
@@ -361,14 +361,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0086
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
 * **Board:** MC6245-M3606-VER1.0 (elektroda topic "Cabletech URZ0086. Potrzebny wsad pamięci")
-* **SoC:** ALi M3606 (M36xx (not modelled))
+* **SoC:** ALi M3606 (M3602 (chips/m3602.py))
 * **Demodulator:** unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.1 (maincode "M3606 2Tuner" 2011-11-15), 2011-11-15, 4194304 bytes, SHA-1 ae41cd38d2d1108d85dfc1e52d84c8b7c90c6558
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-11-15), seecode 0x140000 (M3606 SEE, 2011-11-15), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-11-15)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Cabletech URZ0086 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v111.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -378,7 +378,7 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0086/URZ0086_V1.1.9.abs`
@@ -386,14 +386,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0086
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
 * **Board:** MC6245-M3606-VER1.0 (elektroda topic "Cabletech URZ0086. Potrzebny wsad pamięci")
-* **SoC:** ALi M3606 (M36xx (not modelled))
+* **SoC:** ALi M3606 (M3602 (chips/m3602.py))
 * **Demodulator:** unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.9 (maincode "M3606 2Tuner" 2012-5-23), 2012-05-23, 4194304 bytes, SHA-1 5b9405127cda0c9f06eb912f44d742d8d409ce26
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-5-23), seecode 0x140000 (M3606 SEE, 2012-5-23), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-5-23)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v119.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v119.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Cabletech URZ0086 firmware V1.1.9, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v119.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -403,7 +403,7 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac / URZ0086_v1.1.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH URZ0086/URZ0086_V1.2.1.abs`
@@ -411,14 +411,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Cabletech URZ0086
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
 * **Board:** MC6245-M3606-VER1.0 (elektroda topic "Cabletech URZ0086. Potrzebny wsad pamięci")
-* **SoC:** ALi M3606 (M36xx (not modelled))
+* **SoC:** ALi M3606 (M3602 (chips/m3602.py))
 * **Demodulator:** unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.2.1 (maincode "M3606 2Tuner" 2012-7-2), 2012-07-02, 4194304 bytes, SHA-1 05dc38c4310fdccbe056a2515bded7fe94e5cd08
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-7-2), seecode 0x140000 (M3606 SEE, 2012-7-2), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-7-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/urz0086_v121.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive urz0086_v121.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Cabletech URZ0086 firmware V1.2.1, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v121.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -428,7 +428,7 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac / URZ0086_v1.1.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy / URZ0086_v1.2.1.abs / -poprawiono skalowanie obrazu przy odtwarzaniu nagranych materiałów / -zwiększono wielkość dzielonych plików do 4GB / -inne drobne błędy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `CABLETECH_urz0194s_v1_0_8.bin`
@@ -521,14 +521,14 @@ The attachment "opticum_hd_n2_upgraded.bin" of post #12 in the same thread (the 
 
 * **Box:** Ferguson Ariva T50
 * **Type:** DVB-T HD receiver with USB recording and a media player
-* **SoC:** ALi M3602 (the maincode chunk's version reads "Demo M3602": ALi's SDK project) (M36xx (not modelled))
+* **SoC:** ALi M3602 (the maincode chunk's version reads "Demo M3602": ALi's SDK project) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver "nim_m3101_ver_112a"; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.02B214 (maincode "Demo M3602" 2011-11-18), 2011-11-18, 4194304 bytes, SHA-1 48b9e41aae5f90b0af54f138a42deac7dae18344
 * **Layout:** bootloader 0x000000 (DMB01---0.1.0, 2011-11-18), maincode 0x010000 (Demo M3602, 2011-11-18), radioback 0x340000 (1.0.0, 2010-6-25), bootlogo 0x348000 (1.0.0, 2010-6-21), customerradiolo 0x358000 (1.0.0, 2011-8-16), countryband 0x360000 (1.1.0, 2011-11-18), userdb 0x36FF80 (1.0.0, 2011-11-18)
 * **Source:** [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-t/series_Ariva/Ariva_T50/firmware/ArivaT50_20111118_V102B214.zip), Ferguson (2011-11-18). Ferguson's official download area (https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T50%2Ffirmware): ArivaT50_20111118_V102B214.zip (1.54 MB) also holds a Polish upgrade guide and revision_history.txt (the formats its media player plays); only the .abs image is kept here; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (a family chips/ does not model; it would be treated as the default M3801).
+* **Simulator:** boots yes, application no, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints "APP  init ok" 459 times in 100 M instructions and starts over each time without starting the application.
 
 Ferguson Ariva T50 firmware V1.02B214, the manufacturer's USB update image from Ferguson's download area (ArivaT50_20111118_V102B214.zip).
 
@@ -538,7 +538,9 @@ The front-panel driver is "PAN_PT_0" (a PT6964-style shift-register panel in ALi
 
 The bootloader chunk's version is "DMB01---0.1.0" (its Libcore 1.0.9@Auto_20090520); the chain also carries a boot logo ("bootlogo", an MPEG still) and a "customerradiolo" (the radio-mode background).
 
-Not run in the simulator yet.
+The simulator runs it as the M3602 family (chips/m3602.py).
+
+In the simulator (2026-10-10, the M3602 family): the bootloader probes its DDR at 0xA800AA68 (the family shows the RAM again above 128 MB), prints "APP  init ok", identifies the flash (JEDEC EF 40 16), reads it and runs a bitwise CRC (MIPS16 code at 0x806842EA in its RAM copy), and then takes its reset path: $fp = 0xDEADBEAD and the routine at 0x80688C34, which pulses the module resets (0xB8000080 = 0xFFBFFFFF for chip 0x3602; 0x1FF to 0xB8000060 for any other chip ID) and jumps to 0xBFC00000.  The path that starts the application instead sets $fp = 0xDEADBEEF and jumps to the flash entry 0xAFC00000 (0x80688D5C), whose reset code checks for that value.  Why the check fails is not known yet.
 
 
 ## `FERGUSON ARIVA T650i/T650i_V1.13B4_20160721.abs`
@@ -691,14 +693,14 @@ Not run in the simulator yet.
 * **Box:** Kruger&Matz KM0183 ("KM00183")
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6258 (the V1.0.4 image's file name "J1100393-KM00183-MC6258")
-* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M36xx (not modelled))
+* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.4 (maincode "Demo M3606" 2011-9-1), 2011-09-01, 2097152 bytes, SHA-1 27723bb273c871f7e0868d1c9b3ac017a1fcc9a2
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-1), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-1)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v104.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0183 firmware V1.0.4, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v104.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -706,7 +708,7 @@ Despite the .abs name it is a complete flash image: the ALi chunk chain from off
 
 Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech URZ0083 (its V1.0.6 / V1.0.8 change lists repeat the URZ0083 V1.2.2 / V1.2.5 ones).
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `KRUGER MATZ KM0183/KM00183_V1.0.6.abs`
@@ -714,14 +716,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Kruger&Matz KM0183 ("KM00183")
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6258 (the V1.0.4 image's file name "J1100393-KM00183-MC6258")
-* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M36xx (not modelled))
+* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.6 (maincode "Demo M3606" 2012-1-16), 2012-01-16, 2097152 bytes, SHA-1 4f5a7128658ef2f5a88e60b00272363d336efafb
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-1-16), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-1-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v106.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0183 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -731,7 +733,7 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 
 Change list (lista_zmian.txt, Polish): KM00183_V1.0.6.abs / -poprawiono polskie tłumaczenie w menu / -poprawiono kolor i tło czcionki w EPG / -usunięto wskaźnik poziomu sygnału w OSD przy zmianie kanałów / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -usunięto błąd rezerwacji miejsca na nośniku przy wyłączonej funkcji timeshift / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -inne drobne błędy / KM00183_V1.0.4.abs / -soft bazowy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `KRUGER MATZ KM0183/KM00183_V1.0.8.abs`
@@ -739,14 +741,14 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Box:** Kruger&Matz KM0183 ("KM00183")
 * **Type:** DVB-T HD receiver (2011)
 * **Board:** MC6258 (the V1.0.4 image's file name "J1100393-KM00183-MC6258")
-* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M36xx (not modelled))
+* **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.8 (maincode "Demo M3606" 2012-4-27), 2012-04-27, 2097152 bytes, SHA-1 e640613b000499bac0799d875eb53ae81786d8e8
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-4-27), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-27)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v108.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0183 firmware V1.0.8, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v108.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -756,21 +758,21 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 
 Change list (lista_zmian.txt, Polish): KM00183_V1.0.8.abs / poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / inne drobne błędy / KM00183_V1.0.6.abs / -poprawiono polskie tłumaczenie w menu / -poprawiono kolor i tło czcionki w EPG / -usunięto wskaźnik poziomu sygnału w OSD przy zmianie kanałów / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -usunięto błąd rezerwacji miejsca na nośniku przy wyłączonej funkcji timeshift / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -inne drobne błędy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `KRUGER MATZ KM0186/KM00186_v1.0.6.abs`
 
 * **Box:** Kruger&Matz KM0186 ("KM00186")
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
-* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M36xx (not modelled))
+* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** unknown; the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.6 (maincode "M3606 2Tuner" 2011-11-15), 2011-11-15, 4194304 bytes, SHA-1 746234e502efae6c66e78a2b37e573cc06543dcf
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2011-11-15), seecode 0x140000 (M3606 SEE, 2011-11-15), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2011-11-15)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v106.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0186 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -780,21 +782,21 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 
 Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / - przywrócono odtwarzanie plików .flac
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `KRUGER MATZ KM0186/KM00186_V1.0.9.abs`
 
 * **Box:** Kruger&Matz KM0186 ("KM00186")
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
-* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M36xx (not modelled))
+* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** unknown; the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.9 (maincode "M3606 2Tuner" 2012-5-23), 2012-05-23, 4194304 bytes, SHA-1 8a0053813af891556290dd64078808135e1c6111
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-5-23), seecode 0x140000 (M3606 SEE, 2012-5-23), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-5-23)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v109.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0186 firmware V1.0.9, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v109.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -804,21 +806,21 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 
 Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / - przywrócono odtwarzanie plików .flac / KM00186_v.1.0.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `KRUGER MATZ KM0186/KM00186_V1.1.1.abs`
 
 * **Box:** Kruger&Matz KM0186 ("KM00186")
 * **Type:** DVB-T HD PVR receiver with two tuners (2011)
-* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M36xx (not modelled))
+* **SoC:** ALi M3606 (the Cabletech URZ0086's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** unknown; the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners
 * **Flash:** 4 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.1 (maincode "M3606 2Tuner" 2012-7-2), 2012-07-02, 4194304 bytes, SHA-1 7e92f6027fbe6d3e61228cfe768fc28950e43a3b
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-7-2), seecode 0x140000 (M3606 SEE, 2012-7-2), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-7-2)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00186_v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family).
+* **Simulator:** boots -, application -, display -. As the M3602 family (chip ID 0x3602); not run yet.
 
 Kruger&Matz KM0186 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v111.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under "Allcode") and the change list.
 
@@ -828,7 +830,7 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 
 Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / - przywrócono odtwarzanie plików .flac / KM00186_v1.0.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy / KM00186_v1.1.1.abs / -poprawiono skalowanie obrazu przy odtwarzaniu nagranych materiałów / -zwiększono wielkość dzielonych plików do 4GB / -inne drobne błędy
 
-Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it).
+Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
 
 ## `Opticum Blue R265 Lite/M3822P.bin`
@@ -1000,14 +1002,14 @@ The firmware runs in a PAL SD output mode: its OSD region head is 77..643 x 32..
 
 * **Box:** Thomson THT501
 * **Type:** DVB-T HD receiver with USB recording (made for Thomson by Strong)
-* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M36xx (not modelled))
+* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.0.9 (maincode "501" 2012-3-16), 2012-03-16, 2097152 bytes, SHA-1 d71b0a570b1a39bb97962c81d088e1bd1fc65fca
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-3-16), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-3-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v109.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v109.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (a family chips/ does not model; it would be treated as the default M3801).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Thomson THT501 firmware V1.0.9, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v109.rar, with a Polish USB update guide and the release notes from V1.1.1 on).
 
@@ -1015,21 +1017,21 @@ Despite the .abs name it is a complete flash image: the ALi chunk chain from off
 
 The front-panel driver is "PAN_HWSCAN_0" (LEDs / digits scanned straight from the SoC's GPIO).
 
-Not run in the simulator yet.
+The simulator runs it as the M3602 family (chips/m3602.py).
 
 
 ## `THOMSON THT501/THT501-V1.1.1_20120428.abs`
 
 * **Box:** Thomson THT501
 * **Type:** DVB-T HD receiver with USB recording (made for Thomson by Strong)
-* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M36xx (not modelled))
+* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.1 (maincode "501" 2012-4-28), 2012-04-28, 2097152 bytes, SHA-1 54b0cd31938362427ba142e13b4a26abc35c66be
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-4-28), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-28)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v111.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v111.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (a family chips/ does not model; it would be treated as the default M3801).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Thomson THT501 firmware V1.1.1, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v111.rar, with a Polish USB update guide and the release notes from V1.1.1 on).
 
@@ -1039,21 +1041,21 @@ The front-panel driver is "PAN_HWSCAN_0" (LEDs / digits scanned straight from th
 
 Release notes (THT501_Release_notes_PL.txt, Polish), V1.1.1 of 2012-04-28: HDMI resolution change fixed; recordings named after the event, manual renaming fixed, a message when REC is pressed without a USB device; .srt subtitle size; a progress bar in the info banner; HDMI output 720p by default; volume steps; LCN on for Poland; signal bar; Polish / German / Czech OSD fixes; channel sort / edit with a PIN; first / second audio selection; auto scan for Poland; time zones follow the language.
 
-Not run in the simulator yet.
+The simulator runs it as the M3602 family (chips/m3602.py).
 
 
 ## `THOMSON THT501/THT501_V1.1.5a_20120925.abs`
 
 * **Box:** Thomson THT501
 * **Type:** DVB-T HD receiver with USB recording (made for Thomson by Strong)
-* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M36xx (not modelled))
+* **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
 * **IR coding:** nec
 * **Image:** update, V1.1.5a (maincode "501" 2012-9-25), 2012-09-25, 2097152 bytes, SHA-1 88ee40ff785571a63815a0c59d5c1329202568c2
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-9-25), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-9-25)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v115a.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v115a.rar; downloaded on 2026-10-10
-* **Simulator:** boots -, application -, display -. Not run yet (a family chips/ does not model; it would be treated as the default M3801).
+* **Simulator:** boots yes, application yes, display no. As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts ("Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).
 
 Thomson THT501 firmware V1.1.5a, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v115a.rar, with a Polish USB update guide and the release notes from V1.1.1 on).
 
@@ -1063,7 +1065,7 @@ The front-panel driver is "PAN_HWSCAN_0" (LEDs / digits scanned straight from th
 
 Release notes (THT501_Release_notes_PL.txt, Polish), V1.1.5a of 2012-09-25: SD / HD simulcast for France; ONID filtering for Poland (only Polish channels get LCN order, the rest go above 900); Greek OSD; Irish / UK services inactive during the scan are kept; a tidier info banner; larger extended EPG text; external subtitle colour selectable with FAV in the media player.
 
-Not run in the simulator yet.
+The simulator runs it as the M3602 family (chips/m3602.py).
 
 
 ## `urz0195_full_dump(ESMTF25L3204).bin`

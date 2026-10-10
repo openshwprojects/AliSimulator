@@ -6,7 +6,7 @@
     "type": "DVB-T HD PVR receiver with two tuners (2011)",
     "board": "MC6245-M3606-VER1.0 (elektroda topic \"Cabletech URZ0086. Potrzebny wsad pamięci\")",
     "soc": "ALi M3606",
-    "family": "M36xx (not modelled)",
+    "family": "M3602 (chips/m3602.py)",
     "demod": "unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners",
     "tuner": null,
     "flash": "4 MB SPI",
@@ -34,13 +34,13 @@
     "application": null,
     "display": null,
     "panelText": null,
-    "note": "Not run yet (the ALi M36xx generation; chips/ would treat it as the default M3801 family)."
+    "note": "As the M3602 family (chip ID 0x3602); not run yet."
   },
   "desc": [
     "Cabletech URZ0086 firmware V1.1.9, the manufacturer's USB update image as Gutek's site mirrors it (urz0086_v119.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",
     "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-5-23), seecode 0x140000 (M3606 SEE, 2012-5-23), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-5-23); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 7.2.0@SDK4.0ba.7.2_20120115; SDK7.2-Mico1.6-LECHPOL1.1.9; Libcore version 1.1.5a@SDK_20111126.",
     "The bootloader chunk's version reads \"DVBS2---0.1.0\" (ALi's project name) although the box is DVB-T; the maincode is \"M3606 2Tuner\".  Forum users program these .abs files directly into the flash (renamed .bin): they are complete flash images.",
     "Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac / URZ0086_v1.1.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy",
-    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  Not run in the simulator yet: these are the ALi M36xx generation before the M3801 (chips/ has no family for it)."
+    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py)."
   ]
 }

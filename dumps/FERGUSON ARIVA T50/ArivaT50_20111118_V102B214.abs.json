@@ -6,7 +6,7 @@
     "type": "DVB-T HD receiver with USB recording and a media player",
     "board": null,
     "soc": "ALi M3602 (the maincode chunk's version reads \"Demo M3602\": ALi's SDK project)",
-    "family": "M36xx (not modelled)",
+    "family": "M3602 (chips/m3602.py)",
     "demod": "ALi M3101, external (the firmware's nim_m3101 driver \"nim_m3101_ver_112a\"; NIM_COFDM_0 / NIM_COFDM_1)",
     "tuner": null,
     "flash": "4 MB SPI",
@@ -30,17 +30,18 @@
     "note": "Ferguson's official download area (https://ferguson-digital.eu/download/?dir=dvb-t%2Fseries_Ariva%2FAriva_T50%2Ffirmware): ArivaT50_20111118_V102B214.zip (1.54 MB) also holds a Polish upgrade guide and revision_history.txt (the formats its media player plays); only the .abs image is kept here; downloaded on 2026-10-10"
   },
   "simulator": {
-    "boots": null,
-    "application": null,
-    "display": null,
+    "boots": true,
+    "application": false,
+    "display": false,
     "panelText": null,
-    "note": "Not run yet (a family chips/ does not model; it would be treated as the default M3801)."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints \"APP  init ok\" 459 times in 100 M instructions and starts over each time without starting the application."
   },
   "desc": [
     "Ferguson Ariva T50 firmware V1.02B214, the manufacturer's USB update image from Ferguson's download area (ArivaT50_20111118_V102B214.zip).",
     "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DMB01---0.1.0, 2011-11-18), maincode 0x010000 (Demo M3602, 2011-11-18), radioback 0x340000 (1.0.0, 2010-6-25), bootlogo 0x348000 (1.0.0, 2010-6-21), customerradiolo 0x358000 (1.0.0, 2011-8-16), countryband 0x360000 (1.1.0, 2011-11-18), userdb 0x36FF80 (1.0.0, 2011-11-18); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 1.1.6@Auto_20100413.",
     "The front-panel driver is \"PAN_PT_0\" (a PT6964-style shift-register panel in ALi's SDK), not one front_panel.py decodes yet.",
     "The bootloader chunk's version is \"DMB01---0.1.0\" (its Libcore 1.0.9@Auto_20090520); the chain also carries a boot logo (\"bootlogo\", an MPEG still) and a \"customerradiolo\" (the radio-mode background).",
-    "Not run in the simulator yet."
+    "The simulator runs it as the M3602 family (chips/m3602.py).",
+    "In the simulator (2026-10-10, the M3602 family): the bootloader probes its DDR at 0xA800AA68 (the family shows the RAM again above 128 MB), prints \"APP  init ok\", identifies the flash (JEDEC EF 40 16), reads it and runs a bitwise CRC (MIPS16 code at 0x806842EA in its RAM copy), and then takes its reset path: $fp = 0xDEADBEAD and the routine at 0x80688C34, which pulses the module resets (0xB8000080 = 0xFFBFFFFF for chip 0x3602; 0x1FF to 0xB8000060 for any other chip ID) and jumps to 0xBFC00000.  The path that starts the application instead sets $fp = 0xDEADBEEF and jumps to the flash entry 0xAFC00000 (0x80688D5C), whose reset code checks for that value.  Why the check fails is not known yet."
   ]
 }
