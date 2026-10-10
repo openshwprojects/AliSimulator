@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 chips.detect() picks each firmware image's chip family from its chunk chain:
-the R265 Lite images' "M3821b" bootloader version makes them M3821, the T760i's
+the R265 Lite images' "M3821b" bootloader version makes them M3821 -- and so
+does the T750i's XIP bootloader on a dual-CPU image whose main code drives
+the M3821's demodulator (NIM_S3821) -- the T760i's
 boot-ROM bootloader with a SEE program and a main code that names the chip
 C3505, the M36xx update images (HDCPKey "Demo s3602", or a maincode named after
 the M3602 / M3606 demo projects) M3602, and everything else -- the M3801 dumps
@@ -28,6 +30,7 @@ EXPECTED = [
     ("ArivaT50_20111118_V102B214.abs", "M3602"),  # no HDCPKey chunk: maincode "Demo M3602"
     ("Ferguson_T760i_V1.5B4-14092021.abs", "C3505"),  # boot-ROM bootloader, SEE program, main code names ALI_C3505
     ("Ferguson_T760i_V1.4B8_28072020.abs", "C3505"),
+    ("Ferguson_T750i_V1.20B2_18092019.abs", "M3821"),  # XIP bootloader, SEE program, main code drives NIM_S3821
 ]
 
 print("=== Test: chips.detect() picks each image's chip family ===")

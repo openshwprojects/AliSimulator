@@ -37,18 +37,69 @@ likely the HDMI transmitter's DDC reading the TV's EDID: the block's +0x08
 bit 0 is polled like a hot-plug line and the flash carries an HDCPKey
 chunk).  Demodulator models the internal DVB-T / T2 demodulator's lock for
 sim.set_signal().
+
+The Ferguson T750i's M3821 boots without the boot ROM's step: its
+bootloader is the M3801's kind, run from the flash window (a branch over
+the chunk header, code at 0x490), with its stack in locked D-cache lines
+until the DDR is up (CacheAsRam) and its set-up run through the window's
+cached view; it takes its M3821 path for the chip ID 0x3821 (the plain
+M3821: no variant bits), starts the SEE co-processor (see.py) and unpacks
+the main code and the SEE's program from its dual-CPU image.  Such an image
+is recognised by that bootloader, a SEE program chunk and a main code that
+drives the M3821's own demodulator ("NIM_S3821").
 """
 import ctypes
+import struct
 
-from unicorn import UC_PROT_ALL
-from unicorn.mips_const import UC_MIPS_REG_PC
+from unicorn import UC_HOOK_CODE, UC_PROT_ALL
+from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
-from .base import ChipFamily
+from .base import ChipFamily, chunk_chain, maincode
+from .see import SeeStart
 
 SRAM_PHYS = 0x1FE00000          # the boot SRAM the boot ROM copies the bootloader into
 SRAM_SIZE = 0x100000
 BOOT_COPY = 0x60000             # the bootloader area of the flash (its chunk: 0..0x5FE00)
 ENTRY = 0x80000000 + SRAM_PHYS + 0x800
+
+
+def xip_bootloader(image):
+    """A bootloader that runs from the flash window (the M3801's kind): its
+    word at 0x490, where the chunk header's branch lands, calls into the
+    flash window (JAL 0x?FCxxxxx)."""
+    w = struct.unpack_from("<I", image, 0x490)[0]
+    return w >> 26 == 0x03 and ((w & 0x03FFFFFF) << 2) & 0x0FC00000 == 0x0FC00000
+
+
+class CacheAsRam:
+    """The stack of an XIP bootloader before the DDR is up (the T750i's): it
+    loads the D-cache lines of 0x8FFF8000..0x8FFFFFFF -- the top of the flash
+    window's cached view -- and keeps its stack there (and its DDR set-up
+    functions locked in the I-cache), so stores to those addresses stay in
+    the cache and loads see them.  The simulator has no cache: 32 KB of RAM
+    over that range, holding the flash's bytes, given back the flash's bytes
+    once the bootloader runs from RAM with its stack elsewhere (its RAM copy
+    reads nothing there through the cache)."""
+    PHYS, SIZE = 0x0FFF8000, 0x8000
+
+    def __init__(self, sim):
+        self.sim = sim
+        self.flash = bytes(sim.mu.mem_read(self.PHYS, self.SIZE))
+        self.ram = ctypes.create_string_buffer(self.flash, self.SIZE)
+        sim.mu.mem_unmap(self.PHYS, self.SIZE)
+        sim.mu.mem_map_ptr(self.PHYS, self.SIZE, UC_PROT_ALL, ctypes.addressof(self.ram))
+        self.active = True
+        self._hook = sim.mu.hook_add(UC_HOOK_CODE, self._code_in_ram, begin=0x80000000, end=0x80000000 + sim.ram_size - 1)
+
+    def _code_in_ram(self, uc, address, size, user_data):
+        sp = uc.reg_read(UC_MIPS_REG_SP) & 0x1FFFFFFF
+        if self.PHYS <= sp < self.PHYS + self.SIZE:
+            return                      # (still on the cache's stack)
+        ctypes.memmove(self.ram, self.flash, self.SIZE)     # host memory: no translation to flush
+        uc.hook_del(self._hook)
+        self.active = False
+        self.sim.log(f"[CAR] the bootloader runs from RAM (0x{address:08X}, sp 0x{sp | 0x80000000:08X}): "
+                     f"0x8FFF8000..0x8FFFFFFF show the flash again")
 
 
 class DdrTraining:
@@ -326,11 +377,17 @@ class M3821(ChipFamily):
 
     @classmethod
     def matches(cls, image):
-        return bytes(image[0x20:0x25]) == b"M3821"      # the bootloader chunk's version string
+        if bytes(image[0x20:0x25]) == b"M3821":         # the bootloader chunk's version string
+            return True
+        return (xip_bootloader(image) and any(name == "seecode" for _o, name, _v in chunk_chain(image))
+                and b"NIM_S3821" in maincode(image))
 
     def install(self):
-        super().install()
         sim = self.sim
+        self.xip = xip_bootloader(sim.rom_image)       # (the C3505's is the boot ROM's kind too)
+        if self.xip:
+            self.chip_variant = 0x0000  # the T750i's plain M3821
+        super().install()
         # (count_hz stays at the simulator's 100 MHz although the chip's Count runs at
         # 297 MHz: at the real rate the kernel's 1 ms tick is shorter than the host time
         # its hooked CP0 instructions take, and the next tick lands inside its task
@@ -359,16 +416,23 @@ class M3821(ChipFamily):
         # probably a DDC transfer of the TV's EDID (288 more operations at +0x70 / +0x72).
         sim._SELF_COMPLETING = {**sim._SELF_COMPLETING, 0x2A06F: (0x10, 0x00, 0x10)}
         sim._mmio_on('r', sim._hook_selfcomplete_read, 0x2A06C, 0x2A06F)
+        if self.xip:
+            self.car = CacheAsRam(sim)
+            self.see = SeeStart(sim)
 
     def start(self):
-        """What the boot ROM does: the bootloader area into the SRAM, enter it."""
+        """What the boot ROM does: the bootloader area into the SRAM, enter it
+        (an XIP bootloader starts at the flash window, like the M3801's)."""
         sim = self.sim
+        if self.xip:
+            sim.mu.reg_write(UC_MIPS_REG_PC, sim.base_addr)
+            return
         ctypes.memmove(ctypes.addressof(self.sram), bytes(sim.rom_image[:BOOT_COPY]), BOOT_COPY)
         sim._rescan_cp0_sites(self.code_ranges())
         sim.mu.reg_write(UC_MIPS_REG_PC, ENTRY)
 
     def code_ranges(self):
-        return [(0x80000000 + SRAM_PHYS, BOOT_COPY)]
+        return [] if self.xip else [(0x80000000 + SRAM_PHYS, BOOT_COPY)]
 
     def set_signal(self, on):
         self.demod.signal = bool(on)

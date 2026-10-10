@@ -40,7 +40,12 @@ their file names.
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
   family is recognised by the unpacked main code naming the C3505. Its
   application starts (`run_dump_t760i_app_starts.py`) and waits for its SEE
-  program, which is not run. The
+  program, which is not run. The Ferguson T750i's M3821 boots without the
+  boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
+  locked D-cache lines at the top of the flash window's cached view until
+  the DDR is up (`CacheAsRam`: RAM over that range until the bootloader runs
+  from RAM); it starts its SEE the same way, and its application starts
+  (`run_dump_t750i_app_starts.py`) and waits for the SEE's messages. The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash

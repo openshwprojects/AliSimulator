@@ -2831,7 +2831,10 @@ class AliMipsSimulator:
             self._rom_sites = self._find_cp0_sites(self.rom_image, 0)
             self._rom_sites_dirty = False
         sites = set()
-        for base in (0xAFC00000, 0xBFC00000):         # flash executes from KSEG1 (and the BEV vector)
+        # Flash executes from KSEG1 (and the BEV vector) -- and through KSEG0: the
+        # T750i's XIP bootloader runs its set-up (MTC0 EBase, Status) from the
+        # flash window's cached view, where its CP0 instructions ran natively.
+        for base in (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000):
             sites |= {base + off for off in self._rom_sites}
         full = ranges is None
         if full:
