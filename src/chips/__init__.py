@@ -7,11 +7,12 @@ The simulator picks the family of the image it loads (detect()), so the common
 parts -- the MIPS core, the device window, the UART, the flash model, the
 timers -- stay in simulator.py and the family modules add only the deltas.
 """
+from .c3505 import C3505
 from .m3602 import M3602
 from .m3801 import M3801
 from .m3821 import M3821
 
-FAMILIES = (M3821, M3602, M3801)    # M3801 last: it is the default
+FAMILIES = (M3821, C3505, M3602, M3801)     # M3801 last: it is the default
 
 
 def detect(image):

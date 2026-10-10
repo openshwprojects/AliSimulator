@@ -1,4 +1,6 @@
 """The interface of a chip family (see chips/__init__.py)."""
+import hashlib
+import lzma
 import struct
 
 from unicorn.mips_const import UC_MIPS_REG_PC
@@ -19,6 +21,31 @@ def chunk_chain(image, limit=40):
             break
         q += nxt
     return out
+
+
+_maincode_cache = (None, b"")
+
+
+def maincode(image):
+    """The image's maincode chunk unpacked (its LZMA-alone payload after the
+    0x80-byte chunk header), b"" when there is none or it does not unpack.
+    The last result is kept: several families may ask about one image."""
+    global _maincode_cache
+    key = (len(image), hashlib.sha1(bytes(image[:0x40000])).digest())
+    if _maincode_cache[0] == key:
+        return _maincode_cache[1]
+    data = b""
+    for offset, name, _version in chunk_chain(image):
+        if name == "maincode":
+            length = struct.unpack_from(">I", image, offset + 4)[0]
+            try:
+                data = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE).decompress(
+                    bytes(image[offset + 0x80:offset + 0x80 + length]))
+            except lzma.LZMAError:
+                data = b""
+            break
+    _maincode_cache = (key, data)
+    return data
 
 
 class ChipFamily:

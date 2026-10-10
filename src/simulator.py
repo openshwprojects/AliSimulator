@@ -490,6 +490,13 @@ class AliMipsSimulator:
         # Jumps to address 0 (NULL function pointers, end of a test program)
         # stop emulation instead of executing RAM as code.
         self.mu.hook_add(UC_HOOK_CODE, self._hook_null_jump, begin=0, end=3)
+        # 0x80000200..0x80000FFF run under a code hook in fast mode too
+        # (_hook_short_blocks): the SDK's application images are loaded at
+        # 0x80000200 and start with 0xE00 zero bytes before their first code,
+        # and Unicorn 2.1.4 crashes translating that run of ~900 NOPs as one
+        # unhooked block (the Ferguson T750i / T760i applications).  The
+        # exception vectors below it stay unhooked.
+        self.mu.hook_add(UC_HOOK_CODE, self._hook_short_blocks, begin=0x80000200, end=0x80000FFF)
 
         # The per-instruction hook (_hook_code) and the fast-mode hooks are
         # installed on demand by _sync_hooks() (see run()).
@@ -704,6 +711,10 @@ class AliMipsSimulator:
             return
         self._stop_reason = 'null'
         uc.emu_stop()
+
+    def _hook_short_blocks(self, uc, address, size, user_data):
+        """Nothing: being hooked keeps Unicorn's translation blocks short there
+        (see where it is installed)."""
 
     def setGpioHandler(self, handler, sda_gpio=None):
         """Set callback for GPIO DO register writes: handler(address, size, value).

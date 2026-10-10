@@ -34,7 +34,13 @@ their file names.
   `chips/see.py` runs the SEE's boot code for that handshake on a second
   Unicorn instance sharing the RAM and the register block
   (`run_dump_urz0086_see_start.py`), but not the SEE's own program, so the
-  application's first message to the SEE times out at its SDBBP assertion. The
+  application's first message to the SEE times out at its SDBBP assertion.
+  The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
+  M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
+  (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
+  family is recognised by the unpacked main code naming the C3505. Its
+  application starts (`run_dump_t760i_app_starts.py`) and waits for its SEE
+  program, which is not run. The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash
@@ -360,7 +366,17 @@ then every 1000th.
 * Unicorn 2.1.4 bug: translating an unhooked straight-line block of ~375 or
   more instructions (also a jump into zero-filled RAM) crashes with an access
   violation. Fast mode reports it as a RuntimeError; exact mode is not
-  affected (a hook on every instruction keeps blocks short).
+  affected (a hook on every instruction keeps blocks short). The SDK's
+  application images start at 0x80000200 with 0xE00 zero bytes (~900 NOPs)
+  before their first code, so 0x80000200..0x80000FFF always run under a code
+  hook that does nothing (`_hook_short_blocks`).
+* Unicorn's own CP0 EBase reads 0x800003FF: CPU number 0x3FF. An `mfc0 EBase`
+  that runs natively (not hooked yet) tells a dual-CPU firmware it is not
+  CPU 0 -- the URZ0086's exception vector then takes its second-CPU path
+  through a NULL pointer. An interrupt delivered to a vector in RAM therefore
+  first scans that page for CP0 instructions (an application writes its
+  vector shortly before its first timer tick, within the periodic rescan's
+  window).
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
 * Unicorn race: `uc_emu_stop()` from another thread sets `stop_request` before
