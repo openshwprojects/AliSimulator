@@ -4,7 +4,10 @@ minutes): boots dump.bin into its application, which reads its flash channel
 database word by word and byte by byte (about 10 minutes of wall time) before
 it tunes its first channel and draws the channel banner ("Polsat Sport News",
 channel 0008, Russian UI).  The screen is captured and compared with
-dump_screen.png with a tolerance for the banner's changing parts.
+dump_screen.png with a tolerance for the banner's changing parts.  No
+navigation: its UI ignores the remote, with or without a signal -- the
+firmware keeps hopping between its channels, its channel change never
+completing without the transport stream's tables (see the dump's sidecar).
 
 Usage: python run_dump_capture_screen.py [--make-expected]
 """

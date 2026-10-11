@@ -249,6 +249,47 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   sygnału" box (`run_dump_globo_signal.py`), and the R265 Lite's manual scan
   page shows 100 % signal strength and 30 % quality instead of 0 % and 0 %
   (`run_dump_r265lite_signal_capture_screen.py`).
+* **Demultiplexer and transport stream** (`dmx_m36.py`, `transport_stream.py`):
+  a lock alone is not a channel. The Comsat TE 1050 HD and the Strong Prima
+  VIII wait for the programme tables after they tune, and when none come they
+  move on to the next channel for ever, ignoring the remote the whole time
+  (every key of both tables was tried). `dmx_m36.Demux` models the DMX0
+  demultiplexer the M3801 and M3601E firmwares program at 0xB8022000 (DMX1 at
+  0xB8024000): 48 PID filters loaded through a RAM port (+0x60 type and
+  filter, +0x62 go, +0x64 mask / value: the driver writes mask `1F FF` and the
+  PID), the filter enable bits (+0x40), one "united" ring of 188-byte packets
+  whose physical base, length and interrupt threshold the driver writes
+  (+0xC0, +0x140, +0x142: the Comsat uses 0x03A078A0, 6144 packets, 80),
+  the hardware's write pointer and the driver's read pointer (+0x1C0 /
+  +0x1C2), the threshold interrupt on line 7 (OS IRQ 15; +0x300 enable,
+  +0x310 status, read to clear), the self-clearing reset (+0x03). The
+  register protocol comes from the SDK's driver objects (`refs/MainCode/ddk/
+  libcore_hd.a`: `dmx_hal.o`, `dmx_tasks.o`, `dmx_sec.o`), the base from the
+  firmwares. `sim.attach_mux()` puts a transport stream behind it: a
+  `transport_stream.Mux` of one made-up service ("AliSimulator TV") whose
+  PAT, CAT, PMT, SDT, NIT, TDT (the clock) and EIT (now / next) go into the
+  ring as TS packets with continuity counters and MPEG-2 CRCs, each PID at
+  its own rate, for every PID the firmware has a filter on. The multiplex
+  adapts to the firmware: the first filter on a non-standard PID after the
+  PAT's is its channel's PMT PID, and the service moves there with the
+  programme number, name and video PID of that channel read from the dump's
+  own channel database (`transport_stream.channel_records`: the lib_db
+  P_NODE records of the userdb / defaultdb chunks, found by their bit-field
+  words -- video and PCR PID in one, programme number and PMT PID in the
+  next -- and their UTF-16 names, which the database stores one byte short;
+  dump.bin's "Polsat Sport News" is programme 0x1A on PMT PID 0x321, "TVP
+  Opole" 0x11 on 0x6A5). Without a record the programme number is searched
+  for in the firmware's section filters in RAM. State of play: dump.bin takes
+  all of it -- it filters its channel's PMT, CAT, SDT, NIT, EIT and video /
+  audio PIDs, consumes every packet, and its banner shows the model's EIT
+  ("Now: 02:00-03:00 TVP Opole now" where it said "no information",
+  `docs/dump_bin_banner_with_eit.png`) -- and still steps to its next
+  channel after 20 s (2 minutes without a PMT, 30 s with the wrong programme
+  number), so the last thing it waits for is the video or audio stream
+  itself, which there is no source for yet; its remote stays dead until
+  then.
+  `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
+  mux=True)` boots a test with it.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
   Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read
@@ -473,12 +514,17 @@ wizard switches language); the SRT 8115 opens and closes its main menu; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
 (its panel keys do nothing); the T650i closes its "no channel found"
 dialog (its "edytuj kanały" menu then opens by itself) and opens the
-favourites list from there. The Prima VIII has no navigation yet: with no
+favourites list from there. The Prima VIII has no navigation: with no
 signal its firmware steps through its channel list by itself and acts on
 remote keys only between those re-tunes (its EPG, popups and banner toggle
-were each seen once). dump.bin has no navigation yet: its firmware drains the IR FIFO and takes the interrupt, but
+were each seen once), and with a signal (`sim.set_signal`, which stops the
+re-tuning) 38 of its 40 key codes still change nothing and the other two
+only blank the banner -- its UI waits for something the simulator does not
+provide, most likely the transport stream's tables. dump.bin has no navigation: its firmware drains the IR FIFO and takes the interrupt, but
 none of the frame encodings tried (its key table, its bootloader's wake-code
-user codes 01 FE / 80 7F) changes its screen. How a firmware's key table
+user codes 01 FE / 80 7F) changes its screen, with or without a signal -- like
+the Prima VIII it keeps hopping between its channels (490 and 578 MHz, every
+50 s or so) while its UI ignores the remote. How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the

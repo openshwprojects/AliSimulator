@@ -56,7 +56,7 @@ class SimulatorCrash(Exception):
 
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
-        signal=False, tuner=True):
+        signal=False, tuner=True, mux=False):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -66,13 +66,15 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     dump's tuner model on the I2C bus (sim.attach_tuner: a tuner that takes its
     settings, but no signal -- the demodulator stays unlocked), so every capture
     can show the frequency it is tuned to; signal=True boots with
-    sim.set_signal(True): the tuner and a locked demodulator."""
+    sim.set_signal(True): the tuner and a locked demodulator; mux=True adds
+    the transport stream behind it (sim.attach_mux: the demultiplexer model
+    feeds the tables of one made-up service, so a channel change completes)."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal, tuner)
+                 nav_settle_s, signal, tuner, mux)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -83,7 +85,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s, signal, tuner):
+         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -102,6 +104,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     elif tuner:
         model = sim.attach_tuner()
         print(f"tuner model: {type(model).__name__ if model else None} (no signal)")
+    if mux:
+        dmx = sim.attach_mux()
+        print(f"transport stream: {'attached to the demultiplexer model' if dmx else 'no demultiplexer model for this chip'}")
     info = dump_catalog.load(dump)
     sidecar_panel = bool(info and info["device"].get("panel"))
 
@@ -189,7 +194,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
           f"GE features not modelled: {unsupported or 'none'}")
     shot(out, f"final screen: {colours} colours, {sim.ge_ops} GE commands ({time.time() - start:.0f} s)")
     print("front panel: " + (" -> ".join(f"[{t}]" for t in panel_texts) if has_panel() else "none")
-          + f"; tuner: {sim.tuner_info() or 'no model'}")
+          + f"; tuner: {sim.tuner_info() or 'no model'}" + (f"; {sim.dmx_info()}" if mux else ""))
 
     def check(cond, msg):
         nonlocal ok

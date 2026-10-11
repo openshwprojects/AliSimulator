@@ -34,13 +34,14 @@
     "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\"). In a long run (2026-10-11, with an MxL5007T tuner model at 0x60, which its driver initialises in full) it scans its flash for some 250 M instructions, sets up the display layer (0xB8006304 = its GMA block list) and issues 5 GE commands -- then nothing more: the RTOS sits in its idle loop with every task blocked, the tuner never tuned (no channels) and no screen drawn; what its UI task waits for is not known yet."
   },
   "desc": [
     "Thomson THT501 firmware V1.1.5a, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v115a.rar, with a Polish USB update guide and the release notes from V1.1.1 on).",
     "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-9-25), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-9-25); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 6.4.f@SDK4.0ba.6.4f_20120131; SDK6.4-Mico1.1-Thomson1.1.4.",
     "The front-panel driver is \"PAN_HWSCAN_0\" (LEDs / digits scanned straight from the SoC's GPIO).",
     "Release notes (THT501_Release_notes_PL.txt, Polish), V1.1.5a of 2012-09-25: SD / HD simulcast for France; ONID filtering for Poland (only Polish channels get LCN order, the rest go above 900); Greek OSD; Irish / UK services inactive during the scan are kept; a tidier info banner; larger extended EPG text; external subtitle colour selectable with FAV in the media player.",
-    "The simulator runs it as the M3602 family (chips/m3602.py)."
+    "The simulator runs it as the M3602 family (chips/m3602.py).",
+    "Devices found in the simulator (2026-10-11, chip ID 0x3602 = enum 0x10046 of the firmware's chip-ID function at 0x80000734): the GE_M36F at 0xB800A000 with its interrupt on OS IRQ 12 = interrupt-controller line 4 (the attach at 0x8028AE40 picks the base by chip enum; the M3329 enums get 0xB8015000); the HDMI transmitter driver (EDID parser, HDCP keys in an AT88SC0404C, \"HDMI Control Task\") on byte registers at 0xB800A0xx too, polling bit 0 of +08 as hot-plug every 150 ms; the two demultiplexers at 0xB8022000 and 0xB8024000 (sync byte 0x47, FIFO thresholds 0x2C, united ring of 6144 packets, their tasks polling the pointers); the SPI flash controller at 0xB8000098 (SF_INS / FMT / data at +98 / +99 / +9A, polled tens of thousands of times while the application reads its flash); the tuner driver is an MxL5007T at I2C 0x60 on the first hardware master (its soft reset \"ff 00\" then the full init table once a model answers); the demodulator (M3101, external) is not seen on the hardware I2C masters."
   ]
 }

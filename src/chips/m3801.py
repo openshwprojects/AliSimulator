@@ -46,6 +46,9 @@ class M3801(ChipFamily):
     def install(self):
         super().install()
         self.demod = Demodulator(self.sim)
+        # the transport-stream demultiplexer DMX0 at 0xB8022000 (dmx_m36.py)
+        from dmx_m36 import Demux
+        self.dmx = Demux(self.sim)
 
     def set_signal(self, on):
         self.demod.signal = bool(on)

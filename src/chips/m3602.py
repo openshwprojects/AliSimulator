@@ -65,3 +65,12 @@ class M3602(ChipFamily):
                     pass            # mapped when this simulator had the family before
         # The M3606's SEE co-processor: its start handshake (see.py)
         self.see = SeeStart(sim)
+        # the transport-stream demultiplexer DMX0 at 0xB8022000, as on the M3801 (dmx_m36.py)
+        from dmx_m36 import Demux
+        self.dmx = Demux(sim)
+        # (The graphics engine is the M3801's: base 0xB800A000 and
+        # interrupt-controller line 4.  The Thomson THT501's GE attach pairs
+        # that base with "IRQ 12", which is the OS's interrupt number -- the
+        # controller line plus 8, as the IR receiver's line 19 is OS IRQ 27 --
+        # so nothing differs; raising line 12 instead sends its dispatcher to
+        # its fatal path at the first GE command.)

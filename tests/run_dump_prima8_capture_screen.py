@@ -11,11 +11,14 @@ captured once the banner is up and compared with prima8_screen.png
 with a 1 % tolerance: with no signal on any channel the firmware steps
 through its channel list by itself, a channel every minute or two, so the
 banner's name and number (BTV 0001, NOVA TV 0002, ...) depend on timing --
-they differ by about 1000 pixels.  No navigation yet: over the IR remote
+they differ by about 1000 pixels.  No navigation: over the IR remote
 (this firmware's extended-NEC coding, see ir_remote.IR_CODINGS) keys are
 acted on only between those re-tunes -- its EPG grid (virtual key 42), the
 EPG info window (37), the favourite-list and USB popups (60, 61) and the
-banner toggle (16) were all seen once, but none reliably from a fresh boot.
+banner toggle (16) were all seen once, but none reliably from a fresh boot;
+and with a signal (sim.set_signal, which stops the re-tuning) 38 of its 40
+key codes still change nothing and the other two only blank the banner, so
+its UI waits for something else (see the dump's sidecar).
 (The manufacturer's update for the same box, the SRT Prima VIII V1.0.6
 image of January 2016 in this repository, has no user database and draws
 nothing; this dump came with a user database of Bulgarian channels.  Its

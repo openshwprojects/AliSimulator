@@ -53,6 +53,7 @@ class ChipFamily:
     name = "ALi"
     chip_id = 0x0000            # the chip ID word at 0xB8000000 the firmware's chip-ID function
     chip_variant = 0x0000       # reads: the 16-bit ID in the upper half, variant bits in the lower
+    dmx = None                  # the family's demultiplexer model (dmx_m36.Demux), for sim.attach_mux
 
     def __init__(self, sim):
         self.sim = sim

@@ -149,6 +149,7 @@ class AliMipsSimulator:
         self._irc_fifo = deque()      # IR controller run-length FIFO (see ir_send_nec)
         self._irc_status = 0          # IR controller interrupt status (+7)
         self._irc_frames = deque()    # NEC frames waiting to be received (any thread may append)
+        self.slice_services = []      # called between slices (emulation thread): device models that feed data
         self._irc_last_vt = -1e9      # emulation time the last frame was received
         self._ir_key_table = None     # {vkey: ir16} found in RAM by press_key()
         self.ir_coding = "nec"        # how that table maps to NEC frames (ir_remote.IR_CODINGS)
@@ -1584,6 +1585,32 @@ class AliMipsSimulator:
         if not demod:
             self.log(f"[NIM] {self.chip.name}: no demodulator model, the firmware sees no lock")
         return tuner, demod
+
+    def attach_mux(self, mux=None):
+        """Put a transport stream behind the locked channel: the chip family's
+        demultiplexer model (dmx_m36.Demux, chips/m3801.py and m3602.py) feeds
+        the tables of `mux` (a transport_stream.Mux; by default one service,
+        "AliSimulator TV") to the firmware's PID filters, so a channel change
+        finds its PAT / PMT / SDT instead of waiting for them.  Usually with
+        set_signal(True).  Returns the demultiplexer model, or None when the
+        family has none."""
+        dmx = getattr(self.chip, "dmx", None)
+        if dmx is None:
+            self.log(f"[DMX] {self.chip.name}: no demultiplexer model")
+            return None
+        if mux is None:
+            import transport_stream
+            mux = transport_stream.Mux()
+        dmx.mux = mux
+        if dmx.service not in self.slice_services:
+            self.slice_services.append(dmx.service)
+        self.log(f"[DMX] transport stream attached: {', '.join(s.name for s in mux.services)}")
+        return dmx
+
+    def dmx_info(self):
+        """What the demultiplexer model is doing, one line, or None without one."""
+        dmx = getattr(self.chip, "dmx", None)
+        return dmx.describe() if dmx is not None else None
 
     def press_key(self, key):
         """Press a remote-control key: a name of ir_remote.VKEYS ('UP', 'DOWN',
@@ -3139,6 +3166,8 @@ class AliMipsSimulator:
                 # Remote-control frames queued by ir_send_nec() / press_key()
                 if self._irc_frames:
                     self._irc_service()
+                for service in self.slice_services:      # e.g. the demultiplexer's transport stream
+                    service()
 
                 # Interrupts that could not be injected inside the previous slice
                 # (fast mode: all of them; exact mode: MIPS16 branch self-loops).
