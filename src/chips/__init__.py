@@ -6,6 +6,10 @@ memory the chip has besides RAM and flash, and the devices of that generation.
 The simulator picks the family of the image it loads (detect()), so the common
 parts -- the MIPS core, the device window, the UART, the flash model, the
 timers -- stay in simulator.py and the family modules add only the deltas.
+A simulator starts as the M3801; switching to another family drops the
+previous one's devices (simulator._switch_family: the register handlers go
+back to the common ones, and ChipFamily.uninstall gives back memory, hooks
+and simulator attributes the family changed).
 """
 from .c3505 import C3505
 from .m3503 import M3503

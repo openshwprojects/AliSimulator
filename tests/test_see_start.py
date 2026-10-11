@@ -39,8 +39,7 @@ check(not see_mod.parks(asm(0x3C09B800, 0x35290284, 0x01200008, 0)), "parks(): a
 check(not see_mod.parks(asm(*([0] * 16))), "parks(): nops are not")
 
 sim = AliMipsSimulator(log_handler=lambda m: None)
-sim.chip = M3602(sim)
-sim.chip.install()
+sim._switch_family(M3602)
 see = sim.chip.see
 
 # The SEE's boot code at 0x81000000: copy 4 words 0x81100000 -> 0x81200000, then park (as the

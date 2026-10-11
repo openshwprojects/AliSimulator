@@ -36,7 +36,7 @@ Opticum satellite updates: "M3601S", "M3606 2Tuner").
 """
 import ctypes
 
-from unicorn import UC_PROT_ALL, UcError
+from unicorn import UC_PROT_ALL
 
 from .base import ChipFamily, chunk_chain
 from .see import SeeStart
@@ -62,18 +62,20 @@ class M3602(ChipFamily):
                 return True
         return False
 
+    def _ram_mirrors(self):
+        """(address, size) of the RAM's mirrors above its size, up to the flash window."""
+        sim = self.sim
+        return [(seg + phys, min(sim.ram_size, RAM_WINDOW_END - phys))
+                for phys in range(sim.ram_size, RAM_WINDOW_END, sim.ram_size)
+                for seg in (0x00000000, 0x80000000, 0xA0000000)]
+
     def install(self):
         super().install()
         sim = self.sim
         # The RAM again above its size, up to the flash window (the T50's DDR probe)
         ptr = ctypes.addressof(sim.ram_buffer)
-        for phys in range(sim.ram_size, RAM_WINDOW_END, sim.ram_size):
-            size = min(sim.ram_size, RAM_WINDOW_END - phys)
-            for seg in (0x00000000, 0x80000000, 0xA0000000):
-                try:
-                    sim.mu.mem_map_ptr(seg + phys, size, UC_PROT_ALL, ptr)
-                except UcError:
-                    pass            # mapped when this simulator had the family before
+        for address, size in self._ram_mirrors():
+            sim.mu.mem_map_ptr(address, size, UC_PROT_ALL, ptr)
         # The M3606's SEE co-processor: its start handshake (see.py)
         self.see = SeeStart(sim)
         # the transport-stream demultiplexer DMX0 at 0xB8022000, as on the M3801 (dmx_m36.py)
@@ -85,3 +87,7 @@ class M3602(ChipFamily):
         # controller line plus 8, as the IR receiver's line 19 is OS IRQ 27 --
         # so nothing differs; raising line 12 instead sends its dispatcher to
         # its fatal path at the first GE command.)
+
+    def uninstall(self):
+        for address, size in self._ram_mirrors():
+            self.sim.mu.mem_unmap(address, size)

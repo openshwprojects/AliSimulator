@@ -32,3 +32,7 @@ class M3503(M3602):
     def install(self):
         super().install()
         self.car = CacheAsRam(self.sim)
+
+    def uninstall(self):
+        self.car.remove()
+        super().uninstall()

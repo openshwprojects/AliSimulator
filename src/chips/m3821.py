@@ -101,6 +101,14 @@ class CacheAsRam:
         self.sim.log(f"[CAR] the bootloader runs from RAM (0x{address:08X}, sp 0x{sp | 0x80000000:08X}): "
                      f"0x8FFF8000..0x8FFFFFFF show the flash again")
 
+    def remove(self):
+        """The flash's own mapping back over the range (a chip-family switch)."""
+        if self.active:
+            self.sim.mu.hook_del(self._hook)
+            self.active = False
+        self.sim.mu.mem_unmap(self.PHYS, self.SIZE)
+        self.sim._map_flash_mirror(self.PHYS, self.SIZE)
+
 
 class DdrTraining:
     """The DDR controller's training status at 0xB803E08C.. and the pattern
@@ -419,6 +427,19 @@ class M3821(ChipFamily):
         if self.xip:
             self.car = CacheAsRam(sim)
             self.see = SeeStart(sim)
+
+    def uninstall(self):
+        """The flash mirror back where the boot SRAM and the cache-as-RAM range
+        were, the flash window's normal read mode, the common self-completing
+        registers."""
+        sim = self.sim
+        if self.xip:
+            self.car.remove()
+        for seg in (0x00000000, 0x80000000, 0xA0000000):
+            sim.mu.mem_unmap(seg + SRAM_PHYS, SRAM_SIZE)
+            sim._map_flash_mirror(seg + SRAM_PHYS, SRAM_SIZE)
+        sim._spi_stream = None
+        del sim._SELF_COMPLETING            # (the instance's copy with 0x2A06F: the class's again)
 
     def start(self):
         """What the boot ROM does: the bootloader area into the SRAM, enter it

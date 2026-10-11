@@ -323,7 +323,9 @@ class AliMipsSimulator:
         self._init_unicorn()
         self._init_capstone()
         # The chip family (chips/): its chip ID, boot flow and devices on top of
-        # the common ones; loadFile() switches to the family of the image it loads
+        # the common ones; loadFile() switches to the family of the image it
+        # loads (_switch_family), which starts again from the common devices
+        self._common_devices = self._device_tables()
         self.chip = chips.M3801(self)
         self.chip.install()
 
@@ -827,11 +829,11 @@ class AliMipsSimulator:
         self._update_flash_read_hooks()
 
         # The image's chip family: its boot flow, and its devices if it differs
-        # from the current one (chips/)
+        # from the current one (chips/; the class itself: an M3503 is an M3602
+        # and a C3505 an M3821 to isinstance, but their chip IDs and devices differ)
         family = chips.detect(self.rom_image)
-        if not isinstance(self.chip, family):
-            self.chip = family(self)
-            self.chip.install()
+        if type(self.chip) is not family:
+            self._switch_family(family)
         else:
             self.chip.write_chip_id()       # (this image's board may read another chip ID)
 
@@ -869,6 +871,39 @@ class AliMipsSimulator:
         self._sync_hooks()
         # The reset state: the PC, after whatever the chip's boot ROM does first
         self.chip.start()
+
+    def _device_tables(self):
+        """Copies of the device register handlers (reads, writes) and the slice
+        services: taken before the first chip family installs its devices, they
+        are the common devices'."""
+        return ({off: list(h) for off, h in self._mmio_rd.items()},
+                {off: list(h) for off, h in self._mmio_wr.items()},
+                list(self.slice_services))
+
+    def _switch_family(self, family):
+        """Replace the chip family by `family` (a chips/ class): the current one
+        gives back what its install() changed besides its devices
+        (ChipFamily.uninstall: memory it mapped, hooks, attributes of the
+        simulator), the device handlers and slice services go back to the
+        common ones, then the new family installs its own.  Without that, a
+        simulator -- which starts as the M3801 -- kept the M3801's
+        demodulator, demultiplexer and RTC handlers under every other family."""
+        self.chip.uninstall()
+        reads, writes, services = self._common_devices
+        self._mmio_rd = {off: list(h) for off, h in reads.items()}
+        self._mmio_wr = {off: list(h) for off, h in writes.items()}
+        self.slice_services[:] = services
+        self.chip = family(self)
+        self.chip.install()
+
+    def _map_flash_mirror(self, base, size):
+        """Map the flash window's mirror over base .. base + size - 1 again, as
+        _init_unicorn() maps it (base: an address of the 0x0F000000 /
+        0x1F000000 windows in any segment, the range inside one 4 MB slot): a
+        chip family that put memory of its own there gives it back."""
+        import ctypes
+        perms = (UC_PROT_READ | UC_PROT_EXEC) if base < 0x80000000 else UC_PROT_ALL
+        self.mu.mem_map_ptr(base, size, perms, ctypes.addressof(self.rom_buffer) + self._flash_offset(base))
 
     def loadFileTruncated(self, filename, max_bytes):
         """Load a ROM file but keep only the first max_bytes.

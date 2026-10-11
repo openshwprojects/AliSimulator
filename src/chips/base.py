@@ -68,6 +68,13 @@ class ChipFamily:
         once when the simulator (or loadFile) switches to the family."""
         self.write_chip_id()
 
+    def uninstall(self):
+        """Give back what install() changed besides the device register
+        handlers and slice services, which the simulator resets itself when it
+        switches to another family (simulator._switch_family): memory mapped
+        over the flash window or above the RAM, Unicorn hooks, simulator
+        attributes.  Nothing here."""
+
     def write_chip_id(self):
         """The chip ID word at 0xB8000000: the 16-bit ID in its upper half --
         the family's, or the loaded board's own where the family's members read

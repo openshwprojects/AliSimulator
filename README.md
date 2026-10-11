@@ -20,7 +20,11 @@ their file names.
   `m3821.py`): what differs between ALi generations (the chip ID, how the CPU
   gets from reset to the flash's bootloader, extra memory, that generation's
   devices). `loadFile()` picks the family from the image's chunk headers; the
-  M3801 is the default and everything `simulator.py` models by itself. The
+  M3801 is the default and everything `simulator.py` models by itself. A
+  simulator starts as the M3801, and switching to another family drops the
+  previous one's devices: the register handlers go back to the simulator's
+  own, and `ChipFamily.uninstall()` gives back the memory, hooks and
+  simulator attributes the family changed (`test_family_switch.py`). The
   M36xx generation before it (M3601E / M3602 / M3606: the Cabletech URZ0083
   and URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501 and Ferguson T50
   update images, recognised by their HDCPKey chunk's "Demo s3602", and the
@@ -336,9 +340,7 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   runs with emulation time from the load (the alarms at +0C / +10.. are
   RAM). It belongs to the M3801 family (`chips/m3801.py`); the code of the
   M36xx, M3821 and C3505 applications (URZ0086, KM0186, T750i, T760i)
-  addresses the same block, and they would meet the model too, since a
-  simulator starts with the M3801 family installed and `loadFile()` adds
-  another family's devices without removing the M3801's.
+  addresses the same block, but those families do not have the model.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
   Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read
@@ -603,6 +605,11 @@ carries, a load read back and a second later),
 `test_spi_command_mode.py` (SPI command responses read in the same block as
 the SF_INS store, with the flash read hook installed between slices, also
 toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
+`test_chip_families.py` and `test_family_switch.py` read firmware images
+without running them: the family each image is recognised as, and one
+simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn
+(only the loaded family's devices stay, the memory a family remapped comes
+back, an M3602 image after an M3503 one is run as the M3602).
 `run_all_tests.py` runs every test in its own Python process, so a native
 crash fails that test only.
 
