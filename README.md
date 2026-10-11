@@ -298,11 +298,15 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   dump.bin's "Polsat Sport News" is programme 0x1A on PMT PID 0x321, "TVP
   Opole" 0x11 on 0x6A5). Without a record the programme number is searched
   for in the firmware's section filters in RAM. State of play: dump.bin takes
-  all of it -- it filters its channel's PMT, CAT, SDT, NIT, EIT and video /
-  audio PIDs, consumes every packet, and its banner shows the model's EIT
-  ("Next: 14:00-15:00 TVP Opole next" under "TVP3 Opole" where it said "no
-  information"; `docs/dump_bin_banner_with_eit.png` has an earlier "Now:"
-  line, `run_dump_signal_capture_screen.py` captures it) -- then the banner
+  all of it -- it filters the TDT, its channel's PMT, CAT, SDT, NIT, EIT and
+  video / audio PIDs, consumes every packet, sets the chip's real-time clock
+  (below) to the TDT's time, and its banner shows that date and time
+  ("10/10 13:00": 12:00 UTC in the tests, its time zone +1 h) and the model's
+  EIT ("Now: 13:00-14:00 TVP Opole now", "Next: 14:00-15:00 TVP Opole next"
+  under "TVP3 Opole", "no information" for the present event when the banner
+  comes before its section; `run_dump_signal_capture_screen.py` captures it,
+  `docs/dump_bin_banner_with_eit.png` is a first capture under the unset
+  clock's "28/11 01:00") -- then the banner
   times out and the channel stays, a clear black picture with no source for
   the video and audio streams. After the tune it polls the demodulator:
   state register 0x3B 400 times in 8 s, wanting 1, then 0x147 (non-zero),
@@ -312,13 +316,29 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   Globo's signal test survives it). (Its stepping to the next channel every
   20 s or so, taken for a missing gate of its lock state machine, was its
   front-panel buttons on GPIO 31 / 9 read as pressed: `gpio_keys.py`.) Its
-  remote's EPG key then opens the programme guide on that channel (a black
-  preview), but its grid shows no events: its time line starts at the box's
-  own clock, 01:00 on 28/11, not the TDT's time (10/10 12:00 UTC in the
-  tests), and the model's two events, 12:00-14:00 UTC on 10/10, lie
-  outside it.
+  remote's EPG key then opens the programme guide on that channel at "13:00
+  10/10", the two events on its time line ("TVP Opole now" from 13:00, "TVP
+  Opole next" from 14:00).
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
+* **Real-time clock** (`rtc_m36.py`, 0xB8018A00): the SDK's RTC driver
+  loads the time with a word store to +00 (bit 31, then the year's two low
+  bits, month, day, weekday, hour, minute, second) and reads the running
+  time at +04 in the same layout; the S3811's later revision has the block
+  at 0xB8018F00, which the simulator's revision 0 does not select.
+  dump.bin's application keeps its calendar in clocks of its own, but what
+  it shows -- the local time, the channel banner's date and time, the
+  programme guide's time line -- is this register plus the time zone; it
+  loads it at start with the time saved in its settings and again whenever
+  a TDT arrives. Unmodelled it read 0, month 0 and day 0, which the
+  firmware's MJD arithmetic turned into 28 November, so its guide started at
+  "01:00 28/11" whatever the stream said, without an event in it. The model
+  runs with emulation time from the load (the alarms at +0C / +10.. are
+  RAM). It belongs to the M3801 family (`chips/m3801.py`); the code of the
+  M36xx, M3821 and C3505 applications (URZ0086, KM0186, T750i, T760i)
+  addresses the same block, and they would meet the model too, since a
+  simulator starts with the M3801 family installed and `loadFile()` adds
+  another family's devices without removing the M3801's.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
   bit 0x20 with udelay(2000), up to 36,848 times (6-7 minutes, then ignored).
   Bit 0x20 reads set once 0x80 was written. The 13-bit calibration value read
@@ -578,6 +598,8 @@ sector erase), `test_cp0_count_emulation.py`, `test_cp0_timer_interrupt.py`
 `test_device_models.py` (PMU, VCAP, graphics engine command -> interrupt ->
 acknowledge, masked line, partial acknowledge, controller write-back, command
 stores replayed after asynchronous stops, add_mmio_hook, peek / poke),
+`test_rtc_m36.py` (the real-time clock's register layout, its calendar
+carries, a load read back and a second later),
 `test_spi_command_mode.py` (SPI command responses read in the same block as
 the SF_INS store, with the flash read hook installed between slices, also
 toggled hundreds of times) and `test_mips16_decoder_encodings.py`.

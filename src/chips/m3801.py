@@ -4,7 +4,9 @@ Cabletech, Strong and Ferguson dumps): the CPU boots straight from the flash
 window, reset vector 0xBFC00000 / SYS_FLASH_BASE_ADDR 0xAFC00000, and the
 firmware identifies the silicon as an S3811 (chip ID 0x3811).  Nearly
 everything simulator.py models by default is this family's; what is added
-here is the internal COFDM demodulator's lock status (Demodulator).
+here is the internal COFDM demodulator's lock status (Demodulator), the
+transport-stream demultiplexer (dmx_m36.py) and the real-time clock
+(rtc_m36.py).
 """
 from .base import ChipFamily
 
@@ -69,6 +71,9 @@ class M3801(ChipFamily):
         # the transport-stream demultiplexer DMX0 at 0xB8022000 (dmx_m36.py)
         from dmx_m36 import Demux
         self.dmx = Demux(self.sim)
+        # the real-time clock at 0xB8018A00, which the UI's local time is read from (rtc_m36.py)
+        from rtc_m36 import Rtc
+        self.rtc = Rtc(self.sim)
 
     def set_signal(self, on):
         self.demod.signal = bool(on)
