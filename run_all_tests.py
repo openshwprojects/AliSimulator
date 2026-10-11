@@ -50,7 +50,7 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
          ("prima8", "Strong Prima VIII"), ("T650i", "Ferguson Ariva T650i"), ("T760i", "Ferguson Ariva T760i"),
          ("T750i", "Ferguson Ariva T750i"),
-         ("r265lite", "Opticum Blue R265 Lite"), ("ali_sdk.bin", "ali_sdk.bin")]
+         ("r265lite", "Opticum Blue R265 Lite"), ("T90", "Opticum HD T90"), ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
@@ -58,7 +58,8 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_urz0195_capture_screen.py", "run_dump_prima8_capture_screen.py",
               "run_dump_t650i_capture_screen.py", "run_dump_r265lite_capture_screen.py",
               "run_dump_r265lite_120_capture_screen.py", "run_dump_globo_signal.py",
-              "run_dump_r265lite_signal_capture_screen.py", "run_dump_signal_capture_screen.py")
+              "run_dump_r265lite_signal_capture_screen.py", "run_dump_signal_capture_screen.py",
+              "run_dump_t90_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):

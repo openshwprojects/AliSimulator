@@ -110,7 +110,7 @@ def ir16_to_nec(ir16):
 #          extended NEC whose two address bytes are both rev8(hi) (0x00 on the
 #          Strongs' remotes, 0x01 on the Cabletech's and the Ferguson's),
 #          command = ~rev8(lo)
-IR_CODINGS = [("dump_maciej", "nec"), ("Globo", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
+IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00")]
 
 

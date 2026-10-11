@@ -1,0 +1,44 @@
+{
+  "file": "Software_UNI_S60_1.0.4.1_PVR_2012-08-28.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD S60 (the universal \"UNI\" build; the main code calls itself HD_S60-1-0-4-1 and accepts /c/S60.abs and /c/UNIWERSAL87436723.abs)",
+    "type": "DVB-S2 HD satellite receiver with USB recording",
+    "board": null,
+    "soc": "ALi M3601S (the main-code chunk's version; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, its all-code image M3601SAllCode.abs)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.4.1 PVR (main-code chunk 103000003002002 \"M3601S\"; bootloader Libcore 1.1.6@Auto_20100413 built 2011-07-01 by Davy.Wu; Libcore 5.2.0@SDK4.0ba.5.2_20110615, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701, HDMI_ALI_E_110516_1)",
+    "date": "2012-08-28",
+    "size": 2097152,
+    "sha1": "a06019908653947098635b4fe6ed3b83107d4d27",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), maincode 0x014000 (chunk \"103000003002002\" M3601S, LZMA 0x1466E6 bytes -> 4.5 MB), Radioback 0x15C000 (1.0.0), Menuback 0x163000 (1.0.0), BootLogo 0x168000 (1.0.0), defaultdb 0x16F000 (1.1.0), userdb 0x19FF80 (1.0.0, 0x60070 bytes) -- the whole 2 MB flash; no HDCPKey and no seecode chunk"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Software_UNI_S60_1.0.4.1_PVR_2012-08-28.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update Software_UNI_S60_1.0.4.1_PVR_2012-08-28.rar (the .abs alone); fetched 2026-10-11 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": null,
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader prints \"MC: APP  init ok\" and the application its banner (Libcore 5.2.0, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701) after about 110 s of wall clock, dumps its clock registers and then resets its tuner over and over (\"Reset tuner N time!!!\"): the M3601S's internal S3501 demodulator and its tuner are not modelled; no GE command in a 2.5-minute run."
+  },
+  "desc": [
+    "The official 1.0.4.1 PVR update (2012-08-28) of the Opticum HD S60 satellite receiver, the \"UNI\" (universal) build: the first ALi M3601S image in the collection -- a single-CPU member of the S3602 platform (no seecode chunk, no HDCPKey) with the S3501 internal DVB-S2 demodulator, on a 2 MB flash with the Opticum N2's chunk set (Radioback, Menuback, BootLogo, defaultdb, userdb).",
+    "Its bootloader is the Libcore 1.1.6 build of 2011-07-01 (\"DVBS2---0.1.0\"); the application is the SDK 4.0 satellite line of mid-2011 (SDK4.0ba.5.3_GLS_S2), a year before the Thomson THT501's terrestrial one.",
+    "The application's own update accepts /c/S60.abs, /c/UNIWERSAL87436723.abs and the key files /c/KEY1_5684.txt, /c/KEY2_ETERNAL_567436.txt, /c/KEY2_ONEUSE_567436.txt from a USB stick."
+  ]
+}

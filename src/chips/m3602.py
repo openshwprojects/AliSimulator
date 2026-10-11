@@ -49,6 +49,11 @@ class M3602(ChipFamily):
                 return True
             if name == "maincode" and version.startswith(("Demo M3602", "Demo M3606", "M3606")):
                 return True
+            # the Opticum / Globo satellite updates name their main-code chunk by a number and
+            # put the chip in its version ("M3601S", "M3606 2Tuner"); the Globo HD-XS2's
+            # (an M3503, the same S3602 platform) names it in the bootloader's version
+            if version.startswith(("M3601", "M3606")) or (name == "bootloader" and version.startswith("M3503")):
+                return True
         return False
 
     def install(self):

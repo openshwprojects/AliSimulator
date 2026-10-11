@@ -23,7 +23,9 @@ their file names.
   M3801 is the default and everything `simulator.py` models by itself. The
   M36xx generation before it (M3601E / M3602 / M3606: the Cabletech URZ0083
   and URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501 and Ferguson T50
-  update images, recognised by their HDCPKey chunk's "Demo s3602") boots the
+  update images, recognised by their HDCPKey chunk's "Demo s3602", and the
+  Opticum S60 (M3601S) and X110TS (M3606) satellite updates, recognised by
+  the chip named in their main-code chunk's version) boots the
   same way and finds its first peripherals where the M3801's are, but its
   firmware wants the chip ID 0x3602 -- with the M3801's 0x3811 the
   applications start over through the bootloader -- and the T50's bootloader
@@ -35,6 +37,10 @@ their file names.
   Unicorn instance sharing the RAM and the register block
   (`run_dump_urz0086_see_start.py`), but not the SEE's own program, so the
   application's first message to the SEE times out at its SDBBP assertion.
+  The Globo HD-XS2 / Opticum Blue XS65 updates (`dumps/GLOBO HD-XS2/`, an
+  M3503 of the same platform, matched to this family by the bootloader's
+  version) fault at their first fetch: the M3503 wants a boot-ROM step like
+  the M3821's, not tried yet.
   The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
@@ -485,7 +491,9 @@ the output and the region heads hold output coordinates -- it undoes that
 scaling, read from the display engine's timing register, so the capture shows
 the whole OSD where the TV shows it; each capture logs the output mode): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
-banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
+banner, about 6), `run_dump_t90_capture_screen.py` (the official 2015 update
+of the same Opticum / Globo family, "OPTICUM HD T90/", the same no-signal box
+and menu, about 10), `run_dump_capture_screen.py` (dump.bin's channel banner after
 its 10-minute flash scan, about 15), `run_dump_signal_capture_screen.py` (the
 same boot with a signal and the transport stream: the banner carries the
 multiplex's EIT text, 3 % tolerance for the channel it is on, about 15) and `run_dump_cabletech_capture_screen.py`

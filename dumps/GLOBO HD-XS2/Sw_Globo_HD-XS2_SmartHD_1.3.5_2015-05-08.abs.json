@@ -1,0 +1,44 @@
+{
+  "file": "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs",
+  "device": {
+    "brand": "Globo / Opticum",
+    "model": "HD-XS2 (Globo) / Blue XS65 (Opticum): one software pack for both",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": null,
+    "soc": "ALi M3503 (the bootloader chunk's version \"M3503---0.1.0\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build with the chip's internal NIM_S3503 demodulator driver)",
+    "family": "M3602 (chips/m3602.py), matched by the bootloader's version -- see the simulator note",
+    "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
+    "tuner": null,
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.3.5 \"SmartHD\" (main-code chunk 112000000000002, version 00000135; Libcore 13.8.0@SDK4.0fa.13.8_20150326, Application 1.0.0@SDK4.0fa.13.8_20150326; the SEE's uLibcore 1.1.5a@SDK_20111126)",
+    "date": "2015-05-08",
+    "size": 4194304,
+    "sha1": "96f0a175ff60aa6f949caab6fd38811e021d7df5",
+    "layout": "bootloader 0x000000 (M3503---0.1.0), HDCPKey 0x02EE00 (00000001), MemCfg 0x02F000 (00000001), maincode 0x030000 (chunk \"112000000000002\" 00000135, LZMA 0x121442 bytes -> 5.2 MB), seecode 0x1D0000 (00000135, LZMA 0xDF6E3 -> 2.9 MB), storage_part 0x2B0000, Radioback 0x2D0000 (1.0.0), ca 0x2DFF80, defaultdb 0x2F0000 (1.1.0), userdb 0x2FFF80 (1.0.0, 0x100070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Sw_Opticum_Blue_XS65_Globo_HD-XS2_SoftwarePack_1.3.5_2015-06-22.zip&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's software pack Sw_Opticum_Blue_XS65_Globo_HD-XS2_SoftwarePack_1.3.5_2015-06-22.zip (two .abs images and a Polish README: unpack to the USB stick's root, the receiver picks the matching file itself); fetched 2026-10-11 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "As the M3602 family (2026-10-11): the CPU faults at its first fetch (PC 0 right after the reset vector, 0 instructions) -- the M3503's flash does not begin with XIP code the way the M36xx's does, so the boot-ROM step of the M3821 / C3505 families (bootloader copied into a boot SRAM) is the thing to try next."
+  },
+  "desc": [
+    "The official 1.3.5 \"SmartHD\" update of the Globo HD-XS2 / Opticum Blue XS65 satellite receiver (main code 112000000000002, 2015-05-08), the first ALi M3503 image in the collection: a dual-CPU chip of the S3602 platform with its own SEE co-processor program (the seecode chunk) and an internal DVB-S2 demodulator (NIM_S3503).",
+    "Drivers named in the main code: PAN_FD650K (a TM1650-compatible front-panel chip, pins not found yet), HDMI_ALI_E_150303_1, NIM_S3503 and NIM_S3501; its update file names are /c/Sw_Globo_HD-XS2_SmartHD.abs and /c/XS2_SHD.abs, its OTA server ota.globo-multimedia.com.",
+    "The pack's second image, Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs, is the Polish retail build of the same software."
+  ]
+}

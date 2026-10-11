@@ -39,7 +39,10 @@ _R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={})
 # (substring of the dump's path, case-insensitive) -> panel spec
 PANELS = [
     ("dump_maciej", dict(chip="tm1650", scl=31, sda=9, labels={(1, 4): "▲", (2, 4): "▼"})),
-    ("Globo", dict(chip="tm1650", scl=31, sda=9, labels={(1, 4): "▲", (2, 4): "▼"})),
+    # the Globo STB HD N3 dump ("Ali_3801_Globo_DVBT_dump SPI 4mb.bin"; the Globo HD-XS2 is another board)
+    ("Ali_3801_Globo", dict(chip="tm1650", scl=31, sda=9, labels={(1, 4): "▲", (2, 4): "▼"})),
+    # the official Opticum / Globo update for the HD T90, STB HD N2 and N3: the same boards
+    ("T90", dict(chip="tm1650", scl=31, sda=9, labels={(1, 4): "▲", (2, 4): "▼"})),
     # keys found on its first-install wizard: KS9/K1 = down, KS9/K2 = up, KS10/K1 = power
     # (standby: the panel shows "oFF "); the other 17 positions do nothing there
     ("URZ0083Q", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6),

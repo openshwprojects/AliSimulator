@@ -1,0 +1,45 @@
+{
+  "file": "STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "HD T90, STB HD N2 and STB HD N3 (one update for the three)",
+    "type": "DVB-T set-top box",
+    "board": null,
+    "soc": "ALi M3801",
+    "family": "M3801",
+    "demod": "internal (NIM_S3811)",
+    "tuner": "the boards' own: a Rafael Micro R820T on the Globo N3 (I2C 0x1A); the update's driver is the same R828 reference driver",
+    "tunerModel": {"chip": "r820t", "address": 26, "xtalHz": 16000000, "ifHz": 4570000},
+    "flash": "4 MB SPI",
+    "panel": {"chip": "TM1650", "scl": 31, "sda": 9},
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.3.2 PVR (maincode \"M3801 DVBT\" 2015-1-5, name 406000000003002); defaultdb and userdb 2015-1-5",
+    "date": "2015-01-05",
+    "size": 4194304,
+    "sha1": "5338020c0f8a6492937235e47e01a84cfb9ce7a1",
+    "layout": "bootloader 0x000000 (Libcore 1.1.6, jessie.wei, Fri Jun 15 2012 -- dump_maciej.bin's), HDCPKey 0x04FE00 (1.01), maincode 0x050000 (LZMA), Radioback 0x290000, defaultdb 0x2A0000, userdb 0x2BFF80 -- the Opticum N2 / Globo N3 layout; the full 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=software-decoder-stb-hd-t90-n2-3-1-3-2pvr-2015-01-06.original.zip&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": "2015-01-06",
+    "login": false,
+    "note": "The manufacturer's USB update \"Software Decoder STB HD T90 N2-3 1.3.2PVR 2014-01-05.abs\" as Opticum / Globo published it (the zip software-decoder-stb-hd-t90-n2-3-1-3-2pvr-2015-01-06.original.zip, once on opticum.com.pl / globo.com.pl and skymaster.de's uploads, which no longer serve it), with its Polish / English changelog README_CZYTAJ_TO!!!!.txt (1.2.4 .. 1.3.2); fetched 2026-10-11 from the mirror."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON "],
+    "note": "Boots and draws (2026-10-11): the bootloader's \"success!\" at 90 s, the application banner right after (Libcore 8.13.0@SDK4.0bd.8.13_20130731, Application 1.0.0@SDK4.0ba.7.4_20120227), the first GE commands 3 minutes in, about 960 by 4 minutes and then some 3 a second for ever: it tunes a channel of the update's list and, with no signal, shows the Globo N3's red \"Brak sygnału\" box (run_dump_t90_capture_screen.py, expected screen made 2026-10-11). The remote reaches it: MENU on that screen drew 28 GE commands and changed 60,000 pixels (the Globo N3's menu changes 200,000), so its menu steps are not in the test yet."
+  },
+  "desc": [
+    "The official 1.3.2 PVR update (main code dated 5 January 2015) for the Opticum HD T90 and the Opticum / Globo STB HD N2 and N3 -- the family of dump_maciej.bin (an N2, 2013 firmware) and the Globo N3 dump (2014 firmware): the same bootloader build, the same main-code name 406000000003002, two newer application versions.",
+    "Its changelog (README_CZYTAJ_TO!!!!.txt in the zip): 1.3.2 Slovak translations; 1.3.1 Slovak language, a simple / advanced sort mode, a fix for user settings changing by themselves; 1.3.0 Croatian; 1.2.9 backup to USB, channel-list upgrade, an \"application defender\" that restores factory defaults after three failed starts of channel playback, unified signal bars; 1.2.7 Greek fixes, the wizard's time zone; 1.2.6 timeshift to record, an LCN monitor for the Polish DVB-T offer; 1.2.5 audio on the second multiplex, DAY+/DAY- in the EPG, scan settings split into basic and advanced, the LED display as in 1.2.2; 1.2.4 channel opening time, the last UHF frequency, timers lost on power failure, the front panel's resolution display.",
+    "The image carries a userdb chunk (0x140070 bytes, like the dumps'), so the update does not wipe the channel list."
+  ]
+}

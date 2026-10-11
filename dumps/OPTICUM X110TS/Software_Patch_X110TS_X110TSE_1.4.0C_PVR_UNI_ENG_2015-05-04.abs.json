@@ -1,0 +1,43 @@
+{
+  "file": "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "X110TS / X110TSE (the universal English \"UNI ENG\" build, \"UNI RETA PVR\")",
+    "type": "DVB-S2 HD twin-tuner PVR satellite receiver with CI+ (Conax, Irdeto and Viaccess card slots named in the main code)",
+    "board": null,
+    "soc": "ALi M3606 (the main-code chunk's version \"M3606 2Tuner\", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners; the combo SDK's MxL101 terrestrial driver, NIM_MXL101_0 / _1, and NIM_COFDM_0 are in the build as well)",
+    "tuner": null,
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.4.0C PVR UNI ENG (main-code chunk 111000000003002 \"M3606 2Tuner\"; Application 1.0.0@SDK4.0ba.8.0_Combo_20120530, HDMI_ALI_E_120522_1; the SEE's uLibcore 1.1.5a@SDK_20111126 built 2012-05-31 by lanny.sun)",
+    "date": "2015-05-04",
+    "size": 4194304,
+    "sha1": "cb504a5134cf5bd69301dff91e058910e506d442",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), maincode 0x020000 (chunk \"111000000003002\" M3606 2Tuner, LZMA 0x13D72E bytes -> 5.8 MB), seecode 0x180000 (M3606 SEE, LZMA 0xC9381 -> 2.6 MB), Radioback 0x280000 (1.0.0), keydb 0x28FF80 (1.0.0), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0, 0x140070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update (\"Software Patch\") Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.rar (the .abs alone); fetched 2026-10-11 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader runs from RAM (timer interrupts in its code at 0x81E8xxxx, 40 M instructions in 2.5 minutes) and prints nothing but the first byte -- the M3606 bootloader's wait for its SEE co-processor, as with the Cabletech URZ0086 (run_dump_urz0086_see_start.py); the application does not start."
+  },
+  "desc": [
+    "The official 1.4.0C PVR update (2015-05-04) of the Opticum X110TS / X110TSE twin-tuner satellite PVR, the universal English build: an ALi M3606 image like the Cabletech URZ0086's, with the SEE co-processor's program in a seecode chunk and a keydb chunk, on a 4 MB flash.",
+    "The application is the SDK 4.0 combo line of 2012 (SDK4.0ba.8.0_Combo_20120530): two S3501 satellite front ends plus the MxL101 terrestrial driver, Conax / Irdeto / Viaccess CA and CI+ (\"Conax ITI CIPLUS CAM\"), USB recording with a PVR manager, OTA by timer; the \"UNI RETA PVR\" (universal retail) model name."
+  ]
+}
