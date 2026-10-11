@@ -832,6 +832,8 @@ class AliMipsSimulator:
         if not isinstance(self.chip, family):
             self.chip = family(self)
             self.chip.install()
+        else:
+            self.chip.write_chip_id()       # (this image's board may read another chip ID)
 
         # Re-initialize globals if re-running
         self.instruction_count = 0

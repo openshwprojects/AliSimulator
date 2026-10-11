@@ -28,7 +28,9 @@ their file names.
   the chip named in their main-code chunk's version) boots the
   same way and finds its first peripherals where the M3801's are, but its
   firmware wants the chip ID 0x3602 -- with the M3801's 0x3811 the
-  applications start over through the bootloader -- and the T50's bootloader
+  applications start over through the bootloader; the X110TS's application
+  reboots unless it reads 0x3603, which its sidecar gives as the board's own
+  (`device.chipId`) -- and the T50's bootloader
   probes the RAM 128 MB up, where the family shows it again; the URZ0083's
   application then runs (`run_dump_urz0083_app_runs.py`) without drawing yet
   (see the sidecars). The M3606's bootloader starts its SEE co-processor --
@@ -36,11 +38,15 @@ their file names.
   `chips/see.py` runs the SEE's boot code for that handshake on a second
   Unicorn instance sharing the RAM and the register block
   (`run_dump_urz0086_see_start.py`), but not the SEE's own program, so the
-  application's first message to the SEE times out at its SDBBP assertion.
-  The Globo HD-XS2 / Opticum Blue XS65 updates (`dumps/GLOBO HD-XS2/`, an
-  M3503 of the same platform, matched to this family by the bootloader's
-  version) fault at their first fetch: the M3503 wants a boot-ROM step like
-  the M3821's, not tried yet.
+  application's first message to the SEE times out at its SDBBP assertion
+  (the X110TS's too: `run_dump_x110ts_see_start.py`).
+  The M3503 (`chips/m3503.py`, the Globo HD-XS2 / Opticum Blue XS65
+  satellite updates in `dumps/GLOBO HD-XS2/`, recognised by the bootloader's
+  version) is this family with the chip ID 0x3503 and the T750i's kind of
+  bootloader: it runs from the flash window with its stack in locked D-cache
+  lines until the DDR is up (`CacheAsRam`); it starts its SEE the same way,
+  and its application starts and waits for the SEE
+  (`run_dump_hdxs2_app_starts.py`).
   The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the

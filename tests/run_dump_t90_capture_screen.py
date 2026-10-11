@@ -8,10 +8,12 @@ bootloader ("success!" after about 90 s) into the application (Libcore
 channel, shows its banner and then, with no signal, the red "Brak sygnału"
 (no signal) box of the Globo N3's skin, redrawn a few times a second from
 then on; that screen is captured and compared with t90_screen.png.  The
-TM1650 front panel is decoded alongside.  The remote reaches it (MENU drew 28
-GE commands and changed 60,000 pixels when the expected screen was made), but
-the menu steps and their expected screen (t90_nav.png) are not part of the
-test yet.
+TM1650 front panel is decoded alongside.  Then the IR remote drives it, as
+on the Globo N3: MENU opens the home menu (six tiles, "Edycja kanałów"
+highlighted; the panel shows dashes), RIGHT moves the highlight to "Skan
+kanałów", EXIT returns to live TV and its no-signal box (the panel shows the
+channel number); that screen is compared with t90_nav.png, the same picture
+as t90_screen.png.
 
 Usage: python run_dump_t90_capture_screen.py [--make-expected]
 """
@@ -22,7 +24,7 @@ import screen_regression
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Opticum HD T90 (official update 1.3.2)", "chips": ["ALi M3801", "TM1650", "R820T"],
-            "shows": ["boots to screen"]}
+            "shows": ["boots to screen", "reacts to remote"]}
 
 screen_regression.run(
     dump="OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs",
@@ -33,6 +35,9 @@ screen_regression.run(
     max_diff_pct=1.0,
     title="Opticum HD T90 (official update 1.3.2)",
     retries=2,
-    # to do: navigation=[("MENU", 40000), ("RIGHT", 2000), ("EXIT", 40000)] with nav_settle_s=600 --
-    # MENU changed 60,000 pixels (28 GE commands) on 2026-10-11, less than the Globo's 200,000
+    # the menu changes some 670,000 pixels, RIGHT 200,000 (two tiles), EXIT back to the box 670,000
+    navigation=[("MENU", 200000), ("RIGHT", 2000), ("EXIT", 100000)],
+    nav_diff_pct=1.0,
+    nav_settle_s=600,     # a channel banner may still be up after EXIT on a loaded machine; the stable
+                          # screen is compared
 )

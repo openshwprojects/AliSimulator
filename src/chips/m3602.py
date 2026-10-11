@@ -10,7 +10,12 @@ tables, and an application that reads it starts over through the bootloader
 (the URZ0083 every ~45 M instructions, the THT501 likewise), while with
 0x3602 both keep running.  (Their tables also know 0x3603, for which the
 URZ0083 moves its SPI flash registers to 0xB802E098 and prints nothing at
-all within 160 M instructions: not this chip.)
+all within 160 M instructions: not this chip.)  A board whose SoC reads
+0x3603 says so in its sidecar (device.chipId, chips/base.py): the Opticum
+X110TS's application maps the chip ID to a chip code and reboots unless it
+is 0x3603's, while the Cabletech URZ0086, another "M3606 2Tuner" build,
+boots with 0x3602 -- under 0x3603 its bootloader polls a register at
+0xB801841C, which nothing models, for ever.
 
 The Ferguson T50's bootloader probes its DDR at 0xA800AA68, 128 MB above the
 first word: the RAM shows up again above its size here, as on a controller
@@ -24,9 +29,10 @@ its first message to the SEE times out and it stops at its SDBBP
 assertion.
 
 Recognised by the chunk chain: the HDCPKey chunk's version "Demo s3602"
-(the M3801 images say "Demo M3801"), or a maincode chunk named after the
+(the M3801 images say "Demo M3801"), a maincode chunk named after the
 SDK's M3602 / M3606 demo projects ("Demo M3602", "Demo M3606",
-"M3606 2Tuner").
+"M3606 2Tuner"), or a main-code chunk whose version names the chip (the
+Opticum satellite updates: "M3601S", "M3606 2Tuner").
 """
 import ctypes
 
@@ -50,9 +56,9 @@ class M3602(ChipFamily):
             if name == "maincode" and version.startswith(("Demo M3602", "Demo M3606", "M3606")):
                 return True
             # the Opticum / Globo satellite updates name their main-code chunk by a number and
-            # put the chip in its version ("M3601S", "M3606 2Tuner"); the Globo HD-XS2's
-            # (an M3503, the same S3602 platform) names it in the bootloader's version
-            if version.startswith(("M3601", "M3606")) or (name == "bootloader" and version.startswith("M3503")):
+            # put the chip in its version ("M3601S", "M3606 2Tuner"; the Globo HD-XS2's M3503,
+            # named in its bootloader's version, is m3503.py)
+            if version.startswith(("M3601", "M3606")):
                 return True
         return False
 

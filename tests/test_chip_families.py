@@ -5,10 +5,11 @@ the R265 Lite images' "M3821b" bootloader version makes them M3821 -- and so
 does the T750i's XIP bootloader on a dual-CPU image whose main code drives
 the M3821's demodulator (NIM_S3821) -- the T760i's
 boot-ROM bootloader with a SEE program and a main code that names the chip
-C3505, the M36xx update images (HDCPKey "Demo s3602", or a maincode named after
-the M3602 / M3606 demo projects) M3602, and everything else -- the M3801 dumps
-among them -- falls back to the M3801.  Also checks chunk_chain() on one
-image's known layout.
+C3505, the Globo HD-XS2's "M3503" bootloader M3503, the M36xx update images
+(HDCPKey "Demo s3602", a maincode named after the M3602 / M3606 demo
+projects, or a main-code chunk whose version names the M3601S / M3606) M3602,
+and everything else -- the M3801 dumps among them -- falls back to the M3801.
+Also checks chunk_chain() on one image's known layout.
 """
 import os
 import sys
@@ -31,6 +32,11 @@ EXPECTED = [
     ("Ferguson_T760i_V1.5B4-14092021.abs", "C3505"),  # boot-ROM bootloader, SEE program, main code names ALI_C3505
     ("Ferguson_T760i_V1.4B8_28072020.abs", "C3505"),
     ("Ferguson_T750i_V1.20B2_18092019.abs", "M3821"),  # XIP bootloader, SEE program, main code drives NIM_S3821
+    ("Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "M3503"),  # bootloader "M3503---0.1.0"
+    ("Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs", "M3503"),
+    ("Software_UNI_S60_1.0.4.1_PVR_2012-08-28.abs", "M3602"),   # main-code chunk version "M3601S"
+    ("Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs", "M3602"),   # "M3606 2Tuner"
+    ("STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs", "M3801"),
 ]
 
 print("=== Test: chips.detect() picks each image's chip family ===")

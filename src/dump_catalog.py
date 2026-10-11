@@ -9,7 +9,9 @@ makes of it (boots / application / display, the panel's texts) -- and `desc`,
 the notes on it as a list of paragraphs.  device.tunerModel, where the tuner
 is known, is {"chip", "address" (7-bit, decimal)[, "xtalHz", "ifHz"]}: the
 tuner model to put on its I2C bus (tuners.py) and, for an R820T, the
-firmware's crystal and IF its frequency is decoded with.  tests/test_dump_catalog.py checks
+firmware's crystal and IF its frequency is decoded with.  device.chipId,
+where a board's SoC reads another chip ID than its family's (chips/), is that
+ID as a "0x...." string, the evidence in the notes.  tests/test_dump_catalog.py checks
 every sidecar against its image and against the code's own tables
 (front_panel.PANELS, ir_remote.IR_CODINGS), and tools/dump_table.py renders
 them as dumps/README.md.
@@ -102,4 +104,14 @@ def problems(path, data):
     device = data.get("device") or {}
     if not device.get("soc"):
         out.append(f"{rel}: no SoC")
+    chip_id = device.get("chipId")
+    if chip_id is not None and not (isinstance(chip_id, str) and len(chip_id) == 6 and chip_id.startswith("0x")
+                                    and all(c in "0123456789ABCDEFabcdef" for c in chip_id[2:])):
+        out.append(f"{rel}: chipId {chip_id!r} is not a \"0x....\" chip ID")
     return out
+
+
+def chip_id(dump):
+    """The chip ID a board's sidecar gives (device.chipId), or None."""
+    given = (((load(dump) or {}).get("device")) or {}).get("chipId")
+    return int(given, 16) if given else None

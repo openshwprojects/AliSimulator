@@ -6,7 +6,7 @@
     "type": "DVB-S2 HD satellite receiver",
     "board": null,
     "soc": "ALi M3503 (the bootloader chunk's version \"M3503---0.1.0\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build with the chip's internal NIM_S3503 demodulator driver)",
-    "family": "M3602 (chips/m3602.py), matched by the bootloader's version -- see the simulator note",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503 and the XIP bootloader's cache-as-RAM stack)",
     "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
     "tuner": null,
     "flash": "4 MB SPI",
@@ -30,11 +30,11 @@
     "note": "The manufacturer's software pack Sw_Opticum_Blue_XS65_Globo_HD-XS2_SoftwarePack_1.3.5_2015-06-22.zip (two .abs images and a Polish README: unpack to the USB stick's root, the receiver picks the matching file itself); fetched 2026-10-11 from the mirror's Opticum / INNE folder."
   },
   "simulator": {
-    "boots": false,
-    "application": false,
+    "boots": true,
+    "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family (2026-10-11): the CPU faults at its first fetch (PC 0 right after the reset vector, 0 instructions), like the SmartHD image -- the M3503 needs the boot-ROM step of the M3821 / C3505 families."
+    "note": "As the M3503 family (2026-10-11), like the SmartHD image (run_dump_hdxs2_app_starts.py): the bootloader runs from the flash window with its cache-as-RAM stack, starts the SEE through its boot code at 0xA1016804 and the application, which starts the SEE's program at 0x86000200 -- not run -- and then idles (60 M instructions run); silent builds, one 0x01 byte to the UART."
   },
   "desc": [
     "The official 1.3.5 \"Reta_pol\" update of the Globo HD-XS2 / Opticum Blue XS65 satellite receiver (main code 112003000202162, 2015-06-22): the Polish retail build of the SmartHD image next to it, with network OTA (ota.globo-multimedia.com:8443, wake-up timers for OTA and recordings) and Polish debug texts; its update file names are /c/Sw_Globo_HD-XS2_Reta_pol.abs and /c/XS2_Reta_pol.abs.",

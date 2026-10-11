@@ -6,7 +6,8 @@
     "type": "DVB-S2 HD twin-tuner PVR satellite receiver with CI+ (Conax, Irdeto and Viaccess card slots named in the main code)",
     "board": null,
     "soc": "ALi M3606 (the main-code chunk's version \"M3606 2Tuner\", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
-    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
     "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners; the combo SDK's MxL101 terrestrial driver, NIM_MXL101_0 / _1, and NIM_COFDM_0 are in the build as well)",
     "tuner": null,
     "flash": "4 MB SPI",
@@ -31,13 +32,14 @@
   },
   "simulator": {
     "boots": true,
-    "application": false,
+    "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader runs from RAM (timer interrupts in its code at 0x81E8xxxx, 40 M instructions in 2.5 minutes) and prints nothing but the first byte -- the M3606 bootloader's wait for its SEE co-processor, as with the Cabletech URZ0086 (run_dump_urz0086_see_start.py); the application does not start."
+    "note": "As the M3602 family with the chip ID 0x3603 (2026-10-11, run_dump_x110ts_see_start.py): the bootloader -- a silent build, one 0x01 byte to the UART -- starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py), unpacks the main code and starts the application, which starts the SEE's program at 0xA6000200 -- not run -- and stops at its SDBBP assertion when its first message to the SEE is not acknowledged, like the Cabletech URZ0086.  With the family's 0x3602 the application reboots into the bootloader every ~45 M instructions instead (see the last note)."
   },
   "desc": [
     "The official 1.4.0C PVR update (2015-05-04) of the Opticum X110TS / X110TSE twin-tuner satellite PVR, the universal English build: an ALi M3606 image like the Cabletech URZ0086's, with the SEE co-processor's program in a seecode chunk and a keydb chunk, on a 4 MB flash.",
-    "The application is the SDK 4.0 combo line of 2012 (SDK4.0ba.8.0_Combo_20120530): two S3501 satellite front ends plus the MxL101 terrestrial driver, Conax / Irdeto / Viaccess CA and CI+ (\"Conax ITI CIPLUS CAM\"), USB recording with a PVR manager, OTA by timer; the \"UNI RETA PVR\" (universal retail) model name."
+    "The application is the SDK 4.0 combo line of 2012 (SDK4.0ba.8.0_Combo_20120530): two S3501 satellite front ends plus the MxL101 terrestrial driver, Conax / Irdeto / Viaccess CA and CI+ (\"Conax ITI CIPLUS CAM\"), USB recording with a PVR manager, OTA by timer; the \"UNI RETA PVR\" (universal retail) model name.",
+    "Its SoC reads the chip ID 0x3603 (traced 2026-10-11): early in its start the application maps the chip ID at 0xB8000002 to a chip code (0x8000082C: 0x3602 -> 0x10046, 0x3603 -> 0x10047, 0x3811 -> 0x10048) and, unless the code is 0x10047, reboots through its software-reset path (0x80000720: fp = 0xDEADBEAD, interrupts off, devices reset through 0xB8000080, jump to 0xAFC00000).  Its bootloader and application then use the SPI flash registers at 0xB802E098, as the URZ0083's tables do for 0x3603.  The Cabletech URZ0086 -- also an \"M3606 2Tuner\" build -- keeps 0x3602: under 0x3603 its bootloader polls a 16-bit register at 0xB801841C (a block the simulator does not model) for ever, under 0x3602 it boots to its application."
   ]
 }

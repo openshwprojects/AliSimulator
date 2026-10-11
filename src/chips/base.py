@@ -66,6 +66,17 @@ class ChipFamily:
     def install(self):
         """Memory and devices of this family, on top of the common ones; called
         once when the simulator (or loadFile) switches to the family."""
+        self.write_chip_id()
+
+    def write_chip_id(self):
+        """The chip ID word at 0xB8000000: the 16-bit ID in its upper half --
+        the family's, or the loaded board's own where the family's members read
+        different ones (its sidecar's device.chipId) -- the variant bits below."""
+        self.chip_id = type(self).chip_id
+        path = getattr(self.sim, "dump_path", None)
+        if path:
+            import dump_catalog
+            self.chip_id = dump_catalog.chip_id(path) or self.chip_id
         self.sim.poke(0xB8000000, ((self.chip_id << 16) | self.chip_variant).to_bytes(4, 'little'))
 
     def start(self):
