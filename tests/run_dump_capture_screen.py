@@ -1,13 +1,15 @@
 """
-Screen regression for dump.bin, the Comsat TE 1050 HD (slow, about 15
+Screen regression for dump.bin, the Comsat TE 1050 HD (slow, about 7
 minutes): boots dump.bin into its application, which reads its flash channel
-database word by word and byte by byte (about 10 minutes of wall time) before
-it tunes its first channel and draws the channel banner ("Polsat Sport News",
-channel 0008, Russian UI).  The screen is captured and compared with
-dump_screen.png with a tolerance for the banner's changing parts.  No
-navigation: its UI ignores the remote, with or without a signal -- the
-firmware keeps hopping between its channels, its channel change never
-completing without the transport stream's tables (see the dump's sidecar).
+database word by word and byte by byte before it tunes its first channel and
+draws the channel banner (Russian UI) and, once that has timed out, the
+"Нет Сигнала!" (no signal) box; that screen is captured and compared with
+dump_screen.png.  No navigation: the remote's frames are taken but no key
+changes the screen.  Its two front-panel buttons, straight on GPIO 31 and 9
+(the SDK's key task sends them on as its virtual keys 12 / 13, up / down),
+are modelled released (front_panel.py: gpio_keys.py); read as pressed, the
+simulator's default for an input nothing drives, they made it hop between
+its two channels every 20-50 s.
 
 Usage: python run_dump_capture_screen.py [--make-expected]
 """
@@ -22,8 +24,8 @@ screen_regression.run(
     dump="dump.bin",
     expected="dump_screen.png",
     boot_limit_s=45 * 60,
-    settle_s=90,
+    settle_s=90,          # the banner times out, then the no-signal box is drawn
     min_ge_ops=15,
-    max_diff_pct=2.0,
+    max_diff_pct=1.0,
     title="Comsat TE 1050 HD (dump.bin)",
 )

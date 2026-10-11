@@ -8,14 +8,16 @@ filters the PAT, then the PMT PID of its channel, the CAT, SDT, NIT, EIT, TDT
 and its video / audio PIDs, and the model answers every one: the PMT with
 the programme number of the channel read from the dump's own channel
 database ("TVP Opole", programme 0x11 on PID 0x6A5; "Polsat Sport News",
-0x1A on 0x321).  So the channel banner shows the multiplex's EIT -- "Now:
-02:00-03:00 TVP Opole now" where it used to say "Нет Информации" (no
-information) -- which is what this test captures and compares with
-dump_signal_screen.png.  The firmware still steps to its next channel every
-20 s or so (it waits for the video or audio stream itself, which the
-simulator has no source for yet), so the banner alternates between its two
-channels: the comparison allows 3 % for the channel's name, number and
-programme text.
+0x1A on 0x321).  So the channel banner carries the multiplex's EIT -- "Next:
+14:00-15:00 TVP Opole next" under "TVP3 Opole" / 0009 -- and this test
+captures it as soon as its EIT line is on the screen (after its 14th GE
+command, some 960 colours; the boot runs in 0.5 M instruction slices for
+that) and compares it with dump_signal_screen.png.
+The banner times out some 14 M instructions later and the channel stays: a
+clear black picture, the video and audio streams having no source yet.
+(Before its front-panel buttons were modelled released, gpio_keys.py, the
+firmware stepped between its two channels every 20 s or so and the banner
+kept coming back.)
 
 Usage: python run_dump_signal_capture_screen.py [--make-expected]
 """
@@ -32,9 +34,12 @@ screen_regression.run(
     dump="dump.bin",
     expected="dump_signal_screen.png",
     boot_limit_s=45 * 60,
-    settle_s=60,
-    min_ge_ops=15,
-    max_diff_pct=3.0,
+    settle_s=0,           # the banner is up for a few seconds: the screen of the slice that shows it
+    min_ge_ops=14,        # the banner is drawn at 14 commands ...
+    min_colours=900,      # ... and its EIT line ("Next: ...") and EPG icon follow: some 960 colours, 840 without
+    max_diff_pct=1.0,
+    slice_instructions=500_000,
+    probe_s=0,
     title="Comsat TE 1050 HD (dump.bin) with a signal and a transport stream",
     retries=2,
     signal=True,

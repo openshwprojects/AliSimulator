@@ -38,6 +38,9 @@ for path, data in entries:
         for pin in ("scl", "sda", "clk", "dio", "stb"):
             if pin in spec and spec[pin] != panel.get(pin):
                 failures.append(f"{rel}: panel {pin} is {panel.get(pin)} in the sidecar, {spec[pin]} in front_panel.PANELS")
+        if "keys" in spec and list(spec["keys"]) != list(panel.get("keys") or []):
+            failures.append(f"{rel}: panel keys are {panel.get('keys')} in the sidecar, {list(spec['keys'])} in "
+                            f"front_panel.PANELS")
     model = data["device"].get("tunerModel")
     if model is not None:
         if model.get("chip") not in tuners.MODELS:

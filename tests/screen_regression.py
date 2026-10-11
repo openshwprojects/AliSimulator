@@ -56,7 +56,7 @@ class SimulatorCrash(Exception):
 
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
-        signal=False, tuner=True, mux=False):
+        signal=False, tuner=True, mux=False, slice_instructions=5_000_000, probe_s=10):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -68,13 +68,17 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     can show the frequency it is tuned to; signal=True boots with
     sim.set_signal(True): the tuner and a locked demodulator; mux=True adds
     the transport stream behind it (sim.attach_mux: the demultiplexer model
-    feeds the tables of one made-up service, so a channel change completes)."""
+    feeds the tables of one made-up service, so a channel change completes).
+    The boot runs in slices of slice_instructions and looks for the drawn
+    screen every probe_s seconds; a screen that is up for a few seconds only
+    (a channel banner) is caught with small slices, probe_s=0 and settle_s=0:
+    the screen of the first slice that shows it is the one compared."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal, tuner, mux)
+                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -85,7 +89,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux):
+         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -115,7 +119,10 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
 
     def has_panel():
         """Whether the box has a display to show beside a capture: its sidecar
-        names a panel chip, or the decoder has seen the firmware drive one."""
+        names a panel chip, or the decoder has seen the firmware drive one
+        (buttons on GPIO alone, gpio_keys.py, have none)."""
+        if not getattr(panel, "has_display", True):
+            return False
         return sidecar_panel or getattr(panel, "i2c_transaction_count", 0) or getattr(panel, "frame_count", 0)
 
     def shot(path, caption):
@@ -150,7 +157,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         if drawn_t is not None and now - drawn_t > settle_s:
             break
         try:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+            sim.run(max_instructions=sim.instruction_count + slice_instructions)
         except Exception as e:
             raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s, "
                                  f"{sim.ge_ops} GE commands") from e
@@ -163,7 +170,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         # times out and clears before its no-signal message, and the
         # Cabletech's wizard keeps redrawing a little, so neither "N commands
         # done" nor "the GE went quiet" alone marks the screen to capture.
-        if drawn_t is None and sim.ge_ops >= min_ge_ops and now - last_probe >= 10:
+        if drawn_t is None and sim.ge_ops >= min_ge_ops and now - last_probe >= probe_s:
             last_probe = now
             rgb = sim.capture_screen()
             colours = len(np.unique(rgb.reshape(-1, 3), axis=0))

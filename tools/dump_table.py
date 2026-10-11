@@ -23,6 +23,8 @@ def _panel(panel):
     if not panel:
         return "-"
     pins = ", ".join(f"{k.upper()} {panel[k]}" for k in ("scl", "sda", "clk", "dio", "stb") if k in panel)
+    if panel.get("keys"):
+        pins = ", ".join(filter(None, (pins, "keys on GPIO " + " / ".join(str(p) for p in panel["keys"]))))
     return f"{panel.get('chip', '?')} ({pins})" if pins else panel.get("chip", "?")
 
 

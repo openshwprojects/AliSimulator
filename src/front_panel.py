@@ -21,12 +21,16 @@ follow the firmware's GPIO writes and answer its key reads.
     uPD16312-class chip on the same bus with STB = GPIO 14, its digits in
     grids 4, 2, 3, 1 with their own segment wiring (" ON ", "----", then the
     channel number "0004"); its keys are not driven by the decoder yet.
+  * Buttons straight on GPIO inputs, no chip and no display (gpio_keys.py):
+    the Strong Prima VIII -- GPIO 31 (channel up) and 9 (channel down),
+    pulled up, low while pressed.
 
 A dump that matches no entry gets the TM1650 on GPIO 31 / 9 (a board without
 one shows a blank display and ignores the keys).
 """
 import os
 
+from gpio_keys import GpioKeys
 from tm1628_decoder import TM1628Decoder
 from tm1650_decoder import TM1650Decoder
 
@@ -74,6 +78,13 @@ PANELS = [
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
+    # Strong Prima VIII (MC6501-M3801, the GD25Q32B flash dump): two buttons straight on GPIO 31
+    # and 9, polled by its application, which sends them on as the panel keys 0xFFFF0001 / 0002
+    # (its CH455 driver, "PAN_CH455_0", sits on a software I2C bus with no pins: GPIO 127)
+    ("PRIMA VIII", dict(chip="gpio_keys", keys=(31, 9), labels={31: "CH+", 9: "CH-"})),
+    # Comsat TE 1050 HD (dump.bin): the same SDK key task on the same pins -- GPIO 31 sends its
+    # virtual key 12 (UP), GPIO 9 its 13 (DOWN)
+    ("dump.bin", dict(chip="gpio_keys", keys=(31, 9), labels={31: "UP", 9: "DOWN"})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 
@@ -106,7 +117,11 @@ def make_panel(dump, log_handler=None):
     [(label, code)] for decoder.press_key(code), and a one-line description."""
     spec = panel_spec(dump)
     labels = spec.get("labels", {})
-    if spec["chip"] == "tm1628":
+    if spec["chip"] == "gpio_keys":
+        dec = GpioKeys(spec["keys"], log_handler=log_handler)
+        keys = [(labels.get(pin, f"GPIO {pin}"), GpioKeys.key_code(pin)) for pin in spec["keys"]]
+        desc = "buttons on GPIO " + " / ".join(str(pin) for pin in spec["keys"]) + ", no display"
+    elif spec["chip"] == "tm1628":
         dec = TM1628Decoder(clk_gpio=spec["clk"], dio_gpio=spec["dio"], stb_gpio=spec["stb"],
                             digit_addrs=spec.get("digit_addrs", (0, 2, 4, 6)),
                             seg_map=spec.get("seg_map", TM1628Decoder.STANDARD_SEG_MAP),

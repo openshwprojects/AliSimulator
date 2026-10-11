@@ -220,8 +220,15 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   (TM1650-compatible, the usual pins) whose digits are registers 0x6C, 0x6E,
   0x6A, 0x68 from the left, with the segments on its own bits (read off the
   font table its application builds in RAM): " On ", "Strt", "Find".
-  `press_key()` on either decoder
-  presses a matrix position; `src/tv_gui.py` shows the display and the matrix as
+  The Strong Prima VIII has no LED driver -- its CH455 driver talks to a
+  software I2C bus with no pins -- but two **buttons straight on GPIO 31
+  (channel up) and 9 (channel down)**, pulled up, which its application polls
+  (`gpio_keys.py`: the pins read released unless pressed; the simulator's
+  default for an input nothing drives is 0, a stand-in for an I2C slave's ACK,
+  which held both buttons down and made the box step through its channels by
+  itself).
+  `press_key()` on any decoder
+  presses a matrix position (or a button); `src/tv_gui.py` shows the display and the matrix as
   buttons. The Cabletech firmwares scan their flash database for 12-17 minutes
   (about 90k timer ticks) before the first screen.
 
@@ -262,10 +269,9 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   page shows 100 % signal strength and 30 % quality instead of 0 % and 0 %
   (`run_dump_r265lite_signal_capture_screen.py`).
 * **Demultiplexer and transport stream** (`dmx_m36.py`, `transport_stream.py`):
-  a lock alone is not a channel. The Comsat TE 1050 HD and the Strong Prima
-  VIII wait for the programme tables after they tune, and when none come they
-  move on to the next channel for ever, ignoring the remote the whole time
-  (every key of both tables was tried). `dmx_m36.Demux` models the DMX0
+  a lock alone is not a channel: after a tune the firmware filters the
+  programme tables (PAT, PMT, SDT, EIT ...) and shows what they carry.
+  `dmx_m36.Demux` models the DMX0
   demultiplexer the M3801 and M3601E firmwares program at 0xB8022000 (DMX1 at
   0xB8024000): 48 PID filters loaded through a RAM port (+0x60 type and
   filter, +0x62 go, +0x64 mask / value: the driver writes mask `1F FF` and the
@@ -294,17 +300,19 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   for in the firmware's section filters in RAM. State of play: dump.bin takes
   all of it -- it filters its channel's PMT, CAT, SDT, NIT, EIT and video /
   audio PIDs, consumes every packet, and its banner shows the model's EIT
-  ("Now: 02:00-03:00 TVP Opole now" where it said "no information",
-  `docs/dump_bin_banner_with_eit.png`) -- and still steps to its next
-  channel after 20 s (2 minutes without a PMT, 30 s with the wrong programme
-  number). Between the two it polls the demodulator: state register 0x3B
-  400 times in 8 s, wanting 1, then 0x147 (non-zero), then, after its
-  init command through register 0x12E, the event register 0x02 for a done
-  bit (up to 1000 times, 0x803A2060; read helper 0x8039C7AC). The
-  demodulator model answers all three with a signal (the Globo's signal
-  test survives it) and the Comsat still moves on, now 4 s after the PMT,
-  so a later gate of its lock state machine is still missing; its remote
-  stays dead until then.
+  ("Next: 14:00-15:00 TVP Opole next" under "TVP3 Opole" where it said "no
+  information"; `docs/dump_bin_banner_with_eit.png` has an earlier "Now:"
+  line, `run_dump_signal_capture_screen.py` captures it) -- then the banner
+  times out and the channel stays, a clear black picture with no source for
+  the video and audio streams. After the tune it polls the demodulator:
+  state register 0x3B 400 times in 8 s, wanting 1, then 0x147 (non-zero),
+  then, after its init command through register 0x12E, the event register
+  0x02 for a done bit (up to 1000 times, 0x803A2060; read helper
+  0x8039C7AC); the demodulator model answers all three with a signal (the
+  Globo's signal test survives it). (Its stepping to the next channel every
+  20 s or so, taken for a missing gate of its lock state machine, was its
+  front-panel buttons on GPIO 31 / 9 read as pressed: `gpio_keys.py`.) Its
+  remote still does nothing.
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
@@ -499,10 +507,11 @@ the whole OSD where the TV shows it; each capture logs the output mode): `run_du
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_t90_capture_screen.py` (the official 2015 update
 of the same Opticum / Globo family, "OPTICUM HD T90/", the same no-signal box
-and menu, about 10), `run_dump_capture_screen.py` (dump.bin's channel banner after
-its 10-minute flash scan, about 15), `run_dump_signal_capture_screen.py` (the
-same boot with a signal and the transport stream: the banner carries the
-multiplex's EIT text, 3 % tolerance for the channel it is on, about 15) and `run_dump_cabletech_capture_screen.py`
+and menu, about 10), `run_dump_capture_screen.py` (dump.bin's no-signal box
+after its flash scan and channel banner, about 7), `run_dump_signal_capture_screen.py` (the
+same boot with a signal and the transport stream: the channel banner with the
+multiplex's EIT text, captured as it is drawn -- 0.5 M instruction slices,
+`settle_s=0` -- before it times out, about 8) and `run_dump_cabletech_capture_screen.py`
 (the URZ0083Q's first-install wizard after its 12-17 minute database scan,
 with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
 (the Strong SRT 8115's no-signal screen, about 15) and
@@ -514,8 +523,8 @@ starting, with the panel reading "0004", about 12 minutes; the 2013 firmware
 of the same box has not drawn anything yet) and
 `run_dump_prima8_capture_screen.py` (the Strong Prima VIII flash dump -- unlike
 the manufacturer's update of the same box it carries a channel database --
-whose Bulgarian channel banner is up 3 minutes after the start, about 6
-minutes; the channel it names depends on timing, within the tolerance) and
+whose Bulgarian channel banner is up 3 minutes after the start, then its
+"Няма сигнал!" no-signal box, about 8 minutes) and
 `run_dump_t650i_capture_screen.py` (the Ferguson Ariva T650i's 8 MB update
 image: with its empty channel database it runs the first-install automatic
 search and ends on "nie znaleziono kanału!", the panel reading "Find", about
@@ -535,17 +544,15 @@ wizard switches language); the SRT 8115 opens and closes its main menu; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
 (its panel keys do nothing); the T650i closes its "no channel found"
 dialog (its "edytuj kanały" menu then opens by itself) and opens the
-favourites list from there. The Prima VIII has no navigation: with no
-signal its firmware steps through its channel list by itself and acts on
-remote keys only between those re-tunes (its EPG, popups and banner toggle
-were each seen once), and with a signal (`sim.set_signal`, which stops the
-re-tuning) 38 of its 40 key codes still change nothing and the other two
-only blank the banner -- its UI waits for something the simulator does not
-provide, most likely the transport stream's tables. dump.bin has no navigation: its firmware drains the IR FIFO and takes the interrupt, but
+favourites list from there; the Prima VIII opens its EPG grid with its
+virtual key 42 and closes it with EXIT (16) -- before its front-panel buttons
+were modelled (`gpio_keys.py`) they read as pressed and stepped its channels
+by themselves every second or two, and the remote's keys got lost in between. dump.bin has no navigation: its firmware drains the IR FIFO and takes the interrupt, but
 none of the frame encodings tried (its key table, its bootloader's wake-code
-user codes 01 FE / 80 7F) changes its screen, with or without a signal -- like
-the Prima VIII it keeps hopping between its channels (490 and 578 MHz, every
-50 s or so) while its UI ignores the remote. How a firmware's key table
+user codes 01 FE / 80 7F) changes its screen, with or without a signal, now
+that its front-panel buttons no longer hop it between its channels (the
+Prima VIII's two buttons on the same pins, the SDK's key task: its virtual
+keys 12 / 13 there). How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
