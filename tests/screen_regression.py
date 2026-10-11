@@ -105,7 +105,10 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         model = sim.attach_tuner()
         print(f"tuner model: {type(model).__name__ if model else None} (no signal)")
     if mux:
-        dmx = sim.attach_mux()
+        # a fixed clock: the EIT's programme times (and the TDT) must not follow the host's time of day
+        import datetime
+        import transport_stream
+        dmx = sim.attach_mux(transport_stream.Mux(clock=datetime.datetime(2026, 10, 10, 12, 0, 0, tzinfo=datetime.timezone.utc)))
         print(f"transport stream: {'attached to the demultiplexer model' if dmx else 'no demultiplexer model for this chip'}")
     info = dump_catalog.load(dump)
     sidecar_panel = bool(info and info["device"].get("panel"))
@@ -186,6 +189,18 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     out = report_artifacts.path(f"{name}_screen.png")
     rgb = sim.capture_screen(out)
     colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+    # a screen that is blank at this moment (a banner that has just cleared, a
+    # channel change in progress) is given up to a minute to come back
+    for _ in range(12):
+        if colours >= min_colours:
+            break
+        run_for_s = time.time()
+        while time.time() - run_for_s < 5:
+            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+        rgb = sim.capture_screen(out)
+        colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+        if colours >= min_colours:
+            print(f"[{time.time() - start:6.1f}s] the screen was blank at the capture: captured again ({colours} colours)")
     unsupported = dict(sim.ge.unsupported) if sim.ge else {}
     lines, size = gma_capture.output_mode(bytes(sim.mmio_buffer[0:0x10000]))
     mode = f"{size[0]}x{size[1]} ({lines} lines)" if size else f"{lines} lines"

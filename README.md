@@ -285,9 +285,14 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   ("Now: 02:00-03:00 TVP Opole now" where it said "no information",
   `docs/dump_bin_banner_with_eit.png`) -- and still steps to its next
   channel after 20 s (2 minutes without a PMT, 30 s with the wrong programme
-  number), so the last thing it waits for is the video or audio stream
-  itself, which there is no source for yet; its remote stays dead until
-  then.
+  number). Between the two it polls the demodulator: state register 0x3B
+  400 times in 8 s, wanting 1, then 0x147 (non-zero), then, after its
+  init command through register 0x12E, the event register 0x02 for a done
+  bit (up to 1000 times, 0x803A2060; read helper 0x8039C7AC). The
+  demodulator model answers all three with a signal (the Globo's signal
+  test survives it) and the Comsat still moves on, now 4 s after the PMT,
+  so a later gate of its lock state machine is still missing; its remote
+  stays dead until then.
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
@@ -481,7 +486,9 @@ scaling, read from the display engine's timing register, so the capture shows
 the whole OSD where the TV shows it; each capture logs the output mode): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
 about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_capture_screen.py` (dump.bin's channel banner after
-its 10-minute flash scan, about 15) and `run_dump_cabletech_capture_screen.py`
+its 10-minute flash scan, about 15), `run_dump_signal_capture_screen.py` (the
+same boot with a signal and the transport stream: the banner carries the
+multiplex's EIT text, 3 % tolerance for the channel it is on, about 15) and `run_dump_cabletech_capture_screen.py`
 (the URZ0083Q's first-install wizard after its 12-17 minute database scan,
 with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
 (the Strong SRT 8115's no-signal screen, about 15) and
