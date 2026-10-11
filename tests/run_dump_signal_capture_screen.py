@@ -15,9 +15,14 @@ command, some 960 colours; the boot runs in 0.5 M instruction slices for
 that) and compares it with dump_signal_screen.png.
 The banner times out some 14 M instructions later and the channel stays: a
 clear black picture, the video and audio streams having no source yet.
-(Before its front-panel buttons were modelled released, gpio_keys.py, the
-firmware stepped between its two channels every 20 s or so and the banner
-kept coming back.)
+Then the remote's EPG key opens the programme guide on that channel (a
+black preview), compared with dump_signal_nav.png; its grid shows no events,
+its time line starting at the box's own clock (01:00 on 28/11, not the
+TDT's 10/10 12:00 UTC) while the model's events are on 10/10, 12:00-14:00
+UTC.  (Before its front-panel buttons
+were modelled released, gpio_keys.py, the firmware stepped between its two
+channels every 20 s or so, the banner kept coming back and the remote's
+keys got lost.)
 
 Usage: python run_dump_signal_capture_screen.py [--make-expected]
 """
@@ -28,7 +33,7 @@ import screen_regression
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Comsat TE 1050 HD", "chips": ["ALi M3801", "MxL603"],
-            "shows": ["boots to screen", "shows the transport stream's EPG"]}
+            "shows": ["boots to screen", "shows the transport stream's EPG", "reacts to remote"]}
 
 screen_regression.run(
     dump="dump.bin",
@@ -40,6 +45,9 @@ screen_regression.run(
     max_diff_pct=1.0,
     slice_instructions=500_000,
     probe_s=0,
+    navigation=[("EPG", 200000)],     # the programme guide (some 450,000 pixels without a signal)
+    nav_diff_pct=1.0,
+    nav_settle_s=60,
     title="Comsat TE 1050 HD (dump.bin) with a signal and a transport stream",
     retries=2,
     signal=True,

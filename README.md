@@ -312,7 +312,11 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   Globo's signal test survives it). (Its stepping to the next channel every
   20 s or so, taken for a missing gate of its lock state machine, was its
   front-panel buttons on GPIO 31 / 9 read as pressed: `gpio_keys.py`.) Its
-  remote still does nothing.
+  remote's EPG key then opens the programme guide on that channel (a black
+  preview), but its grid shows no events: its time line starts at the box's
+  own clock, 01:00 on 28/11, not the TDT's time (10/10 12:00 UTC in the
+  tests), and the model's two events, 12:00-14:00 UTC on 10/10, lie
+  outside it.
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
 * **PMU** (`pmu_m36`, 0xB8018D00): the applications set bit 0x80 of +2 and poll
@@ -508,7 +512,8 @@ about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
 banner, about 6), `run_dump_t90_capture_screen.py` (the official 2015 update
 of the same Opticum / Globo family, "OPTICUM HD T90/", the same no-signal box
 and menu, about 10), `run_dump_capture_screen.py` (dump.bin's no-signal box
-after its flash scan and channel banner, about 7), `run_dump_signal_capture_screen.py` (the
+after its flash scan and channel banner, then its channel list and main menu
+over the remote, about 10), `run_dump_signal_capture_screen.py` (the
 same boot with a signal and the transport stream: the channel banner with the
 multiplex's EIT text, captured as it is drawn -- 0.5 M instruction slices,
 `settle_s=0` -- before it times out, about 8) and `run_dump_cabletech_capture_screen.py`
@@ -547,17 +552,20 @@ dialog (its "edytuj kanały" menu then opens by itself) and opens the
 favourites list from there; the Prima VIII opens its EPG grid with its
 virtual key 42 and closes it with EXIT (16) -- before its front-panel buttons
 were modelled (`gpio_keys.py`) they read as pressed and stepped its channels
-by themselves every second or two, and the remote's keys got lost in between. dump.bin has no navigation: its firmware drains the IR FIFO and takes the interrupt, but
-none of the frame encodings tried (its key table, its bootloader's wake-code
-user codes 01 FE / 80 7F) changes its screen, with or without a signal, now
-that its front-panel buttons no longer hop it between its channels (the
-Prima VIII's two buttons on the same pins, the SDK's key task: its virtual
-keys 12 / 13 there). How a firmware's key table
+by themselves every second or two, and the remote's keys got lost in between.
+dump.bin opens its channel list with OK and its main menu with MENU, each
+closed with EXIT, and with a signal and the transport stream its programme
+guide with EPG: its library (the T650i's) takes the extended-NEC coding --
+its decoder keeps the frame's first address byte as the key table code's
+high byte, so a standard NEC frame of its MENU (0xFBDD) was looked up as
+0x04DD -- and its front-panel buttons (the Prima VIII's two on the same
+pins, the SDK's key task: its virtual keys 12 / 13 there) had hidden that
+behind their channel hopping. How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
 Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
-Prima VIII, the URZ0195's 2012 firmware and the Ferguson T650i; a firmware may also number its
+Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i and dump.bin; a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.

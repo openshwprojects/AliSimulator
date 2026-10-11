@@ -106,12 +106,16 @@ def ir16_to_nec(ir16):
 #          sent, address = hi, command = lo (standard NEC frame)
 #   ext00  Strong SRT 8115 (Libcore 8.7j), Strong Prima VIII (Libcore 8.32),
 #          the Cabletech URZ0195's 2012 firmware (Libcore 8.1.0,
-#          "urz0195_full_dump") and the Ferguson Ariva T650i (Libcore 8.1c):
-#          extended NEC whose two address bytes are both rev8(hi) (0x00 on the
-#          Strongs' remotes, 0x01 on the Cabletech's and the Ferguson's),
-#          command = ~rev8(lo)
+#          "urz0195_full_dump"), the Ferguson Ariva T650i and the Comsat
+#          TE 1050 HD (dump.bin; both Libcore 8.1c): extended NEC whose two
+#          address bytes are both rev8(hi) (0x00 on the Strongs' remotes, 0x01
+#          on the Cabletech's and the Ferguson's, 0xDF on the Comsat's),
+#          command = ~rev8(lo) -- these decoders keep the frame's first address
+#          byte as the table code's high byte (the Comsat looked a standard
+#          NEC frame of its MENU, 0xFBDD, up as 0x04DD: ~0xFB)
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
-              ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00")]
+              ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
+              ("dump.bin", "ext00")]
 
 
 def coding_for(dump):
