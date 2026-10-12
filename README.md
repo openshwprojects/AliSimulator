@@ -49,7 +49,10 @@ their file names.
   mailbox registers and the doorbells, in both register layouts the SDKs
   use (`run_dump_urz0086_see_start.py`: the URZ0086's application attaches
   its drivers through ~70 calls the SEE answers; the X110TS's too,
-  `run_dump_x110ts_see_start.py`, and it goes on to draw its OSD). The
+  `run_dump_x110ts_see_start.py`, and its OSD shows its channel banner and
+  then its "No Signal!" box, `run_dump_x110ts_capture_screen.py` -- the
+  chip ID 0x3603 is the SDK's C3603, which reads a product with its DVB-S2
+  demodulator, and that S3501 answers its chip ID on the I2C bus). The
   SEE's programs also read the chip's random number generator (`Trng`): a
   FIFO of its results that drops repeats never filled with the registers as
   plain memory, and its task never slept.
@@ -257,7 +260,9 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   driver runs its whole register sequence, which the `[I2C]` log lines show --
   the way to tell which tuner a board has (each dump's sidecar names it:
   mostly the MaxLinear MxL603 family, an MxL5007T in the 2012 URZ0195
-  firmware, a Rafael R820T in the Globo N3).
+  firmware, a Rafael R820T in the Globo N3). The C3603 (the X110TS) has its
+  S3501 DVB-S2 demodulator at 0x33 (`chips/m3602.py`: a `RegisterSlave`
+  with its chip ID in registers 0xA3..0xA6).
 * **Tuners and signal** (`tuners.py`): chip models of the MxL603 family,
   the MxL5007T and the R820T that keep what the driver writes and report
   their synthesizers locked (MaxLinear: lock registers 0x2B / 0xD8 read
@@ -511,6 +516,13 @@ then every 1000th.
   Count) on to its next timer interrupt instead, and a code hook on the loop
   ends the slices that reach it -- most turns start in the tick handler, which
   returns into the loop (the URZ0086: 8 M instructions in 16 s instead of 22 s).
+* A black capture is not always a missing display model: the X110TS drew its
+  whole channel banner into a region the GMA layer pointed at, and a task of
+  its application cleared the layer's enable bit again about ten times a
+  second -- its own hardware check had failed (a satellite demodulator that
+  did not answer, a chip product without one). Capturing with the layer's
+  enable bit forced on shows what was drawn; tracing the stores to the
+  layer's register shows who hides it.
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
 * Unicorn race: `uc_emu_stop()` from another thread sets `stop_request` before
@@ -595,7 +607,10 @@ behind it: with its empty channel database it runs the first-install
 automatic search, which reads the multiplex's tables there and finds
 "AliSimulator TV", and nothing on the other channels up to 858 MHz -- its
 last search screen is compared, the panel reading "Find" --, about 30
-minutes; without a signal the search ends on "nie znaleziono kanału!").
+minutes; without a signal the search ends on "nie znaleziono kanału!") and
+`run_dump_x110ts_capture_screen.py` (the Opticum X110TS, an M3606
+twin-tuner satellite PVR whose SEE program on the second core drives the
+display: its channel banner, then its red "No Signal!" box, about 5 minutes).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

@@ -14,7 +14,10 @@ at 0x1FE00000 gives the flash mirror back, read-only at the physical
 address, and its SPI stream mode and extra self-completing register go; the
 M3602's RAM mirror above the RAM's size exists only while an M36xx family
 is loaded; the M3503's cache-as-RAM window at 0x0FFF8000 is the flash's
-again (read-only, its code hook gone).
+again (read-only, its code hook gone).  Then the Opticum X110TS update, a
+C3603 board of the same family: its chip word carries the product bits and
+its S3501 demodulator answers its chip ID on the I2C bus -- and is gone again
+when the URZ0083 is loaded after it (same family) or dump.bin (M3801).
 """
 import os
 import sys
@@ -24,7 +27,8 @@ from unicorn import UC_PROT_ALL, UC_PROT_EXEC, UC_PROT_READ
 
 from simulator import AliMipsSimulator, flash_size_for
 
-IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "URZ0083_V1.2.5.abs")
+IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "URZ0083_V1.2.5.abs",
+          "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs")
 ok = True
 
 
@@ -110,5 +114,28 @@ check(not m3503.car.active and r and r[2] == UC_PROT_READ | UC_PROT_EXEC
 check(region(sim, 0x08000000) is not None, "the RAM mirror is mapped again for the M3602")
 left = [type(d).__name__ for d in devices(m3503) if id(d) in owners(sim)]
 check(not left, f"no handler of the M3503's devices is left ({left or 'none'})")
+
+
+def chip_word():
+    return int.from_bytes(sim.peek(0xB8000000, 4), "little")
+
+
+def demod_id():
+    """The chip ID registers (0xA3..0xA6) of the demodulator at I2C 0x33, or None without one."""
+    demod = sim.i2c_devices.get(0x33)
+    return demod.write(bytes([0xA3])) and demod.read(4) if demod else None
+
+
+sim.loadFile(IMAGES[4])
+check(sim.chip is m3602 and chip_word() == 0x36030500 and demod_id() == bytes([0x01, 0x35, 0xC0, 0x00]),
+      f"the X110TS (same family): chip word 0x{chip_word():08X}, a product with the DVB-S2 demodulator, "
+      f"whose S3501 answers at I2C 0x33 ({demod_id() and demod_id().hex()})")
+sim.loadFile(IMAGES[3])
+check(chip_word() == 0x36020000 and demod_id() is None,
+      f"the URZ0083 after it: chip word 0x{chip_word():08X}, no demodulator at 0x33")
+sim.loadFile(IMAGES[4])
+sim.loadFile(IMAGES[1])
+check(type(sim.chip).__name__ == "M3801" and demod_id() is None,
+      "dump.bin after the X110TS (the M3801 family): its S3501 is gone with the M3602 family")
 print(f"\n[{'PASS' if ok else 'FAIL'}] chip family switch")
 sys.exit(0 if ok else 1)

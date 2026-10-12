@@ -27,6 +27,17 @@ bootloader starts and waits for: see.py runs the SEE's boot code for that
 handshake.  The application then starts the SEE's own program, which runs
 on a second core (see.SeeCore) and answers the application's remote calls.
 
+The chip ID 0x3603 is the SDK's C3603, whose product -- bits 8..11 of the
+chip ID word -- picks a row of its feature table (product_feature); byte 4
+of the row enables its DVB-S2 demodulator, which the Opticum X110TS's
+application asks for by name (NIM_S3501_0) and by chip ID (S3501) once its
+OSD is up, in a check of its own (0x801B994C).  With the product bits clear
+(product 0, the one row without the demodulator) and no demodulator on the
+I2C bus the check failed, and a task of the application cleared the OSD
+layer's enable bit (0xB8006300 bit 0) about ten times a second: its screen
+stayed black although it drew its channel banner.  A C3603 board therefore
+reads C3603_PRODUCT in those bits and has its S3501 on the bus.
+
 Recognised by the chunk chain: the HDCPKey chunk's version "Demo s3602"
 (the M3801 images say "Demo M3801"), a maincode chunk named after the
 SDK's M3602 / M3606 demo projects ("Demo M3602", "Demo M3606",
@@ -37,10 +48,35 @@ import ctypes
 
 from unicorn import UC_PROT_ALL
 
+from i2c_scb import RegisterSlave
+
 from .base import ChipFamily, chunk_chain
 from .see import SeeStart
 
 RAM_WINDOW_END = 0x0F000000         # the flash window starts here (simulator.py)
+C3603 = 0x3603                      # the chip ID of the twin-tuner satellite boards (the X110TS)
+# (the SDK's sys_ic_get_c3603_product: bits 8..11 = 0xC -> product 0xE, 5 or 7 -> 0xB, others -> 0.
+# Every product but 0 has the DVB-S2 demodulator; which one the X110TS's chip is, is not known.)
+C3603_PRODUCT = 0x0500
+
+
+class S3501(RegisterSlave):
+    """The C3603's DVB-S2 demodulator as the SDK's NIM_S3501 driver
+    (nim_S3501.o) sees it: 7-bit address 0x33 on the first I2C master, a
+    register file whose read-only registers 0xA3..0xA6 hold the chip ID
+    nim_s3501_get_type assembles from them, 0x350100C0 (NIM_CHIP_ID_M3501A).
+    It never locks: the application finds no signal."""
+    ADDRESS = 0x33
+    ID = {0xA3: 0x01, 0xA4: 0x35, 0xA5: 0xC0, 0xA6: 0x00}
+
+    def __init__(self):
+        super().__init__(self.ID)
+
+    def write(self, data):
+        super().write(data)
+        for reg, value in self.ID.items():
+            self.regs[reg] = value
+        return True
 
 
 class M3602(ChipFamily):
@@ -87,6 +123,22 @@ class M3602(ChipFamily):
         # so nothing differs; raising line 12 instead sends its dispatcher to
         # its fatal path at the first GE command.)
 
+    def variant(self):
+        return C3603_PRODUCT if self.chip_id == C3603 else self.chip_variant
+
+    def write_chip_id(self):
+        """The board's chip ID word, and on a C3603 a fresh S3501 on the I2C
+        bus (a board of another chip ID loaded after it has none)."""
+        super().write_chip_id()
+        self._remove_demod()
+        if self.chip_id == C3603:
+            self.sim.i2c_devices[S3501.ADDRESS] = S3501()
+
+    def _remove_demod(self):
+        if isinstance(self.sim.i2c_devices.get(S3501.ADDRESS), S3501):
+            del self.sim.i2c_devices[S3501.ADDRESS]
+
     def uninstall(self):
         for address, size in self._ram_mirrors():
             self.sim.mu.mem_unmap(address, size)
+        self._remove_demod()

@@ -139,7 +139,12 @@ class ChipFamily:
         if path:
             import dump_catalog
             self.chip_id = dump_catalog.chip_id(path) or self.chip_id
-        self.sim.poke(0xB8000000, ((self.chip_id << 16) | self.chip_variant).to_bytes(4, 'little'))
+        self.sim.poke(0xB8000000, ((self.chip_id << 16) | self.variant()).to_bytes(4, 'little'))
+
+    def variant(self):
+        """The variant bits under the chip ID (chip_variant; a family whose
+        members differ there picks them by self.chip_id)."""
+        return self.chip_variant
 
     def start(self):
         """The reset state once an image is in the flash: where the CPU starts
