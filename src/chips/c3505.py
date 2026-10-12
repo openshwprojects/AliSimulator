@@ -9,7 +9,7 @@ what names the chip ("ALI_C3505:0x%x", c3505_phy_set), so the family is
 recognised by a boot-ROM bootloader whose image has a SEE program chunk and
 whose main code names the C3505.
 
-On that path the bootloader waits for bit 8 of 0xB8000300 (ReadyWord), then
+On that path the bootloader waits for bit 8 of 0xB8000300 (ReadyBits), then
 unpacks and starts the application; the application starts the SEE
 co-processor's program the way see.py describes, which the simulator does
 not run, and then waits for the SEE's answers.  (The T760i receives DVB-T2
@@ -17,27 +17,11 @@ through an external AltoBeam ATBM7812; nothing of that is modelled.)
 """
 import struct
 
-from .base import chunk_chain, maincode
+from .base import ReadyBits, chunk_chain, maincode
 from .m3821 import M3821
 from .see import SeeStart
 
 BOOTROM_SP = struct.pack("<I", 0x3C1D9FE0)     # lui $sp, 0x9FE0: a bootloader that runs in the boot SRAM
-
-
-class ReadyWord:
-    """Bits of a status word the bootloader polls until the hardware reports
-    ready, which the simulator's hardware is at once: a word read starting at
-    `offset` sees `bits` set (ReadyBits does the same for byte registers)."""
-    def __init__(self, sim, offset, bits):
-        self.offset, self.bits = offset, bits
-        sim._mmio_on('r', self._read, offset, offset + 3)
-
-    def _read(self, uc, access, address, size, value, user_data):
-        word = (address & ~3)
-        data = bytearray(uc.mem_read(word, 4))
-        for i in range(4):
-            data[i] |= (self.bits >> (8 * i)) & 0xFF
-        uc.mem_write(word, bytes(data))
 
 
 class C3505(M3821):
@@ -55,5 +39,5 @@ class C3505(M3821):
 
     def install(self):
         super().install()
-        self.ready300 = ReadyWord(self.sim, 0x300, 0x00000100)     # bit 8: polled before the bootloader goes on
+        self.ready300 = ReadyBits(self.sim, {0x301: 0x01})     # bit 8 of 0xB8000300: polled before the bootloader goes on
         self.see = SeeStart(self.sim)

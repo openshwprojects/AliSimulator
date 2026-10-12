@@ -370,8 +370,7 @@ class AliMipsSimulator:
 
         # Shared ROM Buffer (Usually 4MB dumped flash)
         self.rom_buffer = ctypes.create_string_buffer(self.rom_size)
-        rom_ptr = ctypes.addressof(self.rom_buffer)
-        
+
         # Map ROM aliases to the same buffer
         # Ali SoCs commonly map flash repeatedly within a 16MB window
         self.log(f"Mapping Shared ROM mirrors in 16MB window for Phys, KSEG0, KSEG1")
@@ -385,13 +384,11 @@ class AliMipsSimulator:
         # 0x..C00000 slot (see _flash_offset), so each slot maps its segment.
         slot = min(self.rom_size, 0x400000)
         for offset in range(0, 0x01000000, slot):
-            src = self._flash_offset(0x0F000000 + offset)
             for phys in (0x0F000000, 0x1F000000):
                 for seg in (0x00000000, 0x80000000, 0xA0000000):
                     base = seg + phys + offset
-                    perms = (UC_PROT_READ | UC_PROT_EXEC) if seg == 0 else UC_PROT_ALL
                     try:
-                        self.mu.mem_map_ptr(base, slot, perms, rom_ptr + src)
+                        self._map_flash_mirror(base, slot)
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
         
@@ -898,10 +895,12 @@ class AliMipsSimulator:
         self.chip.install()
 
     def _map_flash_mirror(self, base, size):
-        """Map the flash window's mirror over base .. base + size - 1 again, as
-        _init_unicorn() maps it (base: an address of the 0x0F000000 /
-        0x1F000000 windows in any segment, the range inside one 4 MB slot): a
-        chip family that put memory of its own there gives it back."""
+        """Map the flash window's mirror over base .. base + size - 1 (base: an
+        address of the 0x0F000000 / 0x1F000000 windows in any segment, the
+        range inside one 4 MB slot): read-only at the physical address, its
+        bytes the flash's at _flash_offset(base).  _init_unicorn() maps the
+        windows with it, and a chip family that put memory of its own there
+        gives it back with it."""
         import ctypes
         perms = (UC_PROT_READ | UC_PROT_EXEC) if base < 0x80000000 else UC_PROT_ALL
         self.mu.mem_map_ptr(base, size, perms, ctypes.addressof(self.rom_buffer) + self._flash_offset(base))

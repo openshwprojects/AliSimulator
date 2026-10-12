@@ -54,7 +54,7 @@ import struct
 from unicorn import UC_HOOK_CODE, UC_PROT_ALL
 from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
-from .base import ChipFamily, chunk_chain, maincode
+from .base import ChipFamily, DemodulatorLock, ReadyBits, chunk_chain, maincode
 from .see import SeeStart
 
 SRAM_PHYS = 0x1FE00000          # the boot SRAM the boot ROM copies the bootloader into
@@ -328,7 +328,7 @@ class MirrorRegisters:
                 uc.mem_write(0xB8000000 + target, bytes(uc.mem_read(0xB8000000 + source, n)))
 
 
-class Demodulator:
+class Demodulator(DemodulatorLock):
     """The chip's own DVB-T / T2 demodulator ("NIM_S3821_0"), registers memory-
     mapped at 0xB804C000 + register (the nim_device's base address).  Its
     get_lock() (R265 Lite 1.1.5, 0x804B3558) reads the standard from the upper
@@ -339,44 +339,10 @@ class Demodulator:
     With `signal` on those registers read that way (on the tuned frequency,
     when the signal is only on some: sim.tuned_to_signal)."""
     BASE = 0x4C000
-    LOCK = {0x01D: lambda v: v | 0x40,            # DVB-T locked
-            0x067: lambda v: (v & 0xF0) | 0x0F,    # DVB-T2 state machine: locked
-            0x11D: lambda v: 0x20,
-            0x11E: lambda v: 0x00}
-
-    def __init__(self, sim):
-        self.sim = sim
-        self.signal = False
-        self.lock_reads = 0
-        for reg in self.LOCK:
-            sim._mmio_on('r', self._read, self.BASE + reg, self.BASE + reg)
-
-    def _read(self, uc, access, address, size, value, user_data):
-        self.lock_reads += 1
-        if not self.signal or not self.sim.tuned_to_signal():
-            return
-        start = (address & 0xFFFFFF) - self.BASE
-        data = bytearray(uc.mem_read(address, size))
-        for i in range(size):
-            f = self.LOCK.get(start + i)
-            if f:
-                data[i] = f(data[i]) & 0xFF
-        uc.mem_write(address, bytes(data))
-
-
-class ReadyBits:
-    """Status bits the application polls (with 100 us delays) until the hardware
-    reports ready, which the simulator's hardware is at once: register offset in
-    the device window -> the bits that always read as set."""
-    def __init__(self, sim, bits):
-        self.bits = bits
-        for offset in bits:
-            sim._mmio_on('r', self._read, offset, offset)
-
-    def _read(self, uc, access, address, size, value, user_data):
-        offset = address & 0xFFFFFF
-        byte = uc.mem_read(address, 1)[0] | self.bits[offset]
-        uc.mem_write(address, bytes([byte]))
+    LOCKED = {0x01D: lambda v: v | 0x40,            # DVB-T locked
+              0x067: lambda v: (v & 0xF0) | 0x0F,    # DVB-T2 state machine: locked
+              0x11D: lambda v: 0x20,
+              0x11E: lambda v: 0x00}
 
 
 class M3821(ChipFamily):
@@ -456,7 +422,3 @@ class M3821(ChipFamily):
 
     def code_ranges(self):
         return [] if self.xip else [(0x80000000 + SRAM_PHYS, BOOT_COPY)]
-
-    def set_signal(self, on):
-        self.demod.signal = bool(on)
-        return True

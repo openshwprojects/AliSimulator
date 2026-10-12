@@ -8,10 +8,10 @@ here is the internal COFDM demodulator's lock status (Demodulator), the
 transport-stream demultiplexer (dmx_m36.py) and the real-time clock
 (rtc_m36.py).
 """
-from .base import ChipFamily
+from .base import ChipFamily, DemodulatorLock
 
 
-class Demodulator:
+class Demodulator(DemodulatorLock):
     """The chip's own COFDM demodulator ("NIM_S3811_0"), its registers memory-
     mapped at 0xB803E000 + register (the nim_device's base address; the
     driver's register-read helper uses I2C only for an external demodulator).
@@ -35,27 +35,7 @@ class Demodulator:
     so only bit 1 reads set with a signal -- on the tuned frequency, when the
     signal is only on some (sim.tuned_to_signal)."""
     BASE = 0x3E000
-    LOCK_REG, LOCK_BITS = 0x1D, 0x60
     LOCKED = {0x02: lambda v: v | 0x02, 0x1D: lambda v: v | 0x60, 0x3B: lambda v: 1, 0x147: lambda v: 1}
-
-    def __init__(self, sim):
-        self.sim = sim
-        self.signal = False
-        self.lock_reads = 0
-        for reg in self.LOCKED:
-            sim._mmio_on('r', self._read_lock, self.BASE + reg, self.BASE + reg)
-
-    def _read_lock(self, uc, access, address, size, value, user_data):
-        self.lock_reads += 1
-        if not self.signal or not self.sim.tuned_to_signal():
-            return
-        start = (address & 0xFFFFFF) - self.BASE
-        data = bytearray(uc.mem_read(address, size))
-        for i in range(size):
-            f = self.LOCKED.get(start + i)
-            if f:
-                data[i] = f(data[i]) & 0xFF
-        uc.mem_write(address, bytes(data))
 
 
 class M3801(ChipFamily):
@@ -75,7 +55,3 @@ class M3801(ChipFamily):
         # the real-time clock at 0xB8018A00, which the UI's local time is read from (rtc_m36.py)
         from rtc_m36 import Rtc
         self.rtc = Rtc(self.sim)
-
-    def set_signal(self, on):
-        self.demod.signal = bool(on)
-        return True

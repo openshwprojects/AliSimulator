@@ -1,4 +1,5 @@
-"""The interface of a chip family (see chips/__init__.py)."""
+"""The interface of a chip family (see chips/__init__.py), and register models
+several families share (DemodulatorLock, ReadyBits)."""
 import hashlib
 import lzma
 import struct
@@ -48,12 +49,65 @@ def maincode(image):
     return data
 
 
+class DemodulatorLock:
+    """A demodulator's lock status, as the driver's get_lock() and channel
+    monitor read it: with `signal` on -- and the tuner on a frequency with a
+    signal (sim.tuned_to_signal) -- each register of LOCKED reads as its
+    function makes it of the byte last written there; with it off the
+    registers are RAM, the driver's own values (no lock).  A family's model
+    gives BASE, the register block's offset in the device window, and
+    LOCKED, {register: f(byte) -> byte}."""
+    BASE = 0
+    LOCKED = {}
+
+    def __init__(self, sim):
+        self.sim = sim
+        self.signal = False
+        self.lock_reads = 0             # reads of those registers: a test can tell the driver asked
+        for reg in self.LOCKED:
+            sim._mmio_on('r', self._read, self.BASE + reg, self.BASE + reg)
+
+    def _read(self, uc, access, address, size, value, user_data):
+        self.lock_reads += 1
+        if not self.signal or not self.sim.tuned_to_signal():
+            return
+        start = (address & 0xFFFFFF) - self.BASE
+        data = bytearray(uc.mem_read(address, size))
+        for i in range(size):
+            f = self.LOCKED.get(start + i)
+            if f:
+                data[i] = f(data[i]) & 0xFF
+        uc.mem_write(address, bytes(data))
+
+
+class ReadyBits:
+    """Status bits a firmware polls until the hardware reports ready, which the
+    simulator's hardware is at once: {register offset in the device window (a
+    byte): the bits that always read as set}.  A read of any size that covers
+    such a byte sees them -- a word read of its register too."""
+    def __init__(self, sim, bits):
+        self.bits = bits
+        starts = set()
+        for offset in bits:
+            starts.update(range(offset & ~3, offset + 1))      # word, halfword and byte reads that cover it
+        for start in sorted(starts):
+            sim._mmio_on('r', self._read, start, start)
+
+    def _read(self, uc, access, address, size, value, user_data):
+        start = address & 0xFFFFFF
+        data = bytearray(uc.mem_read(address, size))
+        for i in range(size):
+            data[i] |= self.bits.get(start + i, 0)
+        uc.mem_write(address, bytes(data))
+
+
 class ChipFamily:
     """What a family adds to the common simulator: override what differs."""
     name = "ALi"
     chip_id = 0x0000            # the chip ID word at 0xB8000000 the firmware's chip-ID function
     chip_variant = 0x0000       # reads: the 16-bit ID in the upper half, variant bits in the lower
     dmx = None                  # the family's demultiplexer model (dmx_m36.Demux), for sim.attach_mux
+    demod = None                # the family's demodulator model (a DemodulatorLock), for sim.set_signal
 
     def __init__(self, sim):
         self.sim = sim
@@ -94,7 +148,10 @@ class ChipFamily:
     def set_signal(self, on):
         """Make the family's demodulator report a locked channel (on) or not.
         Returns False when the family has no demodulator model."""
-        return False
+        if self.demod is None:
+            return False
+        self.demod.signal = bool(on)
+        return True
 
     def code_ranges(self):
         """Memory besides RAM and flash that holds code: [(address, length)] in the
