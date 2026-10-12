@@ -108,6 +108,7 @@ class ChipFamily:
     chip_variant = 0x0000       # reads: the 16-bit ID in the upper half, variant bits in the lower
     dmx = None                  # the family's demultiplexer model (dmx_m36.Demux), for sim.attach_mux
     demod = None                # the family's demodulator model (a DemodulatorLock), for sim.set_signal
+    see = None                  # a dual-CPU chip's SEE co-processor (see.SeeStart), reset by loadFile
 
     def __init__(self, sim):
         self.sim = sim

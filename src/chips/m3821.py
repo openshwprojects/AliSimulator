@@ -43,8 +43,8 @@ bootloader is the M3801's kind, run from the flash window (a branch over
 the chunk header, code at 0x490), with its stack in locked D-cache lines
 until the DDR is up (CacheAsRam) and its set-up run through the window's
 cached view; it takes its M3821 path for the chip ID 0x3821 (the plain
-M3821: no variant bits), starts the SEE co-processor (see.py) and unpacks
-the main code and the SEE's program from its dual-CPU image.  Such an image
+M3821, revision B in the low byte), starts the SEE co-processor (see.py) and
+unpacks the main code and the SEE's program from its dual-CPU image.  Such an image
 is recognised by that bootloader, a SEE program chunk and a main code that
 drives the M3821's own demodulator ("NIM_S3821").
 """
@@ -362,7 +362,11 @@ class M3821(ChipFamily):
         sim = self.sim
         self.xip = xip_bootloader(sim.rom_image)       # (the C3505's is the boot ROM's kind too)
         if self.xip:
-            self.chip_variant = 0x0000  # the T750i's plain M3821
+            # the T750i's plain M3821, revision B: its SDK's revision function reads the
+            # low byte (0: revision A, 0x20001; else 0x20002), and before revision B the
+            # application leaves the GMA (its OSD layers) to the SEE -- whose device its
+            # OSD code then calls directly, jumping into the SEE's code
+            self.chip_variant = 0x0001
         super().install()
         # (count_hz stays at the simulator's 100 MHz although the chip's Count runs at
         # 297 MHz: at the real rate the kernel's 1 ms tick is shorter than the host time

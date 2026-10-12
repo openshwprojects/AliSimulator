@@ -72,7 +72,18 @@ def flash_size_for(path):
 
 
 class AliMipsSimulator:
-    def __init__(self, rom_size=4*1024*1024, ram_size=128*1024*1024, log_handler=None):
+    def __init__(self, rom_size=4*1024*1024, ram_size=128*1024*1024, log_handler=None,
+                 share_memory_with=None, cpu_num=0, ic_base=0x30):
+        """A simulated ALi chip with one MIPS core.  The second core of a
+        dual-CPU chip (the SEE, chips/see.py) is another instance made with
+        share_memory_with=<the first>: the same RAM, flash and device-register
+        buffers seen by its own Unicorn CPU, with its own CP0 state, timer and
+        interrupt controller -- cpu_num, its CP0 EBase CPU number (the shared
+        exception vector tells the cores apart by it), and ic_base, the offset
+        of its interrupt controller's status / enable words in the device
+        window (the first core's at 0xB8000030, the SEE's at 0xB8040030)."""
+        if share_memory_with is not None:
+            rom_size, ram_size = share_memory_with.rom_size, share_memory_with.ram_size
         # The flash is mirrored inside the 16MB windows (see _flash_offset): a
         # power of two up to 16 MB (a 4 MB or smaller part repeats every
         # rom_size bytes, a larger one is laid out in 4 MB segments).
@@ -80,6 +91,8 @@ class AliMipsSimulator:
             raise ValueError(f"rom_size must be a power of two of at most 16 MB, got {rom_size:#x}")
         self.rom_size = rom_size
         self.ram_size = ram_size
+        self._shared = share_memory_with
+        self.ic_base = ic_base
         self.base_addr = 0xAFC00000
         self.mu = None
         self.md = None
@@ -128,7 +141,8 @@ class AliMipsSimulator:
         self.cp0_status = 0x10400000  # Must match Unicorn's initial CP0 Status
         self.cp0_cause = 0            # stored Cause bits; MFC0 reads _cause_value() (adds TI/IP7, IP3)
         self.cp0_epc = 0
-        self.cp0_ebase = 0x80000000   # EBase (reg 15 sel 1): the exception vectors while Status.BEV = 0
+        self.cp0_ebase = 0x80000000 | (cpu_num & 0x3FF)   # EBase (reg 15 sel 1): the exception vectors
+                                                            # while Status.BEV = 0, and the CPU number
 
         # CP0 timer (Count == Compare -> Cause.TI / IP7), see "CP0 timer" below.
         self._timer_enabled = True    # property timer_enabled
@@ -140,7 +154,8 @@ class AliMipsSimulator:
         self._count_observed = None   # last Count value the guest read or wrote
         self._uart_ip3 = False        # IP3 asserted by a delivered UART interrupt until ERET
         self._ic_lines = 0            # interrupt-controller inputs driven by modelled devices (see _ic_set_line)
-        self.ic_irq_count = 0         # IP3 interrupts taken for those lines
+        self.doorbell_in = None       # where the other CPU of a dual-CPU chip rings this one (see _doorbell_ip3)
+        self.ic_irq_count = 0         # IP3 interrupts taken for those lines and doorbells
         self._ge_status = 0           # graphics engine interrupt status (+8, see _hook_ge_write)
         self.ge_ops = 0               # graphics engine commands completed
         self.ge_render = True         # execute GE commands (draw into RAM) with the ge_m36f model
@@ -325,10 +340,16 @@ class AliMipsSimulator:
         self._init_capstone()
         # The chip family (chips/): its chip ID, boot flow and devices on top of
         # the common ones; loadFile() switches to the family of the image it
-        # loads (_switch_family), which starts again from the common devices
+        # loads (_switch_family), which starts again from the common devices.
+        # A second core is no chip of its own: the first core's flash image and
+        # family devices stay theirs (its stub family only names its code).
         self._common_devices = self._device_tables()
-        self.chip = chips.M3801(self)
-        self.chip.install()
+        if self._shared is not None:
+            self.rom_image = self._shared.rom_image
+            self.chip = chips.see.SeeCoreFamily(self)
+        else:
+            self.chip = chips.M3801(self)
+            self.chip.install()
 
 
         self.gpr_map = [
@@ -368,8 +389,8 @@ class AliMipsSimulator:
         # so the 0x8.../0x9.../0xA.../0xB... mappings below are views for
         # Python (mem_read(0xB8000030), mem_write(base_addr, ...)).
 
-        # Shared ROM Buffer (Usually 4MB dumped flash)
-        self.rom_buffer = ctypes.create_string_buffer(self.rom_size)
+        # Shared ROM Buffer (Usually 4MB dumped flash) -- a second core's is the first one's
+        self.rom_buffer = self._shared.rom_buffer if self._shared else ctypes.create_string_buffer(self.rom_size)
 
         # Map ROM aliases to the same buffer
         # Ali SoCs commonly map flash repeatedly within a 16MB window
@@ -392,8 +413,8 @@ class AliMipsSimulator:
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
         
-        # Shared RAM Buffer (128MB as per device spec)
-        self.ram_buffer = ctypes.create_string_buffer(self.ram_size)
+        # Shared RAM Buffer (128MB as per device spec; a second core's is the first one's)
+        self.ram_buffer = self._shared.ram_buffer if self._shared else ctypes.create_string_buffer(self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
         
         # Map RAM aliases to same buffer
@@ -408,7 +429,7 @@ class AliMipsSimulator:
         # and otherwise read / write the buffer like RAM.  0x98000000 /
         # 0xB8000000 map the same buffer for Python (no side effects).
         MMIO_SIZE = 0x01000000
-        self.mmio_buffer = ctypes.create_string_buffer(MMIO_SIZE)
+        self.mmio_buffer = self._shared.mmio_buffer if self._shared else ctypes.create_string_buffer(MMIO_SIZE)
         mmio_ptr = ctypes.addressof(self.mmio_buffer)
         self._mmio_rd = {}          # offset -> [handler]: reads starting at that offset
         self._mmio_wr = {}          # offset -> [handler]: writes starting at that offset
@@ -449,7 +470,7 @@ class AliMipsSimulator:
         # interrupt controller status the modelled lines show up in
         self._mmio_on('w', self._hook_ge_write, 0xA004, 0xA00B)
         self._mmio_on('r', self._hook_ge_read, 0xA008, 0xA00B)
-        self._mmio_on('r', self._hook_ic_status_read, 0x30, 0x37)
+        self._mmio_on('r', self._hook_ic_status_read, self.ic_base, self.ic_base + 7)
         # Ethernet MAC ("ETHERNET_MAC_0", 0xB802C000; the Ferguson Ariva T650i's
         # network driver): bit 3 of +0 is a software reset the driver sets and
         # polls until the MAC clears it (_hook_mac_reset_read); +0x7C starts an
@@ -491,13 +512,9 @@ class AliMipsSimulator:
         # Jumps to address 0 (NULL function pointers, end of a test program)
         # stop emulation instead of executing RAM as code.
         self.mu.hook_add(UC_HOOK_CODE, self._hook_null_jump, begin=0, end=3)
-        # 0x80000200..0x80000FFF run under a code hook in fast mode too
-        # (_hook_short_blocks): the SDK's application images are loaded at
-        # 0x80000200 and start with 0xE00 zero bytes before their first code,
-        # and Unicorn 2.1.4 crashes translating that run of ~900 NOPs as one
-        # unhooked block (the Ferguson T750i / T760i applications).  The
-        # exception vectors below it stay unhooked.
-        self.mu.hook_add(UC_HOOK_CODE, self._hook_short_blocks, begin=0x80000200, end=0x80000FFF)
+        # 0x80000200..0x80000FFF: a code hook while it holds the SDK's zero
+        # padding (_update_short_block_hook)
+        self._short_block_hook = None
 
         # The per-instruction hook (_hook_code) and the fast-mode hooks are
         # installed on demand by _sync_hooks() (see run()).
@@ -713,9 +730,34 @@ class AliMipsSimulator:
         self._stop_reason = 'null'
         uc.emu_stop()
 
+    # The SDK's application images are loaded at 0x80000200, and some start with
+    # 0xE00 zero bytes before their first code (the Ferguson T750i / T760i
+    # applications).  Unicorn 2.1.4 crashes translating that run of ~900 NOPs
+    # as one unhooked block, so while the range holds such a run it executes
+    # under a code hook that does nothing (_hook_short_blocks); the exception
+    # vectors below it stay unhooked.  Code there runs unhooked: a Python call
+    # per instruction made the URZ0086's start-up (its BSS clear) take 1.7 s of
+    # emulation time instead of 25 ms, and the SEE's program, which its
+    # bootloader starts just before, ran all that time.
+    _PADDING = (0x80000200, 0x80000FFF)
+    _PADDING_WORDS = 128                # a run of zero words this long is padding, not code
+
+    def _update_short_block_hook(self):
+        """At a full CP0 site scan: hook the padding range while it holds a long
+        run of zero words, unhook it otherwise."""
+        lo, hi = self._PADDING
+        padded = bytes(4 * self._PADDING_WORDS) in self.mu.mem_read(lo, hi + 1 - lo)
+        if padded and self._short_block_hook is None:
+            self._short_block_hook = self.mu.hook_add(UC_HOOK_CODE, self._hook_short_blocks, begin=lo, end=hi)
+            self._tb_flush_needed = True
+        elif not padded and self._short_block_hook is not None:
+            self.mu.hook_del(self._short_block_hook)
+            self._short_block_hook = None
+            self._tb_flush_needed = True
+
     def _hook_short_blocks(self, uc, address, size, user_data):
         """Nothing: being hooked keeps Unicorn's translation blocks short there
-        (see where it is installed)."""
+        (_update_short_block_hook)."""
 
     def setGpioHandler(self, handler, sda_gpio=None):
         """Set callback for GPIO DO register writes: handler(address, size, value).
@@ -826,6 +868,9 @@ class AliMipsSimulator:
         self._spi_response, self._spi_resp_idx, self._last_flash_read_page = [], 0, -1
         self._update_flash_read_hooks()
 
+        # A dual-CPU chip's SEE back in reset: a SEE core running the last image's program stops
+        if self.chip.see is not None:
+            self.chip.see.reset()
         # The image's chip family: its boot flow, and its devices if it differs
         # from the current one (chips/; the class itself: an M3503 is an M3602
         # and a C3505 an M3821 to isinstance, but their chip IDs and devices differ)
@@ -1143,7 +1188,8 @@ class AliMipsSimulator:
         runs before the access, like a memory hook: a read handler can put the
         value to be read into the register (via the 0xB8000000 view it is
         given as `address`), a write handler sees the register before the
-        store lands."""
+        store lands -- and can return the value that lands instead, for
+        registers whose bits do not simply take what is stored."""
         table = self._mmio_rd if kind == 'r' else self._mmio_wr
         for off in range(begin & 0xFFFFFF, (end & 0xFFFFFF) + 1):
             table.setdefault(off, []).append(handler)
@@ -1218,7 +1264,9 @@ class AliMipsSimulator:
             if handlers:
                 address = 0xB8000000 | offset
                 for h in handlers:
-                    h(uc, UC_MEM_WRITE, address, size, value, None)
+                    stored = h(uc, UC_MEM_WRITE, address, size, value, None)
+                    if stored is not None:
+                        value = stored
             self.mmio_buffer[offset:offset + size] = value.to_bytes(size, 'little')
         finally:
             self._dev_cb_depth -= 1
@@ -1383,9 +1431,13 @@ class AliMipsSimulator:
     #  * VCAP_M36F (0xB800F000), opened by the video output: the driver sets
     #    bit 0 of +0x4B and spins, without a timeout, until the hardware clears
     #    it again.
+    #  * The M36xx's DMA controller (dma_s3601, 0xB800F200), which the SEE's
+    #    video output opens (the URZ0086's vpo_open): dma_dma_start sets bit 0
+    #    of +0x4B the same way (bit 2 stops it, bit 7 reads busy).
     _SELF_COMPLETING = {
         0x18D02: (0x80, 0x20, 0x00),
         0x0F04B: (None, 0x00, 0x01),
+        0x0F24B: (None, 0x00, 0x01),
     }
 
     def _hook_selfcomplete_read(self, uc, access, address, size, value, user_data):
@@ -1697,24 +1749,25 @@ class AliMipsSimulator:
         return address, command
 
     def _hook_ic_status_read(self, uc, access, address, size, value, user_data):
-        """Interrupt-controller status 0xB8000030 / 34 shows the asserted lines
-        (a write-back acknowledge does not clear a line its device still drives)."""
+        """Interrupt-controller status (0xB8000030 / 34; the SEE's at 0xB8040030 /
+        34, ic_base) shows the asserted lines (a write-back acknowledge does not
+        clear a line its device still drives)."""
         if self._ic_lines:
             for word in (0, 1):
                 bits = (self._ic_lines >> (32 * word)) & self._M32
                 if bits:
-                    a = (address & ~0xFFF) | (0x30 + 4 * word)
+                    a = 0xB8000000 | (self.ic_base + 4 * word)
                     v = int.from_bytes(uc.mem_read(a, 4), 'little')
                     uc.mem_write(a, (v | bits).to_bytes(4, 'little'))
 
     def _ic_set_line(self, line, on):
         """Drive an interrupt-controller input of a modelled device (a level):
-        its 0xB8000030 / 34 status bit follows it, and while it is asserted and
-        enabled in 0xB8000038 / 3C the CPU sees IP3."""
+        its status bit (0xB8000030 / 34, at ic_base) follows it, and while it
+        is asserted and enabled (0xB8000038 / 3C) the CPU sees IP3."""
         bit = 1 << line
         was = self._ic_lines
         self._ic_lines = (was | bit) if on else (was & ~bit)
-        addr = 0xB8000030 + 4 * (line // 32)
+        addr = 0xB8000000 + self.ic_base + 4 * (line // 32)
         b = 1 << (line % 32)
         cur = int.from_bytes(self.mu.mem_read(addr, 4), 'little')
         self.mu.mem_write(addr, ((cur | b) if on else (cur & ~b)).to_bytes(4, 'little'))
@@ -1722,10 +1775,25 @@ class AliMipsSimulator:
             self._irq_soon()
 
     def _ic_ip3(self):
-        """IP3 from the modelled interrupt-controller lines: asserted and enabled."""
-        if not self._ic_lines:
+        """IP3 from the interrupt controller: a modelled line asserted and
+        enabled, or the other CPU's doorbell (_doorbell_ip3)."""
+        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(0xB8000000 + self.ic_base + 8, 8), 'little'):
+            return True
+        return self._doorbell_ip3()
+
+    def _doorbell_ip3(self):
+        """The other CPU of a dual-CPU chip rings this one (chips/see.py
+        Doorbells): its channel 1 / 2 ring bits (doorbell_in: their byte's
+        offset in the device window and the shift that puts them at bits 7 /
+        6) are this CPU's OS IRQ 0x47 / 0x46, interrupt controller lines 63 /
+        62, which assert IP3 while their enable bits (31 / 30 of the second
+        enable word) are set -- the SDK's OS_RegisterISR sets them --, but do
+        not show in the status words: the dispatcher reads the ring byte
+        itself, and takes an IP3 without status for a ring."""
+        if self.doorbell_in is None:
             return False
-        return bool(self._ic_lines & int.from_bytes(self.mu.mem_read(0xB8000038, 8), 'little'))
+        offset, shift = self.doorbell_in
+        return bool((self.mmio_buffer[offset][0] << shift) & self.mmio_buffer[self.ic_base + 0xF][0] & 0xC0)
 
     def _irq_soon(self):
         """A device raised an interrupt from a memory hook.  Fast mode, inside a
@@ -2368,7 +2436,7 @@ class AliMipsSimulator:
         # is a known instruction count.
         if self.instruction_count >= self._timer_next_icount:
             self._timer_update()
-        if (self._ti or self.cp0_cause & 0x300 or self._ic_lines) and not in_delay_slot \
+        if (self._ti or self.cp0_cause & 0x300 or self._ic_lines or self._doorbell_ip3()) and not in_delay_slot \
                 and not self.is_stepping and self._irq_deliverable():
             if compact_jump or (m16 and self._m16_pc_relative_branch(insn, size)):
                 irq_stop = True
@@ -2445,8 +2513,8 @@ class AliMipsSimulator:
                 self.cp0_cause = (self.cp0_cause & ~0x08C00300) | (val & 0x08C00300)
             elif rd == 14:
                 self.cp0_epc = val
-            elif rd == 15 and sel == 1:     # EBase: bits 29..12 writable, 31..30 read as 0b10
-                self.cp0_ebase = 0x80000000 | (val & 0x3FFFF000)
+            elif rd == 15 and sel == 1:     # EBase: bits 29..12 writable, 31..30 read as 0b10,
+                self.cp0_ebase = 0x80000000 | (val & 0x3FFFF000) | (self.cp0_ebase & 0x3FF)    # CPUNum read-only
             else:
                 return False
             if in_delay_slot:
@@ -2655,8 +2723,9 @@ class AliMipsSimulator:
         if self.cp0_status & 0x800 and not self._uart_ip3 and self._ic_ip3():    # (served in the same pass)
             self.ic_irq_count += 1
             if self.ic_irq_count <= 8 or self.ic_irq_count % 1000 == 0:
-                self.log(f"[IC IRQ] #{self.ic_irq_count} lines 0x{self._ic_lines:X} from 0x{epc & ~1:08X}")
-        return (0xBFC00200 if bev else self.cp0_ebase) + (0x200 if iv else 0x180)
+                rung = " and a doorbell" if self._doorbell_ip3() else ""
+                self.log(f"[IC IRQ] #{self.ic_irq_count} lines 0x{self._ic_lines:X}{rung} from 0x{epc & ~1:08X}")
+        return (0xBFC00200 if bev else self.cp0_ebase & 0xFFFFF000) + (0x200 if iv else 0x180)
 
     def _reschedule_slice(self):
         """Fast mode, inside a run() slice: an MTC0 Count / Compare / Status /
@@ -2774,11 +2843,12 @@ class AliMipsSimulator:
         self._uart_irq_retries += 1
         # ALi interrupt controller: EISR/EIER bit 16 = UART IRQ 24
         uart_ic_bit = 1 << 16
+        eisr, eier = 0xB8000000 + self.ic_base, 0xB8000000 + self.ic_base + 8
         try:
-            eisr_val = int.from_bytes(uc.mem_read(0xB8000030, 4), 'little')
-            uc.mem_write(0xB8000030, (eisr_val | uart_ic_bit).to_bytes(4, 'little'))
-            eier_val = int.from_bytes(uc.mem_read(0xB8000038, 4), 'little')
-            uc.mem_write(0xB8000038, (eier_val | uart_ic_bit).to_bytes(4, 'little'))
+            eisr_val = int.from_bytes(uc.mem_read(eisr, 4), 'little')
+            uc.mem_write(eisr, (eisr_val | uart_ic_bit).to_bytes(4, 'little'))
+            eier_val = int.from_bytes(uc.mem_read(eier, 4), 'little')
+            uc.mem_write(eier, (eier_val | uart_ic_bit).to_bytes(4, 'little'))
         except Exception:
             pass
         self._uart_ip3 = True             # IP3, ORed into Cause (a pending IP7 stays visible)
@@ -2933,6 +3003,7 @@ class AliMipsSimulator:
                 sites |= {seg + off for off in found}
         self._add_cp0_sites(sites)
         if full:
+            self._update_short_block_hook()
             self._rescan_due = False
             self._last_rescan_icount = self.instruction_count
         if self.debug_enabled:
@@ -3131,7 +3202,7 @@ class AliMipsSimulator:
         if slice_us is not None:
             cap_us = max(self.min_slice_us, slice_us)
             wait = self._timer_wait_us()
-            if self._ic_lines and self._irq_deliverable():
+            if (self._ic_lines or self._doorbell_ip3()) and self._irq_deliverable():
                 # a device interrupt held back by irq_min_gap_us
                 gap = self._irq_gap_left() * 1e6
                 wait = gap if wait is None else min(wait, gap)
@@ -3187,7 +3258,12 @@ class AliMipsSimulator:
             self._slice_deadline = None
         return self._vtime() - v0
 
-    def run(self, max_instructions=None):
+    def run(self, max_instructions=None, max_vtime=None):
+        """Run until max_instructions (an instruction count; estimated in fast
+        mode) or, with max_vtime, until the emulation time (_vtime) reaches
+        that -- a second core's turn between the first core's slices is a
+        stretch of emulation time (chips/see.py SeeCore), which the estimated
+        counts would not bound reliably."""
         if max_instructions is not None:
             self.max_instructions = max_instructions
 
@@ -3204,6 +3280,8 @@ class AliMipsSimulator:
                 if self._external_stop:
                     break   # emu_stop() from another thread between slices
                 if self.max_instructions and self.instruction_count >= self.max_instructions:
+                    break
+                if max_vtime is not None and self._vtime() >= max_vtime:
                     break
 
                 # Sitting on a breakpoint / stop address: step over it first,
@@ -3276,6 +3354,8 @@ class AliMipsSimulator:
                         if budget is not None:
                             # aim the slice length at the remaining budget
                             slice_us = min(slice_us, budget / self._insn_rate * 1e6)
+                        if max_vtime is not None:
+                            slice_us = min(slice_us, max(0.0, max_vtime - self._vtime()) * 1e6)
                         dt = self._run_slice(cur_pc, end_addr, slice_us)
                         executed = 0 if self._stop_reason == 'rescan' else int(self._insn_rate * dt)
                         if budget is not None:

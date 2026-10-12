@@ -8,10 +8,12 @@ RAM -- which copies a block, writes 0xB8000280 to 0x200, sets the flag and
 jumps back to the park loop -- then send it to a program that does not park.
 Checks that the boot code runs on the SEE's own instance and leaves exactly
 its effects after the main CPU's start store (at its next look at the SEE's
-registers), that the program is not run, and that 0x200 writes are mailbox
-data after that.  Then the handshake once more with the start store replayed
-(re-executed after an asynchronous stop at it): the replay lands before the
-SEE runs, so the boot code's 0xB8000280 stays in 0x200.
+registers, or at the end of its slice), that the program is not run, and
+that 0x200 writes are mailbox data after that.  Then the handshake once more
+with the start store replayed (re-executed after an asynchronous stop at
+it): the replay lands before the SEE runs -- the slice that stopped on the
+store does not start it either --, so the boot code's 0xB8000280 stays in
+0x200.
 """
 import os
 import struct
@@ -69,6 +71,12 @@ def word(offset):
     return int.from_bytes(sim.peek(0xB8000000 + offset, 4), "little")
 
 
+def slice_end():
+    """The end of one of the main CPU's slices: run() calls its slice services."""
+    for service in sim.slice_services:
+        service()
+
+
 write(0x200, 0xB8000280)
 check(see.state == "reset", "the SEE starts out in reset")
 write(0x220, word(0x220) | 0x202)
@@ -93,10 +101,22 @@ check(len(see.starts) == n, "0x200 writes while the SEE runs its program are mai
 write(0x220, word(0x220) & ~0x02, 1)
 check(see.state == "reset", "0x220 bit 1 cleared: the SEE is in reset")
 
+# The handshake again, the main CPU's slice ending before its next look: the SEE starts then
+write(0x200, 0xB8000280)
+write(0x220, word(0x220) | 0x202)
+write(0x20C, word(0x20C) & ~1, 4)
+write(0x200, 0xA1000000)
+n = len(see.starts)
+slice_end()
+check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x20C) & 1 and word(0x200) == 0xB8000280,
+      f"the end of the main CPU's slice runs the boot code too ({see.starts[n:]})")
+write(0x220, word(0x220) & ~0x02, 1)
+
 # The handshake again, with an asynchronous stop that leaves the PC on the start store: the
 # simulator runs that store again on resume (a replay, simulator._dev_note), which must land
-# before the SEE runs -- run in the replay's handler, the boot code's 0xB8000280 was
-# overwritten with the start address by the store landing after it
+# before the SEE runs -- run in the replay's handler, or at the end of the slice that stopped
+# on the store, the boot code's 0xB8000280 was overwritten with the start address by the store
+# landing after it
 write(0x200, 0xB8000280)
 write(0x220, word(0x220) | 0x202)
 write(0x20C, word(0x20C) & ~1, 4)
@@ -104,6 +124,8 @@ write(0x200, 0xA1000000)
 n = len(see.starts)
 key = (sim.mu.reg_read(UC_MIPS_REG_PC), sim.mu.reg_read(UC_MIPS_REG_SP))
 sim._dev_replays[key] = sim._dev_last[0:3]      # what the emu_start wrapper records at such a stop
+slice_end()
+check(len(see.starts) == n, "the slice that stopped on the start store ends: no start yet, the store runs again first")
 write(0x200, 0xA1000000)                        # the replay
 check(len(see.starts) == n and word(0x200) == 0xA1000000,
       "a replayed start store lands again before the SEE runs (no start yet)")
