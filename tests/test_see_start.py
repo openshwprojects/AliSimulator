@@ -9,12 +9,16 @@ jumps back to the park loop -- then send it to a program that does not park.
 Checks that the boot code runs on the SEE's own instance and leaves exactly
 its effects after the main CPU's start store (at its next look at the SEE's
 registers), that the program is not run, and that 0x200 writes are mailbox
-data after that.
+data after that.  Then the handshake once more with the start store replayed
+(re-executed after an asynchronous stop at it): the replay lands before the
+SEE runs, so the boot code's 0xB8000280 stays in 0x200.
 """
 import os
 import struct
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
+
+from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
 from chips import see as see_mod
 from chips.m3602 import M3602
@@ -88,6 +92,25 @@ write(0x200, 0x18)
 check(len(see.starts) == n, "0x200 writes while the SEE runs its program are mailbox data, not starts")
 write(0x220, word(0x220) & ~0x02, 1)
 check(see.state == "reset", "0x220 bit 1 cleared: the SEE is in reset")
+
+# The handshake again, with an asynchronous stop that leaves the PC on the start store: the
+# simulator runs that store again on resume (a replay, simulator._dev_note), which must land
+# before the SEE runs -- run in the replay's handler, the boot code's 0xB8000280 was
+# overwritten with the start address by the store landing after it
+write(0x200, 0xB8000280)
+write(0x220, word(0x220) | 0x202)
+write(0x20C, word(0x20C) & ~1, 4)
+write(0x200, 0xA1000000)
+n = len(see.starts)
+key = (sim.mu.reg_read(UC_MIPS_REG_PC), sim.mu.reg_read(UC_MIPS_REG_SP))
+sim._dev_replays[key] = sim._dev_last[0:3]      # what the emu_start wrapper records at such a stop
+write(0x200, 0xA1000000)                        # the replay
+check(len(see.starts) == n and word(0x200) == 0xA1000000,
+      "a replayed start store lands again before the SEE runs (no start yet)")
+sim._mmio_read(sim.mu, 0x20C, 1, None)
+check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x200) == 0xB8000280,
+      f"the next look runs the boot code once, and its 0xB8000280 stays in 0x200 ({see.starts[n:]}, "
+      f"0x{word(0x200):08X})")
 
 print(f"\n[{'PASS' if not failures else 'FAIL'}] SEE start handshake")
 sys.exit(1 if failures else 0)

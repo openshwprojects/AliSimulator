@@ -87,8 +87,19 @@ class SeeStart:
         return (old & ~mask) | ((value << shift) & mask)
 
     # (the write handlers run before the store lands: the registers still hold the old
-    # values.  A store the simulator re-executes after a stop at it is not a second start.)
+    # values.  A store the simulator re-executes after a stop at it is not a second start,
+    # and it lands again before the SEE runs: the start it made waits for the next access.
+    # Run in the replay's handler, the SEE's boot code wrote 0xB8000280 back to 0x200 just
+    # before the replayed store put the start address there again -- and the Globo
+    # HD-XS2's application, which starts the SEE's program only while 0x200 reads
+    # 0xB8000280 (0x80016DE8), then skipped it, its first mailbox word taken for the start.)
+    def _replayed(self, uc, kind, address, value):
+        """Whether this store re-executes the one that made the pending start."""
+        return self.pending is not None and self.sim._dev_replay_of(uc, kind, address, value) is not None
+
     def _write_control(self, uc, access, address, size, value, user_data):
+        if self._replayed(uc, 'see_run', address, value):
+            return
         self._access(uc, access, address, size, value, user_data)
         old = self._word(CONTROL)
         new = self._after(old, address, CONTROL, size, value)
@@ -103,6 +114,8 @@ class SeeStart:
                 self.state, self.pending = "starting", target
 
     def _write_start(self, uc, access, address, size, value, user_data):
+        if self._replayed(uc, 'see_start', address, value):
+            return
         self._access(uc, access, address, size, value, user_data)
         target = self._after(self._word(START), address, START, size, value)
         if self.state != "parked" or target == PARK or (address & 3) + size != 4:

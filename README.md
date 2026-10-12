@@ -413,6 +413,12 @@ then every 1000th.
   THR / URBR, SPI response reads, GE commands) the handlers recognise the
   re-execution and serve / skip the same data; before, this
   duplicated UART output characters ('bbl_flash_init!') and lost RX bytes.
+  A replayed store lands again after its handler, so a model that defers an
+  effect to the next access (the SEE start, `chips/see.py`) must not run it in
+  the replay's handler: the store then overwrote what the SEE's boot code had
+  just written (0xB8000280 to 0x200), and the Globo HD-XS2's application,
+  which starts the SEE's program only while 0x200 reads that, skipped it in
+  one suite run in five (`test_see_start.py` replays the store).
   A stop counts as a rewind only if the instruction at the stop PC is a load /
   store of the noted register, lies in the translation block the access ran in
   (straight-line code from that block's start), and the registers are
