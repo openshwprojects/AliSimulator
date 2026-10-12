@@ -1,8 +1,11 @@
 """
-The SEE co-processor's start handshake.  The dual-CPU ALi chips (the M3606
-of the Cabletech URZ0086 / Kruger&Matz KM0186, the T750i's M3821, the C3505)
-have a second MIPS core, the SEE, which runs its own program from the main
-CPU's DDR.  The main CPU starts it through three system registers:
+The SEE co-processor: its start handshake, its program on a second core,
+the doorbells between the two.  The dual-CPU ALi chips (the M3606 of the
+Cabletech URZ0086 / Kruger&Matz KM0186 and the Opticum X110TS, the Globo
+HD-XS2's M3503, the T750i's M3821, the T760i's C3505) have a second MIPS
+core, the SEE, which runs its own program from the main CPU's DDR -- the
+audio / video decoders' and the display's drivers, which the main CPU's
+drivers call.  The main CPU starts it through three system registers:
 
   * 0xB8000220 bit 1: the SEE runs (set) or is held in reset (clear);
   * 0xB8000200: where the SEE goes -- while it holds 0xB8000280 the SEE
@@ -27,9 +30,9 @@ store has landed, at its next access to the SEE's registers or the end of
 its slice, whichever comes first.  The copy and the flag are then the boot
 code's own doing.  Only boot code that parks the SEE is run that way -- code
 that loads 0xB8000280 near its start.  The SEE's own program, started the
-same way later, runs on a second simulated core (SeeCore) when run_program
-is set; otherwise it is not run: the SEE then counts as running, so a
-firmware that waits for that program's answers waits on.
+same way later, runs on a second simulated core (SeeCore) -- unless
+run_program is cleared: then it is not run, the SEE only counts as running,
+and a firmware that waits for that program's answers waits on.
 
 The two programs talk through the SDK's remote calls (dual_new.o): a
 message goes in chunks through two buffers at the start of the shared
@@ -41,6 +44,7 @@ the receiver overwrites with 0xFFFFFFFF once it has taken the chunk, and a
 message's first chunk rings the receiver's doorbell (Doorbells).
 """
 import ctypes
+import random
 import struct
 
 from unicorn import UC_ARCH_MIPS, UC_MODE_LITTLE_ENDIAN, UC_MODE_MIPS32, UC_PROT_ALL, Uc, UcError
@@ -52,6 +56,7 @@ START, FLAG, CONTROL = 0x200, 0x20C, 0x220     # offsets in the register block 0
 MAIN_IC, SEE_IC = 0x00030, 0x40030              # the CPUs' interrupt controllers (0xB8000030 / 0xB8040030)
 SEE_CPU_NUM = 1                                 # the SEE's EBase CPU number (the main CPU's is 0)
 OLD_DOORBELL_CHIPS = (0x3602, 0x3603, 0x3281)   # chip IDs whose SDK rings in the +0x36 byte (Doorbells)
+TRNG = 0x34400                                  # the random number generator (0xB8034400, Trng)
 RUN_BIT = 0x02                                  # 0xB8000220: the SEE runs
 PARK = 0xB8000280                               # the on-chip loop the SEE waits in
 MMIO_PHYS = 0x18000000
@@ -113,8 +118,14 @@ class Doorbells:
     not clear the CPU's own rings -- its acknowledge is a plain byte store,
     which would take a ring of its own with it: the ring bits are set by
     writing 1 and cleared by the other CPU's acknowledge.  The registers are
-    the shared register block, so both cores' handlers have them (wire)."""
-    BLOCKS = (MAIN_IC, SEE_IC)
+    the shared register block, so both cores' handlers have them (wire).
+
+    A message's first chunk rings its receiver, so the acknowledges that end
+    a ring count the messages each CPU took: taken["SEE"] / taken["main"],
+    [calls, answers]."""
+
+    def __init__(self):
+        self.taken = {"main": [0, 0], "SEE": [0, 0]}
 
     @staticmethod
     def chip_id(sim):
@@ -127,31 +138,58 @@ class Doorbells:
         channel 1 / 2 at bits 7 / 6."""
         return (block + 6, 0) if chip_id in OLD_DOORBELL_CHIPS else (block + 7, 4)
 
-    @classmethod
-    def wire(cls, core):
+    def wire(self, core):
         """Among a core's device register handlers: stores that cover a +0x37 byte."""
-        for block in cls.BLOCKS:
-            core._mmio_on('w', cls._write, block + 4, block + 7)
+        for block in (MAIN_IC, SEE_IC):
+            core._mmio_on('w', self._write, block + 4, block + 7)
 
-    @classmethod
-    def _write(cls, uc, access, address, size, value, user_data):
+    def _write(self, uc, access, address, size, value, user_data):
         offset = address & 0xFFFFFF
         reg = (offset & ~3) + 3                     # the +0x37 byte
         if offset + size <= reg:
             return None                             # (the store ends before it)
         shift = 8 * (reg - offset)
         b = (value >> shift) & 0xFF
-        other = SEE_IC if reg - 7 == MAIN_IC else MAIN_IC
+        receiver, other = ("main", SEE_IC) if reg - 7 == MAIN_IC else ("SEE", MAIN_IC)
         if int.from_bytes(uc.mem_read(0xB8000002, 2), 'little') in OLD_DOORBELL_CHIPS:
-            ring, acks = other + 6, (b << 4) & 0xC0
+            ring, acks, ring_shift = other + 6, (b << 4) & 0xC0, 0
             b &= ~0x0C
         else:
-            ring, acks = other + 7, (b >> 4) & 0x0C
+            ring, acks, ring_shift = other + 7, (b >> 4) & 0x0C, 4
             b = (b & ~0xCC) | ((uc.mem_read(0xB8000000 + reg, 1)[0] | b) & 0x0C)
         if acks:
             ring += 0xB8000000
-            uc.mem_write(ring, bytes([uc.mem_read(ring, 1)[0] & ~acks & 0xFF]))
+            rung = uc.mem_read(ring, 1)[0]
+            ended = (rung & acks) << ring_shift     # channel 1 / 2 at bits 7 / 6
+            self.taken[receiver][0] += bool(ended & 0x80)
+            self.taken[receiver][1] += bool(ended & 0x40)
+            uc.mem_write(ring, bytes([rung & ~acks & 0xFF]))
         return (value & ~(0xFF << shift)) | ((b & 0xFF) << shift)
+
+
+class Trng:
+    """The chip's random number generator, 0xB8034400 on these chips (the
+    newer SDK has it at 0xB803A400 on the M3281 and a later M3603
+    revision): setting bit 0 of +0 starts it, bit 0 of +4 reads busy (never
+    here), +8 / +0xC hold the 64-bit result.  The SEE's TRNG task
+    (LLD_TRNG_M36F) keeps a FIFO of 0x80 results and drops a result equal to
+    one of the last five: with the registers as plain memory every result
+    was the same, the FIFO never filled and the task never slept -- the
+    T760i's SEE then ran nothing else once its interrupts were off, ~190 M
+    instructions in.  The results come from a seeded generator, the same
+    sequence every run; the start bit clears itself."""
+
+    def __init__(self):
+        self.random = random.Random(0x5EE)
+
+    def wire(self, core):
+        core._mmio_on('w', self._write, TRNG, TRNG)
+
+    def _write(self, uc, access, address, size, value, user_data):
+        if not value & 1:
+            return None
+        uc.mem_write(0xB8000000 + TRNG + 8, self.random.getrandbits(64).to_bytes(8, 'little'))
+        return value & ~1
 
 
 class SeeCore:
@@ -169,19 +207,22 @@ class SeeCore:
     catches up with that core's (service) -- two cores on one clock, each
     core's Count following its own emulation time.  (A turn of so many
     instructions did not work: fast-mode counts are estimates, and with the
-    SEE's rate estimated low a million-instruction turn took minutes.)  Its
-    code is scanned for CP0 instructions from the entry's page on, CODE
-    bytes, and in the shared vector page."""
+    SEE's rate estimated low a million-instruction turn took minutes.)  While
+    the SEE's idle task waits for an interrupt in its `b .` the time skips to
+    the next one (simulator.idle_skip).  Its code is scanned for CP0
+    instructions from the entry's page on, CODE bytes, and in the shared
+    vector page.  What it writes to the UART goes where the first core's
+    output goes: the two CPUs share the chip's UART."""
     CODE = 0x400000
 
-    def __init__(self, sim, address):
+    def __init__(self, sim, address, wire):
         from simulator import AliMipsSimulator          # (simulator imports chips)
         self.main = sim
-        self.uart = []
         self.core = AliMipsSimulator(share_memory_with=sim, cpu_num=SEE_CPU_NUM, ic_base=SEE_IC,
                                      log_handler=self._log)
         self.core.setSPIDump(False)
-        self.core.setUartHandler(self.uart.append)
+        self.core.setUartHandler(lambda ch: sim._uart_log(ord(ch)))
+        self.core.idle_skip = True
         page = 0x80000000 | (address & 0x1FFFF000)
         self.core.chip.ranges = [(page, self.CODE), (0x80000000, 0x1000)]
         self.core._rescan_due = True
@@ -189,7 +230,7 @@ class SeeCore:
         self.core._sync_hooks()
         self.core.mu.reg_write(UC_MIPS_REG_PC, address)
         self.core.max_instructions = 0                  # (no instruction limit: turns are emulation time)
-        Doorbells.wire(self.core)
+        wire(self.core)                                 # (the models both cores share: SeeStart._wire)
         chip = Doorbells.chip_id(sim)
         sim.doorbell_in, self.core.doorbell_in = Doorbells.ring(chip, SEE_IC), Doorbells.ring(chip, MAIN_IC)
         self._t0 = (sim._vtime(), self.core._vtime())
@@ -225,7 +266,7 @@ class SeeStart:
         self.pending = None         # a start address the SEE goes to once the main CPU's store landed
         self.cpu = None             # the SEE's Unicorn instance, made at its first start
         self.starts = []            # (start address, what happened) per start
-        self.run_program = False    # run the SEE's own program on a second core (SeeCore) when it is started
+        self.run_program = True     # run the SEE's own program on a second core (SeeCore) when it is started
         self.core = None            # that core
         sim._mmio_on('w', self._write_start, START, START + 3)
         sim._mmio_on('w', self._write_control, CONTROL, CONTROL + 3)
@@ -239,12 +280,22 @@ class SeeStart:
         sim._mmio_on('r', self._access, CONTROL, CONTROL + 3)
         sim._mmio_on('w', self._access, FLAG, FLAG + 3)
         sim.slice_services.append(self._start_at_slice_end)
-        Doorbells.wire(sim)
+        self.doorbells = Doorbells()    # (its taken: the messages each CPU took from the other)
+        self.trng = Trng()
+        self._wire(sim)
+
+    def _wire(self, core):
+        """The device models both cores' stores reach: the doorbells and the
+        random number generator the SEE's program keeps a FIFO of."""
+        self.doorbells.wire(core)
+        self.trng.wire(core)
 
     def reset(self):
         """The SEE back in reset (the simulator loads an image again)."""
         self.state, self.pending = "reset", None
         self._stop_core()
+        for counts in self.doorbells.taken.values():
+            counts[:] = [0, 0]
 
     def _stop_core(self):
         if self.core is not None:
@@ -331,7 +382,7 @@ class SeeStart:
         if not parks(code):
             self.state = "running"
             if self.run_program and self.core is None:
-                self.core = SeeCore(sim, address)
+                self.core = SeeCore(sim, address, self._wire)
                 self.starts.append((address, "run on the SEE core"))
                 sim.log(f"[SEE] started at 0x{address:08X}: the SEE's program runs on the second core")
                 return

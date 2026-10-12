@@ -22,11 +22,10 @@ first word: the RAM shows up again above its size here, as on a controller
 that ignores the upper address bits.  (It still resets itself after its
 flash checks -- see its sidecar.)
 
-The M3606 (URZ0086 / KM0186) has a SEE co-processor, which its bootloader
-starts and waits for: see.py runs the SEE's boot code for that handshake.
-The application then starts the SEE's own program, which is not run, so
-its first message to the SEE times out and it stops at its SDBBP
-assertion.
+The M3606 (URZ0086 / KM0186, the X110TS) has a SEE co-processor, which its
+bootloader starts and waits for: see.py runs the SEE's boot code for that
+handshake.  The application then starts the SEE's own program, which runs
+on a second core (see.SeeCore) and answers the application's remote calls.
 
 Recognised by the chunk chain: the HDCPKey chunk's version "Demo s3602"
 (the M3801 images say "Demo M3801"), a maincode chunk named after the

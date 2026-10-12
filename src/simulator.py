@@ -288,6 +288,8 @@ class AliMipsSimulator:
         self._cp0_site_hooks = {}            # address -> hook handle
         self._bp_hooks = {}                  # address -> hook handle
         self._virgin_hooks = {}              # chunk base -> hook handle
+        self._idle_loops = {}                # idle loop address -> hook handle (idle_skip)
+        self._run_max_vtime = None           # run()'s max_vtime, for _hook_idle_loop
         self._rescan_due = False
         self._last_rescan_icount = -1
         self._tb_flush_needed = False
@@ -3258,6 +3260,58 @@ class AliMipsSimulator:
             self._slice_deadline = None
         return self._vtime() - v0
 
+    # A core whose program waits for an interrupt in a branch-to-self (the SEE's
+    # idle task) spins away as much host time as it emulates: with idle_skip set
+    # (chips/see.py SeeCore) run() moves its emulation time -- its Count with
+    # it -- on to its next timer interrupt instead, or to max_vtime if that
+    # comes first.  A loop found that way also ends the slices that reach it
+    # (_hook_idle_loop): the SEE's turns mostly start in its tick handler, which
+    # returns into the loop.
+    idle_skip = False
+    _IDLE_LOOP = bytes.fromhex("ffff0010" "00000000")      # b . / nop
+
+    def _idle_until(self, max_vtime):
+        """The emulation time an idle loop can skip to, or None: interrupts
+        enabled (IE, not EXL / ERL), none deliverable, and a timer interrupt
+        (one Count tick past Compare, where the timer latches) or max_vtime to
+        go to, whichever comes first."""
+        if (self.cp0_status & 0x7) != 0x1 or self._irq_deliverable() or self._irq_due():
+            return None
+        until = max_vtime
+        wait = self._timer_wait_us()
+        if wait is not None:
+            tick = self._vtime() + wait / 1e6 + 1.0 / self.count_hz
+            until = tick if until is None else min(until, tick)
+        return until
+
+    def _skip_idle(self, pc, max_vtime):
+        """Fast mode, between slices: in an idle loop that only an interrupt
+        ends -- `b .` with a nop in its delay slot (_idle_until) --, the
+        emulation time skips on.  Returns whether it moved."""
+        until = self._idle_until(max_vtime)
+        now = self._vtime()
+        if until is None or until <= now:
+            return False
+        try:
+            if bytes(self.mu.mem_read(pc, 8)) != self._IDLE_LOOP:
+                return False
+        except UcError:
+            return False
+        if pc not in self._idle_loops:
+            self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
+            self._tb_flush_needed = True
+        self._vt_accum += until - now
+        return True
+
+    def _hook_idle_loop(self, uc, address, size, user_data):
+        """A slice reached an idle loop (_skip_idle): end it there if the time
+        can skip on, instead of spinning to the slice's end."""
+        if self._code_hook_h is None and self._stop_reason is None:
+            until = self._idle_until(self._run_max_vtime)
+            if until is not None and until > self._vtime():
+                self._stop_reason = 'idle'
+                self._orig_emu_stop()
+
     def run(self, max_instructions=None, max_vtime=None):
         """Run until max_instructions (an instruction count; estimated in fast
         mode) or, with max_vtime, until the emulation time (_vtime) reaches
@@ -3275,6 +3329,7 @@ class AliMipsSimulator:
         self._in_run = True
         self._run_tid = threading.get_ident()
         self._external_stop = False
+        self._run_max_vtime = max_vtime
         try:
             while True:
                 if self._external_stop:
@@ -3306,6 +3361,8 @@ class AliMipsSimulator:
                 # Interrupts that could not be injected inside the previous slice
                 # (fast mode: all of them; exact mode: MIPS16 branch self-loops).
                 cur_pc = self._take_interrupt_at_boundary(cur_pc)
+                if self.idle_skip and not full and self._skip_idle(cur_pc, max_vtime):
+                    continue
 
                 if full:
                     # Exact mode: _hook_code counts instructions, delivers IRQs,
@@ -3420,6 +3477,7 @@ class AliMipsSimulator:
             raise  # Re-raise so GUI can break
         finally:
             self._in_run = False
+            self._run_max_vtime = None
 
     def _exec_one(self, pc):
         """Execute exactly one instruction at pc in the current ISA mode.

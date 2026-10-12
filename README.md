@@ -38,30 +38,40 @@ their file names.
   probes the RAM 128 MB up, where the family shows it again; the URZ0083's
   application then runs (`run_dump_urz0083_app_runs.py`) without drawing yet
   (see the sidecars). The M3606's bootloader starts its SEE co-processor --
-  the second MIPS core of ALi's dual-CPU chips -- and waits for it:
-  `chips/see.py` runs the SEE's boot code for that handshake on a second
-  Unicorn instance sharing the RAM and the register block
-  (`run_dump_urz0086_see_start.py`), but not the SEE's own program, so the
-  application's first message to the SEE times out at its SDBBP assertion
-  (the X110TS's too: `run_dump_x110ts_see_start.py`).
+  the second MIPS core of ALi's dual-CPU chips, which runs the audio / video
+  decoders' and the display's drivers -- and waits for it: `chips/see.py`
+  runs the SEE's boot code for that handshake on a light Unicorn instance
+  sharing the RAM and the register block, and the SEE's own program, which
+  the application starts later, on a second simulated core (`SeeCore`: an
+  `AliMipsSimulator` sharing the first one's memory, with its own CP0 state,
+  CPU number and interrupt controller, its turns between the first core's
+  slices). The two programs' remote calls go through the shared memory, the
+  mailbox registers and the doorbells, in both register layouts the SDKs
+  use (`run_dump_urz0086_see_start.py`: the URZ0086's application attaches
+  its drivers through ~70 calls the SEE answers; the X110TS's too,
+  `run_dump_x110ts_see_start.py`, and it goes on to draw its OSD). The
+  SEE's programs also read the chip's random number generator (`Trng`): a
+  FIFO of its results that drops repeats never filled with the registers as
+  plain memory, and its task never slept.
   The M3503 (`chips/m3503.py`, the Globo HD-XS2 / Opticum Blue XS65
   satellite updates in `dumps/GLOBO HD-XS2/`, recognised by the bootloader's
   version) is this family with the chip ID 0x3503 and the T750i's kind of
   bootloader: it runs from the flash window with its stack in locked D-cache
   lines until the DDR is up (`CacheAsRam`); it starts its SEE the same way,
-  and its application starts and waits for the SEE
+  and its application runs with the SEE's program
   (`run_dump_hdxs2_app_starts.py`).
   The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
   family is recognised by the unpacked main code naming the C3505. Its
-  application starts (`run_dump_t760i_app_starts.py`) and waits for its SEE
-  program, which is not run. The Ferguson T750i's M3821 boots without the
+  application runs with its SEE program (`run_dump_t760i_app_starts.py`).
+  The Ferguson T750i's M3821 boots without the
   boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
   locked D-cache lines at the top of the flash window's cached view until
   the DDR is up (`CacheAsRam`: RAM over that range until the bootloader runs
-  from RAM); it starts its SEE the same way, and its application starts
-  (`run_dump_t750i_app_starts.py`) and waits for the SEE's messages. The
+  from RAM); it starts its SEE the same way, and its application runs with
+  the SEE's program, opens its database and starts drawing
+  (`run_dump_t750i_app_starts.py`; the chip reads as revision B). The
   M3821 / M3822P (the DVB-T2 boxes: `dumps/Opticum Blue R265 Lite/`) adds the
   boot ROM's step (the bootloader copied into a boot SRAM at 0x1FE00000, entry
   0x9FE00800), a DDR-training model, the chip-ID variant word, the SPI flash
@@ -424,7 +434,9 @@ then every 1000th.
   the replay's handler: the store then overwrote what the SEE's boot code had
   just written (0xB8000280 to 0x200), and the Globo HD-XS2's application,
   which starts the SEE's program only while 0x200 reads that, skipped it in
-  one suite run in five (`test_see_start.py` replays the store).
+  one suite run in five (`test_see_start.py` replays the store). Nor at the
+  end of the slice that stopped on the store, which comes before the replay
+  (and an interrupt taken at that boundary can come in between).
   A stop counts as a rewind only if the instruction at the stop PC is a load /
   store of the noted register, lies in the translation block the access ran in
   (straight-line code from that block's start), and the registers are
@@ -477,8 +489,11 @@ then every 1000th.
   violation. Fast mode reports it as a RuntimeError; exact mode is not
   affected (a hook on every instruction keeps blocks short). The SDK's
   application images start at 0x80000200 with 0xE00 zero bytes (~900 NOPs)
-  before their first code, so 0x80000200..0x80000FFF always run under a code
-  hook that does nothing (`_hook_short_blocks`).
+  before their first code, so 0x80000200..0x80000FFF run under a code hook
+  that does nothing (`_hook_short_blocks`) while they hold such a run of zero
+  words -- only then: other images keep code there (the URZ0086's BSS clear),
+  which the hook's Python call per instruction slowed from 25 ms of emulation
+  time to 1.7 s.
 * Unicorn's own CP0 EBase reads 0x800003FF: CPU number 0x3FF. An `mfc0 EBase`
   that runs natively (not hooked yet) tells a dual-CPU firmware it is not
   CPU 0 -- the URZ0086's exception vector then takes its second-CPU path
@@ -486,6 +501,16 @@ then every 1000th.
   first scans that page for CP0 instructions (an application writes its
   vector shortly before its first timer tick, within the periodic rescan's
   window).
+* A dual-CPU chip's second core (`chips/see.py` `SeeCore`) is a second
+  `AliMipsSimulator` on the same RAM, flash and register buffers, run between
+  the first core's slices until its emulation time catches up with the first
+  core's: turns of so many instructions did not work (fast-mode counts are
+  estimates; with the SEE's rate estimated low, a million-instruction turn
+  took minutes). Its idle task's `b .` would spin away as much host time as
+  the turn lasts, so `idle_skip` moves the core's emulation time (and its
+  Count) on to its next timer interrupt instead, and a code hook on the loop
+  ends the slices that reach it -- most turns start in the tick handler, which
+  returns into the loop (the URZ0086: 8 M instructions in 16 s instead of 22 s).
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
 * Unicorn race: `uc_emu_stop()` from another thread sets `stop_request` before

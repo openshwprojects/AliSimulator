@@ -11,9 +11,9 @@ whose main code names the C3505.
 
 On that path the bootloader waits for bit 8 of 0xB8000300 (ReadyBits), then
 unpacks and starts the application; the application starts the SEE
-co-processor's program the way see.py describes, which the simulator does
-not run, and then waits for the SEE's answers.  (The T760i receives DVB-T2
-through an external AltoBeam ATBM7812; nothing of that is modelled.)
+co-processor's program the way see.py describes, which runs on a second
+core (see.SeeCore) and answers its remote calls.  (The T760i receives
+DVB-T2 through an external AltoBeam ATBM7812; nothing of that is modelled.)
 """
 import struct
 

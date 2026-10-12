@@ -2,8 +2,9 @@
 ALi M3503 (dumps/GLOBO HD-XS2/: the Globo HD-XS2 / Opticum Blue XS65
 satellite updates), a dual-CPU chip of the S3602 platform: its main code is
 the SDK's "M3602 HD STB" build with the chip's own DVB-S2 demodulator
-(NIM_S3503), so it is the M36xx family (m3602.py: its devices and the SEE
-start handshake, see.py) with the chip ID 0x3503.
+(NIM_S3503), so it is the M36xx family (m3602.py: its devices and the SEE,
+see.py -- the start handshake and the SEE's program on a second core, here
+with the newer chips' doorbells) with the chip ID 0x3503.
 
 Its bootloader is the XIP kind of the Ferguson T750i's (m3821.py): it runs
 from the flash window -- the word at 0x490, where the chunk header's branch

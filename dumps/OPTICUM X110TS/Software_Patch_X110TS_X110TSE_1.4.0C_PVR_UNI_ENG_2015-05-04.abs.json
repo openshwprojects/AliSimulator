@@ -35,7 +35,7 @@
     "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family with the chip ID 0x3603 (2026-10-11, run_dump_x110ts_see_start.py): the bootloader -- a silent build, one 0x01 byte to the UART -- starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py), unpacks the main code and starts the application, which starts the SEE's program at 0xA6000200 -- not run -- and stops at its SDBBP assertion when its first message to the SEE is not acknowledged, like the Cabletech URZ0086.  With the family's 0x3602 the application reboots into the bootloader every ~45 M instructions instead (see the last note)."
+    "note": "As the M3602 family with its board's chip ID 0x3603 (2026-10-12, run_dump_x110ts_see_start.py): the bootloader starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py) and the application, which -- given the chip ID it checks for -- starts the SEE's program at 0xA6000200 on the second core (see.SeeCore), prints its banner and attaches its drivers through 80 remote calls the SEE answers (and 36 of the SEE's) by ~56 M instructions; it draws from ~78 M (~510 GE commands and ~250 calls answered by 120 M).  Without the SEE's program its first message went unacknowledged and it stopped at its SDBBP assertion (0x801A9608)."
   },
   "desc": [
     "The official 1.4.0C PVR update (2015-05-04) of the Opticum X110TS / X110TSE twin-tuner satellite PVR, the universal English build: an ALi M3606 image like the Cabletech URZ0086's, with the SEE co-processor's program in a seecode chunk and a keydb chunk, on a 4 MB flash.",
