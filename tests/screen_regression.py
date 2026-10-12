@@ -15,9 +15,10 @@ max_diff_pct.
 
 A `navigation` sequence then drives the UI: each step is a remote-control key
 name (sent through the emulated IR receiver and the firmware's own key table,
-see ir_remote.py) or ("panel", code) for a front-panel key (answered by the
-panel decoder's key read), with the least number of pixels the step must
-change.  Every step's screen goes to the report and the last one is compared
+see ir_remote.py), ("panel", code) for a front-panel key (answered by the
+panel decoder's key read) or ("wait", seconds) for no key -- the firmware
+goes on by itself for that long --, with the least number of pixels the step
+must change.  Every step's screen goes to the report and the last one is compared
 with <name>_nav.png (also made by --make-expected).
 """
 import os
@@ -56,7 +57,8 @@ class SimulatorCrash(Exception):
 
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
-        signal=False, tuner=True, mux=False, slice_instructions=5_000_000, probe_s=10):
+        signal=False, tuner=True, mux=False, slice_instructions=5_000_000, probe_s=10,
+        signal_frequencies=None):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -66,8 +68,9 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     dump's tuner model on the I2C bus (sim.attach_tuner: a tuner that takes its
     settings, but no signal -- the demodulator stays unlocked), so every capture
     can show the frequency it is tuned to; signal=True boots with
-    sim.set_signal(True): the tuner and a locked demodulator; mux=True adds
-    the transport stream behind it (sim.attach_mux: the demultiplexer model
+    sim.set_signal(True): the tuner and a locked demodulator -- on every
+    frequency, or on signal_frequencies (Hz) only; mux=True adds the
+    transport stream behind it (sim.attach_mux: the demultiplexer model
     feeds the tables of one made-up service, so a channel change completes).
     The boot runs in slices of slice_instructions and looks for the drawn
     screen every probe_s seconds; a screen that is up for a few seconds only
@@ -78,7 +81,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s)
+                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -89,7 +92,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s):
+         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -103,8 +106,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     sim.loadFile(dump)
     print(f"front panel: {panel_desc}")
     if signal:
-        model, demod = sim.set_signal(True)
-        print(f"signal: tuner model {type(model).__name__ if model else None}, demodulator locked: {demod}")
+        model, demod = sim.set_signal(True, frequencies=signal_frequencies)
+        where = ", ".join(f"{f / 1e6:.3f} MHz" for f in signal_frequencies) if signal_frequencies else "every frequency"
+        print(f"signal ({where}): tuner model {type(model).__name__ if model else None}, demodulator locked: {demod}")
     elif tuner:
         model = sim.attach_tuner()
         print(f"tuner model: {type(model).__name__ if model else None} (no signal)")
@@ -281,7 +285,10 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     for i, (key, min_px) in enumerate(navigation, 1):
         ops = sim.ge_ops
         try:
-            if isinstance(key, tuple):                   # ("panel", code): a front-panel key
+            if isinstance(key, tuple) and key[0] == "wait":     # ("wait", seconds): no key, the firmware goes on
+                run_for(key[1])
+                label = f"{key[1]:.0f} s without a key"
+            elif isinstance(key, tuple):                 # ("panel", code): a front-panel key
                 panel.press_key(key[1], hold_reads=2)
                 label = f"panel key {key[1]}"
             else:
@@ -302,7 +309,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         settle(120, 8, min_s=20)
         after = sim.capture_screen()
         changed = int((after != previous).any(axis=2).sum())
-        path = report_artifacts.path(f"{name}_nav_{i}_{str(key[1] if isinstance(key, tuple) else key).replace('+', 'plus').replace('-', 'minus')}.png")
+        step = f"{key[0]}{key[1]:.0f}" if isinstance(key, tuple) and key[0] == "wait" else key[1] if isinstance(key, tuple) else key
+        path = report_artifacts.path(f"{name}_nav_{i}_{str(step).replace('+', 'plus').replace('-', 'minus')}.png")
         gma_capture.save_png(path, after)
         shot(path, f"navigation step {i}: {label}: {sim.ge_ops - ops} GE commands, {changed} pixels changed")
         check(changed >= min_px, f"navigation step {i}: {label} changed the screen "

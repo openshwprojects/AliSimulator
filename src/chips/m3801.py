@@ -32,7 +32,8 @@ class Demodulator:
     thousand times, 1 ms apart, for bit 1 or bit 0 -- "done" -- and reports
     the tune failed when neither comes (0x803A2060), which made it step to
     the next channel; bit 5 / bits 5-6 are "lock lost" events it reacts to,
-    so only bit 1 reads set with a signal."""
+    so only bit 1 reads set with a signal -- on the tuned frequency, when the
+    signal is only on some (sim.tuned_to_signal)."""
     BASE = 0x3E000
     LOCK_REG, LOCK_BITS = 0x1D, 0x60
     LOCKED = {0x02: lambda v: v | 0x02, 0x1D: lambda v: v | 0x60, 0x3B: lambda v: 1, 0x147: lambda v: 1}
@@ -46,7 +47,7 @@ class Demodulator:
 
     def _read_lock(self, uc, access, address, size, value, user_data):
         self.lock_reads += 1
-        if not self.signal:
+        if not self.signal or not self.sim.tuned_to_signal():
             return
         start = (address & 0xFFFFFF) - self.BASE
         data = bytearray(uc.mem_read(address, size))

@@ -262,7 +262,13 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   `frequency()` decodes what the driver tuned it to (MxL603 / MxL5007T: the
   channel word / 64 MHz; R820T: the PLL with the firmware's crystal and IF,
   "calibrating" while the antenna input is off for its image-rejection
-  calibration), and `sim.tuner_info()` gives that as one line. The screen
+  calibration), and `sim.tuner_info()` gives that as one line. The signal is
+  on every frequency, or with `sim.set_signal(True, frequencies=[...])` on
+  those only, as an antenna receives a few multiplexes: the demodulators
+  report lock, and the demultiplexer model feeds its stream, only while the
+  tuner model is tuned within 1 MHz of one (`sim.tuned_to_signal()`; a
+  terrestrial channel raster is 7 or 8 MHz), so a channel search finds those
+  channels and nothing elsewhere. The screen
   regressions attach the dump's tuner without a signal (`screen_regression`'s
   `tuner=True`), so they keep their no-signal screens and every capture in the
   report shows the frequency it was taken at; the simulator itself attaches
@@ -559,9 +565,13 @@ the manufacturer's update of the same box it carries a channel database --
 whose Bulgarian channel banner is up 3 minutes after the start, then its
 "Няма сигнал!" no-signal box, about 8 minutes) and
 `run_dump_t650i_capture_screen.py` (the Ferguson Ariva T650i's 8 MB update
-image: with its empty channel database it runs the first-install automatic
-search and ends on "nie znaleziono kanału!", the panel reading "Find", about
-25 minutes). `run_dump_maciej_remote.py` drives the
+image with a signal on UHF channel 34, 578 MHz, and the transport stream
+behind it: with its empty channel database it runs the first-install
+automatic search, which reads the multiplex's tables there and finds
+"AliSimulator TV", and nothing on the other channels up to 858 MHz -- its
+last search screen is compared, the panel reading "Find" --, about 30
+minutes; without a signal the search ends on "nie znaleziono kanału!").
+`run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
 changing. The screen regressions take a `navigation` sequence too: remote keys
@@ -575,9 +585,11 @@ returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its p
 keys and the URZ0194S steps its wizard's Region value with its (the whole
 wizard switches language); the SRT 8115 opens and closes its main menu; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
-(its panel keys do nothing); the T650i closes its "no channel found"
-dialog (its "edytuj kanały" menu then opens by itself) and opens the
-favourites list from there; the Prima VIII opens its EPG grid with its
+(its panel keys do nothing); the T650i, once its search, the programme-guide
+download that gives up (the multiplex has no EIT schedule) and its live
+picture are through (a `("wait", seconds)` step), opens its channel list
+with OK: "1 AliSimulator TV", the multiplex's now / next events beside it;
+the Prima VIII opens its EPG grid with its
 virtual key 42 and closes it with EXIT (16) -- before its front-panel buttons
 were modelled (`gpio_keys.py`) they read as pressed and stepped its channels
 by themselves every second or two, and the remote's keys got lost in between.

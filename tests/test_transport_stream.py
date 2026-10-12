@@ -6,7 +6,9 @@ counters -- and the demultiplexer register model on a booted-but-not-run
 dump.bin: the filter RAM write port (mask / value as the driver's
 dmx_set_pid writes them), the united ring (base, length, threshold), the
 write pointer the firmware reads, the threshold interrupt on line 7 and its
-read-to-clear status, and that the feed stops when the ring is full.
+read-to-clear status, and that the feed stops when the ring is full.  Then a
+signal on one frequency (set_signal(frequencies=...)): the demodulator's lock
+bits and the stream only while the MxL603 model is tuned there.
 """
 import os
 import sys
@@ -15,6 +17,7 @@ import datetime
 import struct
 
 import transport_stream as ts
+import tuners
 from simulator import AliMipsSimulator
 
 ok = True
@@ -131,5 +134,26 @@ written = dmx.packets_written
 dmx.service()
 check(dmx.packets_written == written, "a full ring takes nothing (the firmware is behind)")
 check(any("filter 5 value" in m for m in logs) and any("feeding PID 0x0000" in m for m in logs), "the model logs its filters and feeds")
+
+# a signal on one frequency only (set_signal(frequencies=...)): the demodulator reports lock, and
+# the stream flows, while the tuner model is tuned there -- a channel search finds that channel only
+mu.mem_write(base + 0x140, (4096).to_bytes(2, 'little'))
+guest_write(base + 0x1C2, dmx.write_ptr[0].to_bytes(2, 'little'))      # the ring consumed
+tuner, demod = sim.set_signal(True, frequencies=[578_000_000])
+lock = 0xB803E01D                                                        # get_lock(): bits 5 / 6
+tuner.write(bytes([0x0F, 0x22, 0x10, 0x80, 0x11, 0x76]))                 # the MxL603 on 474 MHz (UHF 21)
+sim._vt_accum += 1
+written = dmx.packets_written
+dmx.service()
+check(not sim.tuned_to_signal() and guest_read(lock, 1) & 0x60 == 0 and dmx.packets_written == written,
+      f"signal on 578 MHz, tuner on {tuners.describe(tuner)}: no lock, no packets")
+tuner.write(bytes([0x10, 0x80, 0x11, 0x90]))                             # 578 MHz (UHF 34): 0x9080 / 64
+sim._vt_accum += 1
+dmx.service()
+check(sim.tuned_to_signal() and guest_read(lock, 1) & 0x60 == 0x60 and dmx.packets_written > written,
+      f"tuner on {tuners.describe(tuner)}: the demodulator reports lock and the stream flows")
+sim.set_signal(True)
+tuner.write(bytes([0x10, 0x80, 0x11, 0x76]))
+check(sim.tuned_to_signal() and guest_read(lock, 1) & 0x60 == 0x60, "set_signal(True) without frequencies: a signal everywhere again")
 print(f"\n[{'PASS' if ok else 'FAIL'}] transport stream and demultiplexer model")
 sys.exit(0 if ok else 1)

@@ -290,8 +290,10 @@ class Demux:
 
     def service(self):
         """Between emulation slices: put the multiplex's tables for every
-        enabled PID that is due into the ring."""
-        if self.mux is None or not self.enabled() or not self.united():
+        enabled PID that is due into the ring -- while the tuner is on a
+        frequency with a signal (sim.tuned_to_signal: the stream comes out of
+        the demodulator; a channel search tunes past many without one)."""
+        if self.mux is None or not self.enabled() or not self.united() or not self.sim.tuned_to_signal():
             return
         pids = self.enabled_pids()
         if not pids:

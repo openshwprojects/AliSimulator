@@ -3,10 +3,8 @@ A transport stream for the demultiplexer model: the DVB tables a receiver
 needs to complete a channel change, as TS packets.
 
 With a tuner model and the demodulator reporting lock (sim.set_signal), the
-firmware finds a carrier but no data: it waits for the programme tables
-(PAT, PMT) and, when they never come, moves on to the next channel -- the
-Comsat TE 1050 HD and the Strong Prima VIII hop between their channels for
-ever and ignore the remote while they do.  This module builds the tables of
+firmware finds a carrier but no data: no programme tables (PAT, PMT), so no
+service to play or to find in a channel search.  This module builds the tables of
 a small multiplex (Mux) -- PAT, PMT per service, SDT with the service names,
 NIT, TDT with the clock -- as MPEG-2 private sections and packs them into
 188-byte TS packets with continuity counters, so the demultiplexer model

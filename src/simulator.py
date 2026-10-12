@@ -150,6 +150,7 @@ class AliMipsSimulator:
         self._irc_status = 0          # IR controller interrupt status (+7)
         self._irc_frames = deque()    # NEC frames waiting to be received (any thread may append)
         self.slice_services = []      # called between slices (emulation thread): device models that feed data
+        self.signal_frequencies = None  # set_signal(frequencies=...): where a signal is (None: everywhere)
         self._irc_last_vt = -1e9      # emulation time the last frame was received
         self._ir_key_table = None     # {vkey: ir16} found in RAM by press_key()
         self.ir_coding = "nec"        # how that table maps to NEC frames (ir_remote.IR_CODINGS)
@@ -1609,19 +1610,38 @@ class AliMipsSimulator:
         import tuners
         return tuners.describe(self.tuner())
 
-    def set_signal(self, on=True):
-        """A receivable channel on every frequency: the dump's tuner model on
-        the I2C bus (attach_tuner) and the chip family's demodulator reporting
-        lock (chips/m3801.py, chips/m3821.py).  There is no transport stream
-        behind it, so the firmware finds a locked channel with nothing in it.
-        Returns (tuner model or None, demodulator modelled)."""
+    def set_signal(self, on=True, frequencies=None):
+        """A receivable channel: the dump's tuner model on the I2C bus
+        (attach_tuner) and the chip family's demodulator reporting lock
+        (chips/m3801.py, chips/m3821.py) -- on every frequency, or with
+        `frequencies` (Hz) only while the tuner model is tuned to one of them
+        (tuned_to_signal), as an antenna receives a few multiplexes: a channel
+        search then finds those and nothing elsewhere.  There is no transport
+        stream behind it (attach_mux), so the firmware finds a locked channel
+        with nothing in it.  Returns (tuner model or None, demodulator
+        modelled)."""
         tuner = self.tuner()
         if on and tuner is None:
             tuner = self.attach_tuner()
+        self.signal_frequencies = None if frequencies is None else tuple(frequencies)
         demod = self.chip.set_signal(on)
         if not demod:
             self.log(f"[NIM] {self.chip.name}: no demodulator model, the firmware sees no lock")
         return tuner, demod
+
+    SIGNAL_TOLERANCE_HZ = 1_000_000     # a terrestrial channel raster is 7 or 8 MHz
+
+    def tuned_to_signal(self):
+        """Whether the tuner sits on a frequency with a signal: any frequency
+        unless set_signal() named some; then the tuner model must be tuned
+        within SIGNAL_TOLERANCE_HZ of one of them (not while it calibrates)."""
+        if self.signal_frequencies is None:
+            return True
+        tuner = self.tuner()
+        f = tuner.frequency() if tuner is not None else None
+        if not f or f.get("calibrating"):
+            return False
+        return any(abs(f["rf_hz"] - hz) <= self.SIGNAL_TOLERANCE_HZ for hz in self.signal_frequencies)
 
     def attach_mux(self, mux=None):
         """Put a transport stream behind the locked channel: the chip family's

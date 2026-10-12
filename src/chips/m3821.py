@@ -336,7 +336,8 @@ class Demodulator:
     for DVB-T (1, 2), tests bit 6 of register 0x1D (0x804B34CC); for DVB-T2
     (4) it wants the low nibble of register 0x67 at 0xA or above and, from the
     two bytes at 0x11D, the second below the first minus one (0x804B33DC).
-    With `signal` on those registers read that way."""
+    With `signal` on those registers read that way (on the tuned frequency,
+    when the signal is only on some: sim.tuned_to_signal)."""
     BASE = 0x4C000
     LOCK = {0x01D: lambda v: v | 0x40,            # DVB-T locked
             0x067: lambda v: (v & 0xF0) | 0x0F,    # DVB-T2 state machine: locked
@@ -344,6 +345,7 @@ class Demodulator:
             0x11E: lambda v: 0x00}
 
     def __init__(self, sim):
+        self.sim = sim
         self.signal = False
         self.lock_reads = 0
         for reg in self.LOCK:
@@ -351,7 +353,7 @@ class Demodulator:
 
     def _read(self, uc, access, address, size, value, user_data):
         self.lock_reads += 1
-        if not self.signal:
+        if not self.signal or not self.sim.tuned_to_signal():
             return
         start = (address & 0xFFFFFF) - self.BASE
         data = bytearray(uc.mem_read(address, size))
