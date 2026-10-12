@@ -110,7 +110,8 @@ class Doorbells:
         sets bit 7 / 6 of its +0x36 byte, the receiver acknowledges by
         setting bit 3 / 2 of its own +0x37 byte -- the SEE writes 0xB8040037
         for the main CPU's ring;
-      * the newer chips (0x3701 / 0x3503 / 0x3821, chip codes 0x1004A on):
+      * the newer chips (0x3701 / 0x3503 / 0x3821 / 0x3505, chip codes
+        0x1004A on):
         the ringer sets bit 3 / 2 of its +0x37 byte, the receiver
         acknowledges by storing bit 7 / 6 to its own +0x37 byte.
     An acknowledge bit never stays set (a later read-modify-write of the

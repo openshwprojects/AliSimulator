@@ -8,7 +8,11 @@
     "soc": "ALi M3821 family (the maincode's demodulator drivers are NIM_S3821_0 / NIM_S3821_T2_*: the M3821's own DVB-T2 COFDM)",
     "family": "M3821 (chips/m3821.py, its XIP bootloader)",
     "demod": "internal S3821 (NIM_S3821_0, DVB-T / DVB-T2)",
-    "tuner": "MaxLinear MxL603 (the maincode's tuner driver names it)",
+    "tuner": "MaxLinear MxL603 (the maincode's tuner driver names it) at I2C 0x60 on the third hardware I2C master (SCB2): the application wakes it once its database is open (0x0B and 0x12 set to 1, ~67 M instructions)",
+    "tunerModel": {
+      "chip": "mxl603",
+      "address": 96
+    },
     "flash": "8 MB SPI",
     "panel": {
       "chip": "FD650K (TM1650-compatible)"
@@ -36,7 +40,7 @@
     "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3821 family with its XIP bootloader (2026-10-12, run_dump_t750i_app_starts.py): the bootloader runs from the flash window with its stack in the cache-as-RAM range, prints \"HW BootLoader APP  init!\", starts the SEE through the SEE's boot code at 0xA1017804 (chips/see.py), unpacks the main code (\"success!\") and starts the application, which moves its exception vectors (EBase 0x80002000) and starts the SEE's program at 0xA6000200 on the second core (see.SeeCore).  Its drivers' remote calls are answered (144, and 24 of the SEE's, by ~76 M instructions); it opens its database (\"DB_init() success!\"), starts drawing (GE commands from ~70 M, ~90 by 150 M, with ~600 calls answered) and scans the channels, its MxL603 tuner not answering (no tuner model attached: MxL603_Tuner_Init errors).  The chip reads as revision B (chip word 0x38210001): under revision A the application leaves the GMA to the SEE and its OSD code calls the SEE's device directly, jumping into the SEE's code at ~69 M."
+    "note": "As the M3821 family with its XIP bootloader (2026-10-12, run_dump_t750i_app_starts.py): the bootloader runs from the flash window with its stack in the cache-as-RAM range, prints \"HW BootLoader APP  init!\", starts the SEE through the SEE's boot code at 0xA1017804 (chips/see.py), unpacks the main code (\"success!\") and starts the application, which moves its exception vectors (EBase 0x80002000) and starts the SEE's program at 0xA6000200 on the second core (see.SeeCore).  Its drivers' remote calls are answered (144, and 24 of the SEE's, by ~76 M instructions); it opens its database (\"DB_init() success!\"), starts drawing (GE commands from ~70 M, ~90 by 150 M, with ~600 calls answered) and tunes, its MxL603 not answering without a tuner model (MxL603_Tuner_Init errors); with sim.set_signal() -- the tuner model at 0x60, the demodulator locked -- it goes on to its network, CEC and player set-up posts its root-menu message (CTRL_MSG_SUBTYPE_CMD_ENTER_ROOT) by ~120 M and runs its first-install search (177.5 MHz on, 7 MHz steps, ~140 M).  Its screen is not captured: no register write of either core points at an M36F GMA region head (the 0xAA signature), the layers gma_capture reads (0xB8006300 / 6380) stay off -- its OSD layers are another display engine's.  The chip reads as revision B (chip word 0x38210001): under revision A the application leaves the GMA to the SEE and its OSD code calls the SEE's device directly, jumping into the SEE's code at ~69 M."
   },
   "desc": [
     "Ferguson Ariva T750i firmware V1.20B2, the manufacturer's USB update image from Ferguson's download area (T750i_20190918_V1.20B2.zip).",
