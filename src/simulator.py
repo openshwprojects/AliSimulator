@@ -93,6 +93,7 @@ class AliMipsSimulator:
         self.ram_size = ram_size
         self._shared = share_memory_with
         self.ic_base = ic_base
+        self._ic = 0xB8000000 + ic_base     # its status words (+0 / +4) and enables (+8 / +0xC), no side effects
         self.base_addr = 0xAFC00000
         self.mu = None
         self.md = None
@@ -391,8 +392,8 @@ class AliMipsSimulator:
         # so the 0x8.../0x9.../0xA.../0xB... mappings below are views for
         # Python (mem_read(0xB8000030), mem_write(base_addr, ...)).
 
-        # Shared ROM Buffer (Usually 4MB dumped flash) -- a second core's is the first one's
-        self.rom_buffer = self._shared.rom_buffer if self._shared else ctypes.create_string_buffer(self.rom_size)
+        # Shared ROM Buffer (Usually 4MB dumped flash)
+        self.rom_buffer = self._buffer('rom_buffer', self.rom_size)
 
         # Map ROM aliases to the same buffer
         # Ali SoCs commonly map flash repeatedly within a 16MB window
@@ -415,8 +416,8 @@ class AliMipsSimulator:
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
         
-        # Shared RAM Buffer (128MB as per device spec; a second core's is the first one's)
-        self.ram_buffer = self._shared.ram_buffer if self._shared else ctypes.create_string_buffer(self.ram_size)
+        # Shared RAM Buffer (128MB as per device spec)
+        self.ram_buffer = self._buffer('ram_buffer', self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
         
         # Map RAM aliases to same buffer
@@ -431,7 +432,7 @@ class AliMipsSimulator:
         # and otherwise read / write the buffer like RAM.  0x98000000 /
         # 0xB8000000 map the same buffer for Python (no side effects).
         MMIO_SIZE = 0x01000000
-        self.mmio_buffer = self._shared.mmio_buffer if self._shared else ctypes.create_string_buffer(MMIO_SIZE)
+        self.mmio_buffer = self._buffer('mmio_buffer', MMIO_SIZE)
         mmio_ptr = ctypes.addressof(self.mmio_buffer)
         self._mmio_rd = {}          # offset -> [handler]: reads starting at that offset
         self._mmio_wr = {}          # offset -> [handler]: writes starting at that offset
@@ -609,6 +610,12 @@ class AliMipsSimulator:
             self.log(f"Warning: Could not set CP0 Status: {e}")
 
         self._calibrate_hflags()
+
+    def _buffer(self, name, size):
+        """A memory buffer the Unicorn mappings point into: a second core's is the
+        first core's (share_memory_with)."""
+        import ctypes
+        return getattr(self._shared, name) if self._shared else ctypes.create_string_buffer(size)
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
@@ -909,13 +916,18 @@ class AliMipsSimulator:
         self._dev_replays = {}
         self.visit_counts = {}
         self.last_lui_addr = None
-        self._rescan_due = True     # fast mode: (re)scan ROM + RAM for CP0 sites before running
-        self._rom_sites_dirty = True
-        # Install the hooks now as well: some test scripts drive sim.mu.emu_start()
-        # directly instead of run(), and still need CP0 emulation.
-        self._sync_hooks()
+        self._rescan_all()
         # The reset state: the PC, after whatever the chip's boot ROM does first
         self.chip.start()
+
+    def _rescan_all(self):
+        """Fast mode: scan the flash, the RAM and the family's code ranges for
+        CP0 instruction sites again, and install the hooks now -- some test
+        scripts drive sim.mu.emu_start() directly instead of run(), and still
+        need CP0 emulation."""
+        self._rescan_due = True
+        self._rom_sites_dirty = True
+        self._sync_hooks()
 
     def _device_tables(self):
         """Copies of the device register handlers (reads, writes) and the slice
@@ -964,9 +976,7 @@ class AliMipsSimulator:
             pad = b'\xFF' * (self.rom_size - max_bytes)
             self.rom_image[max_bytes:] = pad
             self._rom_write(max_bytes, pad)
-            self._rom_sites_dirty = True
-            self._rescan_due = True
-            self._sync_hooks()
+            self._rescan_all()
             self.log(f"Truncated ROM to {max_bytes // 1024}KB (rest filled with 0xFF)")
 
     def _hook_mem_invalid(self, uc, access, address, size, value, user_data):
@@ -1758,7 +1768,7 @@ class AliMipsSimulator:
             for word in (0, 1):
                 bits = (self._ic_lines >> (32 * word)) & self._M32
                 if bits:
-                    a = 0xB8000000 | (self.ic_base + 4 * word)
+                    a = self._ic + 4 * word
                     v = int.from_bytes(uc.mem_read(a, 4), 'little')
                     uc.mem_write(a, (v | bits).to_bytes(4, 'little'))
 
@@ -1769,7 +1779,7 @@ class AliMipsSimulator:
         bit = 1 << line
         was = self._ic_lines
         self._ic_lines = (was | bit) if on else (was & ~bit)
-        addr = 0xB8000000 + self.ic_base + 4 * (line // 32)
+        addr = self._ic + 4 * (line // 32)
         b = 1 << (line % 32)
         cur = int.from_bytes(self.mu.mem_read(addr, 4), 'little')
         self.mu.mem_write(addr, ((cur | b) if on else (cur & ~b)).to_bytes(4, 'little'))
@@ -1779,7 +1789,7 @@ class AliMipsSimulator:
     def _ic_ip3(self):
         """IP3 from the interrupt controller: a modelled line asserted and
         enabled, or the other CPU's doorbell (_doorbell_ip3)."""
-        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(0xB8000000 + self.ic_base + 8, 8), 'little'):
+        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(self._ic + 8, 8), 'little'):
             return True
         return self._doorbell_ip3()
 
@@ -2438,7 +2448,7 @@ class AliMipsSimulator:
         # is a known instruction count.
         if self.instruction_count >= self._timer_next_icount:
             self._timer_update()
-        if (self._ti or self.cp0_cause & 0x300 or self._ic_lines or self._doorbell_ip3()) and not in_delay_slot \
+        if (self._ti or self.cp0_cause & 0x300 or self._ic_ip3()) and not in_delay_slot \
                 and not self.is_stepping and self._irq_deliverable():
             if compact_jump or (m16 and self._m16_pc_relative_branch(insn, size)):
                 irq_stop = True
@@ -2845,7 +2855,7 @@ class AliMipsSimulator:
         self._uart_irq_retries += 1
         # ALi interrupt controller: EISR/EIER bit 16 = UART IRQ 24
         uart_ic_bit = 1 << 16
-        eisr, eier = 0xB8000000 + self.ic_base, 0xB8000000 + self.ic_base + 8
+        eisr, eier = self._ic, self._ic + 8
         try:
             eisr_val = int.from_bytes(uc.mem_read(eisr, 4), 'little')
             uc.mem_write(eisr, (eisr_val | uart_ic_bit).to_bytes(4, 'little'))
@@ -3204,7 +3214,7 @@ class AliMipsSimulator:
         if slice_us is not None:
             cap_us = max(self.min_slice_us, slice_us)
             wait = self._timer_wait_us()
-            if (self._ic_lines or self._doorbell_ip3()) and self._irq_deliverable():
+            if self._ic_ip3() and self._irq_deliverable():
                 # a device interrupt held back by irq_min_gap_us
                 gap = self._irq_gap_left() * 1e6
                 wait = gap if wait is None else min(wait, gap)
@@ -3271,26 +3281,26 @@ class AliMipsSimulator:
     _IDLE_LOOP = bytes.fromhex("ffff0010" "00000000")      # b . / nop
 
     def _idle_until(self, max_vtime):
-        """The emulation time an idle loop can skip to, or None: interrupts
-        enabled (IE, not EXL / ERL), none deliverable, and a timer interrupt
-        (one Count tick past Compare, where the timer latches) or max_vtime to
-        go to, whichever comes first."""
+        """The emulation time an idle loop can skip to -- when interrupts are
+        enabled (IE, not EXL / ERL) and none is deliverable: the next timer
+        interrupt (one Count tick past Compare, where the timer latches) or
+        max_vtime, whichever comes first --, or None (nothing to skip to)."""
         if (self.cp0_status & 0x7) != 0x1 or self._irq_deliverable() or self._irq_due():
             return None
+        now = self._vtime()
         until = max_vtime
         wait = self._timer_wait_us()
         if wait is not None:
-            tick = self._vtime() + wait / 1e6 + 1.0 / self.count_hz
+            tick = now + wait / 1e6 + 1.0 / self.count_hz
             until = tick if until is None else min(until, tick)
-        return until
+        return until if until is not None and until > now else None
 
     def _skip_idle(self, pc, max_vtime):
         """Fast mode, between slices: in an idle loop that only an interrupt
         ends -- `b .` with a nop in its delay slot (_idle_until) --, the
         emulation time skips on.  Returns whether it moved."""
         until = self._idle_until(max_vtime)
-        now = self._vtime()
-        if until is None or until <= now:
+        if until is None:
             return False
         try:
             if bytes(self.mu.mem_read(pc, 8)) != self._IDLE_LOOP:
@@ -3300,17 +3310,16 @@ class AliMipsSimulator:
         if pc not in self._idle_loops:
             self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
             self._tb_flush_needed = True
-        self._vt_accum += until - now
+        self._vt_accum += until - self._vtime()
         return True
 
     def _hook_idle_loop(self, uc, address, size, user_data):
         """A slice reached an idle loop (_skip_idle): end it there if the time
         can skip on, instead of spinning to the slice's end."""
-        if self._code_hook_h is None and self._stop_reason is None:
-            until = self._idle_until(self._run_max_vtime)
-            if until is not None and until > self._vtime():
-                self._stop_reason = 'idle'
-                self._orig_emu_stop()
+        if self._code_hook_h is None and self._stop_reason is None \
+                and self._idle_until(self._run_max_vtime) is not None:
+            self._stop_reason = 'idle'
+            self._orig_emu_stop()
 
     def run(self, max_instructions=None, max_vtime=None):
         """Run until max_instructions (an instruction count; estimated in fast

@@ -129,8 +129,9 @@ class Doorbells:
         self.taken = {"main": [0, 0], "SEE": [0, 0]}
 
     @staticmethod
-    def chip_id(sim):
-        return int.from_bytes(sim.mmio_buffer[2:4], 'little')
+    def chip_id(uc):
+        """The chip ID the SDK picks the layout by (0xB8000002)."""
+        return int.from_bytes(uc.mem_read(0xB8000002, 2), 'little')
 
     @staticmethod
     def ring(chip_id, block):
@@ -152,12 +153,13 @@ class Doorbells:
         shift = 8 * (reg - offset)
         b = (value >> shift) & 0xFF
         receiver, other = ("main", SEE_IC) if reg - 7 == MAIN_IC else ("SEE", MAIN_IC)
-        if int.from_bytes(uc.mem_read(0xB8000002, 2), 'little') in OLD_DOORBELL_CHIPS:
-            ring, acks, ring_shift = other + 6, (b << 4) & 0xC0, 0
-            b &= ~0x0C
-        else:
-            ring, acks, ring_shift = other + 7, (b >> 4) & 0x0C, 4
+        ring, ring_shift = self.ring(self.chip_id(uc), other)
+        if ring_shift:                              # (the newer layout: acknowledges in bits 7 / 6)
+            acks = (b >> 4) & 0x0C
             b = (b & ~0xCC) | ((uc.mem_read(0xB8000000 + reg, 1)[0] | b) & 0x0C)
+        else:                                       # (acknowledges in bits 3 / 2)
+            acks = (b << 4) & 0xC0
+            b &= ~0x0C
         if acks:
             ring += 0xB8000000
             rung = uc.mem_read(ring, 1)[0]
@@ -226,13 +228,11 @@ class SeeCore:
         self.core.idle_skip = True
         page = 0x80000000 | (address & 0x1FFFF000)
         self.core.chip.ranges = [(page, self.CODE), (0x80000000, 0x1000)]
-        self.core._rescan_due = True
-        self.core._rom_sites_dirty = True
-        self.core._sync_hooks()
+        self.core._rescan_all()
         self.core.mu.reg_write(UC_MIPS_REG_PC, address)
         self.core.max_instructions = 0                  # (no instruction limit: turns are emulation time)
         wire(self.core)                                 # (the models both cores share: SeeStart._wire)
-        chip = Doorbells.chip_id(sim)
+        chip = Doorbells.chip_id(sim.mu)
         sim.doorbell_in, self.core.doorbell_in = Doorbells.ring(chip, SEE_IC), Doorbells.ring(chip, MAIN_IC)
         self._t0 = (sim._vtime(), self.core._vtime())
         sim.slice_services.append(self.service)
@@ -309,7 +309,7 @@ class SeeStart:
     def _start_at_slice_end(self):
         """Between the main CPU's slices: a pending start -- unless the store
         that made it is still to run again (the slice stopped on it, see
-        _replayed; an interrupt taken at the boundary can come first).  Its
+        _pend; an interrupt taken at the boundary can come first).  Its
         replay lands the start address in 0x200 once more, so started before
         it the SEE's boot code had its 0xB8000280 overwritten: the Globo
         HD-XS2's application then saw no parked SEE and skipped starting the
@@ -334,18 +334,20 @@ class SeeStart:
         return (old & ~mask) | ((value << shift) & mask)
 
     # (the write handlers run before the store lands: the registers still hold the old
-    # values.  A store the simulator re-executes after a stop at it is not a second start,
-    # and it lands again before the SEE runs: the start it made waits for the next access.
-    # Run in the replay's handler, the SEE's boot code wrote 0xB8000280 back to 0x200 just
-    # before the replayed store put the start address there again -- and the Globo
-    # HD-XS2's application, which starts the SEE's program only while 0x200 reads
-    # 0xB8000280 (0x80016DE8), then skipped it, its first mailbox word taken for the start.)
-    def _replayed(self, uc, kind, address, value):
-        """Whether this store re-executes the one that made the pending start."""
-        return self.pending is not None and self.sim._dev_replay_of(uc, kind, address, value) is not None
+    # values.  A store that makes a start is noted (_pend): one the simulator re-executes
+    # after a stop at it is not a second start, and it lands again before the SEE runs --
+    # the start it made waits for the next access.  Run in the replay's handler, the SEE's
+    # boot code wrote 0xB8000280 back to 0x200 just before the replayed store put the
+    # start address there again -- and the Globo HD-XS2's application, which starts the
+    # SEE's program only while 0x200 reads 0xB8000280 (0x80016DE8), then skipped it, its
+    # first mailbox word taken for the start.)
+    def _pend(self, uc, kind, address, value, target):
+        """The SEE goes to `target` once this store has landed."""
+        self.sim._dev_note(uc, kind, address, value)
+        self.state, self.pending = "starting", target
 
     def _write_control(self, uc, access, address, size, value, user_data):
-        if self._replayed(uc, 'see_run', address, value):
+        if self.sim._dev_replay_of(uc, 'see_run', address, value) is not None:
             return
         self._access(uc, access, address, size, value, user_data)
         old = self._word(CONTROL)
@@ -357,40 +359,42 @@ class SeeStart:
             target = self._word(START)
             if target == PARK:
                 self.state = "parked"
-            elif self.sim._dev_replay_of(uc, 'see_run', address, value) is None:
-                self.sim._dev_note(uc, 'see_run', address, value)
-                self.state, self.pending = "starting", target
+            else:
+                self._pend(uc, 'see_run', address, value, target)
 
     def _write_start(self, uc, access, address, size, value, user_data):
-        if self._replayed(uc, 'see_start', address, value):
+        if self.sim._dev_replay_of(uc, 'see_start', address, value) is not None:
             return
         self._access(uc, access, address, size, value, user_data)
         target = self._after(self._word(START), address, START, size, value)
-        if self.state != "parked" or target == PARK or (address & 3) + size != 4:
-            return
-        if self.sim._dev_replay_of(uc, 'see_start', address, value) is not None:
-            return
-        self.sim._dev_note(uc, 'see_start', address, value)
-        self.state, self.pending = "starting", target
+        if self.state == "parked" and target != PARK and (address & 3) + size == 4:
+            self._pend(uc, 'see_start', address, value, target)
 
     def start(self, address):
-        """The SEE goes to `address`: run it if it is boot code that parks the SEE."""
+        """The SEE goes to `address`: run it if it is boot code that parks the
+        SEE (_boot), else start its program on the second core (run_program)."""
         sim = self.sim
         try:
             code = bytes(sim.mu.mem_read(address & ~3, SCAN))
         except UcError:
             code = b""
-        if not parks(code):
-            self.state = "running"
-            if self.run_program and self.core is None:
-                self.core = SeeCore(sim, address, self._wire)
-                self.starts.append((address, "run on the SEE core"))
-                sim.log(f"[SEE] started at 0x{address:08X}: the SEE's program runs on the second core")
-                return
-            self.starts.append((address, "not run (the SEE's own program)"))
-            sim.log(f"[SEE] started at 0x{address:08X}: not boot code that parks the SEE -- the SEE's "
-                    f"program is not run")
-            return
+        if parks(code):
+            what = self._boot(address)
+            told = f"its boot code {what} (started flag {'set' if self._word(FLAG) & 1 else 'clear'})"
+        elif self.run_program and self.core is None:
+            self.core = SeeCore(sim, address, self._wire)
+            what, told = "run on the SEE core", "the SEE's program runs on the second core"
+        else:
+            what = "not run (the SEE's own program)"
+            told = "not boot code that parks the SEE -- the SEE's program is not run"
+        self.state = "parked" if what == "parked" else "running"
+        self.starts.append((address, what))
+        sim.log(f"[SEE] started at 0x{address:08X}: {told}")
+
+    def _boot(self, address):
+        """Boot code on the SEE's light Unicorn instance, from `address` until
+        it reaches the park loop: what happened."""
+        sim = self.sim
         if self.cpu is None:
             cpu = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 + UC_MODE_LITTLE_ENDIAN)
             cpu.ctl_set_cpu_model(UC_CPU_MIPS32_24KF)
@@ -399,11 +403,7 @@ class SeeStart:
             self.cpu = cpu
         try:
             self.cpu.emu_start(address, PARK, count=LIMIT)
-            pc = self.cpu.reg_read(UC_MIPS_REG_PC)
-            what = "parked" if pc == PARK else f"stopped at 0x{pc:08X} without parking"
         except UcError as e:
-            what = f"stopped: {e}"
-        self.state = "parked" if what == "parked" else "running"
-        self.starts.append((address, what))
-        sim.log(f"[SEE] started at 0x{address:08X}: its boot code {what}"
-                f" (started flag {'set' if self._word(FLAG) & 1 else 'clear'})")
+            return f"stopped: {e}"
+        pc = self.cpu.reg_read(UC_MIPS_REG_PC)
+        return "parked" if pc == PARK else f"stopped at 0x{pc:08X} without parking"

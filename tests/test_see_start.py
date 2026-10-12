@@ -87,10 +87,33 @@ def word(offset):
     return int.from_bytes(sim.peek(0xB8000000 + offset, 4), "little")
 
 
+def byte(offset):
+    return sim.peek(0xB8000000 + offset, 1)[0]
+
+
+def look():
+    """The main CPU's next look at the SEE's registers: a read of the started flag."""
+    return sim._mmio_read(sim.mu, 0x20C, 1, None)
+
+
 def slice_end():
     """The end of one of the main CPU's slices: run() calls its slice services."""
     for service in sim.slice_services:
         service()
+
+
+def handshake(target):
+    """The bootloader's start of the SEE: park it (0x200 = 0xB8000280), let it run (0x220 bits 9
+    and 1), clear the started flag, send it to `target`."""
+    write(0x200, see_mod.PARK)
+    write(0x220, word(0x220) | 0x202)
+    write(0x20C, word(0x20C) & ~1, 4)
+    write(0x200, target)
+
+
+def reset_see():
+    """0x220 bit 1 cleared: the SEE held in reset."""
+    write(0x220, word(0x220) & ~0x02, 1)
 
 
 write(0x200, 0xB8000280)
@@ -100,7 +123,7 @@ check(see.state == "parked", "0x220 bit 1 set with 0x200 = 0xB8000280: the SEE r
 write(0x20C, word(0x20C) & ~1, 4)
 write(0x200, 0xA1000000)
 check(see.starts == [] and word(0x200) == 0xA1000000, "0x200 = the boot code: the main CPU's store lands first")
-flag = sim._mmio_read(sim.mu, 0x20C, 1, None)
+flag = look()
 check(see.starts == [(0xA1000000, "parked")], f"the main CPU's next look runs the boot code, which parks ({see.starts})")
 check(flag & 1 == 1, "that read already sees the started flag the boot code set")
 check(word(0x200) == 0xB8000280, "the boot code wrote 0xB8000280 back to 0x200")
@@ -108,35 +131,29 @@ check(sim.peek(0x81200000, 16) == asm(0x11111111, 0x22222222, 0x33333333, 0x4444
       "the boot code's copy landed in the shared RAM")
 check(see.state == "parked", "the SEE is parked again")
 write(0x200, 0xA1300000)
-sim._mmio_read(sim.mu, 0x20C, 1, None)
+look()
 check(see.state == "running" and see.starts[-1][0] == 0xA1300000 and "not run" in see.starts[-1][1],
       f"0x200 = a program that does not park: not run, the SEE counts as running ({see.starts[-1]})")
 n = len(see.starts)
 write(0x200, 0x18)
 check(len(see.starts) == n, "0x200 writes while the SEE runs its program are mailbox data, not starts")
-write(0x220, word(0x220) & ~0x02, 1)
+reset_see()
 check(see.state == "reset", "0x220 bit 1 cleared: the SEE is in reset")
 
 # The handshake again, the main CPU's slice ending before its next look: the SEE starts then
-write(0x200, 0xB8000280)
-write(0x220, word(0x220) | 0x202)
-write(0x20C, word(0x20C) & ~1, 4)
-write(0x200, 0xA1000000)
+handshake(0xA1000000)
 n = len(see.starts)
 slice_end()
 check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x20C) & 1 and word(0x200) == 0xB8000280,
       f"the end of the main CPU's slice runs the boot code too ({see.starts[n:]})")
-write(0x220, word(0x220) & ~0x02, 1)
+reset_see()
 
 # The handshake again, with an asynchronous stop that leaves the PC on the start store: the
 # simulator runs that store again on resume (a replay, simulator._dev_note), which must land
 # before the SEE runs -- run in the replay's handler, or at the end of the slice that stopped
 # on the store, the boot code's 0xB8000280 was overwritten with the start address by the store
 # landing after it
-write(0x200, 0xB8000280)
-write(0x220, word(0x220) | 0x202)
-write(0x20C, word(0x20C) & ~1, 4)
-write(0x200, 0xA1000000)
+handshake(0xA1000000)
 n = len(see.starts)
 key = (sim.mu.reg_read(UC_MIPS_REG_PC), sim.mu.reg_read(UC_MIPS_REG_SP))
 sim._dev_replays[key] = sim._dev_last[0:3]      # what the emu_start wrapper records at such a stop
@@ -145,16 +162,11 @@ check(len(see.starts) == n, "the slice that stopped on the start store ends: no 
 write(0x200, 0xA1000000)                        # the replay
 check(len(see.starts) == n and word(0x200) == 0xA1000000,
       "a replayed start store lands again before the SEE runs (no start yet)")
-sim._mmio_read(sim.mu, 0x20C, 1, None)
+look()
 check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x200) == 0xB8000280,
       f"the next look runs the boot code once, and its 0xB8000280 stays in 0x200 ({see.starts[n:]}, "
       f"0x{word(0x200):08X})")
-write(0x220, word(0x220) & ~0x02, 1)
-
-
-def byte(offset):
-    return sim.peek(0xB8000000 + offset, 1)[0]
-
+reset_see()
 
 # The doorbells, the M3602's layout: the SEE rings in its +0x36 byte, the main CPU acknowledges
 # with bit 3 / 2 of its own +0x37 byte (stores the simulator delivers like the main CPU's)
@@ -185,9 +197,7 @@ sim.mu.mem_write(0x81400000, asm(0x3C088150,                    # lui t0, 0x8150
                                  0xA16C0036,
                                  0x1000FFFF, 0x00000000))       # b .
 sim.mu.mem_write(0x81600000, asm(0x1000FFFF, 0x00000000))       # the main CPU's b .
-write(0x200, 0xB8000280)
-write(0x220, word(0x220) | 0x202)
-write(0x200, 0x81400000)
+handshake(0x81400000)
 slice_end()
 check(see.core is not None and see.starts[-1] == (0x81400000, "run on the SEE core"),
       f"a program that does not park: the second core runs it ({see.starts[-1]})")
@@ -210,7 +220,7 @@ check(byte(0x36) == 0 and not core._doorbell_ip3(), "the SEE's acknowledge ends 
 check(see.doorbells.taken == {"main": [2, 0], "SEE": [0, 1]},
       f"both cores' acknowledges count: the main CPU took 2 calls, the SEE 1 answer ({see.doorbells.taken})")
 seecore = see.core
-write(0x220, word(0x220) & ~0x02, 1)
+reset_see()
 check(see.core is None and sim.doorbell_in is None and seecore.service not in sim.slice_services,
       "0x220 bit 1 cleared: the second core stops (no turns, no rings)")
 
@@ -219,7 +229,7 @@ check(see.core is None and sim.doorbell_in is None and seecore.service not in si
 print("\n--- the random number generator (see.Trng) ---")
 results = []
 for _ in range(3):
-    write(see_mod.TRNG, sim.peek(0xB8000000 + see_mod.TRNG, 1)[0] | 1, 1)      # start: +0 bit 0
+    write(see_mod.TRNG, byte(see_mod.TRNG) | 1, 1)                  # start: +0 bit 0
     results.append(bytes(sim.peek(0xB8000000 + see_mod.TRNG + 8, 8)))
 check(len(set(results)) == 3 and b"\0" * 8 not in results, f"each start gives a new 64-bit result ({results[0].hex()} ...)")
 check(byte(see_mod.TRNG) & 1 == 0 and byte(see_mod.TRNG + 4) & 1 == 0, "the start bit clears itself, busy (+4 bit 0) reads 0")
