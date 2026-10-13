@@ -94,6 +94,12 @@ class SeeCoreFamily(ChipFamily):
     def code_ranges(self):
         return list(self.ranges)
 
+    @property
+    def ve_status(self):
+        """The first core's family's: the video engine is the chip's (the SEE
+        runs the video decoder's driver)."""
+        return self.sim._shared.chip.ve_status
+
 
 class Doorbells:
     """The doorbells between the two CPUs (the SDK's dual_new.o).  A CPU rings

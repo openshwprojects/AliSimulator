@@ -375,7 +375,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   sends the firmware down its fatal path (reboot into the bootloader). Those
   bits read clear — there are no VE events here. Without this, dump.bin
   rebooted two minutes after its first screen (the status word still held the
-  0x318 the driver had written at init) and started over.
+  0x318 the driver had written at init) and started over. The M36xx's MPEG
+  decoder (the SDK's `vdec_s3601`, run by the SEE on the M3606) keeps its VLD
+  bit offset there instead -- written as the start, read back as the position
+  -- so that family (`ChipFamily.ve_status`) reads the word as written: masked,
+  the offset went back and the URZ0086 V1.1.1's SEE program stopped at its
+  assertion that the video buffer's read pointer only moves on.
 * **Ethernet MAC** (`ETHERNET_MAC_0`, 0xB802C000; the Ferguson Ariva T650i's
   network driver): the software-reset bit 3 of +0 reads back clear, and an
   MDIO access started at +0x7C (bit 31) completes at once and reads 0xFFFF

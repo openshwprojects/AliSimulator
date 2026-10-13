@@ -1471,12 +1471,16 @@ class AliMipsSimulator:
     # takes the firmware's fatal path 0x8000070C, which reboots into the
     # bootloader.  The register is RAM here and held the 0x318 the driver wrote
     # at init, so dump.bin rebooted two minutes after its first screen and
-    # started over.  With no VE events to report those bits read clear.
+    # started over.  With no VE events to report those bits read clear -- on
+    # the chips whose VE has them there (ChipFamily.ve_status: not the M36xx,
+    # whose decoder keeps its bit offset at +0x28).
     _VE_STATUS_REGS = (0x4228, 0x4288)
     _VE_STATUS_MASK = 0x037FFF00
 
     def _hook_ve_status_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
+        if not self.chip.ve_status:
+            return
         word = address & ~3
         v = int.from_bytes(uc.mem_read(word, 4), 'little')
         if v & self._VE_STATUS_MASK:

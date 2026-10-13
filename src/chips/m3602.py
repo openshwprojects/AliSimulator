@@ -82,6 +82,12 @@ class S3501(RegisterSlave):
 class M3602(ChipFamily):
     name = "M3602"
     chip_id = 0x3602
+    # (its MPEG decoder, the SDK's vdec_s3601, keeps the VLD's bit offset at +0x28 of the
+    # video engine: vdec_hal_vld_config_data writes the start, vdec_hal_vld_get_offset
+    # reads it back.  Read as the M3801's status word, with bits 8..25 cleared, the
+    # offset went back and the URZ0086 V1.1.1's SEE program stopped at its assertion
+    # that the video buffer's read pointer only moves on, ~85 M instructions in.)
+    ve_status = False
 
     @classmethod
     def matches(cls, image):

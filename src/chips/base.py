@@ -109,6 +109,7 @@ class ChipFamily:
     dmx = None                  # the family's demultiplexer model (dmx_m36.Demux), for sim.attach_mux
     demod = None                # the family's demodulator model (a DemodulatorLock), for sim.set_signal
     see = None                  # a dual-CPU chip's SEE co-processor (see.SeeStart), reset by loadFile
+    ve_status = True            # the video engine's +0x28 / +0x88 are status words (simulator._hook_ve_status_read)
 
     def __init__(self, sim):
         self.sim = sim
