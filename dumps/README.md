@@ -45,7 +45,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs` | Opticum / Globo HD T90, STB HD N2 and STB HD N3 (one update for the three) | ALi M3801 | the boards' own: a Rafael Micro R820T on the Globo N3 (I2... | TM1650 (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/viewer_top.php?file=software-decoder-stb-hd-t90-n2-3-1-3-2pvr-2015-01-06.original.zip&dir=Firmware+for+to+all+receivers/Opticum/INNE) |
 | `OPTICUM S60/Software_UNI_S60_1.0.4.1_PVR_2012-08-28.abs` | Opticum HD S60 (the universal "UNI" build; the main code calls itself HD_S60-1-0-4-1 and accepts /c/S60.abs and /c/UNIWERSAL87436723.abs) | ALi M3601S (the main-code chunk's version; the main code is the SDK's "M3602 HD STB" / "S3602 HD STB" platform build, its all-code image M3601SAllCode.abs) | - | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/viewer_top.php?file=Software_UNI_S60_1.0.4.1_PVR_2012-08-28.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE) |
 | `OPTICUM X110TS/Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs` | Opticum X110TS / X110TSE (the universal English "UNI ENG" build, "UNI RETA PVR") | ALi M3606 (the main-code chunk's version "M3606 2Tuner", the seecode chunk's "M3606 SEE"; the main code is the SDK's "M3602 HD STB" / "S3602 HD STB" platform build, SDK4.0ba.8.0_Combo) | - | TM1650-compatible (SCL 9, SDA 8) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/viewer_top.php?file=Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE) |
-| `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN` | Echosonic Mini ESR-250 | ALi M3510A | - | - | no / no / no | not recorded |
+| `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN` | Echosonic Mini ESR-250 | ALi M3510A | - | - | yes / yes / yes | not recorded |
 | `other/sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin` | satellite receiver main board "s15125" | ALi M3329 | - | - | no / no / no | not recorded |
 | `srt8115.BIN` | Strong SRT 8115 | ALi M3801 | MaxLinear MxL603 family (MxL603 / pin-compatible MxL608)... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3123357.html#15195863), andrzej 4 |
 | `SRT_Prima_VIII_V1.0.6_20160114.abs` | Strong Prima VIII | ALi M3801 | probably a Silicon Labs Si2144 option: the image's only t... | - | yes / yes / yes | not recorded |
@@ -1028,14 +1028,14 @@ Its LNB fault line (GPIO 99) and its DVB-T tuner's short-circuit line (GPIO 104)
 * **Box:** Echosonic Mini ESR-250
 * **Type:** DVB-S2 satellite receiver
 * **Board:** revision A3
-* **SoC:** ALi M3510A (other)
+* **SoC:** ALi M3510A (M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503, the XIP bootloader's cache-as-RAM stack and the chip's internal demodulator))
 * **Demodulator:** internal (the firmware's NIM_S3501 driver)
 * **Flash:** GigaDevice GD25Q32B (4 MB SPI)
 * **IR coding:** nec
 * **Image:** dump, bootloader "3510-r1362", 2015-02-02, 2015-02-02, 4194304 bytes, SHA-1 33ce167f0070858b346e02089b7189c988e321bf
 * **Layout:** the ALi NCRC chunk chain, bootloader chunk at 0 (next chunk at 0x06EE00)
 * **Source:** not recorded (2026-01-20). Not recorded: added to this repository on 2026-01-20 under dumps/other with the file name it came with, which says what it is (read from a working unit, "OK")
-* **Simulator:** boots no, application no, display no. Another chip than the M3801 / M3821 families the simulator models; no test runs it.
+* **Simulator:** boots yes, application yes, display yes. As the M3503 family (2026-10-13; its bootloader, "3510-r1362", is the Globo HD-XS2's XIP kind, and its start-up code tests the chip ID for 0x3503 and 0x3821 only): the bootloader runs from the flash window with its stack in the cache-as-RAM lines -- as the M3801 default it popped a return address of 0xFFFFFFFF and ended at PC 0 -- and starts the application at ~34 M instructions (single-CPU, no SEE program; a silent build, two 0x01 bytes to the UART).  The application draws its "Quick Setup" menu (Menu Language English, First Audio, Second Audio, LNB Power On, Single Search, Multi Satellite Search, Main Menu) through the GE by ~100 M (14 commands; run_dump_esr250_capture_screen.py).  A task of it hid the OSD layer (0xB8006300 bit 0) as long as the NIM device's chip ID was not an S3501's: the chip's internal demodulator, whose registers the CPU reads at 0xB8028000 + the register number, answers it (chips/m3503.py InternalDemod).  The remote does not work yet: the firmware drains every IR frame and acknowledges it, but no key code in any of the three codings reached the menu (DOWN, UP, OK tried).
 
 Its application names a satellite front end (NIM_S3501 / S3503 tuner-demodulator drivers, "Tuner 1 has no satellite select!").
 

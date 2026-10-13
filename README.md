@@ -78,7 +78,15 @@ their file names.
   bootloader: it runs from the flash window with its stack in locked D-cache
   lines until the DDR is up (`CacheAsRam`); it starts its SEE the same way,
   and its application runs with the SEE's program
-  (`run_dump_hdxs2_app_starts.py`).
+  (`run_dump_hdxs2_app_starts.py`). The chip's DVB-S2 demodulator is on the
+  chip: the CPU reads its registers at 0xB8028000 + the register number, and
+  its chip ID registers answer the S3501's ID (`InternalDemod`). The
+  Echosonic Mini ESR-250's M3510A (`dumps/other/`, bootloader "3510-r1362")
+  runs as this family -- the same XIP bootloader, a start-up that tests the
+  chip ID for 0x3503 -- and its single-CPU application draws its Quick Setup
+  menu once that demodulator answers: a task of it kept the OSD layer off
+  until the NIM device reported an S3501's chip ID
+  (`run_dump_esr250_capture_screen.py`).
   The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
@@ -711,7 +719,9 @@ wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
 its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
 whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
-switch's fault flag on GPIO 25 pulled up, about 3).
+switch's fault flag on GPIO 25 pulled up, about 3) and
+`run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
+run as the M3503: its Quick Setup menu, about 3).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
