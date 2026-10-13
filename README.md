@@ -702,7 +702,8 @@ last search screen is compared, the panel reading "Find" --, about 30
 minutes; without a signal the search ends on "nie znaleziono kanału!") and
 `run_dump_x110ts_capture_screen.py` (the Opticum X110TS, an M3606
 twin-tuner satellite PVR whose SEE program on the second core drives the
-display: its channel banner, then its red "No Signal!" box, about 5 minutes)
+display: its channel banner, then its red "No Signal!" box, and the main
+menu the remote's MENU opens, about 7 minutes)
 and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
 display engine's layer, captured as it comes up, about 3 minutes) and
