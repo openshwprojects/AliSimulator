@@ -48,7 +48,7 @@ import ctypes
 
 from unicorn import UC_PROT_ALL
 
-from i2c_scb import RegisterSlave
+from demods import S3501
 
 from .base import ChipFamily, chunk_chain
 from .see import SeeStart
@@ -58,25 +58,7 @@ C3603 = 0x3603                      # the chip ID of the twin-tuner satellite bo
 # (the SDK's sys_ic_get_c3603_product: bits 8..11 = 0xC -> product 0xE, 5 or 7 -> 0xB, others -> 0.
 # Every product but 0 has the DVB-S2 demodulator; which one the X110TS's chip is, is not known.)
 C3603_PRODUCT = 0x0500
-
-
-class S3501(RegisterSlave):
-    """The C3603's DVB-S2 demodulator as the SDK's NIM_S3501 driver
-    (nim_S3501.o) sees it: 7-bit address 0x33 on the first I2C master, a
-    register file whose read-only registers 0xA3..0xA6 hold the chip ID
-    nim_s3501_get_type assembles from them, 0x350100C0 (NIM_CHIP_ID_M3501A).
-    It never locks: the application finds no signal."""
-    ADDRESS = 0x33
-    ID = {0xA3: 0x01, 0xA4: 0x35, 0xA5: 0xC0, 0xA6: 0x00}
-
-    def __init__(self):
-        super().__init__(self.ID)
-
-    def write(self, data):
-        super().write(data)
-        for reg, value in self.ID.items():
-            self.regs[reg] = value
-        return True
+# (the C3603's DVB-S2 demodulator is demods.S3501, at 0x33 on the first I2C master)
 
 
 class M3602(ChipFamily):

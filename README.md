@@ -279,12 +279,14 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   the way to tell which tuner a board has (each dump's sidecar names it:
   mostly the MaxLinear MxL603 family, an MxL5007T in the 2012 URZ0195
   firmware, a Rafael R820T in the Globo N3). The C3603 (the X110TS) has its
-  S3501 DVB-S2 demodulator at 0x33 (`chips/m3602.py`: a `RegisterSlave`
-  with its chip ID in registers 0xA3..0xA6). An external demodulator a
-  board's sidecar names (`device.demodModel`, `demods.py`) is put on the bus
-  when the image loads (`sim.attach_demod()`): the T760i's AltoBeam ATBM7812
-  at 0x40, 16-bit register addresses, its chip ID 0xA8 in register 0 --
-  without it the driver retried its power-on for ~125 M instructions.
+  S3501 DVB-S2 demodulator at 0x33 (`demods.S3501`, a `RegisterSlave`
+  with its chip ID in registers 0xA3..0xA6; `chips/m3602.py` puts it on the
+  bus for that chip). A demodulator a board's sidecar names
+  (`device.demodModel`, `demods.py`) is put on the bus when the image loads
+  (`sim.attach_demod()`): the T760i's AltoBeam ATBM7812 at 0x40, 16-bit
+  register addresses, its chip ID 0xA8 in register 0 -- without it the
+  driver retried its power-on for ~125 M instructions -- and the UNI S60's
+  S3501, without which its driver reset the tuner 11 times and gave up.
   A board whose firmware bit-bangs an I2C bus over GPIO pins to its chips
   names it in its sidecar (`device.gpioI2c`: SCL / SDA); loadFile puts a
   `gpio_i2c.GpioI2cBus` on those pins that forwards the transfers to the same

@@ -11,7 +11,8 @@
     "tuner": null,
     "flash": "2 MB SPI",
     "panel": {"chip": "TM1650-compatible", "scl": 62, "sda": 63},
-    "irCoding": "nec"
+    "irCoding": "nec",
+    "demodModel": {"chip": "s3501", "address": 51}
   },
   "image": {
     "kind": "update",
@@ -34,7 +35,7 @@
     "application": true,
     "display": false,
     "panelText": [" ON "],
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader prints \"MC: APP  init ok\" and the application its banner (Libcore 5.2.0, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701) after about 110 s of wall clock, dumps its clock registers and then resets its tuner over and over (\"Reset tuner N time!!!\"): the M3601S's internal S3501 demodulator and its tuner are not modelled; no GE command in a 2.5-minute run (5 GE commands by 120 M instructions).  The chip ID 0x3603 is no better: the bootloader then stays in its RAM copy and prints nothing in 120 M instructions, as the Cabletech URZ0086's does."
+    "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader prints \"MC: APP  init ok\" and the application its banner (Libcore 5.2.0, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701) after about 110 s of wall clock, dumps its clock registers and sets up its front end.  Its NIM driver finds the internal S3501 demodulator at I2C 0x33 on SCB1 (device.demodModel, demods.py: chip ID 0x350100C0) and initialises it; without that model it reset its tuner 11 times and logged \"ERROR: reset nim failed!!!\" (2026-10-13).  The application still draws no more than 5 GE commands by 120 M instructions: every task waits and the idle task (0x8024EBF0, b .) runs.  The chip ID 0x3603 is no better: the bootloader then stays in its RAM copy and prints nothing in 120 M instructions, as the Cabletech URZ0086's does."
   },
   "desc": [
     "The official 1.0.4.1 PVR update (2012-08-28) of the Opticum HD S60 satellite receiver, the \"UNI\" (universal) build: the first ALi M3601S image in the collection -- a single-CPU member of the S3602 platform (no seecode chunk, no HDCPKey) with the S3501 internal DVB-S2 demodulator, on a 2 MB flash with the Opticum N2's chunk set (Radioback, Menuback, BootLogo, defaultdb, userdb).",
