@@ -11,7 +11,7 @@
     "tuner": null,
     "flash": "2 MB SPI",
     "panel": null,
-    "irCoding": "nec",
+    "irCoding": "ext00",
     "chipId": "0x3603"
   },
   "image": {

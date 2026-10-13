@@ -744,7 +744,7 @@ The pack's second image, Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs, is the P
 * **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.0.4 (maincode "Demo M3606" 2011-9-1), 2011-09-01, 2097152 bytes, SHA-1 27723bb273c871f7e0868d1c9b3ac017a1fcc9a2
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2010-06-01), HDCPKey 0x00FE00 (Demo s3602, 2009-11-10), maincode 0x010000 (Demo M3606, 2011-9-1), Radioback 0x160000 (1.0.0, 2009-05-08), countryband 0x170000 (1.0.0, 2010-4-1), userdb 0x18FF80 (1.0.0, 2011-9-1)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v104.rar; downloaded on 2026-10-10
@@ -767,7 +767,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.0.6 (maincode "Demo M3606" 2012-1-16), 2012-01-16, 2097152 bytes, SHA-1 4f5a7128658ef2f5a88e60b00272363d336efafb
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-1-16), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-1-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v106.rar; downloaded on 2026-10-10
@@ -792,7 +792,7 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **SoC:** ALi M3601E (the Cabletech URZ0083's twin) (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3100 family, external (the firmware's NIM_COFDM driver tables name the M3101)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.0.8 (maincode "Demo M3606" 2012-4-27), 2012-04-27, 2097152 bytes, SHA-1 e640613b000499bac0799d875eb53ae81786d8e8
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (Demo M3606, 2012-4-27), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-27)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm), the archive km00183_v108.rar; downloaded on 2026-10-10
@@ -1130,7 +1130,7 @@ Its front panel is two buttons straight on GPIO 31 and 9 (traced 2026-10-11).  A
 * **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.0.9 (maincode "501" 2012-3-16), 2012-03-16, 2097152 bytes, SHA-1 d71b0a570b1a39bb97962c81d088e1bd1fc65fca
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-3-16), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-3-16)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v109.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v109.rar; downloaded on 2026-10-10
@@ -1152,7 +1152,7 @@ The simulator runs it as the M3602 family (chips/m3602.py).
 * **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.1.1 (maincode "501" 2012-4-28), 2012-04-28, 2097152 bytes, SHA-1 54b0cd31938362427ba142e13b4a26abc35c66be
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-4-28), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-4-28)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v111.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v111.rar; downloaded on 2026-10-10
@@ -1176,7 +1176,7 @@ The simulator runs it as the M3602 family (chips/m3602.py).
 * **SoC:** ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") (M3602 (chips/m3602.py))
 * **Demodulator:** ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)
 * **Flash:** 2 MB SPI
-* **IR coding:** nec
+* **IR coding:** ext00
 * **Image:** update, V1.1.5a (maincode "501" 2012-9-25), 2012-09-25, 2097152 bytes, SHA-1 88ee40ff785571a63815a0c59d5c1329202568c2
 * **Layout:** bootloader 0x000000 (DVBT---0.1.0, 2011-08-03), HDCPKey 0x01FE00 (Demo s3602, 2011-08-03), maincode 0x020000 (501, 2012-9-25), Radioback 0x170000 (1.0.0, 2011-08-03), countryband 0x177200 (1.0.0, 2011-07-08), userdb 0x17FF80 (1.0.0, 2012-9-25)
 * **Source:** [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v115a.rar), Thomson (Strong), mirrored by Gutek (2026-10-10). Gutek's firmware list (https://www.gutek.com.pl/tunery_oprog_do_tunerow.htm, "Thomson THT501"), the archive thomson_tht501_v115a.rar; downloaded on 2026-10-10

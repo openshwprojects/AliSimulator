@@ -758,7 +758,7 @@ maps to the NEC frame bytes differs between SDK generations
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
 Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
 Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
-URZ0083's M3601E firmwares, and standard NEC whose table code keeps the first
+M3601E firmwares (URZ0083, KM0183, THT501), and standard NEC whose table code keeps the first
 address byte for the Echosonic ESR-250's 2015 firmware; a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the

@@ -113,8 +113,9 @@ def ir16_to_nec(ir16):
 #          command = ~rev8(lo) -- these decoders keep the frame's first address
 #          byte as the table code's high byte (the Comsat looked a standard
 #          NEC frame of its MENU, 0xFBDD, up as 0x04DD: ~0xFB); also the
-#          Cabletech URZ0083's M3601E firmwares (Libcore 5.0, found on its
-#          first-install wizard: DOWN moved the highlight only this way)
+#          M3601E firmwares (Libcore 5.0) of the Cabletech URZ0083, the
+#          Kruger&Matz KM0183 and the Thomson THT501 (found on their
+#          first-install wizards: DOWN moved the highlight only this way)
 #   necfirst  the Echosonic ESR-250's 2015 firmware (an M3510A): standard NEC,
 #          but its key conversion (0x8009C058) keeps (code >> 24) << 8 |
 #          (code & 0xFF) -- the frame's first address byte where the older
@@ -123,7 +124,8 @@ def ir16_to_nec(ir16):
 #          "ext00" (both address bytes the same) not at all.
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
-              ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("ESR-250", "necfirst")]
+              ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
+              ("ESR-250", "necfirst")]
 
 
 def coding_for(dump):
