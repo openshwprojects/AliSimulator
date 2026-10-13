@@ -266,18 +266,44 @@ class DmaRings:
     enable bits.  (The block the M3801 SDK calls VCAP_M36F: bit 0 of its +0x4B
     is the self-clearing reset the simulator answers for every chip,
     _SELF_COMPLETING.)  The simulator copies a descriptor's bytes the moment it
-    is submitted."""
-    BASE = 0xF000
-    RING, RING_LEN, SUBMIT, DONE = 0x00, 0x20, 0x28, 0x30
-    CHANNELS = 8
+    is submitted.
 
-    def __init__(self, sim):
+    The M36xx has the same engine at 0xB800F200 (the SDK's dma_s3601: list
+    base / length / write / read index at the same offsets), whose first
+    SC_CHANNELS channels can also find start codes in what they copy
+    (start_codes): a descriptor with bit 29 set (dma_copy's flag 0x20) has the
+    copied bytes searched for 00 00 01 xx, and the physical address of each
+    xx byte goes into the channel's start-code ring (base +0x60 + 4 * ch, its
+    length in entries +0x70 + 2 * ch, the engine's write index +0x80 + 2 * ch,
+    the driver's read index +0x78 + 2 * ch), unless the code lies in the
+    channel's range (+0x88 + 2 * ch: first, last; the video decoder's 0x02 ..
+    0xB1 leaves out its slices) -- or, with the channel's bit of +0x4F set,
+    outside it.  The SEE library's video decoder reads those entries in its
+    buffer updates (vdec_vbv_update_write_p -> dma_get_start_code) to find
+    its pictures.  (No image has fed the engine in the simulator so far; the
+    single-CPU M3601E's decoder parses its buffer itself.)"""
+    RING, RING_LEN, SUBMIT, DONE = 0x00, 0x20, 0x28, 0x30
+    SC_ENABLE, SC_RANGE_INSIDE = 0x4C, 0x4F
+    SC_BASE, SC_LEN, SC_READ, SC_WRITE, SC_RANGE = 0x60, 0x70, 0x78, 0x80, 0x88
+    CHANNELS, SC_CHANNELS = 8, 4
+    SC_FLAG = 1 << 29
+
+    def __init__(self, sim, base=0xF000, start_codes=False):
         self.sim = sim
+        self.BASE = base
+        self.start_codes = start_codes
         self.done = [0] * self.CHANNELS
+        self.tail = [b""] * self.CHANNELS        # (end address, last 3 bytes) of each channel's last scanned copy
         self.submissions = 0            # logged ones
+        self.codes = 0                  # start codes found
+        self.wire(sim)
+
+    def wire(self, core):
+        """The engine's registers among a core's device handlers (the SEE core
+        of a dual-CPU chip feeds the engine too: its video decoder)."""
         b = self.BASE
-        sim._mmio_on('w', self._write_submit, b + self.SUBMIT, b + self.SUBMIT + self.CHANNELS - 1)
-        sim._mmio_on('r', self._read_done, b + self.DONE, b + self.DONE + self.CHANNELS - 1)
+        core._mmio_on('w', self._write_submit, b + self.SUBMIT, b + self.SUBMIT + self.CHANNELS - 1)
+        core._mmio_on('r', self._read_done, b + self.DONE, b + self.DONE + self.CHANNELS - 1)
 
     def _reg(self, offset, size):
         return int.from_bytes(self.sim.peek(0xB8000000 + self.BASE + offset, size), 'little')
@@ -301,8 +327,41 @@ class DmaRings:
                     sim.log(f"[DMA] ch{ch} #{self.done[ch]}: 0x{src:08X} -> 0x{dst:08X}, {n} bytes (ring 0x{ring:08X} x{length})"
                             + ("" if ok else " -- outside RAM, skipped"))
                 if ok:
-                    sim.mu.mem_write(0x80000000 + dst, bytes(sim.mu.mem_read(0x80000000 + src, n)))
+                    data = bytes(sim.mu.mem_read(0x80000000 + src, n))
+                    sim.mu.mem_write(0x80000000 + dst, data)
+                    if self.start_codes and word & self.SC_FLAG and ch < self.SC_CHANNELS:
+                        self._find_start_codes(ch, dst, data)
                 self.done[ch] = (self.done[ch] + 1) & 0xFF
+
+    def _find_start_codes(self, ch, dst, data):
+        """Append the start codes in a copy (and across its start, from the
+        channel's previous copy if this one follows it) to the channel's ring."""
+        if not self._reg(self.SC_ENABLE, 1) >> ch & 1:
+            return
+        end, tail = self.tail[ch] or (None, b"")
+        prefix = tail if end == dst else b""
+        self.tail[ch] = (dst + len(data), (prefix + data)[-3:])
+        buf = prefix + data
+        first, last = self._reg(self.SC_RANGE + 2 * ch, 1), self._reg(self.SC_RANGE + 2 * ch + 1, 1)
+        inside = self._reg(self.SC_RANGE_INSIDE, 1) >> ch & 1
+        ring = self._reg(self.SC_BASE + 4 * ch, 4) & 0x0FFFFFF0
+        length = self._reg(self.SC_LEN + 2 * ch, 2)
+        if not ring or not length:
+            return
+        write = self._reg(self.SC_WRITE + 2 * ch, 2)
+        read = self._reg(self.SC_READ + 2 * ch, 2)
+        i = buf.find(b"\x00\x00\x01")
+        while 0 <= i < len(buf) - 3:
+            code = buf[i + 3]
+            if (first <= code <= last) == bool(inside):
+                if (write + 1) % length == read:
+                    break                                   # (the ring is full)
+                address = dst - len(prefix) + i + 3         # the code byte's physical address
+                self.sim.mu.mem_write(0x80000000 + ring + 4 * write, address.to_bytes(4, 'little'))
+                write = (write + 1) % length
+                self.codes += 1
+            i = buf.find(b"\x00\x00\x01", i + 3)
+        self.sim.mu.mem_write(0xB8000000 + self.BASE + self.SC_WRITE + 2 * ch, write.to_bytes(2, 'little'))
 
     def _read_done(self, uc, access, address, size, value, user_data):
         ch = (address & 0xFFFFFF) - self.BASE - self.DONE

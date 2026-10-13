@@ -495,8 +495,9 @@ class AliMipsSimulator:
             self._mmio_on('r', self._hook_spi_read, base, base + 3)
         # The hardware I2C masters the tuner / EEPROM drivers use (i2c_scb.py):
         # the slaves are sim.i2c_devices, none answers unless sim.i2c_ack_all
+        # (a second core's are the first one's: one bus, the board's chips on it)
         import i2c_scb
-        self.i2c_devices = {}
+        self.i2c_devices = self._shared.i2c_devices if self._shared else {}
         self.i2c_ack_all = False
         self._demod_address = None          # where attach_demod put the loaded board's demodulator
         self.i2c_masters = [i2c_scb.I2cMaster(self, base, f"SCB{i}") for i, base in enumerate(self.I2C_SCB_BASES)]

@@ -110,6 +110,7 @@ class ChipFamily:
     demod = None                # the family's demodulator model (a DemodulatorLock), for sim.set_signal
     see = None                  # a dual-CPU chip's SEE co-processor (see.SeeStart), reset by loadFile
     ve_status = True            # the video engine's +0x28 / +0x88 are status words (simulator._hook_ve_status_read)
+    core_devices = ()           # device models a dual-CPU chip's second core reaches too (their wire(core))
 
     def __init__(self, sim):
         self.sim = sim

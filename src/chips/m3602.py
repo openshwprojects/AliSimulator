@@ -117,6 +117,11 @@ class M3602(ChipFamily):
         ptr = ctypes.addressof(sim.ram_buffer)
         for address, size in self._ram_mirrors():
             sim.mu.mem_map_ptr(address, size, UC_PROT_ALL, ptr)
+        # the M3606's DMA engine at 0xB800F200, which the SEE's video decoder feeds, with its
+        # start codes (m3821.DmaRings); the SEE core gets it too (core_devices, see.SeeStart._wire)
+        from .m3821 import DmaRings
+        self.dma = DmaRings(sim, base=0xF200, start_codes=True)
+        self.core_devices = (self.dma,)
         # The M3606's SEE co-processor: its start handshake (see.py)
         self.see = SeeStart(sim)
         # the transport-stream demultiplexer DMX0 at 0xB8022000, as on the M3801 (dmx_m36.py)

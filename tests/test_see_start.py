@@ -207,6 +207,8 @@ core = see.core.core if see.core else None
 marker, ebase = struct.unpack("<2I", bytes(sim.peek(0x81500000, 8)))
 check(marker == 0x5EE, f"the SEE's stores land in the shared RAM (0x{marker:X})")
 check(ebase == 0x80000001, f"the SEE reads its CPU number 1 in EBase (0x{ebase:08X})")
+check(core is not None and core.i2c_devices is sim.i2c_devices,
+      "the SEE core's I2C masters reach the first core's devices (one bus, the board's chips on it)")
 check(core is not None and core.mu.reg_read(UC_MIPS_REG_PC) == 0x81400020,
       f"the SEE idles in its b . (PC 0x{core.mu.reg_read(UC_MIPS_REG_PC) if core else 0:08X})")
 check(sim.doorbell_in == (0x40036, 0) and byte(0x40036) == 0x80 and sim._doorbell_ip3(),

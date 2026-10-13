@@ -293,9 +293,14 @@ class SeeStart:
 
     def _wire(self, core):
         """The device models both cores' stores reach: the doorbells and the
-        random number generator the SEE's program keeps a FIFO of."""
+        random number generator the SEE's program keeps a FIFO of -- and, on
+        the second core, the family's own engines the SEE's drivers feed too
+        (ChipFamily.core_devices: the M36xx's DMA engine)."""
         self.doorbells.wire(core)
         self.trng.wire(core)
+        if core is not self.sim:
+            for device in getattr(self.sim.chip, 'core_devices', ()):
+                device.wire(core)
 
     def reset(self):
         """The SEE back in reset (the simulator loads an image again)."""
