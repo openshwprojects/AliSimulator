@@ -16,6 +16,21 @@ gma_m36f_init_head / gma_fill_hw_head) is:
   +1C  bitmap address (physical)
 The GE (ge_m36f.py) draws the bitmaps; this module only reads them.
 
+The M3602's display layers (the SDK's ge_m36.c / ge_lld.c, which the
+Ferguson T50 runs) are older: 0xB80061A0 holds layer 0's enable in bit 0
+and layer 1's in bit 8, 0xB80061A8 / 0xB80061AC the address of each one's
+head, which ge_hal_m36_set_gma fills in:
+  +04  bitmap address
+  +08  x start (bits 0..10) | pixel format (bits 13..16: 2 AYCbCr8888,
+       0xD / 0xE CLUT8, gma_pixel_fmt_convt) | x end (bits 17..27)
+  +0C  y start (bits 0..10) | y end (bits 12..22) | alpha (bits 23..30)
+  +14  pitch in bytes
+  +18  the palette's address (32-byte aligned)
+A pixel or palette entry is Cb, Y, Cr and a 7-bit alpha.  The coordinates
+are the output's: the T50's OSD driver has the GE scale its 912 x 640 CLUT8
+screen to the TV system's size itself (513 x 512 for PAL, at 103, 32), so
+the capture scales the layer up to its 1280 x 720 canvas (output_scale).
+
 The newer display engine of the Ferguson T750i (an M3821 with the SDK's
 dual-CPU build) has layers of its own at 0xB8006900 and 0xB8006B00, which
 no CPU store sets: the drivers build register lists in RAM and hand them to
@@ -120,6 +135,50 @@ def render_head(ram, h):
         px[..., 0] *= ga / 255.0
     rgba = np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
     return rgba, x0, y0
+
+
+M3602_LAYER_ON = 0x61A0
+M3602_HEADS = ((0x61A8, 0x001), (0x61AC, 0x100))        # (head address register, its bit in M3602_LAYER_ON)
+
+
+def m3602_layers(ram, dev):
+    """The M3602's enabled display layers: dicts with the head's fields."""
+    on = struct.unpack_from('<I', dev, M3602_LAYER_ON)[0]
+    layers = []
+    for reg, bit in M3602_HEADS:
+        a = struct.unpack_from('<I', dev, reg)[0] & PHYS
+        if not on & bit or not a:
+            continue
+        w = [_w(ram, a, 4 * i) for i in range(8)]
+        layers.append({
+            'head': a, 'words': w,
+            'bitmap': w[1] & PHYS,
+            'x0': w[2] & 0x7FF, 'x1': (w[2] >> 17) & 0x7FF, 'format': (w[2] >> 13) & 0xF,
+            'y0': w[3] & 0x7FF, 'y1': (w[3] >> 12) & 0x7FF, 'alpha': (w[3] >> 23) & 0xFF,
+            'pitch': w[5] & 0xFFFF,
+            'palette': w[6] & 0x07FFFFE0,
+        })
+    return layers
+
+
+def render_m3602(ram, layer):
+    """rgba uint8 (h, w, 4) of an M3602 layer's bitmap; None for a format not modelled."""
+    width, height = layer['x1'] - layer['x0'] + 1, layer['y1'] - layer['y0'] + 1
+    pitch, fmt, a = layer['pitch'], layer['format'], layer['bitmap']
+    bpp = 4 if fmt == 2 else 1 if fmt in (0xD, 0xE) else 0
+    if not bpp or width <= 0 or height <= 0 or pitch < width * bpp or a + height * pitch > ram.size:
+        return None
+    rows = ram[a:a + height * pitch].reshape(height, pitch)[:, :width * bpp]
+    if bpp == 4:
+        px = rows.reshape(height, width, 4)
+    else:
+        pal = layer['palette']
+        if pal + 1024 > ram.size:
+            return None
+        px = ram[pal:pal + 1024].reshape(256, 4)[rows]
+    rgb = ge_m36f.GeM36F._ycbcr_to_rgb(px[..., [1, 0, 2]].astype(np.float32), 0)
+    alpha = np.minimum(px[..., 3].astype(np.float32) * (255.0 / 127.0), 255.0)
+    return np.clip(np.concatenate([rgb, alpha[..., None]], -1) + 0.5, 0, 255).astype(np.uint8)
 
 
 DE_LIST_CHANNELS = (0x6080, 0x6090, 0x60A0, 0x60B0)     # (list address, +4 load enable) of the register lists
@@ -251,6 +310,16 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0)):
                     h['scaled_back'] = (fx, fy)
             rgba, x, y = render_head(ram, h)
             _blend(canvas, rgba, x, y)
+    # the M3602's layers (the T50), in the output's coordinates: scaled up to the canvas
+    info['m3602_layers'] = m3602_layers(ram, dev)
+    for layer in info['m3602_layers']:
+        rgba = render_m3602(ram, layer)
+        if rgba is None:
+            continue
+        h, w = rgba.shape[:2]
+        rows = np.minimum((np.arange(round(h * fy)) / fy).astype(int), h - 1)
+        cols = np.minimum((np.arange(round(w * fx)) / fx).astype(int), w - 1)
+        _blend(canvas, rgba[rows][:, cols], round(layer['x0'] * fx), round(layer['y0'] * fy))
     # the newer display engine's layers (the T750i), on top
     info['de_layers'] = de_layers(ram, dev)
     for layer in info['de_layers']:

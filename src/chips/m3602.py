@@ -126,12 +126,15 @@ class M3602(ChipFamily):
         self.video_engine = VideoEngine(sim)
         self.video_output = VideoOutput(sim)
         self.core_devices = (self.dma, self.video_engine, self.video_output)
-        # (The graphics engine is the M3801's: base 0xB800A000 and
-        # interrupt-controller line 4.  The Thomson THT501's GE attach pairs
-        # that base with "IRQ 12", which is the OS's interrupt number -- the
-        # controller line plus 8, as the IR receiver's line 19 is OS IRQ 27 --
-        # so nothing differs; raising line 12 instead sends its dispatcher to
-        # its fatal path at the first GE command.)
+        # (The graphics engine most of these firmwares use is the M3801's: base
+        # 0xB800A000 and interrupt-controller line 4.  The Thomson THT501's GE
+        # attach pairs that base with "IRQ 12", which is the OS's interrupt
+        # number -- the controller line plus 8, as the IR receiver's line 19 is
+        # OS IRQ 27 -- so nothing differs; raising line 12 instead sends its
+        # dispatcher to its fatal path at the first GE command.)  The T50's
+        # driver is the older one of the M3602's own engine at 0xB800C000:
+        from ge_m3602 import GeM3602
+        self.ge = GeM3602(sim)
 
     def variant(self):
         return C3603_PRODUCT if self.chip_id == C3603 else self.chip_variant

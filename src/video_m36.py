@@ -29,6 +29,11 @@ anything else and wait until their decoder reports its first picture shown.
     releases the decoder's frames -- and the decoder's first frame request
     sets "first picture shown".  With the field bit standing still the
     handler never moved on and the URZ0083 waited for its logo for ever.
+    Half a field after each field start the model sets status bit 0, which
+    no driver here enables: the Ferguson T50's polls it before it
+    reprograms the output for its TV system (0x80283B70) and spun on it for
+    ever without it -- set at the field start, its interrupt handler, which
+    clears every status bit it finds, took it first.
 """
 import struct
 
@@ -40,7 +45,7 @@ VE_LINE = 1                             # interrupt-controller line (OS IRQ 9)
 
 VPO_INT = 0xB8006004
 VPO_LINE = 2                            # interrupt-controller line (OS IRQ 10)
-VPO_BLANK, VPO_FIELD_START = 0x04, 0x10
+VPO_MID_FIELD, VPO_BLANK, VPO_FIELD_START = 0x01, 0x04, 0x10
 VPO_FIELD_BIT = 1 << 18
 FIELD_S = 0.02                          # 50 Hz fields
 
@@ -145,6 +150,7 @@ class VideoOutput(_Device):
         self.field = 0
         self.fields = 0
         self._next = None
+        self._mid = None                # when status bit 0 comes in this field
         super().__init__(sim)
         sim.slice_services.append(self.service)
 
@@ -166,16 +172,23 @@ class VideoOutput(_Device):
         return (landed & mask) >> shift
 
     def service(self):
-        """Between emulation slices: a field every FIELD_S of emulation time."""
+        """Between emulation slices: a field every FIELD_S of emulation time, status bit 0 half-way."""
         now = self.sim._vtime()
         if self._next is None:
             self._next = now + FIELD_S
+        if self._mid is not None and now >= self._mid:
+            self._mid = None
+            self._post(VPO_MID_FIELD)
         if now < self._next:
             return
         self._next = now + FIELD_S
+        self._mid = now + FIELD_S / 2
         self.fields += 1
         self.field ^= 1
-        self.status |= VPO_BLANK | VPO_FIELD_START
+        self._post(VPO_BLANK | VPO_FIELD_START)
+
+    def _post(self, bits):
+        self.status |= bits
         word = self._word()
         self.sim.poke(VPO_INT, struct.pack("<I", word))
         self._line(word)
