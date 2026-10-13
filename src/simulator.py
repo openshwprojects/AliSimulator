@@ -839,7 +839,8 @@ class AliMipsSimulator:
         0x05: "Read Status", 0xAB: "Release Power Down",
         0x90: "Read Mfr/Dev ID", 0x06: "WREN", 0x04: "WRDI",
         0x01: "Write Status", 0x02: "Page Program", 0xAD: "AAI Program",
-        0x3B: "Dual Read", 0x6B: "Quad Read", 0x32: "Quad Page Program",
+        0x3B: "Dual Read", 0x6B: "Quad Read", 0xBB: "Dual I/O Read", 0xEB: "Quad I/O Read",
+        0x32: "Quad Page Program",
         0x20: "Sector Erase 4K", 0x52: "Block Erase 32K",
         0xD8: "Block Erase 64K", 0xC7: "Chip Erase", 0x60: "Chip Erase",
     }
@@ -2001,17 +2002,25 @@ class AliMipsSimulator:
         
         In normal read mode, reads from SYS_FLASH_BASE_ADDR return actual
         flash content. The controller is in passthrough when:
-          SF_INS = 0x03 (Read) or 0x0B (Fast Read)
-        
+          SF_INS = 0x03 (Read), 0x0B (Fast Read) or a dual / quad read
+
         Note: SF_HIT_ADDR may or may not be set. In CONT_RD mode the firmware
         sets FMT=0x0D (DATA|ADDR|CODE) for the first read, then FMT=0x09
         (DATA|CODE) for sequential reads without address phase.
+
+        The dual and quad reads (0x3B, 0x6B, 0xBB, 0xEB) deliver the same
+        bytes, only faster: the M3601E / M3606 bootloaders switch to the quad
+        I/O read 0xEB under the chip ID 0x3603 (the Cabletech URZ0083's and
+        URZ0086's), and their chunk headers read as zeros while only 0x03 /
+        0x0B counted -- "malloc size: 0, please check the application!".
 
         A chip family's byte-stream mode (chips/m3821.py) takes the window
         over while it is on, whatever SF_INS says.
         """
         stream = self._spi_stream
-        return self._spi_ins in (0x03, 0x0B) and not (stream is not None and stream.active)
+        return self._spi_ins in self._SPI_READS and not (stream is not None and stream.active)
+
+    _SPI_READS = (0x03, 0x0B, 0x3B, 0x6B, 0xBB, 0xEB)
 
     def _flash_offset(self, address):
         """Offset into the flash image for any mirror of the memory-mapped flash.

@@ -31,13 +31,21 @@ their file names.
   Opticum S60 (M3601S) and X110TS (M3606) satellite updates, recognised by
   the chip named in their main-code chunk's version) boots the
   same way and finds its first peripherals where the M3801's are, but its
-  firmware wants the chip ID 0x3602 -- with the M3801's 0x3811 the
-  applications start over through the bootloader; the X110TS's application
-  reboots unless it reads 0x3603, which its sidecar gives as the board's own
-  (`device.chipId`) -- and the T50's bootloader
-  probes the RAM 128 MB up, where the family shows it again; the URZ0083's
-  application then runs (`run_dump_urz0083_app_runs.py`) without drawing yet
-  (see the sidecars). The M3606's bootloader starts its SEE co-processor --
+  firmware wants an M36xx chip ID -- with the M3801's 0x3811 the
+  applications start over through the bootloader. The family's own is
+  0x3602; the boards read 0x3603, which their sidecars give
+  (`device.chipId`): the X110TS's application reboots unless it reads it,
+  and the Cabletech, Kruger&Matz and Thomson applications' USB host start
+  runs into its assertion without it. Under 0x3603 their bootloaders read
+  the flash with the quad I/O read 0xEB, which the simulator serves like a
+  plain read now -- before, their chunk headers read as zeros. The T50's
+  bootloader probes the RAM 128 MB up, where the family shows it again. The
+  M3601E boxes (URZ0083, KM0183, THT501) decode a boot logo first and wait
+  until it is shown: `video_m36.py` finishes the video engine's pictures at
+  once and raises the video output's field interrupts, whose field bit must
+  alternate for the driver to move on. All 14 of their images then draw
+  their first-install wizard (`run_dump_urz0083_capture_screen.py`; the
+  application, `run_dump_urz0083_app_runs.py`). The M3606's bootloader starts its SEE co-processor --
   the second MIPS core of ALi's dual-CPU chips, which runs the audio / video
   decoders' and the display's drivers -- and waits for it: `chips/see.py`
   runs the SEE's boot code for that handshake on a light Unicorn instance
@@ -671,7 +679,10 @@ its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4) and
 image, without the dump's channel database: its first-install wizard,
 about 5) and `run_dump_urz0195_2013_capture_screen.py` (the Cabletech
 URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
-screen, about 4).
+screen, about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
+URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
+wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
+5).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

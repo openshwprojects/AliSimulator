@@ -4,18 +4,20 @@ URZ0086, the Kruger&Matz KM0183 and KM0186, the Thomson THT501 and the
 Ferguson Ariva T50 images), the SoCs before the M3801.  The CPU boots
 straight from the flash window like the M3801's and the peripherals the
 firmware uses first sit where the M3801's do (UART 0xB8018300, the I2C
-masters 0xB8018200 / 0xB8018700 / 0xB8018B00, the GE 0xB800A000), but the
-firmware wants the chip ID 0x3602: the M3801's 0x3811 is not in its chip
+masters 0xB8018200 / 0xB8018700 / 0xB8018B00, the GE 0xB800A000), and the
+firmware wants an M36xx chip ID: the M3801's 0x3811 is not in its chip
 tables, and an application that reads it starts over through the bootloader
-(the URZ0083 every ~45 M instructions, the THT501 likewise), while with
-0x3602 both keep running.  (Their tables also know 0x3603, for which the
-URZ0083 moves its SPI flash registers to 0xB802E098 and prints nothing at
-all within 160 M instructions: not this chip.)  A board whose SoC reads
-0x3603 says so in its sidecar (device.chipId, chips/base.py): the Opticum
-X110TS's application maps the chip ID to a chip code and reboots unless it
-is 0x3603's, while the Cabletech URZ0086, another "M3606 2Tuner" build,
-boots with 0x3602 -- under 0x3603 its bootloader polls a register at
-0xB801841C, which nothing models, for ever.
+(the URZ0083 every ~45 M instructions, the THT501 likewise).  The family's
+own ID is 0x3602; a board whose SoC reads 0x3603 says so in its sidecar
+(device.chipId, chips/base.py) -- the Opticum X110TS's application reboots
+unless its chip code is 0x3603's, and the Cabletech, Kruger&Matz and
+Thomson boxes read it too: their applications' USB host attach gives the
+controller a base (0xB8032000 / 0xB8032400) only for 0x3603 or 0x3101, and
+under 0x3602 the host's start ran into its assertion (an SDBBP, then a jump
+to 0) right after the boot logo.  Under 0x3603 their bootloaders read the
+flash with the quad I/O read 0xEB (simulator._SPI_READS), which the
+simulator did not serve before: their chunk headers read as zeros
+("malloc size: 0") and 0x3602 had looked like the only chip they booted on.
 
 The Ferguson T50's bootloader probes its DDR at 0xA800AA68, 128 MB above the
 first word: the RAM shows up again above its size here, as on a controller
@@ -26,6 +28,11 @@ The M3606 (URZ0086 / KM0186, the X110TS) has a SEE co-processor, which its
 bootloader starts and waits for: see.py runs the SEE's boot code for that
 handshake.  The application then starts the SEE's own program, which runs
 on a second core (see.SeeCore) and answers the application's remote calls.
+
+The M3601E boxes decode a boot logo from the flash before anything else and
+wait until their MPEG decoder reports the first picture shown: the video
+engine's completion and the video output's field interrupts are
+video_m36.py's.
 
 The chip ID 0x3603 is the SDK's C3603, whose product -- bits 8..11 of the
 chip ID word -- picks a row of its feature table (product_feature); byte 4
@@ -103,12 +110,17 @@ class M3602(ChipFamily):
         # start codes (m3821.DmaRings); the SEE core gets it too (core_devices, see.SeeStart._wire)
         from .m3821 import DmaRings
         self.dma = DmaRings(sim, base=0xF200, start_codes=True)
-        self.core_devices = (self.dma,)
         # The M3606's SEE co-processor: its start handshake (see.py)
         self.see = SeeStart(sim)
         # the transport-stream demultiplexer DMX0 at 0xB8022000, as on the M3801 (dmx_m36.py)
         from dmx_m36 import Demux
         self.dmx = Demux(sim)
+        # the video engine's completion and the video output's field interrupts: a boot logo
+        # gets decoded and shown (video_m36.py); on the M3606 the SEE drives them
+        from video_m36 import VideoEngine, VideoOutput
+        self.video_engine = VideoEngine(sim)
+        self.video_output = VideoOutput(sim)
+        self.core_devices = (self.dma, self.video_engine, self.video_output)
         # (The graphics engine is the M3801's: base 0xB800A000 and
         # interrupt-controller line 4.  The Thomson THT501's GE attach pairs
         # that base with "IRQ 12", which is the OS's interrupt number -- the

@@ -112,10 +112,12 @@ def ir16_to_nec(ir16):
 #          on the Cabletech's and the Ferguson's, 0xDF on the Comsat's),
 #          command = ~rev8(lo) -- these decoders keep the frame's first address
 #          byte as the table code's high byte (the Comsat looked a standard
-#          NEC frame of its MENU, 0xFBDD, up as 0x04DD: ~0xFB)
+#          NEC frame of its MENU, 0xFBDD, up as 0x04DD: ~0xFB); also the
+#          Cabletech URZ0083's M3601E firmwares (Libcore 5.0, found on its
+#          first-install wizard: DOWN moved the highlight only this way)
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
-              ("dump.bin", "ext00")]
+              ("dump.bin", "ext00"), ("URZ0083_", "ext00")]
 
 
 def coding_for(dump):

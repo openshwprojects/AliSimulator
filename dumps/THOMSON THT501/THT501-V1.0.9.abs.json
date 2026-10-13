@@ -11,7 +11,8 @@
     "tuner": null,
     "flash": "2 MB SPI",
     "panel": null,
-    "irCoding": "nec"
+    "irCoding": "nec",
+    "chipId": "0x3603"
   },
   "image": {
     "kind": "update",
@@ -32,9 +33,9 @@
   "simulator": {
     "boots": true,
     "application": true,
-    "display": false,
+    "display": true,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
+    "note": "With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: the bootloader reads the flash with the quad I/O read 0xEB, the application decodes its boot logo (the video engine's completion and the video output's field interrupts, video_m36.py) and shows its first-install wizard in English (\"Welcome\": Language English, Region United Kingdom, Subtitle, Aspect Mode, Scan Mode, Connection HDMI, OK) within 230 M instructions.  Before (as 0x3602): As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
   },
   "desc": [
     "Thomson THT501 firmware V1.0.9, the manufacturer's USB update image as Gutek's site mirrors it (thomson_tht501_v109.rar, with a Polish USB update guide and the release notes from V1.1.1 on).",

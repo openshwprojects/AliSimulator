@@ -12,6 +12,7 @@
     "flash": "4 MB SPI",
     "panel": null,
     "irCoding": "nec",
+    "chipId": "0x3603",
     "gpioI2c": {"scl": 44, "sda": 43}
   },
   "image": {

@@ -11,7 +11,8 @@
     "tuner": null,
     "flash": "2 MB SPI",
     "panel": null,
-    "irCoding": "nec"
+    "irCoding": "ext00",
+    "chipId": "0x3603"
   },
   "image": {
     "kind": "update",
@@ -32,9 +33,9 @@
   "simulator": {
     "boots": true,
     "application": true,
-    "display": false,
+    "display": true,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).  By 600 M instructions it has issued 5 GE commands and the display layer shows nothing; its change list says that since V1.2.2 the box switches on into standby after a power loss, and the remote key vkey 19 (code 0x0065) did not wake it.  Its front panel is the SoC's own scanned LED panel (\"PAN_HWSCAN_0\"), which front_panel.py does not decode."
+    "note": "With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: the bootloader reads the flash with the quad I/O read 0xEB, the application decodes its boot logo (the video engine's completion and the video output's field interrupts, video_m36.py) and shows its first-install wizard in Polish (\"Welcome\": Region Poland, Język polski, Typ, Wymiary, Tak) within 230 M instructions.  Before (as 0x3602): As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet).  By 600 M instructions it has issued 5 GE commands and the display layer shows nothing; its change list says that since V1.2.2 the box switches on into standby after a power loss, and the remote key vkey 19 (code 0x0065) did not wake it.  Its front panel is the SoC's own scanned LED panel (\"PAN_HWSCAN_0\"), which front_panel.py does not decode."
   },
   "desc": [
     "Cabletech URZ0083 firmware V1.2.5, the manufacturer's USB update image as Gutek's site mirrors it (v125.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",
