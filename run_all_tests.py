@@ -66,7 +66,8 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_t750i_capture_screen.py", "run_dump_t760i_capture_screen.py",
               "run_dump_prima8_update_capture_screen.py", "run_dump_urz0195_2013_capture_screen.py",
               "run_dump_urz0083_capture_screen.py", "run_dump_urz0086_capture_screen.py",
-              "run_dump_s60_capture_screen.py", "run_dump_esr250_capture_screen.py")
+              "run_dump_s60_capture_screen.py", "run_dump_esr250_capture_screen.py",
+              "run_dump_t50_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):

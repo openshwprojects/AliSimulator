@@ -12,7 +12,7 @@ their file names.
 ## Layout
 
 * `src/` -- the simulator (`simulator.py`, `mips16_decoder.py`, the slice
-  stopper and clocks) and the device models (`ge_m36f.py`, `gma_capture.py`,
+  stopper and clocks) and the device models (`ge_m36f.py`, `ge_m3602.py`, `gma_capture.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
@@ -45,7 +45,18 @@ their file names.
   knows its 4 MB flash only by the electronic ID in the last byte of the
   0xAB read (0x15), which the simulator answers as the real part does now:
   before, its flash driver attached no device and the bootloader rebooted
-  before the application. The M3601E boxes (URZ0083, KM0183, THT501) decode
+  before the application. Its application draws with the M3602's own
+  graphics engine at 0xB800C000 (`ge_m3602.py`, the SDK's `ge_hal.c`: command
+  lists in RAM; fills, copies and scaled copies through a palette) into a
+  912 x 640 CLUT8 screen, which the engine scales into the AYCbCr8888 layer of
+  its PAL output (0xB80061A0..AC, `gma_capture.m3602_layers`), and its UI
+  waits for its boot logo: its decoder, driving an HD and an SD output,
+  reports the first picture shown only once both outputs' field handlers
+  have asked for it -- the SD output's (the DEO at 0xB8020000) interrupt,
+  with its field at bit 19, is `video_m36.py`'s too, as is the HD output's
+  status bit 0 the driver polls before it switches TV systems. It then shows
+  its "Welcome" installation wizard (`run_dump_t50_capture_screen.py`). The
+  M3601E boxes (URZ0083, KM0183, THT501) decode
   a boot logo first and wait until it is shown: `video_m36.py` finishes the
   video engine's pictures at once and raises the video output's field
   interrupts, whose field bit must alternate for the driver to move on. All
@@ -614,6 +625,13 @@ then every 1000th.
   low, cuts the port's power, shows "USB Short circuit!!" for 3 s and tries
   again ~10 s later -- a popup for 3 s of every ~14; bisecting pull-ups gave
   contradictory answers until the code that reads the pin was found.
+* A UI that draws nothing may be waiting on a task, not on a device: the T50's
+  control task waited for good on an event flag (found by logging every
+  task's last call into the OS's wait functions, located in the image by the
+  SDK's object code), set by a task that polled its decoder's "first picture
+  shown" -- which came only once the second video output, which nothing
+  modelled, had asked for the frame too. The SDK's headers name the fields
+  (Request_Info's src_path) that the disassembly only shows as offsets.
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
 * Unicorn race: `uc_emu_stop()` from another thread sets `stop_request` before
@@ -726,7 +744,10 @@ whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 switch's fault flag on GPIO 25 pulled up, about 3) and
 `run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
 run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
-moves, about 4).
+moves, about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
+T50, an M3602: its boot logo shown on both outputs, then its installation
+wizard "Welcome", drawn by the M3602's own GE and scaled to its PAL layer,
+whose highlight DOWN moves, about 8).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
@@ -762,8 +783,10 @@ maps to the NEC frame bytes differs between SDK generations
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
 Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
 Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
-M3601E firmwares (URZ0083, KM0183, THT501), and standard NEC whose table code keeps the first
-address byte for the Echosonic ESR-250's 2015 firmware; a firmware may also number its
+M3601E firmwares (URZ0083, KM0183, THT501), standard NEC whose table code keeps the first
+address byte for the Echosonic ESR-250's 2015 firmware, and only the command half for the
+Ferguson T50, whose control task drops a key unless the code's address half is its remote's
+(extended NEC 0x01 / 0xFC); a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.
@@ -781,6 +804,9 @@ carries, a load read back and a second later),
 `test_spi_command_mode.py` (SPI command responses read in the same block as
 the SF_INS store, with the flash read hook installed between slices, also
 toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
+`test_ge_m3602.py` runs the M3602 GE's commands (fill, copy, a scaled copy
+through the palette inside a clip rectangle, a chained command) on a RAM
+image and captures an M3602 display layer of a PAL output.
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn

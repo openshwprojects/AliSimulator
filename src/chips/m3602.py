@@ -26,8 +26,9 @@ The Ferguson T50's bootloader probes its DDR at 0xA800AA68, 128 MB above the
 first word: the RAM shows up again above its size here, as on a controller
 that ignores the upper address bits.  It knows its 4 MB flash only by the
 electronic ID of the 0xAB read (simulator._spi_command_response); with that
-answered it starts its application, which then draws nothing -- see its
-sidecar.
+answered it starts its application, which draws with the M3602's own
+graphics engine at 0xB800C000 (ge_m3602.py) and drives an HD and an SD video
+output (video_m36.py) -- its first screen is its installation wizard.
 
 The M3606 (URZ0086 / KM0186, the X110TS) has a SEE co-processor, which its
 bootloader starts and waits for: see.py runs the SEE's boot code for that
@@ -120,12 +121,13 @@ class M3602(ChipFamily):
         # the transport-stream demultiplexer DMX0 at 0xB8022000, as on the M3801 (dmx_m36.py)
         from dmx_m36 import Demux
         self.dmx = Demux(sim)
-        # the video engine's completion and the video output's field interrupts: a boot logo
-        # gets decoded and shown (video_m36.py); on the M3606 the SEE drives them
-        from video_m36 import VideoEngine, VideoOutput
+        # the video engine's completion and the HD and SD video outputs' field interrupts: a boot
+        # logo gets decoded and shown (video_m36.py); on the M3606 the SEE drives them
+        from video_m36 import DEO_FIELD_BIT, DEO_INT, DEO_LINE, VideoEngine, VideoOutput
         self.video_engine = VideoEngine(sim)
         self.video_output = VideoOutput(sim)
-        self.core_devices = (self.dma, self.video_engine, self.video_output)
+        self.sd_output = VideoOutput(sim, DEO_INT, DEO_LINE, DEO_FIELD_BIT)
+        self.core_devices = (self.dma, self.video_engine, self.video_output, self.sd_output)
         # (The graphics engine most of these firmwares use is the M3801's: base
         # 0xB800A000 and interrupt-controller line 4.  The Thomson THT501's GE
         # attach pairs that base with "IRQ 12", which is the OS's interrupt

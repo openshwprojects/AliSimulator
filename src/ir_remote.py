@@ -122,10 +122,15 @@ def ir16_to_nec(ir16):
 #          SDKs keep the second (~address): address = rev8(hi), command =
 #          ~rev8(lo).  Under "nec" its frames came out 0xFFxx and under
 #          "ext00" (both address bytes the same) not at all.
+#   cmd    the Ferguson Ariva T50 (Libcore 1.1.6): its table code is the low
+#          half of the received code, rev8(command) << 8 | rev8(~command), with
+#          no address byte; command = rev8(hi).  Its control task keeps a key
+#          only when the code's high half is 0x803F (0x8000AD0C): extended NEC
+#          with the address bytes 0x01, 0xFC -- with 0x00 every key was dropped
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
-              ("ESR-250", "necfirst")]
+              ("ESR-250", "necfirst"), ("ArivaT50", "cmd")]
 
 
 def coding_for(dump):
@@ -148,6 +153,8 @@ def frame_from_ir16(ir16, coding="nec"):
         return _rev8(hi), (~_rev8(lo)) & 0xFF, _rev8(hi)
     if coding == "necfirst":
         return _rev8(hi), (~_rev8(lo)) & 0xFF, None
+    if coding == "cmd":
+        return 0x01, _rev8(hi), 0xFC
     address, command = ir16_to_nec(ir16)
     return address, command, None
 
@@ -156,9 +163,12 @@ def find_key_table(ram, min_entries=12):
     """Find the UI's remote key table (struct ir_key_map_t {IR_KEY_INFO
     key_info; UINT32 ui_vkey;}) in a RAM image (numpy uint8 array): runs of
     8-byte entries whose key_info is type REMOTE, state PRESSED, count 0 and
-    whose ir_code shares the NEC address byte.  Returns {vkey: ir16} of the
-    longest run (first entry per vkey), or {} if none is found."""
+    whose ir_code shares the NEC address byte -- or, in the T50's table
+    (coding "cmd"), is a command and its complement, rev8(c) << 8 |
+    rev8(~c).  Returns {vkey: ir16} of the longest run (first entry per
+    vkey), or {} if none is found."""
     import numpy as np
+    rev = np.array([_rev8(b) for b in range(256)], np.int64)
     n = len(ram) // 8 * 8
     best = {}
     for phase in (0, 4):
@@ -168,7 +178,8 @@ def find_key_table(ram, min_entries=12):
         k, v = k[:m], v[:m]
         hdr = PAN_KEY_TYPE_REMOTE | (PAN_KEY_PRESSED << 4)
         ok = ((k & 0xFFFF) == hdr) & (v < 0x100)
-        same = ok[1:] & ok[:-1] & ((k[1:] >> 24) == (k[:-1] >> 24))
+        pair = ((k >> 16) & 0xFF) == rev[~rev[(k >> 24) & 0xFF] & 0xFF]
+        same = ok[1:] & ok[:-1] & (((k[1:] >> 24) == (k[:-1] >> 24)) | (pair[1:] & pair[:-1]))
         s = np.concatenate(([0], same.astype(np.int8), [0]))
         d = np.diff(s)
         for st, en in zip(np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]):

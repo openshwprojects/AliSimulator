@@ -6,9 +6,11 @@ Fast checks of the IR remote support (ir_remote.py), no firmware boot:
    runs of one level summed) and irc_NEC_pulse_to_code() (ALi S3602 build,
    530 us unit, precision 280 us, as disassembled from dump_maciej), then
    scan_code_to_msg_code()'s 16-bit ir_code -- and under the "necfirst"
-   coding the 2015 SDK's, which keeps the code's top byte instead.
+   coding the 2015 SDK's, which keeps the code's top byte instead, and under
+   "cmd" the Ferguson T50's, which keeps the command half only.
 2. find_key_table() finds a g_itou_key_tab-style table in a synthetic RAM
-   image, and press-key codes round-trip through ir16_to_nec().
+   image -- and the T50's, whose codes have no address byte in common --,
+   and press-key codes round-trip through ir16_to_nec().
 3. press_key() uses VKEY_FALLBACKS for a key the firmware numbers
    differently (INFO = 29 in dump_maciej) and rejects unknown keys.
 """
@@ -98,6 +100,14 @@ def main():
         if len(codes) != 1 or (((codes[0] >> 24) << 8) | (codes[0] & 0xFF)) != ir16:
             print(f"[FAIL] necfirst ir16 0x{ir16:04X}: NEC 0x{a:02X}/0x{c:02X} -> {[hex(x) for x in codes]}")
             ok = False
+    # the T50's table code is the received code's low half, rev8(command) << 8 | rev8(~command),
+    # and its control task keeps only codes whose high half is its remote's address, 0x803F
+    for ir16 in (0xDA25, 0x807F, 0x6897, 0xA857):
+        a, c, a_hi = ir_remote.frame_from_ir16(ir16, "cmd")
+        codes = receive(ir_remote.nec_rlc(a, c, a_hi))
+        if len(codes) != 1 or codes[0] != (0x803F << 16 | ir16):
+            print(f"[FAIL] cmd ir16 0x{ir16:04X}: NEC 0x{a:02X}/0x{c:02X} -> {[hex(x) for x in codes]}")
+            ok = False
     # 2. key table search
     ram = np.zeros(1 << 20, np.uint8)
     rng = np.random.default_rng(1)
@@ -110,6 +120,17 @@ def main():
     found = ir_remote.find_key_table(ram)
     if found != table:
         print(f"[FAIL] find_key_table: {found}")
+        ok = False
+    # ... and a T50-style one, whose codes share no address byte, only the command / ~command form
+    ram[:] = rng.integers(0, 256, ram.size, dtype=np.uint8)
+    rev = ir_remote._rev8
+    table = {v: rev(0x10 + 7 * v) << 8 | rev(~(0x10 + 7 * v) & 0xFF) for v in range(20)}
+    for i, (vkey, ir16) in enumerate(table.items()):
+        ram[base + 8 * i: base + 8 * i + 8] = np.frombuffer(
+            np.array([0x11 | (ir16 << 16), vkey], '<u4').tobytes(), np.uint8)
+    found = ir_remote.find_key_table(ram)
+    if found != table:
+        print(f"[FAIL] find_key_table, T50 layout: {found}")
         ok = False
     # 3. a key the firmware numbers differently: press_key falls back to VKEY_FALLBACKS
     from simulator import AliMipsSimulator

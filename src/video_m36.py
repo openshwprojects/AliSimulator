@@ -34,6 +34,15 @@ anything else and wait until their decoder reports its first picture shown.
     reprograms the output for its TV system (0x80283B70) and spun on it for
     ever without it -- set at the field start, its interrupt handler, which
     clears every status bit it finds, took it first.
+  * The SD output's (the DEO, 0xB8020004) is the same but for the field,
+    which its driver reads at bit 19, on interrupt-controller line 15 (OS
+    IRQ 23).  The T50 drives an HD and an SD output, and its decoder, in
+    that dual-output mode (+0xB44 of its private data = 8), reports the
+    first picture shown only once the SD output's field handler has asked
+    for the frame too (a request whose src_path is not 0), which it does
+    when the field it reads has changed: without the DEO's interrupts and
+    its field, its OSD driver waited for its logo for ever and the UI drew
+    nothing.
 """
 import struct
 
@@ -45,8 +54,11 @@ VE_LINE = 1                             # interrupt-controller line (OS IRQ 9)
 
 VPO_INT = 0xB8006004
 VPO_LINE = 2                            # interrupt-controller line (OS IRQ 10)
+DEO_INT = 0xB8020004                    # the SD output's
+DEO_LINE = 15                           # (OS IRQ 23)
 VPO_MID_FIELD, VPO_BLANK, VPO_FIELD_START = 0x01, 0x04, 0x10
 VPO_FIELD_BIT = 1 << 18
+DEO_FIELD_BIT = 1 << 19
 FIELD_S = 0.02                          # 50 Hz fields
 
 
@@ -145,7 +157,11 @@ class VideoEngine(_Device):
 
 
 class VideoOutput(_Device):
-    def __init__(self, sim):
+    """A video output's interrupt register: the HD output's (VPO_INT, line VPO_LINE, VPO_FIELD_BIT) or the
+    SD output's (DEO_INT, DEO_LINE, DEO_FIELD_BIT)."""
+
+    def __init__(self, sim, register=VPO_INT, line=VPO_LINE, field_bit=VPO_FIELD_BIT):
+        self.register, self.line, self.field_bit = register, line, field_bit
         self.status = 0                 # bits 0..5 of the status (register bits 8..13)
         self.field = 0
         self.fields = 0
@@ -155,14 +171,15 @@ class VideoOutput(_Device):
         sim.slice_services.append(self.service)
 
     def wire(self, core):
-        core._mmio_on('w', self._write, 0x6004, 0x6007)
+        offset = self.register & 0xFFFFFF
+        core._mmio_on('w', self._write, offset, offset + 3)
 
     def _word(self, enables_from=None):
-        word = int.from_bytes(self.sim.peek(VPO_INT, 4), 'little') if enables_from is None else enables_from
-        return (word & ~0x3F00 & ~VPO_FIELD_BIT) | (self.status << 8) | (self.field and VPO_FIELD_BIT)
+        word = int.from_bytes(self.sim.peek(self.register, 4), 'little') if enables_from is None else enables_from
+        return (word & ~0x3F00 & ~self.field_bit) | (self.status << 8) | (self.field and self.field_bit)
 
     def _line(self, word):
-        self._set_line(VPO_LINE, bool(self.status & word & 0x3F))
+        self._set_line(self.line, bool(self.status & word & 0x3F))
 
     def _write(self, uc, access, address, size, value, user_data):
         base, word, shift, mask = _merge(uc, address, size, value)
@@ -190,5 +207,5 @@ class VideoOutput(_Device):
     def _post(self, bits):
         self.status |= bits
         word = self._word()
-        self.sim.poke(VPO_INT, struct.pack("<I", word))
+        self.sim.poke(self.register, struct.pack("<I", word))
         self._line(word)
