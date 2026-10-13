@@ -576,7 +576,11 @@ commands complete through the GE interrupt without timeouts.
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
 the display layer and compare it pixel for pixel with the expected screen, a PNG
 kept in `tests/expected/` (`screen_regression.py` is the shared body; an
-expected screen is remade with `--make-expected`; `gma_capture.py` composites the GMA layers' regions, and
+expected screen is remade with `--make-expected`; `gma_capture.py` composites the GMA layers' regions --
+and the layers of the newer display engine at 0xB8006900 / 6B00 the T750i's
+drivers use, which no CPU store sets: the drivers hand the display engine
+register lists in RAM (0xB8006080 / 90 / A0 / B0: the list, +4 load enable),
+which it loads every frame, so the capture walks them --, and
 for a firmware whose output mode is not 720p -- the Prima VIII and the SRT
 8115 drive PAL, the Cabletechs 1080i (the URZ0195's 2012 firmware from the
 start, the URZ0083Q and URZ0194S once their wizard is up: its default "Tryb
@@ -615,7 +619,10 @@ last search screen is compared, the panel reading "Find" --, about 30
 minutes; without a signal the search ends on "nie znaleziono kanału!") and
 `run_dump_x110ts_capture_screen.py` (the Opticum X110TS, an M3606
 twin-tuner satellite PVR whose SEE program on the second core drives the
-display: its channel banner, then its red "No Signal!" box, about 5 minutes).
+display: its channel banner, then its red "No Signal!" box, about 5 minutes)
+and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
+with the dual-CPU build: its first-install wizard "Witamy" through the newer
+display engine's layer, captured as it comes up, about 3 minutes).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

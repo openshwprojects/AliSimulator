@@ -15,6 +15,19 @@ gma_m36f_init_head / gma_fill_hw_head) is:
   +18  next head (physical; the chain ends at a head pointing to itself / 0)
   +1C  bitmap address (physical)
 The GE (ge_m36f.py) draws the bitmaps; this module only reads them.
+
+The newer display engine of the Ferguson T750i (an M3821 with the SDK's
+dual-CPU build) has layers of its own at 0xB8006900 and 0xB8006B00, which
+no CPU store sets: the drivers build register lists in RAM and hand them to
+the display engine (DE_LIST_CHANNELS: the list's physical address, then a
+load-enable bit at +4), which loads them every frame.  A list is a 0x20-byte
+header (+4 the next list, +8 the number of pairs) and that many (register's
+physical address, value) pairs.  A layer (DE_LAYERS) then has its control
+word at +0 (b0-4 the pixel format, the SDK's GE_PIXEL_FORMAT), its bitmap's
+size at +18 / +1C (in the upper halves), its pitch in pixels at +34, an
+enable bit at +A4 and at +E0 a head in RAM whose second word is the bitmap
+address.  de_registers() and de_layers() read that the way the hardware
+does, at the moment of the capture.
 """
 import struct
 
@@ -109,6 +122,70 @@ def render_head(ram, h):
     return rgba, x0, y0
 
 
+DE_LIST_CHANNELS = (0x6080, 0x6090, 0x60A0, 0x60B0)     # (list address, +4 load enable) of the register lists
+DE_LAYERS = (0x6900, 0x6B00)
+# the SDK's GE_PIXEL_FORMAT (ge.h) -> the GE's HW format codes ge_m36f decodes (no CLUT formats:
+# where their palette is, is not known yet)
+DE_FORMATS = {0x00: 0x06, 0x01: 0x00, 0x02: 0x04, 0x03: 0x02, 0x05: 0x01, 0x06: 0x05, 0x07: 0x03}
+
+
+def de_registers(ram, dev):
+    """{register offset: value} the display engine's enabled register lists
+    set (a later list's value for a register wins)."""
+    regs = {}
+    for channel in DE_LIST_CHANNELS:
+        head, enabled = struct.unpack_from('<II', dev, channel)
+        seen = set()
+        while enabled & 1 and head and head not in seen and len(seen) < 64:
+            seen.add(head)
+            _flags, nxt, count = (_w(ram, head, 4 * i) for i in range(3))
+            if count > 512:
+                break
+            for i in range(count):
+                reg = _w(ram, head, 0x20 + 8 * i)
+                if reg >> 24 & 0x1F == 0x18:                    # (a register of the device window)
+                    regs[reg & 0xFFFFFF] = _w(ram, head, 0x24 + 8 * i)
+            head = nxt & PHYS
+    return regs
+
+
+def de_layers(ram, dev):
+    """The display engine's layers the register lists configure: dicts with
+    the layer's base, whether it is on, its bitmap (address, HW format,
+    width, height, pitch in pixels) and where it starts on the screen
+    (the low halves of +10 / +14)."""
+    regs = de_registers(ram, dev)
+    layers = []
+    for base in DE_LAYERS:
+        head = regs.get(base + 0xE0)
+        if not head:
+            continue
+        fmt = DE_FORMATS.get(regs.get(base, 0) & 0x1F)
+        layers.append({
+            'base': base,
+            'enabled': bool(regs.get(base + 0xA4, 0) & 1) and fmt is not None,
+            'format': fmt,
+            'bitmap': _w(ram, head, 4) & PHYS,
+            'width': regs.get(base + 0x18, 0) >> 16,
+            'height': regs.get(base + 0x1C, 0) >> 16,
+            'pitch': regs.get(base + 0x34, 0) & 0xFFFF,
+            'x': regs.get(base + 0x10, 0) & 0x7FF,
+            'y': regs.get(base + 0x14, 0) & 0x7FF,
+        })
+    return layers
+
+
+def render_de_layer(ram, layer):
+    """rgba uint8 (h, w, 4) of a display-engine layer's bitmap."""
+    fmt, width, height = layer['format'], layer['width'], layer['height']
+    pitch = layer['pitch'] or width
+    g = ge_m36f.GeM36F(ram)
+    pfreg = (fmt << 12) | (pitch & 0xFFF)
+    raw = g._read_raw(layer['bitmap'], pfreg, 0, 0, width, height)
+    px = g._decode(raw, fmt, pfreg)
+    return np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+
+
 DE_TIMING_REG = 0x600C              # b16-26 total lines of the output TV mode (625 PAL, 525 NTSC, 750 720p, 1125 1080i)
 OUTPUT_SIZE = {625: (720, 576), 525: (720, 480), 750: (1280, 720), 1125: (1920, 1080)}
 
@@ -173,14 +250,25 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0)):
                     h['x1'], h['y1'] = h['x0'] + vw - 1, h['y0'] + vh - 1
                     h['scaled_back'] = (fx, fy)
             rgba, x, y = render_head(ram, h)
-            hh, ww = rgba.shape[:2]
-            hh, ww = min(hh, H - y), min(ww, W - x)
-            if hh <= 0 or ww <= 0:
-                continue
-            src = rgba[:hh, :ww].astype(np.float32)
-            a = src[..., 3:4] / 255.0
-            canvas[y:y + hh, x:x + ww] = src[..., :3] * a + canvas[y:y + hh, x:x + ww] * (1 - a)
+            _blend(canvas, rgba, x, y)
+    # the newer display engine's layers (the T750i), on top
+    info['de_layers'] = de_layers(ram, dev)
+    for layer in info['de_layers']:
+        if layer['enabled'] and layer['bitmap'] and layer['width'] and layer['height']:
+            _blend(canvas, render_de_layer(ram, layer), layer['x'], layer['y'])
     return np.clip(canvas + 0.5, 0, 255).astype(np.uint8), info
+
+
+def _blend(canvas, rgba, x, y):
+    """Alpha-blend an RGBA image onto the canvas at (x, y), clipped to it."""
+    H, W = canvas.shape[:2]
+    hh, ww = rgba.shape[:2]
+    hh, ww = min(hh, H - y), min(ww, W - x)
+    if hh <= 0 or ww <= 0:
+        return
+    src = rgba[:hh, :ww].astype(np.float32)
+    a = src[..., 3:4] / 255.0
+    canvas[y:y + hh, x:x + ww] = src[..., :3] * a + canvas[y:y + hh, x:x + ww] * (1 - a)
 
 
 def save_png(path, rgb):
