@@ -31,10 +31,10 @@
   },
   "simulator": {
     "boots": true,
-    "application": false,
+    "application": true,
     "display": false,
     "panelText": null,
-    "note": "As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints \"APP  init ok\" 459 times in 100 M instructions and starts over each time without starting the application."
+    "note": "With the flash's electronic ID answered as a real 4 MB part answers it (2026-10-13: the last byte of the 0xAB read, 0x15 -- the 2009 bootloader's flash table knows the part by that byte only) its flash driver attaches the flash and the bootloader starts the application: \"MC: APP  init ok\", Libcore 1.1.6@Auto_20100413, the demultiplexer's and the video decoders' attach messages; it then sets up its two M3101 demodulators at I2C 0x20 / 0x21 and asks for an MxL5007T-type tuner at 0x63 behind them -- nothing answers there -- and polls the first demodulator's lock register; no GE command within 230 M instructions.  Before: As the M3602 family (chip ID 0x3602, 2026-10-10): the bootloader prints \"APP  init ok\" 459 times in 100 M instructions and starts over each time without starting the application."
   },
   "desc": [
     "Ferguson Ariva T50 firmware V1.02B214, the manufacturer's USB update image from Ferguson's download area (ArivaT50_20111118_V102B214.zip).",
@@ -42,6 +42,6 @@
     "The front-panel driver is \"PAN_PT_0\" (a PT6964-style shift-register panel in ALi's SDK), not one front_panel.py decodes yet.",
     "The bootloader chunk's version is \"DMB01---0.1.0\" (its Libcore 1.0.9@Auto_20090520); the chain also carries a boot logo (\"bootlogo\", an MPEG still) and a \"customerradiolo\" (the radio-mode background).",
     "The simulator runs it as the M3602 family (chips/m3602.py).",
-    "In the simulator (2026-10-10, the M3602 family): the bootloader probes its DDR at 0xA800AA68 (the family shows the RAM again above 128 MB), prints \"APP  init ok\", identifies the flash (JEDEC EF 40 16), reads it and runs a bitwise CRC (MIPS16 code at 0x806842EA in its RAM copy), and then takes its reset path: $fp = 0xDEADBEAD and the routine at 0x80688C34, which pulses the module resets (0xB8000080 = 0xFFBFFFFF for chip 0x3602; 0x1FF to 0xB8000060 for any other chip ID) and jumps to 0xBFC00000.  The path that starts the application instead sets $fp = 0xDEADBEEF and jumps to the flash entry 0xAFC00000 (0x80688D5C), whose reset code checks for that value.  Why the check fails is not known yet."
+    "In the simulator (2026-10-10, the M3602 family): the bootloader probes its DDR at 0xA800AA68 (the family shows the RAM again above 128 MB), prints \"APP  init ok\", identifies the flash (JEDEC EF 40 16), reads it and runs a bitwise CRC (MIPS16 code at 0x806842EA in its RAM copy), and then takes its reset path: $fp = 0xDEADBEAD and the routine at 0x80688C34, which pulses the module resets (0xB8000080 = 0xFFBFFFFF for chip 0x3602; 0x1FF to 0xB8000060 for any other chip ID) and jumps to 0xBFC00000.  The path that starts the application instead sets $fp = 0xDEADBEEF and jumps to the flash entry 0xAFC00000 (0x80688D5C), whose reset code checks for that value.  It was not a failed check: the bitwise loop is the CRC table's set-up, and check_program's first flash read (sto_fetch_long, 0x806845D8) found no flash device and called that reset routine (0x80688D48) -- the flash driver's attach had registered none, as no entry of its table matched the part's IDs (2026-10-13)."
   ]
 }

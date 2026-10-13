@@ -34,9 +34,9 @@
   "simulator": {
     "boots": true,
     "application": true,
-    "display": false,
+    "display": true,
     "panelText": null,
-    "note": "As the M3602 family (2026-10-12): the bootloader starts the SEE co-processor -- chips/see.py runs its boot code at 0xA1E8D688, which copies the SEE's program into place, sets the started flag and parks the SEE -- prints \"success!\" and starts the application, which starts the SEE's program at 0xA6000200 on the second core (see.SeeCore) and attaches its drivers through 63 remote calls the SEE answers (and 18 of the SEE's, which the main CPU answers), printing its register dump; no GE command within 60 M instructions."
+    "note": "With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: the bootloader reads the flash with the quad I/O read 0xEB, the SEE's video drivers decode the boot logo -- video_m36.py's video engine and video output models are wired onto the SEE core and interrupt the core whose controller has the line enabled -- and the SEE's OSD driver draws the first-install wizard in Polish (\"Witaj\": Region Poland, Język polski, Tryb wyświetlania 576i, Tryb proporcji 4:3LB, Tak) within 230 M instructions.  Until the model read the stream buffer's address right (its bits 24..27 sit in the register's bits 27..30) the engine consumed every bit it was given, and in some runs the SEE stopped at its bit-buffer accounting's assertion (0x860BC008) around 90-100 M instructions.  Before (as 0x3602): As the M3602 family (2026-10-12): the bootloader starts the SEE co-processor -- chips/see.py runs its boot code at 0xA1E8D688, which copies the SEE's program into place, sets the started flag and parks the SEE -- prints \"success!\" and starts the application, which starts the SEE's program at 0xA6000200 on the second core (see.SeeCore) and attaches its drivers through 63 remote calls the SEE answers (and 18 of the SEE's, which the main CPU answers), printing its register dump; no GE command within 60 M instructions."
   },
   "desc": [
     "Kruger&Matz KM0186 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00186_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",

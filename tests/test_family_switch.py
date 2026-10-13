@@ -3,8 +3,9 @@ Fast check of a chip-family switch (simulator.loadFile -> _switch_family),
 no firmware run: every simulator starts as the M3801 family, and loading an
 image of another family must leave that family's devices only.  One
 simulator loads, in turn, the R265 Lite's M3822P image (M3821), dump.bin
-(M3801), the Globo HD-XS2 update (M3503) and the Cabletech URZ0083 v1.2.5
-update (M3602).  Checks after each load: the family is the image's own
+(M3801), the Globo HD-XS2 update (M3503) and the Ferguson Ariva T50 update
+(M3602, whose board reads the family's own chip ID -- the Cabletech ones read
+0x3603).  Checks after each load: the family is the image's own
 (the exact class: an M3503 is an M3602 subclass, yet loading an M3602 image
 after it switches, with the chip ID 0x3602); no register handler of the
 previous family's devices is left (the M3801's demodulator, demultiplexer
@@ -17,7 +18,7 @@ is loaded; the M3503's cache-as-RAM window at 0x0FFF8000 is the flash's
 again (read-only, its code hook gone).  Then the Opticum X110TS update, a
 C3603 board of the same family: its chip word carries the product bits and
 its S3501 demodulator answers its chip ID on the I2C bus -- and is gone again
-when the URZ0083 is loaded after it (same family) or dump.bin (M3801).  A
+when the T50 is loaded after it (same family) or dump.bin (M3801).  A
 T760i image puts its board's ATBM7812 demodulator (its sidecar's
 demodModel) at 0x40; the next image's board has none.
 """
@@ -29,7 +30,7 @@ from unicorn import UC_PROT_ALL, UC_PROT_EXEC, UC_PROT_READ
 
 from simulator import AliMipsSimulator, flash_size_for
 
-IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "URZ0083_V1.2.5.abs",
+IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "ArivaT50_20111118_V102B214.abs",
           "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs", "Ferguson_T760i_V1.5B4-14092021.abs")
 ok = True
 
@@ -108,7 +109,7 @@ sim.loadFile(IMAGES[3])
 m3602 = sim.chip
 chip_word = int.from_bytes(sim.peek(0xB8000000, 4), "little")
 check(type(m3602).__name__ == "M3602" and chip_word >> 16 == 0x3602,
-      f"URZ0083 v1.2.5 after the M3503: the M3602 family itself, chip ID 0x{chip_word >> 16:04X}")
+      f"the T50 after the M3503: the M3602 family itself, chip ID 0x{chip_word >> 16:04X}")
 r = region(sim, 0x0FFF8000)
 check(not m3503.car.active and r and r[2] == UC_PROT_READ | UC_PROT_EXEC
       and bytes(sim.mu.mem_read(0x0FFF8000, 16)) == flash_bytes(sim, 0x0FFF8000),
@@ -134,7 +135,7 @@ check(sim.chip is m3602 and chip_word() == 0x36030500 and demod_id() == bytes([0
       f"whose S3501 answers at I2C 0x33 ({demod_id() and demod_id().hex()})")
 sim.loadFile(IMAGES[3])
 check(chip_word() == 0x36020000 and demod_id() is None,
-      f"the URZ0083 after it: chip word 0x{chip_word():08X}, no demodulator at 0x33")
+      f"the T50 after it: chip word 0x{chip_word():08X}, no demodulator at 0x33")
 sim.loadFile(IMAGES[4])
 sim.loadFile(IMAGES[1])
 check(type(sim.chip).__name__ == "M3801" and demod_id() is None,

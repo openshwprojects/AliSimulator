@@ -46,12 +46,13 @@ import report_artifacts                                # noqa: E402
 # Scripts whose name does not say which dump they run: look for it in the source
 DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
-         ("URZ0083_V", "Cabletech URZ0083"), ("URZ0086", "Cabletech URZ0086"),
+         ("URZ0083_V", "Cabletech URZ0083"), ("URZ0083_v", "Cabletech URZ0083"), ("URZ0086", "Cabletech URZ0086"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
          ("prima8", "Strong Prima VIII"), ("T650i", "Ferguson Ariva T650i"), ("T760i", "Ferguson Ariva T760i"),
          ("T750i", "Ferguson Ariva T750i"),
          ("r265lite", "Opticum Blue R265 Lite"), ("T90", "Opticum HD T90"), ("HD-XS2", "Globo HD-XS2"),
-         ("X110TS", "Opticum X110TS"), ("ali_sdk.bin", "ali_sdk.bin")]
+         ("X110TS", "Opticum X110TS"), ("UNI_S60", "Opticum HD S60"), ("ArivaT50", "Ferguson Ariva T50"),
+         ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
@@ -63,7 +64,8 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_t90_capture_screen.py", "run_dump_x110ts_capture_screen.py",
               "run_dump_t750i_capture_screen.py", "run_dump_t760i_capture_screen.py",
               "run_dump_prima8_update_capture_screen.py", "run_dump_urz0195_2013_capture_screen.py",
-              "run_dump_urz0083_capture_screen.py")
+              "run_dump_urz0083_capture_screen.py", "run_dump_urz0086_capture_screen.py",
+              "run_dump_s60_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):

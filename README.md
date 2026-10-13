@@ -33,19 +33,27 @@ their file names.
   same way and finds its first peripherals where the M3801's are, but its
   firmware wants an M36xx chip ID -- with the M3801's 0x3811 the
   applications start over through the bootloader. The family's own is
-  0x3602; the boards read 0x3603, which their sidecars give
-  (`device.chipId`): the X110TS's application reboots unless it reads it,
-  and the Cabletech, Kruger&Matz and Thomson applications' USB host start
-  runs into its assertion without it. Under 0x3603 their bootloaders read
-  the flash with the quad I/O read 0xEB, which the simulator serves like a
-  plain read now -- before, their chunk headers read as zeros. The T50's
-  bootloader probes the RAM 128 MB up, where the family shows it again. The
-  M3601E boxes (URZ0083, KM0183, THT501) decode a boot logo first and wait
-  until it is shown: `video_m36.py` finishes the video engine's pictures at
-  once and raises the video output's field interrupts, whose field bit must
-  alternate for the driver to move on. All 14 of their images then draw
-  their first-install wizard (`run_dump_urz0083_capture_screen.py`; the
-  application, `run_dump_urz0083_app_runs.py`). The M3606's bootloader starts its SEE co-processor --
+  0x3602 (the T50's); the other boards read 0x3603, which their sidecars
+  give (`device.chipId`): the X110TS's application reboots unless it reads
+  it, and the Cabletech, Kruger&Matz, Thomson and S60 applications' USB host
+  start runs into its assertion without it. Under 0x3603 their bootloaders
+  read the flash with the quad I/O read 0xEB, which the simulator serves like
+  a plain read now -- before, their chunk headers read as zeros. The T50's
+  bootloader probes the RAM 128 MB up, where the family shows it again, and
+  knows its 4 MB flash only by the electronic ID in the last byte of the
+  0xAB read (0x15), which the simulator answers as the real part does now:
+  before, its flash driver attached no device and the bootloader rebooted
+  before the application. The M3601E boxes (URZ0083, KM0183, THT501) decode
+  a boot logo first and wait until it is shown: `video_m36.py` finishes the
+  video engine's pictures at once and raises the video output's field
+  interrupts, whose field bit must alternate for the driver to move on. All
+  14 of their images then draw their first-install wizard
+  (`run_dump_urz0083_capture_screen.py`; the application,
+  `run_dump_urz0083_app_runs.py`); the M3606 ones (URZ0086, KM0186), whose
+  SEE runs those drivers -- the models are wired onto the SEE core and
+  interrupt the core whose controller has the line enabled --, draw theirs
+  too (`run_dump_urz0086_capture_screen.py`), and the S60 shows its "No
+  Signal!" message (`run_dump_s60_capture_screen.py`). The M3606's bootloader starts its SEE co-processor --
   the second MIPS core of ALi's dual-CPU chips, which runs the audio / video
   decoders' and the display's drivers -- and waits for it: `chips/see.py`
   runs the SEE's boot code for that handshake on a light Unicorn instance
@@ -301,7 +309,8 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   `sim.i2c_devices` -- the URZ0086 / KM0186 boards' second tuner, on GPIO 44
   / 43 (the first answers on SCB0). `device.gpioPullUps` lists the input
   pins a board pulls up (they read high; an input nothing models reads 0):
-  the X110TS's LNB and DVB-T fault lines, which it read as short circuits.
+  the X110TS's LNB and DVB-T fault lines, which it read as short circuits,
+  and the S60's USB power switch's fault flag (GPIO 25).
 * **Tuners and signal** (`tuners.py`): chip models of the MxL603 family,
   the MxL5007T and the R820T that keep what the driver writes and report
   their synthesizers locked (MaxLinear: lock registers 0x2B / 0xD8 read
@@ -578,6 +587,22 @@ then every 1000th.
   did not answer, a chip product without one). Capturing with the layer's
   enable bit forced on shows what was drawn; tracing the stores to the
   layer's register shows who hides it.
+* A reset loop is not always a failed check: the Ferguson T50's bootloader
+  took its reboot path right after "APP  init ok" because no flash device
+  was registered -- its 2009 flash table knows a 4 MB part only by the
+  electronic ID in the last byte of the 0xAB read, and the simulator
+  answered 0x00 there (a real W25Q32 answers 0x15). The first flash read of
+  its program check then found no device and rebooted.
+* A register layout fitted to one board can be wrong on the next: the
+  M36xx video engine keeps bits 24..27 of its stream buffer's address in
+  bits 27..30 of the register. Read as 0x02000000 plus the low 24 bits it
+  pointed at the URZ0083's logo by chance and at zeros on the URZ0086,
+  whose engine then consumed every bit it was given -- and in some runs
+  the SEE's bit-buffer accounting stopped at its assertion.
+* A popup in some captures only can be a check on a timer: the S60's task
+  reads its USB power switch's fault flag (GPIO 25) every ~14 s and, read
+  low, shows "USB Short circuit!!" for 3 s; bisecting pull-ups gave
+  contradictory answers until the code that reads the pin was found.
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
 * Unicorn race: `uc_emu_stop()` from another thread sets `stop_request` before
@@ -682,7 +707,11 @@ URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
 screen, about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
-5).
+5) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
+its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
+whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
+(the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
+switch's fault flag on GPIO 25 pulled up, about 3).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

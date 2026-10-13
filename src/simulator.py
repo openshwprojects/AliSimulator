@@ -1944,16 +1944,16 @@ class AliMipsSimulator:
         if cmd == 0x05:      # Read Status Register: bit0=WIP, bit1=WEL, bits[5:2]=BP
             return [self._spi_status]
         if cmd == 0xAB:      # Release from Deep Power Down / Read Electronic ID
-            if self.rom_size > 0x400000:
-                # a real part clocks its electronic ID out after the 3 dummy
-                # bytes, repeatedly: W25Q64 / MX25L6405 answer 0x16 (one below
-                # the JEDEC capacity byte), which the ALi drivers' tables match
-                # in byte 3 of this read ("0x16, 56 /*MX25L6405D*/"); their
-                # 4 MB entry ("0x16, 16") matches the JEDEC read instead, and
-                # 4 MB parts keep the response the 4 MB dumps have booted with
-                res = (self._spi_jedec_id[2] - 1) & 0xFF
-                return [res, res, res, res]
-            return [self._spi_jedec_id[2], 0x00, 0x00, 0x00]
+            # A real part clocks its electronic ID out after the 3 dummy bytes,
+            # repeatedly: one below the JEDEC capacity byte (W25Q32 / MX25L3205
+            # 0x15, W25Q64 / MX25L6405 0x16).  The ALi drivers read it without
+            # a dummy phase and match byte 3 ("0x15, 56 /*MX25L3205*/", "0x16,
+            # 56 /*MX25L6405D*/"); the newer tables also know 4 MB parts by
+            # the JEDEC capacity byte ("0x16, 16"), the Ferguson T50's 2009
+            # bootloader only by this read -- with 0x00 there it attached no
+            # flash device and rebooted.
+            res = (self._spi_jedec_id[2] - 1) & 0xFF
+            return [res, res, res, res]
         if cmd == 0x90:      # Read Manufacturer/Device ID
             return [self._spi_jedec_id[0], self._spi_jedec_id[2],
                     self._spi_jedec_id[0], self._spi_jedec_id[2]]

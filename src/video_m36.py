@@ -6,9 +6,11 @@ anything else and wait until their decoder reports its first picture shown.
 
   * Video engine (vdec_s3601's VE, 0xB8004200).  The driver parses a
     picture's headers itself and programs the engine -- the quantiser
-    tables, the stream buffer (+0x224: its address in the low 24 bits,
-    counted from 0x02000000), the VLD's bit offset (+0x228, at the first
-    slice) and the bits it may read from there (+0x22C), the frame buffers
+    tables, the stream buffer (+0x224: address bits 0..23 in its bits 0..23,
+    bits 24..27 in its bits 27..30 -- 0x1550DE00 is the URZ0083's logo at
+    0x0250DE00, 0x3DCD3F00 the URZ0086's at 0x07CD3F00), the VLD's bit
+    offset (+0x228, at the first slice) and the bits it may read from there
+    (+0x22C), the frame buffers
     through +0x2E0 / +0x2E4 -- then starts it: the low nibble of +0x214.
     The model finishes the picture at once: status +0x218 bit 0 (write 1 to
     clear; interrupt-controller line 1 while a status bit is set), +0x220
@@ -117,7 +119,8 @@ class VideoEngine(_Device):
         """The VLD's bit offset on at the end of the picture's slices."""
         start, avail = self._rd(VE_VLD_BITS), self._rd(VE_VLD_AVAIL)
         end_byte = (start + avail) // 8
-        buffer = 0x82000000 | (self._rd(VE_BUFFER) & 0x00FFFFFF)
+        reg = self._rd(VE_BUFFER)
+        buffer = 0x80000000 | (reg >> 3 & 0x0F000000) | (reg & 0x00FFFFFF)
         try:
             data = bytes(self.sim.mu.mem_read(buffer, end_byte + 4))
         except Exception:
