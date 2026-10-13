@@ -32,9 +32,9 @@
   "simulator": {
     "boots": true,
     "application": true,
-    "display": null,
+    "display": true,
     "panelText": null,
-    "note": "run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader (\"bl_flash_init!\", \"bl_verify_sw\", \"check_program!\", \"success!\") into the main application; no screen regression yet."
+    "note": "run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader (\"bl_flash_init!\", \"bl_verify_sw\", \"check_program!\", \"success!\") into the main application.  Without a channel database it opens its first-install wizard (2026-10-13, run_dump_prima8_update_capture_screen.py): \"Welcome\" -- language English, region United Kingdom, subtitle off, aspect mode auto, scan mode free, connection HDMI -- drawn by ~20 GE commands (~230 M instructions) through the M3801's GE and GMA."
   },
   "desc": [
     "Despite the .abs name it is a complete 4 MB flash image."

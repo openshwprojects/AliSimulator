@@ -632,7 +632,10 @@ and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
 display engine's layer, captured as it comes up, about 3 minutes) and
 `run_dump_t760i_capture_screen.py` (the Ferguson Ariva T760i, a C3505 with
-its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4).
+its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4) and
+`run_dump_prima8_update_capture_screen.py` (the Strong Prima VIII's update
+image, without the dump's channel database: its first-install wizard,
+about 5).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
