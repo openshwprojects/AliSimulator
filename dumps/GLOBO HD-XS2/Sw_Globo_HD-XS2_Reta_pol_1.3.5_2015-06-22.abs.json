@@ -10,7 +10,7 @@
     "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
     "tuner": null,
     "flash": "4 MB SPI",
-    "panel": null,
+    "panel": {"chip": "TM1650-compatible", "scl": 135, "sda": 134},
     "irCoding": "nec"
   },
   "image": {
@@ -33,7 +33,7 @@
     "boots": true,
     "application": true,
     "display": false,
-    "panelText": null,
+    "panelText": [" ON ", " on "],
     "note": "As the M3503 family (2026-10-12), like the SmartHD image (run_dump_hdxs2_app_starts.py): the bootloader runs from the flash window with its cache-as-RAM stack, starts the SEE through its boot code at 0xA1016804 and the application, which starts the SEE's program at 0x86000200 on the second core (see.SeeCore): 77 calls answered and 34 of the SEE's by ~76 M instructions, no GE command yet; a silent build, one 0x01 byte to the UART."
   },
   "desc": [

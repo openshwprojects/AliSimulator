@@ -91,6 +91,17 @@ PANELS = [
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
+    # Opticum X110TS (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
+    # from the bootloader, then the application's "LnbP": it reads its LNB fault line (GPIO 99,
+    # active low), which nothing here pulls up, as a short circuit
+    ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={})),
+    # Globo HD-XS2 (both builds): on GPIO bank 4, SCL = GPIO 135, SDA = GPIO 134 -- " ON " from the
+    # bootloader, " on " from the application, which then polls the keys (none of the 28 positions
+    # gets it out of the wait it is in)
+    ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    # UNI S60: SCL = GPIO 62, SDA = GPIO 63; the bootloader blanks the digits, the application
+    # writes " ON "
+    ("UNI_S60", dict(chip="tm1650", scl=62, sda=63, labels={})),
     # Strong Prima VIII (MC6501-M3801, the GD25Q32B flash dump): two buttons straight on GPIO 31
     # and 9, polled by its application, which sends them on as the panel keys 0xFFFF0001 / 0002
     # (its CH455 driver, "PAN_CH455_0", sits on a software I2C bus with no pins: GPIO 127)

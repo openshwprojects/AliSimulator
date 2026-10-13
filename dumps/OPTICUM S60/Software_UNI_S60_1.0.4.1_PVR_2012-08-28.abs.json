@@ -10,7 +10,7 @@
     "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
     "tuner": null,
     "flash": "2 MB SPI",
-    "panel": null,
+    "panel": {"chip": "TM1650-compatible", "scl": 62, "sda": 63},
     "irCoding": "nec"
   },
   "image": {
@@ -33,7 +33,7 @@
     "boots": true,
     "application": true,
     "display": false,
-    "panelText": null,
+    "panelText": [" ON "],
     "note": "As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader prints \"MC: APP  init ok\" and the application its banner (Libcore 5.2.0, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701) after about 110 s of wall clock, dumps its clock registers and then resets its tuner over and over (\"Reset tuner N time!!!\"): the M3601S's internal S3501 demodulator and its tuner are not modelled; no GE command in a 2.5-minute run (5 GE commands by 120 M instructions).  The chip ID 0x3603 is no better: the bootloader then stays in its RAM copy and prints nothing in 120 M instructions, as the Cabletech URZ0086's does."
   },
   "desc": [
