@@ -17,7 +17,9 @@ is loaded; the M3503's cache-as-RAM window at 0x0FFF8000 is the flash's
 again (read-only, its code hook gone).  Then the Opticum X110TS update, a
 C3603 board of the same family: its chip word carries the product bits and
 its S3501 demodulator answers its chip ID on the I2C bus -- and is gone again
-when the URZ0083 is loaded after it (same family) or dump.bin (M3801).
+when the URZ0083 is loaded after it (same family) or dump.bin (M3801).  A
+T760i image puts its board's ATBM7812 demodulator (its sidecar's
+demodModel) at 0x40; the next image's board has none.
 """
 import os
 import sys
@@ -28,7 +30,7 @@ from unicorn import UC_PROT_ALL, UC_PROT_EXEC, UC_PROT_READ
 from simulator import AliMipsSimulator, flash_size_for
 
 IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "URZ0083_V1.2.5.abs",
-          "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs")
+          "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs", "Ferguson_T760i_V1.5B4-14092021.abs")
 ok = True
 
 
@@ -137,5 +139,11 @@ sim.loadFile(IMAGES[4])
 sim.loadFile(IMAGES[1])
 check(type(sim.chip).__name__ == "M3801" and demod_id() is None,
       "dump.bin after the X110TS (the M3801 family): its S3501 is gone with the M3602 family")
+sim.loadFile(IMAGES[5])
+atbm = sim.i2c_devices.get(0x40)
+check(type(sim.chip).__name__ == "C3505" and type(atbm).__name__ == "ATBM7812" and atbm.read(1) == b"\xA8",
+      f"the T760i: its board's ATBM7812 demodulator at 0x40 ({type(atbm).__name__})")
+sim.loadFile(IMAGES[1])
+check(0x40 not in sim.i2c_devices, "dump.bin after it: no demodulator at 0x40")
 print(f"\n[{'PASS' if ok else 'FAIL'}] chip family switch")
 sys.exit(0 if ok else 1)

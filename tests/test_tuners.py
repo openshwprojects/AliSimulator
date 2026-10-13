@@ -8,12 +8,15 @@ each chip answers: the MaxLinear lock registers through the 0xFB read prefix
 (MxL603 0x2B, MxL5007T 0xD8), the R820T's bit-reversed status registers
 read from register 0 (chip id 0x69, PLL lock bit 6 of register 2, a usable
 filter calibration code in register 4), registers read back as written, and
-no ACK from an address nobody models.  No firmware involved.
+no ACK from an address nobody models.  And the external demodulator model
+(demods.py): the ATBM7812's 16-bit register addresses and its read-only chip
+ID 0xA8 in register 0.  No firmware involved.
 """
 import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 
+import demods
 import i2c_scb
 import tuners
 
@@ -155,6 +158,15 @@ r.write(bytes([0x15, 0xFC]))
 f = r.frequency()
 check(abs(f["rf_hz"] - 198_500_000) < 1_000 and abs(f["lo_hz"] - 203_070_000) < 1_000,
       f"R820T: N 101, SDM 0x88FC, divider 16 -> {tuners.describe(r)} (VHF channel 8)")
+
+# ATBM7812 at 0x40 (the T760i's demodulator): 16-bit register addresses, the chip ID in register 0
+atbm = sim.i2c_devices[0x40] = demods.make("atbm7812")
+check(i2c_write(0x40, [0x00, 0x00]) and i2c_read(0x40, 1) == b"\xA8",
+      "ATBM7812: register 0x0000 reads the chip ID 0xA8 (ATBM78xPowerOnInit's check)")
+check(i2c_write(0x40, [0x0A, 0x00, 0x55, 0x66]) and i2c_write(0x40, [0x0A, 0x01]) and i2c_read(0x40, 1) == b"\x66",
+      "ATBM7812: a write from register 0x0A00 on lands in 0x0A00 / 0x0A01")
+i2c_write(0x40, [0x00, 0x00, 0x12])
+check(atbm.regs[0x0000] == 0xA8, "ATBM7812: a write cannot change the chip ID")
 
 print(f"\n[{'PASS' if ok else 'FAIL'}] tuner models")
 sys.exit(0 if ok else 1)

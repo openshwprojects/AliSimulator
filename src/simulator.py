@@ -496,6 +496,7 @@ class AliMipsSimulator:
         import i2c_scb
         self.i2c_devices = {}
         self.i2c_ack_all = False
+        self._demod_address = None          # where attach_demod put the loaded board's demodulator
         self.i2c_masters = [i2c_scb.I2cMaster(self, base, f"SCB{i}") for i, base in enumerate(self.I2C_SCB_BASES)]
 
         # SPI flash memory-mapped data (SYS_FLASH_BASE_ADDR, the physical
@@ -888,6 +889,7 @@ class AliMipsSimulator:
             self._switch_family(family)
         else:
             self.chip.write_chip_id()       # (this image's board may read another chip ID)
+        self.attach_demod()                 # (the board's external demodulator, when its sidecar names one)
 
         # Re-initialize globals if re-running
         self.instruction_count = 0
@@ -1664,6 +1666,25 @@ class AliMipsSimulator:
         device = tuners.make(chip, **config)
         self.i2c_devices[address] = device
         self.log(f"[I2C] tuner model {chip} at 0x{address:02X}")
+        return device
+
+    def attach_demod(self):
+        """Put the loaded board's external demodulator (demods.py: its
+        sidecar's device.demodModel) on the I2C bus, in place of the one
+        the previous image's board had; loadFile calls it.  Returns the
+        model, or None when the board names none."""
+        import demods
+        import dump_catalog
+        if self._demod_address is not None:
+            self.i2c_devices.pop(self._demod_address, None)
+            self._demod_address = None
+        given = dump_catalog.demod_model(self.dump_path) if getattr(self, "dump_path", None) else None
+        if given is None:
+            return None
+        chip, address = given
+        self.i2c_devices[address] = device = demods.make(chip)
+        self._demod_address = address
+        self.log(f"[I2C] demodulator model {chip} at 0x{address:02X}")
         return device
 
     def tuner(self):

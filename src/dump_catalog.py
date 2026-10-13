@@ -9,7 +9,10 @@ makes of it (boots / application / display, the panel's texts) -- and `desc`,
 the notes on it as a list of paragraphs.  device.tunerModel, where the tuner
 is known, is {"chip", "address" (7-bit, decimal)[, "xtalHz", "ifHz"]}: the
 tuner model to put on its I2C bus (tuners.py) and, for an R820T, the
-firmware's crystal and IF its frequency is decoded with.  device.chipId,
+firmware's crystal and IF its frequency is decoded with.
+device.demodModel, where the board carries an external demodulator the
+simulator models, is {"chip", "address"} (demods.py): loadFile puts it on
+the I2C bus.  device.chipId,
 where a board's SoC reads another chip ID than its family's (chips/), is that
 ID as a "0x...." string, the evidence in the notes.  tests/test_dump_catalog.py checks
 every sidecar against its image and against the code's own tables
@@ -108,7 +111,21 @@ def problems(path, data):
     if chip_id is not None and not (isinstance(chip_id, str) and len(chip_id) == 6 and chip_id.startswith("0x")
                                     and all(c in "0123456789ABCDEFabcdef" for c in chip_id[2:])):
         out.append(f"{rel}: chipId {chip_id!r} is not a \"0x....\" chip ID")
+    demod = device.get("demodModel")
+    if demod is not None:
+        import demods
+        if not (isinstance(demod, dict) and demod.get("chip") in demods.MODELS
+                and isinstance(demod.get("address"), int) and 0 < demod["address"] < 0x80):
+            out.append(f"{rel}: demodModel {demod!r} is not {{\"chip\": one of {sorted(demods.MODELS)}, "
+                       f"\"address\": a 7-bit address}}")
     return out
+
+
+def demod_model(dump):
+    """(chip, 7-bit address) of the demodulator a board's sidecar names
+    (device.demodModel), or None."""
+    given = (((load(dump) or {}).get("device")) or {}).get("demodModel")
+    return (given["chip"], given["address"]) if given else None
 
 
 def chip_id(dump):

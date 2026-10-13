@@ -67,7 +67,11 @@ their file names.
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
   family is recognised by the unpacked main code naming the C3505. Its
-  application runs with its SEE program (`run_dump_t760i_app_starts.py`).
+  application runs with its SEE program (`run_dump_t760i_app_starts.py`)
+  and, with its board's AltoBeam ATBM7812 demodulator answering its chip ID
+  (`demods.py`, the sidecar's `demodModel`), opens its first-install wizard
+  and its channel search through the newer display engine's layer
+  (`run_dump_t760i_capture_screen.py`).
   The Ferguson T750i's M3821 boots without the
   boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
   locked D-cache lines at the top of the flash window's cached view until
@@ -262,7 +266,11 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   mostly the MaxLinear MxL603 family, an MxL5007T in the 2012 URZ0195
   firmware, a Rafael R820T in the Globo N3). The C3603 (the X110TS) has its
   S3501 DVB-S2 demodulator at 0x33 (`chips/m3602.py`: a `RegisterSlave`
-  with its chip ID in registers 0xA3..0xA6).
+  with its chip ID in registers 0xA3..0xA6). An external demodulator a
+  board's sidecar names (`device.demodModel`, `demods.py`) is put on the bus
+  when the image loads (`sim.attach_demod()`): the T760i's AltoBeam ATBM7812
+  at 0x40, 16-bit register addresses, its chip ID 0xA8 in register 0 --
+  without it the driver retried its power-on for ~125 M instructions.
 * **Tuners and signal** (`tuners.py`): chip models of the MxL603 family,
   the MxL5007T and the R820T that keep what the driver writes and report
   their synthesizers locked (MaxLinear: lock registers 0x2B / 0xD8 read
@@ -622,7 +630,9 @@ twin-tuner satellite PVR whose SEE program on the second core drives the
 display: its channel banner, then its red "No Signal!" box, about 5 minutes)
 and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
-display engine's layer, captured as it comes up, about 3 minutes).
+display engine's layer, captured as it comes up, about 3 minutes) and
+`run_dump_t760i_capture_screen.py` (the Ferguson Ariva T760i, a C3505 with
+its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

@@ -61,7 +61,7 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_r265lite_120_capture_screen.py", "run_dump_globo_signal.py",
               "run_dump_r265lite_signal_capture_screen.py", "run_dump_signal_capture_screen.py",
               "run_dump_t90_capture_screen.py", "run_dump_x110ts_capture_screen.py",
-              "run_dump_t750i_capture_screen.py")
+              "run_dump_t750i_capture_screen.py", "run_dump_t760i_capture_screen.py")
 
 
 def discover_test_files(include_slow=False):
