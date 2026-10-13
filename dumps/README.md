@@ -335,6 +335,8 @@ Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
+
 
 ## `CABLETECH URZ0086/URZ0086_v1.1.0.abs`
 
@@ -359,6 +361,8 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów.
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
+
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
 
 
 ## `CABLETECH URZ0086/URZ0086_v1.1.1.abs`
@@ -385,6 +389,8 @@ Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
+
 
 ## `CABLETECH URZ0086/URZ0086_V1.1.9.abs`
 
@@ -410,6 +416,8 @@ Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
+
 
 ## `CABLETECH URZ0086/URZ0086_V1.2.1.abs`
 
@@ -434,6 +442,8 @@ The bootloader chunk's version reads "DVBS2---0.1.0" (ALi's project name) althou
 Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac / URZ0086_v1.1.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy / URZ0086_v1.2.1.abs / -poprawiono skalowanie obrazu przy odtwarzaniu nagranych materiałów / -zwiększono wielkość dzielonych plików do 4GB / -inne drobne błędy
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
+
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
 
 
 ## `CABLETECH_urz0194s_v1_0_8.bin`
@@ -822,6 +832,8 @@ Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. pols
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
+
 
 ## `KRUGER MATZ KM0186/KM00186_V1.0.9.abs`
 
@@ -846,6 +858,8 @@ Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. pols
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
 
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
+
 
 ## `KRUGER MATZ KM0186/KM00186_V1.1.1.abs`
 
@@ -869,6 +883,8 @@ Kruger&Matz is Lechpol's other brand: the same firmware line as the Cabletech UR
 Change list (lista_zmian.txt, Polish): KM00186_v1.0.6.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / - przywrócono odtwarzanie plików .flac / KM00186_v1.0.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy / KM00186_v1.1.1.abs / -poprawiono skalowanie obrazu przy odtwarzaniu nagranych materiałów / -zwiększono wielkość dzielonych plików do 4GB / -inne drobne błędy
 
 Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).
+
+Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
 
 
 ## `Opticum Blue R265 Lite/M3822P.bin`
@@ -996,13 +1012,15 @@ The application's own update accepts /c/S60.abs, /c/UNIWERSAL87436723.abs and th
 * **Image:** update, 1.4.0C PVR UNI ENG (main-code chunk 111000000003002 "M3606 2Tuner"; Application 1.0.0@SDK4.0ba.8.0_Combo_20120530, HDMI_ALI_E_120522_1; the SEE's uLibcore 1.1.5a@SDK_20111126 built 2012-05-31 by lanny.sun), 2015-05-04, 4194304 bytes, SHA-1 cb504a5134cf5bd69301dff91e058910e506d442
 * **Layout:** bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), maincode 0x020000 (chunk "111000000003002" M3606 2Tuner, LZMA 0x13D72E bytes -> 5.8 MB), seecode 0x180000 (M3606 SEE, LZMA 0xC9381 -> 2.6 MB), Radioback 0x280000 (1.0.0), keydb 0x28FF80 (1.0.0), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0, 0x140070 bytes) -- the whole 4 MB flash
 * **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/viewer_top.php?file=Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE). The manufacturer's USB update ("Software Patch") Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.rar (the .abs alone); fetched 2026-10-11 from the mirror's Opticum / INNE folder.
-* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> 'LnbP'. As the M3602 family with its board's chip ID 0x3603 (2026-10-12, run_dump_x110ts_see_start.py): the bootloader starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py) and the application, which -- given the chip ID it checks for -- starts the SEE's program at 0xA6000200 on the second core (see.SeeCore), prints its banner and attaches its drivers through 80 remote calls the SEE answers (and 36 of the SEE's) by ~56 M instructions; it draws from ~78 M (~510 GE commands and ~250 calls answered by 120 M).  Without the SEE's program its first message went unacknowledged and it stopped at its SDBBP assertion (0x801A9608).  Its OSD shows (2026-10-13, run_dump_x110ts_capture_screen.py): the banner of its first channel (TVP 1, 13.0E Hotbird) at ~100 M, then a red "No Signal!" box -- once its chip reads a C3603 product with the DVB-S2 demodulator and that S3501 answers its chip ID at I2C 0x33 (chips/m3602.py).  Before, the application's own hardware check (0x801B994C: the NIM_S3501_0 driver's chip ID 0x3501, the product's feature byte 4) failed, and a task of its own cleared the OSD layer's enable bit (0xB8006300 bit 0) about ten times a second.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> 'Strt' -> 'OOO1'. As the M3602 family with its board's chip ID 0x3603 (2026-10-12, run_dump_x110ts_see_start.py): the bootloader starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py) and the application, which -- given the chip ID it checks for -- starts the SEE's program at 0xA6000200 on the second core (see.SeeCore), prints its banner and attaches its drivers through 80 remote calls the SEE answers (and 36 of the SEE's) by ~56 M instructions; it draws from ~78 M (~510 GE commands and ~250 calls answered by 120 M).  Without the SEE's program its first message went unacknowledged and it stopped at its SDBBP assertion (0x801A9608).  Its OSD shows (2026-10-13, run_dump_x110ts_capture_screen.py): the banner of its first channel (TVP 1, 13.0E Hotbird) at ~100 M, then a red "No Signal!" box -- once its chip reads a C3603 product with the DVB-S2 demodulator and that S3501 answers its chip ID at I2C 0x33 (chips/m3602.py).  Before, the application's own hardware check (0x801B994C: the NIM_S3501_0 driver's chip ID 0x3501, the product's feature byte 4) failed, and a task of its own cleared the OSD layer's enable bit (0xB8006300 bit 0) about ten times a second.
 
 The official 1.4.0C PVR update (2015-05-04) of the Opticum X110TS / X110TSE twin-tuner satellite PVR, the universal English build: an ALi M3606 image like the Cabletech URZ0086's, with the SEE co-processor's program in a seecode chunk and a keydb chunk, on a 4 MB flash.
 
 The application is the SDK 4.0 combo line of 2012 (SDK4.0ba.8.0_Combo_20120530): two S3501 satellite front ends plus the MxL101 terrestrial driver, Conax / Irdeto / Viaccess CA and CI+ ("Conax ITI CIPLUS CAM"), USB recording with a PVR manager, OTA by timer; the "UNI RETA PVR" (universal retail) model name.
 
 Its SoC reads the chip ID 0x3603 (traced 2026-10-11): early in its start the application maps the chip ID at 0xB8000002 to a chip code (0x8000082C: 0x3602 -> 0x10046, 0x3603 -> 0x10047, 0x3811 -> 0x10048) and, unless the code is 0x10047, reboots through its software-reset path (0x80000720: fp = 0xDEADBEAD, interrupts off, devices reset through 0xB8000080, jump to 0xAFC00000).  Its bootloader and application then use the SPI flash registers at 0xB802E098, as the URZ0083's tables do for 0x3603.  The Cabletech URZ0086 -- also an "M3606 2Tuner" build -- keeps 0x3602: under 0x3603 its bootloader polls a 16-bit register at 0xB801841C (a block the simulator does not model) for ever, under 0x3602 it boots to its application.
+
+Its LNB fault line (GPIO 99) and its DVB-T tuner's short-circuit line (GPIO 104) are inputs the application reads as active low (0x8000C054, 0x80011684): read as 0 -- as the simulator reads an input nothing models -- the LNB looked shorted and the panel showed "LnbP"; pulled up (device.gpioPullUps, 2026-10-13) the application tunes its first channel (panel "OOO1") and draws the same screen.
 
 
 ## `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN`

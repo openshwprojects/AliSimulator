@@ -12,7 +12,13 @@ tuner model to put on its I2C bus (tuners.py) and, for an R820T, the
 firmware's crystal and IF its frequency is decoded with.
 device.demodModel, where the board carries an external demodulator the
 simulator models, is {"chip", "address"} (demods.py): loadFile puts it on
-the I2C bus.  device.chipId,
+the I2C bus.  device.gpioI2c, where the board's tuner or other chips hang on
+an I2C bus the firmware bit-bangs over GPIO pins, is {"scl", "sda"} (GPIO
+numbers; gpio_i2c.py: its slaves are the I2C devices the hardware masters
+reach), and device.gpioPullUps the GPIO numbers of input pins the board
+pulls up (status and fault lines that read high when nothing pulls them low;
+an input pin nothing models reads 0 otherwise): loadFile attaches both.
+device.chipId,
 where a board's SoC reads another chip ID than its family's (chips/), is that
 ID as a "0x...." string, the evidence in the notes.  tests/test_dump_catalog.py checks
 every sidecar against its image and against the code's own tables
@@ -118,7 +124,26 @@ def problems(path, data):
                 and isinstance(demod.get("address"), int) and 0 < demod["address"] < 0x80):
             out.append(f"{rel}: demodModel {demod!r} is not {{\"chip\": one of {sorted(demods.MODELS)}, "
                        f"\"address\": a 7-bit address}}")
+    pin = lambda p: isinstance(p, int) and not isinstance(p, bool) and 0 <= p < 160    # noqa: E731
+    bus = device.get("gpioI2c")
+    if bus is not None and not (isinstance(bus, dict) and set(bus) == {"scl", "sda"} and all(map(pin, bus.values()))):
+        out.append(f"{rel}: gpioI2c {bus!r} is not {{\"scl\": a GPIO number, \"sda\": a GPIO number}}")
+    pull_ups = device.get("gpioPullUps")
+    if pull_ups is not None and not (isinstance(pull_ups, list) and pull_ups and all(map(pin, pull_ups))):
+        out.append(f"{rel}: gpioPullUps {pull_ups!r} is not a list of GPIO numbers")
     return out
+
+
+def gpio_i2c(dump):
+    """(scl, sda) of the I2C bus a board's firmware bit-bangs to its chips
+    (device.gpioI2c), or None."""
+    given = (((load(dump) or {}).get("device")) or {}).get("gpioI2c")
+    return (given["scl"], given["sda"]) if given else None
+
+
+def gpio_pull_ups(dump):
+    """The GPIO numbers of the input pins a board pulls up (device.gpioPullUps)."""
+    return list((((load(dump) or {}).get("device")) or {}).get("gpioPullUps") or [])
 
 
 def demod_model(dump):

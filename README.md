@@ -285,6 +285,13 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   when the image loads (`sim.attach_demod()`): the T760i's AltoBeam ATBM7812
   at 0x40, 16-bit register addresses, its chip ID 0xA8 in register 0 --
   without it the driver retried its power-on for ~125 M instructions.
+  A board whose firmware bit-bangs an I2C bus over GPIO pins to its chips
+  names it in its sidecar (`device.gpioI2c`: SCL / SDA); loadFile puts a
+  `gpio_i2c.GpioI2cBus` on those pins that forwards the transfers to the same
+  `sim.i2c_devices` -- the URZ0086 / KM0186 boards' second tuner, on GPIO 44
+  / 43 (the first answers on SCB0). `device.gpioPullUps` lists the input
+  pins a board pulls up (they read high; an input nothing models reads 0):
+  the X110TS's LNB and DVB-T fault lines, which it read as short circuits.
 * **Tuners and signal** (`tuners.py`): chip models of the MxL603 family,
   the MxL5007T and the R820T that keep what the driver writes and report
   their synthesizers locked (MaxLinear: lock registers 0x2B / 0xD8 read

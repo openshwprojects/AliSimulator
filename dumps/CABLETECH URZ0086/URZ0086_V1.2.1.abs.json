@@ -11,7 +11,8 @@
     "tuner": null,
     "flash": "4 MB SPI",
     "panel": null,
-    "irCoding": "nec"
+    "irCoding": "nec",
+    "gpioI2c": {"scl": 44, "sda": 43}
   },
   "image": {
     "kind": "update",
@@ -41,6 +42,7 @@
     "Despite the .abs name it is a complete flash image: the ALi chunk chain from offset 0 -- bootloader 0x000000 (DVBS2---0.1.0, 2011-04-14), HDCPKey 0x01FE00 (Demo s3602, 2011-04-14), maincode 0x020000 (M3606 2Tuner, 2012-7-2), seecode 0x140000 (M3606 SEE, 2012-7-2), Radioback 0x240000 (1.0.0, 2011-04-14), countryband 0x250000 (1.0.0, 2011-04-14), userdb 0x26FF80 (1.0.0, 2012-7-2); the maincode's CRC-32/MPEG-2 is intact.  Banners in its LZMA streams: Libcore version 7.2.0@SDK4.0ba.7.2_20120115; SDK7.2-Mico1.6-LECHPOL1.2.1; Libcore version 1.1.5a@SDK_20111126.",
     "The bootloader chunk's version reads \"DVBS2---0.1.0\" (ALi's project name) although the box is DVB-T; the maincode is \"M3606 2Tuner\".  Forum users program these .abs files directly into the flash (renamed .bin): they are complete flash images.",
     "Change list (lista_zmian.txt, Polish): URZ0086_V1.0.7.abs / - soft bazowy / URZ0086_v1.1.0.abs / - Poprawiono j. polski w menu, / - Dodano znaczniki nagrywania w liście kanałów. / URZ0086_v1.1.1.abs / przywrócono odtwarzanie plików .flac / URZ0086_v1.1.9.abs / -zmiana sposobu załączenia dekodera po braku zasilania (dekoder załącza się do stand-by) / -poprawiono wyświetlanie napisów przy odtwarzaniu filmów z nośników zewnętrznych / -opcja nagrywanie jako pierwsza przy programowaniu zdarzeń czasowych / -poprawiono błędne nagrywanie przy programowaniu nagrań zbieżnych w czasie z tego samego MUX / -inne drobne błędy / URZ0086_v1.2.1.abs / -poprawiono skalowanie obrazu przy odtwarzaniu nagranych materiałów / -zwiększono wielkość dzielonych plików do 4GB / -inne drobne błędy",
-    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py)."
+    "Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cabletech_urz0083_urz0086_recenzja.htm): the URZ0083 is built on the ALi M3601E with an ALi M3100 demodulator and 64 MB DDR2, the URZ0086 on the ALi M3606 with 128 MB DDR2.  The simulator runs them as the M3602 family (chips/m3602.py).",
+    "Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet)."
   ]
 }

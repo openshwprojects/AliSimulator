@@ -92,8 +92,8 @@ PANELS = [
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
     # Opticum X110TS (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
-    # from the bootloader, then the application's "LnbP": it reads its LNB fault line (GPIO 99,
-    # active low), which nothing here pulls up, as a short circuit
+    # from the bootloader, "Strt" and the channel number ("OOO1") from the application (with its
+    # LNB fault line not pulled up -- the sidecar's gpioPullUps -- it showed "LnbP" instead)
     ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={})),
     # Globo HD-XS2 (both builds): on GPIO bank 4, SCL = GPIO 135, SDA = GPIO 134 -- " ON " from the
     # bootloader, " on " from the application, which then polls the keys (none of the 28 positions

@@ -100,6 +100,7 @@ class AliMipsSimulator:
         self.uart_callback = None
         self.spi_callback = None
         self.gpio_callback = None
+        self.gpio_devices = []          # the board's other chips on GPIO pins (attach_gpio_devices)
         self._gpio_dbg_seen = set()
         self._spi_dump_enabled = True
         self.log_callback = log_handler
@@ -890,6 +891,7 @@ class AliMipsSimulator:
         else:
             self.chip.write_chip_id()       # (this image's board may read another chip ID)
         self.attach_demod()                 # (the board's external demodulator, when its sidecar names one)
+        self.attach_gpio_devices()          # (its bit-banged I2C bus, pulled-up inputs)
 
         # Re-initialize globals if re-running
         self.instruction_count = 0
@@ -1379,9 +1381,10 @@ class AliMipsSimulator:
         register -- an output pin at its DO bit, an input pin high (the
         bus's pull-up; the decoder adds what its chip pulls low).  Drivers
         that bit-bang a bus open-drain keep DO 0 and switch the direction
-        (the Opticum Blue R265 Lite's application, tm1650_decoder.py)."""
+        (the Opticum Blue R265 Lite's application, tm1650_decoder.py).  The
+        board's other chips on GPIO pins (gpio_devices) get the same."""
         self._device_access(uc)
-        if not self.gpio_callback:
+        if not self.gpio_callback and not self.gpio_devices:
             return
         base = address & ~3
         shift = (address & 3) * 8
@@ -1392,7 +1395,11 @@ class AliMipsSimulator:
         else:
             do_addr, dir_val = base - 4, word
             do_val = int.from_bytes(uc.mem_read(do_addr, 4), 'little')
-        self.gpio_callback(do_addr, 4, (do_val & dir_val | ~dir_val) & 0xFFFFFFFF)
+        levels = (do_val & dir_val | ~dir_val) & 0xFFFFFFFF
+        if self.gpio_callback:
+            self.gpio_callback(do_addr, 4, levels)
+        for device in self.gpio_devices:
+            device.on_gpio_write(do_addr, 4, levels)
 
     def _hook_gpio_di_read(self, uc, access, address, size, value, user_data):
         """GPIO DI→DO loopback with DIR-aware ACK simulation.
@@ -1405,7 +1412,8 @@ class AliMipsSimulator:
         making ACK succeed (SDA=input after SET_SDA_IN, DI returns 0).  The
         panel decoder answers for the input pins of its own chip instead
         (di_override): a TM1650's idle bus reads high, its SDA low only while
-        it acknowledges or sends a 0 bit.
+        it acknowledges or sends a 0 bit -- and so do the board's other chips
+        on GPIO pins (gpio_devices: a bit-banged I2C bus, pulled-up inputs).
         """
         self._device_access(uc)
         di_offset = address & 0xFFF
@@ -1425,7 +1433,10 @@ class AliMipsSimulator:
                 di_val = do_val & dir_val
                 override = getattr(getattr(self.gpio_callback, '__self__', None), 'di_override', None)
                 if override is not None:
-                    di_val = override(di_offset, di_val) & ~dir_val | (do_val & dir_val)
+                    di_val = override(di_offset, di_val)
+                for device in self.gpio_devices:
+                    di_val = device.di_override(di_offset, di_val)
+                di_val = di_val & ~dir_val | (do_val & dir_val)
                 uc.mem_write(address & ~3, di_val.to_bytes(4, 'little'))
             except:
                 pass
@@ -1690,6 +1701,30 @@ class AliMipsSimulator:
         self._demod_address = address
         self.log(f"[I2C] demodulator model {chip} at 0x{address:02X}")
         return device
+
+    def attach_gpio_devices(self):
+        """Put the loaded board's other chips on GPIO pins in place of the
+        previous board's (loadFile calls it): the I2C bus its firmware
+        bit-bangs to its tuner or other chips (its sidecar's device.gpioI2c,
+        gpio_i2c.py; the slaves are sim.i2c_devices, as on the hardware
+        masters) and the input pins its board pulls up (device.gpioPullUps:
+        they read high, gpio_keys.GpioKeys that nobody presses).  Returns
+        the list, sim.gpio_devices."""
+        import dump_catalog
+        from gpio_i2c import GpioI2cBus
+        from gpio_keys import GpioKeys
+        self.gpio_devices = []
+        path = getattr(self, "dump_path", None)
+        if not path:
+            return self.gpio_devices
+        bus = dump_catalog.gpio_i2c(path)
+        if bus:
+            self.gpio_devices.append(GpioI2cBus(self, *bus))
+            self.log(f"[I2C] bit-banged bus on GPIO {bus[0]} (SCL) / {bus[1]} (SDA)")
+        pull_ups = dump_catalog.gpio_pull_ups(path)
+        if pull_ups:
+            self.gpio_devices.append(GpioKeys(pull_ups))
+        return self.gpio_devices
 
     def tuner(self):
         """The tuner model on the I2C bus (tuners.py), or None."""
