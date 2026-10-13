@@ -721,7 +721,8 @@ whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
 switch's fault flag on GPIO 25 pulled up, about 3) and
 `run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
-run as the M3503: its Quick Setup menu, about 3).
+run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
+moves, about 4).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
@@ -756,7 +757,9 @@ maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
 Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
-Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i and dump.bin; a firmware may also number its
+Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
+URZ0083's M3601E firmwares, and standard NEC whose table code keeps the first
+address byte for the Echosonic ESR-250's 2015 firmware; a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
 firmware time follows each emulation thread's own CPU time), which is what the
 workflow does.

@@ -5,7 +5,8 @@ Fast checks of the IR remote support (ir_remote.py), no firmware boot:
    firmware's receive path: generate_code() run-length grouping (8 us ticks,
    runs of one level summed) and irc_NEC_pulse_to_code() (ALi S3602 build,
    530 us unit, precision 280 us, as disassembled from dump_maciej), then
-   scan_code_to_msg_code()'s 16-bit ir_code.
+   scan_code_to_msg_code()'s 16-bit ir_code -- and under the "necfirst"
+   coding the 2015 SDK's, which keeps the code's top byte instead.
 2. find_key_table() finds a g_itou_key_tab-style table in a synthetic RAM
    image, and press-key codes round-trip through ir16_to_nec().
 3. press_key() uses VKEY_FALLBACKS for a key the firmware numbers
@@ -90,6 +91,12 @@ def main():
         got = [hex(ir16_of(x)) for x in codes]
         if len(codes) != 1 or ir16_of(codes[0]) != ir16 or len(rlc) > 255:
             print(f"[FAIL] ir16 0x{ir16:04X}: NEC 0x{a:02X}/0x{c:02X}, {len(rlc)} RLC bytes -> {got}")
+            ok = False
+        # the 2015 SDK's conversion (the ESR-250's 0x8009C058) keeps the first address byte
+        a, c, a_hi = ir_remote.frame_from_ir16(ir16, "necfirst")
+        codes = receive(ir_remote.nec_rlc(a, c, a_hi))
+        if len(codes) != 1 or (((codes[0] >> 24) << 8) | (codes[0] & 0xFF)) != ir16:
+            print(f"[FAIL] necfirst ir16 0x{ir16:04X}: NEC 0x{a:02X}/0x{c:02X} -> {[hex(x) for x in codes]}")
             ok = False
     # 2. key table search
     ram = np.zeros(1 << 20, np.uint8)
