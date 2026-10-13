@@ -15,7 +15,8 @@ at 0x1FE00000 gives the flash mirror back, read-only at the physical
 address, and its SPI stream mode and extra self-completing register go; the
 M3602's RAM mirror above the RAM's size exists only while an M36xx family
 is loaded; the M3503's cache-as-RAM window at 0x0FFF8000 is the flash's
-again (read-only, its code hook gone).  Then the Opticum X110TS update, a
+again (read-only, its code hook gone), and its internal demodulator's chip
+ID registers read 0 again.  Then the Opticum X110TS update, a
 C3603 board of the same family: its chip word carries the product bits and
 its S3501 demodulator answers its chip ID on the I2C bus -- and is gone again
 when the T50 is loaded after it (same family) or dump.bin (M3801).  A
@@ -117,6 +118,8 @@ check(not m3503.car.active and r and r[2] == UC_PROT_READ | UC_PROT_EXEC
 check(region(sim, 0x08000000) is not None, "the RAM mirror is mapped again for the M3602")
 left = [type(d).__name__ for d in devices(m3503) if id(d) in owners(sim)]
 check(not left, f"no handler of the M3503's devices is left ({left or 'none'})")
+check(sim.peek(0xB80280A3, 4) == bytes(4),
+      f"the M3503's internal demodulator's chip ID is gone with it ({sim.peek(0xB80280A3, 4).hex()})")
 
 
 def chip_word():

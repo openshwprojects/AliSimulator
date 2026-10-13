@@ -10,19 +10,24 @@ tables, and an application that reads it starts over through the bootloader
 (the URZ0083 every ~45 M instructions, the THT501 likewise).  The family's
 own ID is 0x3602; a board whose SoC reads 0x3603 says so in its sidecar
 (device.chipId, chips/base.py) -- the Opticum X110TS's application reboots
-unless its chip code is 0x3603's, and the Cabletech, Kruger&Matz and
-Thomson boxes read it too: their applications' USB host attach gives the
-controller a base (0xB8032000 / 0xB8032400) only for 0x3603 or 0x3101, and
-under 0x3602 the host's start ran into its assertion (an SDBBP, then a jump
-to 0) right after the boot logo.  Under 0x3603 their bootloaders read the
-flash with the quad I/O read 0xEB (simulator._SPI_READS), which the
-simulator did not serve before: their chunk headers read as zeros
-("malloc size: 0") and 0x3602 had looked like the only chip they booted on.
+unless its chip code is 0x3603's, and the Cabletech, Kruger&Matz, Thomson
+and Opticum S60 boxes read it too.  Their applications' USB host attach
+gives the controller a base (0xB8032000 / 0xB8032400) only for 0x3603 or
+0x3101: under 0x3602 the M3601E boxes' (URZ0083, KM0183, THT501) and the
+S60's host start ran into its assertion (an SDBBP, then a jump to 0) right
+after the boot logo, and the M3606 ones (URZ0086, KM0186) idled without
+decoding theirs.  Under 0x3603 their bootloaders -- all but the X110TS's,
+which reads with 0x03 -- read the flash with the quad I/O read 0xEB
+(simulator._SPI_READS), which the simulator did not serve before: their
+chunk headers read as zeros ("malloc size: 0") and 0x3602 had looked like
+the only chip they booted on.
 
 The Ferguson T50's bootloader probes its DDR at 0xA800AA68, 128 MB above the
 first word: the RAM shows up again above its size here, as on a controller
-that ignores the upper address bits.  (It still resets itself after its
-flash checks -- see its sidecar.)
+that ignores the upper address bits.  It knows its 4 MB flash only by the
+electronic ID of the 0xAB read (simulator._spi_command_response); with that
+answered it starts its application, which then draws nothing -- see its
+sidecar.
 
 The M3606 (URZ0086 / KM0186, the X110TS) has a SEE co-processor, which its
 bootloader starts and waits for: see.py runs the SEE's boot code for that

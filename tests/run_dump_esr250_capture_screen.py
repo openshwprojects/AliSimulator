@@ -2,8 +2,8 @@
 Screen regression for the Echosonic Mini ESR-250 (slow, about 4 minutes): an
 ALi M3510A satellite receiver, run as the M3503 family (chips/m3503.py) --
 its bootloader ("3510-r1362") is the Globo HD-XS2's XIP kind, with its stack
-in cache-as-RAM lines until the DDR is up, and its start-up code tests the
-chip ID for 0x3503.  Its single-CPU application draws its "Quick Setup" menu
+in cache-as-RAM lines until the DDR is up, and its set-up code branches on
+the chip ID 0x3503.  Its single-CPU application draws its "Quick Setup" menu
 through the GE some 100 M instructions in, which is captured and compared
 with esr250_screen.png.  A task of the application keeps the OSD layer off
 unless the NIM device reports an S3501's chip ID: the chip's internal

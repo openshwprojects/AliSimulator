@@ -19,9 +19,9 @@ its registers directly at 0xB8028000 + the register number.
 
 The Echosonic Mini ESR-250's M3510A runs as this family too: its bootloader
 ("3510-r1362") is the same XIP kind with the same cache-as-RAM stack, its
-start-up code tests the chip ID for 0x3503 and 0x3821 only, and its
-application -- single-CPU, no SEE program -- drives the same internal
-demodulator.
+set-up code branches on the chip IDs 0x3503 and 0x3821 (0x3510 appears
+nowhere in it), and its application -- single-CPU, no SEE program --
+drives the same internal demodulator.
 
 Recognised by the bootloader chunk's version, "M3503---0.1.0" or "3510-".
 """
@@ -53,6 +53,10 @@ class InternalDemod:
         reg = address & 0xFF
         return sum(S3501.ID.get(reg + i, (value >> (8 * i)) & 0xFF) << (8 * i) for i in range(size))
 
+    def remove(self):
+        """The ID registers back to zero (the next family's chip has no such demodulator)."""
+        self.sim.poke(0xB8000000 + self.BASE + 0xA3, bytes(len(S3501.ID)))
+
 
 class M3503(M3602):
     name = "M3503"
@@ -70,4 +74,5 @@ class M3503(M3602):
 
     def uninstall(self):
         self.car.remove()
+        self.nim.remove()
         super().uninstall()

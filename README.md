@@ -35,10 +35,12 @@ their file names.
   applications start over through the bootloader. The family's own is
   0x3602 (the T50's); the other boards read 0x3603, which their sidecars
   give (`device.chipId`): the X110TS's application reboots unless it reads
-  it, and the Cabletech, Kruger&Matz, Thomson and S60 applications' USB host
-  start runs into its assertion without it. Under 0x3603 their bootloaders
-  read the flash with the quad I/O read 0xEB, which the simulator serves like
-  a plain read now -- before, their chunk headers read as zeros. The T50's
+  it, the M3601E boxes' (URZ0083, KM0183, THT501) and the S60's run into
+  their USB host start's assertion right after their boot logo without it,
+  and the URZ0086's and KM0186's idle without decoding theirs. Under 0x3603
+  all their bootloaders but the X110TS's read the flash with the quad I/O
+  read 0xEB, which the simulator serves like a plain read now -- before,
+  their chunk headers read as zeros. The T50's
   bootloader probes the RAM 128 MB up, where the family shows it again, and
   knows its 4 MB flash only by the electronic ID in the last byte of the
   0xAB read (0x15), which the simulator answers as the real part does now:
@@ -82,8 +84,8 @@ their file names.
   chip: the CPU reads its registers at 0xB8028000 + the register number, and
   its chip ID registers answer the S3501's ID (`InternalDemod`). The
   Echosonic Mini ESR-250's M3510A (`dumps/other/`, bootloader "3510-r1362")
-  runs as this family -- the same XIP bootloader, a start-up that tests the
-  chip ID for 0x3503 -- and its single-CPU application draws its Quick Setup
+  runs as this family -- the same XIP bootloader, whose set-up branches on
+  the chip ID 0x3503 -- and its single-CPU application draws its Quick Setup
   menu once that demodulator answers: a task of it kept the OSD layer off
   until the NIM device reported an S3501's chip ID
   (`run_dump_esr250_capture_screen.py`).
@@ -607,9 +609,10 @@ then every 1000th.
   pointed at the URZ0083's logo by chance and at zeros on the URZ0086,
   whose engine then consumed every bit it was given -- and in some runs
   the SEE's bit-buffer accounting stopped at its assertion.
-* A popup in some captures only can be a check on a timer: the S60's task
-  reads its USB power switch's fault flag (GPIO 25) every ~14 s and, read
-  low, shows "USB Short circuit!!" for 3 s; bisecting pull-ups gave
+* A popup in some captures only can be a check on a timer: a task of the
+  S60 reads its USB power switch's fault flag (GPIO 25) and, while it reads
+  low, cuts the port's power, shows "USB Short circuit!!" for 3 s and tries
+  again ~10 s later -- a popup for 3 s of every ~14; bisecting pull-ups gave
   contradictory answers until the code that reads the pin was found.
 * `emu_start(timeout=)` on Windows creates a thread per call that polls with
   a 15.6 ms timer and is joined at the end, hence `slice_stopper.py`.
@@ -716,7 +719,7 @@ URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
 screen, about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
-5) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
+4) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
 its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
 whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power

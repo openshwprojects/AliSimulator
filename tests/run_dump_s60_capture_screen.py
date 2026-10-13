@@ -9,9 +9,9 @@ S3501 answers at I2C 0x33; its bootloader reads the flash with the quad I/O
 read 0xEB, and its application decodes its boot logo (video_m36.py) and,
 with no signal, shows its "No Signal!" message, which is captured and
 compared with s60_screen.png.  GPIO 25 is pulled up (the sidecar's
-device.gpioPullUps): the USB power switch's fault flag, which the
-application checks every ~14 s -- read low, it cut the port's power and
-showed "USB Short circuit!!" for 3 s.
+device.gpioPullUps): the USB power switch's fault flag -- while it read
+low, a task of the application cut the port's power, showed "USB Short
+circuit!!" for 3 s and tried again ~10 s later.
 
 Usage: python run_dump_s60_capture_screen.py [--make-expected]
 """

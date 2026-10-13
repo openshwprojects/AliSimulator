@@ -35,7 +35,7 @@
     "application": true,
     "display": true,
     "panelText": null,
-    "note": "With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: the bootloader reads the flash with the quad I/O read 0xEB, the application decodes its boot logo (the video engine's completion and the video output's field interrupts, video_m36.py) and shows its first-install wizard in Polish (\"Welcome\": Region Poland, Język polski, Typ, Wymiary, Tak) within 230 M instructions.  Before (as 0x3602): As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
+    "note": "With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: the bootloader reads the flash with the quad I/O read 0xEB, the application decodes its boot logo (the video engine's completion and the video output's field interrupts, video_m36.py) and shows its first-install wizard in Polish (\"Witaj\": Region Poland, Język polski, Tryb wyświetlania, Tryb proporcji, Tak) within 230 M instructions.  Before (as 0x3602): As the M3602 family (chip ID 0x3602, 2026-10-10): its application starts (\"Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019\") and keeps running for the 100 M instructions run (0 GE commands, nothing drawn yet)."
   },
   "desc": [
     "Kruger&Matz KM0183 firmware V1.0.6, the manufacturer's USB update image as Gutek's site mirrors it (km00183_v106.rar); the archive also holds the update instructions (the box's menu: Narzędzia / Aktualizacja oprogramowania przez USB, the file chosen under \"Allcode\") and the change list.",
