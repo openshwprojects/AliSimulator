@@ -613,7 +613,7 @@ family with a newer application: the same wizard after an 11-minute scan) and
 `run_dump_urz0195_capture_screen.py` (the Cabletech URZ0195 with its 2012
 firmware, which draws its channel banner and no-signal screen seconds after
 starting, with the panel reading "0004", about 12 minutes; the 2013 firmware
-of the same box has not drawn anything yet) and
+of the same box has a test of its own, below) and
 `run_dump_prima8_capture_screen.py` (the Strong Prima VIII flash dump -- unlike
 the manufacturer's update of the same box it carries a channel database --
 whose Bulgarian channel banner is up 3 minutes after the start, then its
@@ -635,7 +635,9 @@ display engine's layer, captured as it comes up, about 3 minutes) and
 its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4) and
 `run_dump_prima8_update_capture_screen.py` (the Strong Prima VIII's update
 image, without the dump's channel database: its first-install wizard,
-about 5).
+about 5) and `run_dump_urz0195_2013_capture_screen.py` (the Cabletech
+URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
+screen, about 4).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

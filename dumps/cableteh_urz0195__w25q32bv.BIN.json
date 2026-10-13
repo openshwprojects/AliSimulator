@@ -33,9 +33,9 @@
   "simulator": {
     "boots": true,
     "application": true,
-    "display": false,
+    "display": true,
     "panelText": null,
-    "note": "Boots into its application, which had issued no graphics-engine command 14 minutes after its banner; no screen regression."
+    "note": "Boots into its application, which plays the first channel of its database (\"prog id : 4\", TVN, ~86 M instructions) and draws (2026-10-13, run_dump_urz0195_2013_capture_screen.py): its channel banner (channel 5, \"Brak informacji\", 0 %) ~20 GE commands in, then, when the banner has timed out, the live-TV \"Brak sygnału!\" (no signal) screen, scaled from the 1080i output (an earlier simulator had seen no graphics-engine command 14 minutes after its banner)."
   },
   "desc": [
     "The newer of the two URZ0195 dumps in this repository (the other is urz0195_full_dump(ESMTF25L3204).bin, with an older firmware).  The forum names the chip in later threads about this model; the firmware's chip-ID table is the M3801 family's.",

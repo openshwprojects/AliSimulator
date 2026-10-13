@@ -11,8 +11,9 @@ a 0 as "O"), after " ON " and "----".  Then the IR remote (this firmware's
 extended-NEC coding, see ir_remote.IR_CODINGS) opens the channel list with
 OK ("All TV": TVP1 HD ... TV6, Polsat highlighted) and moves the highlight
 down to TVN; that screen is compared with urz0195_2012_nav.png.  (The
-repository's other URZ0195 image, the 2013 firmware, has not drawn anything
-in the simulator yet.  No front-panel key does anything on this firmware.)
+repository's other URZ0195 image, the 2013 firmware, is
+run_dump_urz0195_2013_capture_screen.py.  No front-panel key does anything
+on this firmware.)
 
 Usage: python run_dump_urz0195_capture_screen.py [--make-expected]
 """
