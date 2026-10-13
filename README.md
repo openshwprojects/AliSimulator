@@ -529,6 +529,11 @@ then every 1000th.
   Count) on to its next timer interrupt instead, and a code hook on the loop
   ends the slices that reach it -- most turns start in the tick handler, which
   returns into the loop (the URZ0086: 8 M instructions in 16 s instead of 22 s).
+* A device register that is plain memory keeps what the firmware stores into
+  it: the URZ0083's bootloader pulses bit 31 of the chip ID word, and its
+  application then read its chip as 0xB602 and rebooted itself every ~38 M
+  instructions -- the chip ID word is read-only now
+  (`_hook_chip_id_store`).
 * A black capture is not always a missing display model: the X110TS drew its
   whole channel banner into a region the GMA layer pointed at, and a task of
   its application cleared the layer's enable bit again about ten times a

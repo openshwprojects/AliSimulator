@@ -469,6 +469,8 @@ class AliMipsSimulator:
         # Video engine status words the decoder driver checks after a VE reset
         for reg in self._VE_STATUS_REGS:
             self._mmio_on('r', self._hook_ve_status_read, reg, reg + 3)
+        # The chip ID word (0xB8000000, ChipFamily.write_chip_id) is read-only
+        self._mmio_on('w', self._hook_chip_id_store, 0x0000, 0x0003)
         # Graphics engine command / interrupt status (_hook_ge_write) and the
         # interrupt controller status the modelled lines show up in
         self._mmio_on('w', self._hook_ge_write, 0xA004, 0xA00B)
@@ -1487,6 +1489,15 @@ class AliMipsSimulator:
         v = int.from_bytes(uc.mem_read(word, 4), 'little')
         if v & self._VE_STATUS_MASK:
             uc.mem_write(word, (v & ~self._VE_STATUS_MASK).to_bytes(4, 'little'))
+
+    @staticmethod
+    def _hook_chip_id_store(uc, access, address, size, value, user_data):
+        """A store to the chip ID word leaves it as it is (the chip's ID, its
+        variant bits).  The Cabletech URZ0083's bootloader pulses bit 31 of
+        it (0xB6020000, 0x36020000, ... 0xB6020000): kept, the application
+        read its chip as 0xB602, which its chip table does not know, and its
+        display driver's attach rebooted it every ~38 M instructions."""
+        return int.from_bytes(uc.mem_read(address, size), 'little')
 
     def _hook_mac_reset_read(self, uc, access, address, size, value, user_data):
         """ETHERNET_MAC_0 +0 (0xB802C000): the software-reset bit 3 reads back
