@@ -29,7 +29,7 @@ screen_regression.run(
     settle_s=60,
     min_ge_ops=360,           # the home menu is complete at 364 commands
     min_colours=16,
-    panel_text=" ON ",
+    panel_text="noCH",
     title="Opticum Blue R265 Lite with a signal",
     signal=True,
     navigation=[("RIGHT", 1000), ("OK", 100000), ("OK", 10000)],

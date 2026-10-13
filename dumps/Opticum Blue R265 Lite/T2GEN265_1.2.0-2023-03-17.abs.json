@@ -34,7 +34,7 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": [" ON "],
+    "panelText": [" ON ", " on ", "Strt", "noCH"],
     "note": "Boots through its 2023 bootloader into its application (run_dump_r265lite_120_app_banner.py, ~35 s: stage 2 copies the maincode through the flash window word by word) and draws the same home menu as 1.1.5 (run_dump_r265lite_120_capture_screen.py)."
   },
   "desc": [

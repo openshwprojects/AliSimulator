@@ -14,7 +14,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
 from mips16_decoder import MIPS16Decoder
-from tm1650_decoder import GPIO_DO_OFFSETS, PanelDecoder
+from tm1650_decoder import GPIO_DO_OFFSETS, GPIO_EXTRA_DO_OFFSETS
 import chips
 
 class ISAMode(Enum):
@@ -457,10 +457,10 @@ class AliMipsSimulator:
         # UART: THR writes (TX), LSR / URBR / UIIR reads (RX simulation)
         self._mmio_on('w', self._hook_uart_write, 0x18300, 0x18305)
         self._mmio_on('r', self._hook_uart_read, 0x18300, 0x18309)
-        # GPIO DO writes for I2C / panel decoding, DI reads loop DO back
-        for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0E8, 0x0F4
-            self._mmio_on('w', self._hook_gpio_write, gpio_off, gpio_off + 3)
-        for di_off in self._GPIO_DI_TO_DO:      # 0x050, 0x0D0, 0x0E4, 0x0F0
+        # GPIO DO and DIR writes for I2C / panel decoding, DI reads loop DO back
+        for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0F4, 0x354, 0x454 and 0x0E8
+            self._mmio_on('w', self._hook_gpio_write, gpio_off, gpio_off + 7)
+        for di_off in self._GPIO_DI_TO_DO:      # DO - 4
             self._mmio_on('r', self._hook_gpio_di_read, di_off, di_off + 3)
         # Device operations the applications start and then poll for completion
         # (see _hook_selfcomplete_read): PMU 0x18018D02, VCAP 0x1800F04B
@@ -772,17 +772,14 @@ class AliMipsSimulator:
         """Nothing: being hooked keeps Unicorn's translation blocks short there
         (_update_short_block_hook)."""
 
-    def setGpioHandler(self, handler, sda_gpio=None):
-        """Set callback for GPIO DO register writes: handler(address, size, value).
-        
-        If sda_gpio is set (0-127), also simulate I2C ACK by clearing that
-        bit in DI reads so the bit-bang driver sees slave pulling SDA low.
-        """
+    def setGpioHandler(self, handler):
+        """Set the callback for GPIO pin changes, handler(address, size,
+        value): called for every write of a GPIO bank's DO or DIR register
+        with the bank's pin levels (_hook_gpio_write).  If the handler is a
+        bound method of an object with di_override(di_offset, value), the
+        object also answers the firmware's reads of the pins it drives
+        (_hook_gpio_di_read)."""
         self.gpio_callback = handler
-        if sda_gpio is not None:
-            do_offset, bit = PanelDecoder._gpio_to_offset_bit(sda_gpio)
-            self._i2c_sda_di_offset = do_offset - 4          # the bank's DI register
-            self._i2c_sda_mask = 1 << bit
 
     def setI2CDump(self, enabled):
         """Enable or disable I2C/GPIO trace logging. TM1650 results always shown."""
@@ -1369,41 +1366,33 @@ class AliMipsSimulator:
                 # bit0=1 means no interrupt pending
                 uc.mem_write(address, bytes([0x01]))
 
-    # The GPIO banks (tm1650_decoder.GPIO_DO_OFFSETS gives each bank's DO register; its DI register
-    # is DO - 4, its DIR register DO + 4): a DO write goes to the panel decoder, a DI read returns
-    # the DO value (pin loopback) for the output bits
-    _GPIO_DO_OFFSETS = set(GPIO_DO_OFFSETS)
-    _GPIO_DI_TO_DO = {do - 4: do for do in GPIO_DO_OFFSETS}
-    _GPIO_DI_TO_DIR = {do - 4: do + 4 for do in GPIO_DO_OFFSETS}
-
-    def _notify_gpio(self, address, size, value):
-        """Notify GPIO callback if this write targets a GPIO DO register."""
-        if self.gpio_callback:
-            offset = address & 0xFFF
-            # Only match GPIO Data-Output registers, NOT direction (0x058) or other regs
-            if offset in self._GPIO_DO_OFFSETS:
-                # Read full 32-bit register value for correct bit extraction
-                base = address & ~3
-                try:
-                    data = self.mu.mem_read(base, 4)
-                    full_val = int.from_bytes(data, 'little')
-                except:
-                    full_val = value
-                self.gpio_callback(base, 4, full_val)
-
-
+    # The GPIO banks (tm1650_decoder.GPIO_DO_OFFSETS and _EXTRA_ give each bank's DO register; its DI
+    # register is DO - 4, its DIR register DO + 4): DO and DIR writes go to the panel decoder as the
+    # bank's pin levels, a DI read returns the DO value (pin loopback) for the output bits
+    _GPIO_DO_OFFSETS = set(GPIO_DO_OFFSETS) | set(GPIO_EXTRA_DO_OFFSETS)
+    _GPIO_DI_TO_DO = {do - 4: do for do in _GPIO_DO_OFFSETS}
+    _GPIO_DI_TO_DIR = {do - 4: do + 4 for do in _GPIO_DO_OFFSETS}
 
     def _hook_gpio_write(self, uc, access, address, size, value, user_data):
-        """UC_HOOK_MEM_WRITE for GPIO region. Decoder handles dedup."""
+        """A write of a GPIO bank's DO or DIR register: the GPIO handler gets
+        the bank's pin levels as they are after it, `address` the bank's DO
+        register -- an output pin at its DO bit, an input pin high (the
+        bus's pull-up; the decoder adds what its chip pulls low).  Drivers
+        that bit-bang a bus open-drain keep DO 0 and switch the direction
+        (the Opticum Blue R265 Lite's application, tm1650_decoder.py)."""
         self._device_access(uc)
-        if self.gpio_callback:
-            if size < 4:
-                base = address & ~3
-                data = uc.mem_read(base, 4)
-                value = int.from_bytes(data, 'little')
-                address = base
-                size = 4
-            self.gpio_callback(address, size, value)
+        if not self.gpio_callback:
+            return
+        base = address & ~3
+        shift = (address & 3) * 8
+        mask = ((1 << (size * 8)) - 1) << shift
+        word = int.from_bytes(uc.mem_read(base, 4), 'little') & ~mask | ((value << shift) & mask)
+        if (base & 0xFFF) in self._GPIO_DO_OFFSETS:
+            do_addr, do_val, dir_val = base, word, int.from_bytes(uc.mem_read(base + 4, 4), 'little')
+        else:
+            do_addr, dir_val = base - 4, word
+            do_val = int.from_bytes(uc.mem_read(do_addr, 4), 'little')
+        self.gpio_callback(do_addr, 4, (do_val & dir_val | ~dir_val) & 0xFFFFFFFF)
 
     def _hook_gpio_di_read(self, uc, access, address, size, value, user_data):
         """GPIO DI→DO loopback with DIR-aware ACK simulation.
@@ -1411,9 +1400,12 @@ class AliMipsSimulator:
         For each bit:
         - If DIR bit = 1 (output): return the DO value (master is driving)
         - If DIR bit = 0 (input):  return 0 (simulate slave pulling low = ACK)
-        
+
         This makes I2C START succeed (SDA=output, DI returns 1) while also
-        making ACK succeed (SDA=input after SET_SDA_IN, DI returns 0).
+        making ACK succeed (SDA=input after SET_SDA_IN, DI returns 0).  The
+        panel decoder answers for the input pins of its own chip instead
+        (di_override): a TM1650's idle bus reads high, its SDA low only while
+        it acknowledges or sends a 0 bit.
         """
         self._device_access(uc)
         di_offset = address & 0xFFF

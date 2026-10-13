@@ -16,7 +16,8 @@ max_diff_pct.
 A `navigation` sequence then drives the UI: each step is a remote-control key
 name (sent through the emulated IR receiver and the firmware's own key table,
 see ir_remote.py), ("panel", code) for a front-panel key (answered by the
-panel decoder's key read) or ("wait", seconds) for no key -- the firmware
+panel decoder's key reads: 2 of them see it pressed, ("panel", code, reads)
+another number) or ("wait", seconds) for no key -- the firmware
 goes on by itself for that long --, with the least number of pixels the step
 must change.  Every step's screen goes to the report and the last one is compared
 with <name>_nav.png (also made by --make-expected).
@@ -288,8 +289,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
             if isinstance(key, tuple) and key[0] == "wait":     # ("wait", seconds): no key, the firmware goes on
                 run_for(key[1])
                 label = f"{key[1]:.0f} s without a key"
-            elif isinstance(key, tuple):                 # ("panel", code): a front-panel key
-                panel.press_key(key[1], hold_reads=2)
+            elif isinstance(key, tuple):                 # ("panel", code[, reads]): a front-panel key
+                panel.press_key(key[1], hold_reads=key[2] if len(key) > 2 else 2)
                 label = f"panel key {key[1]}"
             else:
                 addr, cmd = sim.press_key(key)

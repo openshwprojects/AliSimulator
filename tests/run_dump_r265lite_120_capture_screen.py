@@ -32,7 +32,10 @@ screen_regression.run(
     settle_s=60,
     min_ge_ops=360,           # the home menu is complete at 363 commands
     min_colours=16,
-    panel_text=" ON ",        # this bootloader's stage 2 writes the panel too
+    panel_text="noCH",        # after this bootloader's stage 2's " ON ", the application's texts
     title="Opticum Blue R265 Lite firmware 1.2.0",
     navigation=[("DOWN", 1000), ("INFO", 1000)],
+    retries=3,                # the slice-stop race (README "Things learned") strikes this image's hand-over
+                              # to its application often on a busy machine: a context restore on the
+                              # untouched stack top (sp 0x87FFFFE4, all other registers 0) within a minute
 )

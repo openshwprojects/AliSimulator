@@ -10,7 +10,11 @@ for hold_reads reads, then the code released, as the chip reports its last key.
 
 A Python copy of the firmware's bit-bang (dump_maciej: SCL = GPIO 31, SDA =
 GPIO 9, both in bank 0: DO 0x054, DI 0x050) runs transactions through the
-decoder and checks the bytes it clocks in.
+decoder and checks the bytes it clocks in.  A second copy drives the bus the
+way the Opticum Blue R265 Lite's application does (SCL = GPIO 57, SDA = GPIO
+58 in bank 1): open-drain -- DO stays 0, a line is pulled low by making it an
+output and released by making it an input -- and it checks that both lines
+read high before each START, as that driver does.
 """
 import os
 import sys
@@ -76,6 +80,52 @@ class BitBang:
         return a and d
 
 
+class OpenDrain(BitBang):
+    """The R265 Lite's driver: only the direction register moves (a bit set
+    pulls the line low), the decoder gets the pin levels as the simulator
+    reports them (an input pin high) and the reads go through its override."""
+    SCL, SDA, DO, DI = 57 - 32, 58 - 32, 0x0D4, 0x0D0
+
+    def __init__(self, dec):
+        self.dec, self.dir = dec, 0
+        self.notify()
+
+    def notify(self):
+        self.dec.on_gpio_write(0xB8000000 + self.DO, 4, ~self.dir & 0xFFFFFFFF)     # DO 0: (DO & DIR) | ~DIR
+
+    def set(self, scl=None, sda=None):
+        for pin, level in ((self.SCL, scl), (self.SDA, sda)):
+            if level is not None:
+                self.dir = self.dir & ~(1 << pin) if level else self.dir | (1 << pin)
+        self.notify()
+
+    def lines(self):
+        di = self.dec.di_override(self.DI, 0) & ~self.dir                       # output pins read DO = 0
+        return (di >> self.SCL) & 1, (di >> self.SDA) & 1
+
+    def read_sda(self):
+        return self.lines()[1]
+
+    def start(self):
+        self.set(scl=1, sda=1)
+        self.free = self.lines() == (1, 1)          # the driver's check that nobody holds the bus
+        self.set(sda=0); self.set(scl=0)
+
+    def write_byte(self, b):
+        for i in range(7, -1, -1):
+            self.set(sda=(b >> i) & 1); self.set(scl=1); self.set(scl=0)
+        self.set(sda=1); self.set(scl=1); ack = self.read_sda(); self.set(scl=0)
+        return ack == 0
+
+    def read_byte(self):
+        self.set(sda=1)
+        v = 0
+        for _ in range(8):
+            self.set(scl=1); v = (v << 1) | self.read_sda(); self.set(scl=0)
+        self.set(sda=1); self.set(scl=1); self.set(scl=0)  # NACK
+        return v
+
+
 def main():
     ok = True
     dec = TM1650Decoder(scl_gpio=SCL, sda_gpio=SDA, log_handler=lambda m: None)
@@ -111,6 +161,23 @@ def main():
             fbus.display_write(addr, data)
         check(fd.get_display_text() == text, f"FD650K layout, {what}: {fd.get_display_text()!r} == {text!r}")
     report_artifacts.panel(fd.digits, "the Ferguson T650i's panel when its application starts", fd.get_display_text())
+
+    # the R265 Lite's open-drain bus: the lines read high whenever the chip does not hold SDA
+    hd = TM1650Decoder(scl_gpio=57, sda_gpio=58, log_handler=lambda m: None)
+    obus = OpenDrain(hd)
+    check(obus.lines() == (1, 1), f"open-drain: the idle bus reads high {obus.lines()}")
+    check(obus.display_write(0x48, 0x01) and obus.free, "open-drain: a display write is acknowledged, the bus was free")
+    for addr, data in ((0x68, 0x54), (0x6A, 0x5C), (0x6C, 0x39), (0x6E, 0x76)):
+        obus.display_write(addr, data)
+    check(hd.get_display_text() == "noCH", f"open-drain: the digits decode ({hd.get_display_text()!r} == 'noCH')")
+    down = TM1650Decoder.key_code(1, 4, pressed=False)
+    hd.press_key(down)
+    got = [obus.key_read() for _ in range(2)]
+    check(got == [down | 0x40, down] and obus.free, f"open-drain: key reads answer KI1/DIG4 pressed, then released "
+          f"{[hex(g) for g in got]}")
+    check(obus.lines() == (1, 1) and hd.state == 'IDLE', "open-drain: the bus is idle and high again")
+    check(hd.key_read_count == 2 and hd.i2c_transaction_count == 7,
+          f"open-drain: 7 transactions, 2 key reads ({hd.i2c_transaction_count}, {hd.key_read_count})")
     print("[PASS] TM1650 key scan" if ok else "[FAIL] TM1650 key scan")
     sys.exit(0 if ok else 1)
 

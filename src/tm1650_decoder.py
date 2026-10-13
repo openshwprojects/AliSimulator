@@ -13,16 +13,30 @@ T650i's FD650K: digits 0x6C, 0x6E, 0x6A, 0x68, segments on bits
 1, 5, 6, 0, 7, 2, 4, 3).  .digits / get_display_text() give the display in
 the standard layout (bit 0..6 = a..g, bit 7 = DP), left to right; .raw holds
 the bytes as written to registers 0x68..0x6E.
+
+The decoders see the pins' levels (simulator._hook_gpio_write): a pin the CPU
+drives as an output is at its DO bit, a pin it leaves as an input is high --
+the bus's pull-up -- unless the chip pulls it low.  Some drivers bit-bang the
+bus open-drain, DO kept 0 and only the direction switched (the Opticum Blue
+R265 Lite's application, the ALi SDK's i2c_gpio), others drive both lines and
+switch SDA to an input only where the chip answers.  Either way the chip holds
+SDA low while it acknowledges a byte and while it shifts out a 0 bit of a key
+byte, and nothing else: the firmware reads its pins through di_override(), and
+an idle bus reads high -- the R265 Lite's driver checks that before a START.
 """
 
 
-GPIO_DO_OFFSETS = (0x054, 0x0D4, 0x0E8, 0x0F4)    # the DO (data-out) register of GPIO bank 0..3 (32 pins
-                                                  # each); the bank's DI register is DO - 4, DIR is DO + 4
+GPIO_DO_OFFSETS = (0x054, 0x0D4, 0x0F4, 0x354, 0x454)  # the DO (data-out) register of GPIO bank 0..4, 32 pins
+                                                       # each: GPIO 0..159 as the SDK's GPIO driver numbers them
+                                                       # (the Ferguson T750i's bank selection, 0x8000C530); the
+                                                       # bank's DI register is DO - 4, its DIR register DO + 4
+GPIO_EXTRA_DO_OFFSETS = (0x0E8,)                       # older SDKs' third bank (the Cabletech URZ0083Q's, the
+                                                       # Strong SRT 8115's firmware), which has no number here
 
 
 class PanelDecoder:
     """What the LED-driver decoders share: the GPIO pins as (DO register
-    offset, bit), the bookkeeping of the DO writes the simulator reports to
+    offset, bit), the bookkeeping of the pin levels the simulator reports to
     on_gpio_write(), the log with the chip's tag, and the 7-segment digits
     (.digits of the subclass, standard layout: bit 0..6 = a..g, bit 7 = DP)
     as text."""
@@ -130,6 +144,7 @@ class TM1650Decoder(PanelDecoder):
         self.bit_count = 0
         self.current_byte = 0
         self.bytes_received = []
+        self._ack = False               # SCL high in a byte's 9th clock (its acknowledge)
 
         # Display state: the bytes written to digit registers 0x68, 0x6A, 0x6C, 0x6E
         self.raw = [0x00, 0x00, 0x00, 0x00]
@@ -151,7 +166,8 @@ class TM1650Decoder(PanelDecoder):
         self._i2c_trace_count = 0
 
     def on_gpio_write(self, address, size, value):
-        """Called when a GPIO register is written. Auto-detects I2C pins."""
+        """Called with a GPIO bank's pin levels (`address` its DO register)
+        whenever the CPU writes the bank's DO or DIR register."""
         offset = address & 0xFFF
         if not self._gpio_changed(offset, value):
             return
@@ -216,8 +232,15 @@ class TM1650Decoder(PanelDecoder):
         4. STOP: SCL low, SDA low, SCL high, SDA high
         
         The firmware may change SDA while SCL is still high between bit clocks.
-        We only sample data on SCL RISING edges.
+        We only sample data on SCL RISING edges.  While the chip holds SDA
+        (_chip_owns_sda) the CPU's side of the line does not count: a driver
+        that releases SDA for the acknowledge while SCL is high makes no STOP.
         """
+        if self.state == 'DATA':
+            if scl_changed and scl == 0:
+                self._ack = False
+            elif sda_changed and scl == 1 and not scl_changed and self._chip_owns_sda():
+                return
         if self.state == 'IDLE':
             # START: SDA falls while SCL is high
             if sda_changed and sda == 0 and scl == 1:
@@ -225,6 +248,7 @@ class TM1650Decoder(PanelDecoder):
                 self.bit_count = 0
                 self.current_byte = 0
                 self.bytes_received = []
+                self._ack = False
                 self._tx_serial += 1
                 self.log(f"[I2C] START detected")
                 return
@@ -244,6 +268,7 @@ class TM1650Decoder(PanelDecoder):
                     self.bytes_received.append(self.current_byte)
                     self.bit_count = 0
                     self.current_byte = 0
+                    self._ack = True
                 return
             
             # STOP: SDA rises while SCL is high (after receiving at least one byte)
@@ -266,6 +291,7 @@ class TM1650Decoder(PanelDecoder):
                 self.bit_count = 0
                 self.current_byte = 0
                 self.bytes_received = []
+                self._ack = False
                 self._tx_serial += 1
                 self.log(f"[I2C] Repeated START")
                 return
@@ -302,10 +328,11 @@ class TM1650Decoder(PanelDecoder):
         elif addr in self.KEY_READ_ADDRS:
             # Key read: 7-bit I2C addr 0x27 -> (0x27<<1)|1 = 0x4F.
             # Firmware polls the keypad continuously; only log the first read
-            # and whenever the observed value changes.
-            # NOTE: we only see the GPIO output latch, so 'data' is not the real
-            # key code unless the simulator emulates the chip driving SDA.
+            # and whenever the observed value changes.  The data byte is the
+            # one the chip answered (sda_in), when the firmware read it.
             self.key_read_count += 1
+            if self._answer_tx == self._tx_serial:
+                data = self._answer
             if data != self._last_key_value:
                 self._last_key_value = data
                 self.log(f"[TM1650] Key read: {self.parse_key_byte(data)} "
@@ -329,30 +356,51 @@ class TM1650Decoder(PanelDecoder):
         self._press_reads_left = hold_reads
         self.key_byte = (code | 0x40) & 0xFF
 
+    def _key_byte_on_bus(self):
+        """Whether the byte on the bus is the chip's: the data byte of a key read."""
+        return len(self.bytes_received) == 1 and self.bytes_received[0] in self.KEY_READ_ADDRS
+
+    def _chip_owns_sda(self):
+        """Whether the chip holds SDA now: while it acknowledges a byte it
+        received (from that byte's 8th clock to the end of its 9th) and while
+        it shifts out a key byte."""
+        if self.state != 'DATA':
+            return False
+        if self._ack:
+            return len(self.bytes_received) == 1 or self.bytes_received[0] not in self.KEY_READ_ADDRS
+        return self._key_byte_on_bus() or self.bit_count == 8
+
     def sda_in(self):
-        """Level the chip drives on SDA now: during the data byte of a key
-        read the bit the CPU is clocking in (MSB first; it reads DI after the
-        SCL rising edge, when bit_count already counts that edge), else 0 (ACK
-        / idle: the CPU drives the line)."""
-        if (self.state == 'DATA' and len(self.bytes_received) == 1
-                and self.bytes_received[0] in self.KEY_READ_ADDRS and 1 <= self.bit_count <= 8):
-            if self._answer_tx != self._tx_serial:        # first bit of this transaction's data byte
-                self._answer_tx = self._tx_serial
-                self.key_reads_answered += 1
-                self._answer = self.key_byte
-                if self._press_reads_left > 0:
-                    self._press_reads_left -= 1
-                    if self._press_reads_left == 0:
-                        self.key_byte &= ~0x40 & 0xFF      # released from the next read on
-            return (self._answer >> (8 - self.bit_count)) & 1
-        return 0
+        """Level the chip leaves on SDA now: 0 while it acknowledges a byte
+        and for the 0 bits of the key byte it answers a key read with (MSB
+        first: the bit the CPU clocked in with the last SCL rising edge while
+        SCL is high, the next one while it is low), else 1 -- released, the
+        pull-up.  The key byte is latched at the first read of the line in a
+        key read (press_key)."""
+        if not self._chip_owns_sda():
+            return 1
+        if self._ack or not self._key_byte_on_bus():
+            return 0                                        # the acknowledge
+        if self._answer_tx != self._tx_serial:              # first look at this transaction's key byte
+            self._answer_tx = self._tx_serial
+            self.key_reads_answered += 1
+            self._answer = self.key_byte
+            if self._press_reads_left > 0:
+                self._press_reads_left -= 1
+                if self._press_reads_left == 0:
+                    self.key_byte &= ~0x40 & 0xFF           # released from the next read on
+        bit = 8 - self.bit_count if self.prev_scl else 7 - self.bit_count
+        return (self._answer >> bit) & 1 if 0 <= bit <= 7 else 1
 
     def di_override(self, di_offset, di_value):
-        """Called by the simulator for every GPIO DI read: sets the SDA bit of
-        the read value to the level the chip drives (sda_in), for the bank
-        that holds SDA."""
-        if di_offset == self.sda_offset - 4 and self.sda_in():      # DI register = DO register - 4
-            return di_value | (1 << self.sda_bit)
+        """Called by the simulator for every GPIO DI read (the bank's DI
+        register = its DO register - 4) with the value it reads so far; the
+        simulator keeps the bits of output pins.  SCL reads high (the chip
+        never stretches the clock), SDA as the chip leaves it (sda_in)."""
+        if di_offset == self.scl_offset - 4:
+            di_value |= 1 << self.scl_bit
+        if di_offset == self.sda_offset - 4:
+            di_value = di_value & ~(1 << self.sda_bit) | (self.sda_in() << self.sda_bit)
         return di_value
 
     @staticmethod

@@ -87,7 +87,8 @@ their file names.
   the application polls; with the box's official firmware images (1.1.5 and
   1.2.0) the bootloader, the LZMA decompression and the application's start-up
   run to its UART banner and its main loop, remote keys reach it through the
-  same IR controller as the M3801's, its HD2015 panel chip decodes as a TM1650,
+  same IR controller as the M3801's, its HD2015 panel chip decodes as a TM1650
+  (the application's open-drain bus: its texts and its three buttons),
   and both applications draw their home menu through the M3801's own GE and
   display layer (`run_dump_r265lite_capture_screen.py`,
   `run_dump_r265lite_120_capture_screen.py`; firmware 1.2.0's first waits for
@@ -240,7 +241,20 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   the same protocol. The Ferguson Ariva T650i has an FD650K
   (TM1650-compatible, the usual pins) whose digits are registers 0x6C, 0x6E,
   0x6A, 0x68 from the left, with the segments on its own bits (read off the
-  font table its application builds in RAM): " On ", "Strt", "Find".
+  font table its application builds in RAM): " On ", "Strt", "Find"; the
+  T750i and T760i have the same panel on other banks (SCL / SDA = GPIO 128 /
+  129 and 107 / 110). The decoders get the pins' levels on every write of a
+  bank's DO or DIR register -- an output pin at its DO bit, an input pin high,
+  the pull-up -- because some drivers bit-bang the bus open-drain, DO kept 0
+  and only the direction switched: the Opticum Blue R265 Lite's application
+  (HD2015, SCL = GPIO 57, SDA = GPIO 58) does, and it checks that both lines
+  read high before every START. While released lines read 0 it took the bus
+  for busy and never reached its chip; now the TM1650 model drives SDA low
+  only while it acknowledges or sends a 0 bit, and the application writes
+  " on ", "Strt", "noCH" and reads its three buttons (KI1/DIG4 and KI7/DIG4
+  step its menu, KI2/DIG4 is power). GPIO numbers are the SDK driver's:
+  banks 0xB8000054, 0D4, 0F4, 354, 454 for GPIO 0..159 (older SDKs' third
+  bank, 0xB80000E8, is watched too).
   The Strong Prima VIII has no LED driver -- its CH455 driver talks to a
   software I2C bus with no pins -- but two **buttons straight on GPIO 31
   (channel up) and 9 (channel down)**, pulled up, which its application polls
@@ -534,6 +548,12 @@ then every 1000th.
   application then read its chip as 0xB602 and rebooted itself every ~38 M
   instructions -- the chip ID word is read-only now
   (`_hook_chip_id_store`).
+* A stand-in has to look like the bus at rest too: input pins that read 0
+  (an I2C slave's ACK, so writes "succeeded") made the R265 Lite's panel
+  driver, which checks that SDA and SCL are high before a START, find its bus
+  busy for ever -- and a decoder that only watched DO never saw its open-drain
+  transactions anyway. Its buttons and texts appeared once released lines
+  read high and DIR writes reached the decoder.
 * A black capture is not always a missing display model: the X110TS drew its
   whole channel banner into a region the GMA layer pointed at, and a task of
   its application cleared the layer's enable bit again about ten times a

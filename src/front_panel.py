@@ -36,9 +36,13 @@ from tm1650_decoder import TM1650Decoder
 
 # Opticum Blue R265 Lite (M3822P): an HD2015 -- TM1650-compatible -- on GPIO bank 1 (0xB80000D4),
 # SCL = GPIO 57, SDA = GPIO 58; no display is soldered on this box, the chip only scans its three
-# buttons, but the firmware still writes " ON " at boot (digits in the standard layout).  Both
-# the flash dump (M3822P.bin) and the update images (T2GEN265_*.abs) are this board.
-_R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={})
+# buttons, but the firmware still writes " ON " at boot and its application "noCH" (digits in the
+# standard layout).  The application drives the bus open-drain (tm1650_decoder.py) and polls the
+# keys: KI1/DIG4 and KI7/DIG4 step the home menu's highlight (one down, the other -- presumably
+# up -- wrapping round to the same tile of its two-row column), KI2/DIG4 is power (standby,
+# "oFF "); the other 25 positions do nothing there.  Both the flash dump (M3822P.bin) and the
+# update images (T2GEN265_*.abs) are this board.
+_R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={(1, 4): "▼", (7, 4): "▲", (2, 4): "PWR"})
 
 # (substring of the dump's path, case-insensitive) -> panel spec
 PANELS = [
@@ -75,6 +79,15 @@ PANELS = [
     # '0' = 0xEF, '1' = 0x60, '8' = 0xF7, '-' = 0x10): " On " from the bootloader, "Strt"
     # when the application starts (keys not mapped yet)
     ("T650i", dict(chip="tm1650", scl=31, sda=9, digit_order=(2, 3, 1, 0),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+    # Ferguson Ariva T750i / T760i (the M3821 generation): the T650i's FD650K and digit layout on
+    # other pins -- the T750i's on GPIO bank 4 (0xB8000454), SCL = GPIO 128 (bit 0, always an
+    # output), SDA = GPIO 129 (bit 1, switched to an input for the chip's answers); the T760i's on
+    # bank 3 (0xB8000354), SCL = GPIO 107, SDA = GPIO 110.  Both write " On " from the
+    # bootloader, the T750i " on ", "Strt" and "Find" from its application (keys not mapped yet)
+    ("T750i", dict(chip="tm1650", scl=128, sda=129, digit_order=(2, 3, 1, 0),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+    ("T760i", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
