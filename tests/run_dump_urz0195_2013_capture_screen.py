@@ -5,8 +5,9 @@ application (Libcore 8.1c.0@SDK4.0bd.8.7_20121127), which plays the first
 channel of its database ("prog id : 4", TVN) and draws its channel banner
 (channel 5, "Brak informacji", 0 %) some 20 GE commands in, then, when the
 banner has timed out, the live-TV "Brak sygnału!" (no signal) screen; that
-stable screen is compared with urz0195_2013_screen.png.  (Its uPD16312-class
-front panel's segment wiring is not mapped yet, so its text is not checked.)
+stable screen is compared with urz0195_2013_screen.png.  Its uPD16312-class
+front panel, wired and driven like the 2012 firmware's (the same font table),
+must show the channel number "0005" by then (the decoder renders it "OOOS").
 
 Usage: python run_dump_urz0195_2013_capture_screen.py [--make-expected]
 """
@@ -22,6 +23,7 @@ screen_regression.run(
     settle_s=60,
     min_ge_ops=36,        # after the channel banner (~20 commands) has timed out
     max_diff_pct=1.0,
+    panel_text="OOOS",    # the channel number "0005"
     title="Cabletech URZ0195 (2013 firmware)",
     retries=2,
 )

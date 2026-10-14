@@ -35,7 +35,7 @@
     "application": true,
     "display": true,
     "panelText": [" ON ", "----", "0004"],
-    "note": "Boots into its application and draws (run_dump_urz0195_capture_screen.py, expected urz0195_2012_screen.png); its uPD16312-class panel shows \" ON \", \"----\", then the channel number \"0004\"."
+    "note": "Boots into its application and draws (run_dump_urz0195_capture_screen.py, expected urz0195_2012_screen.png); its uPD16312-class panel shows \" ON \", \"----\", then the channel number \"0004\".  Its UI's key map (58 entries) holds remote keys only, so no panel key can do anything (2026-10-14; all 40 key bits pressed on its live-TV screen had changed nothing)."
   },
   "desc": [
     "The older of the two URZ0195 dumps in this repository: a different bootloader build than cableteh_urz0195__w25q32bv.BIN's (Libcore 1.1.6, just.li, Fri Jul 13 2012, vs vic.wang Nov 26 2012) and maincode of 2012-08-02 (vs 2013-10-23); the same remote (standby wake code 807F00FF) and the same uPD16312-class front panel driver."

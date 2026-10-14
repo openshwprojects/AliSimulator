@@ -780,7 +780,7 @@ exit and down keys -- "Edit Channel", "Favorite" highlighted -- about 5) and
 image, without the dump's channel database: its first-install wizard,
 about 5) and `run_dump_urz0195_2013_capture_screen.py` (the Cabletech
 URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
-screen, about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
+screen, the panel reading "0005", about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
 4) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
