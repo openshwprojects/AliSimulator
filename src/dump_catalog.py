@@ -20,7 +20,10 @@ pulls up (status and fault lines that read high when nothing pulls them low;
 an input pin nothing models reads 0 otherwise): loadFile attaches both.
 device.chipId,
 where a board's SoC reads another chip ID than its family's (chips/), is that
-ID as a "0x...." string, the evidence in the notes.  tests/test_dump_catalog.py checks
+ID as a "0x...." string, the evidence in the notes.  device.otp, where a
+board's firmware reads its chip's one-time-programmable memory for something
+it must find there, is {"0x<offset>": "<hex bytes>"} (chips/m3821.Otp).
+tests/test_dump_catalog.py checks
 every sidecar against its image and against the code's own tables
 (front_panel.PANELS, ir_remote.IR_CODINGS), and tools/dump_table.py renders
 them as dumps/README.md.
@@ -131,7 +134,24 @@ def problems(path, data):
     pull_ups = device.get("gpioPullUps")
     if pull_ups is not None and not (isinstance(pull_ups, list) and pull_ups and all(map(pin, pull_ups))):
         out.append(f"{rel}: gpioPullUps {pull_ups!r} is not a list of GPIO numbers")
+    otp_given = device.get("otp")
+    if otp_given is not None:
+        try:
+            ok = isinstance(otp_given, dict) and bool(otp_given) and all(
+                k.startswith("0x") and int(k, 16) + len(bytes.fromhex(v)) <= 0x400 and v
+                for k, v in otp_given.items())
+        except (ValueError, AttributeError, TypeError):
+            ok = False
+        if not ok:
+            out.append(f"{rel}: otp is not {{\"0x<offset>\": \"<hex bytes>\"}} within 1 KB")
     return out
+
+
+def otp(dump):
+    """{offset: bytes} of a board's one-time-programmable memory the sidecar
+    gives (device.otp), or None."""
+    given = (((load(dump) or {}).get("device")) or {}).get("otp")
+    return {int(k, 16): bytes.fromhex(v) for k, v in given.items()} if given else None
 
 
 def gpio_i2c(dump):

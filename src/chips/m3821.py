@@ -387,6 +387,51 @@ class MirrorRegisters:
                 uc.mem_write(0xB8000000 + target, bytes(uc.mem_read(0xB8000000 + source, n)))
 
 
+class Otp:
+    """The one-time-programmable memory's controller at 0xB8042000 (1 KB of
+    bits that can only be set), as the M3821 / C3505 firmwares' OTP driver uses
+    it (T750i 0x803EFCB0..0x803EFF54): +04 the byte address, +08 a byte to
+    burn, +0C the command -- bit 8 reads the 32-bit word at the address into
+    +18, bit 0 burns +08 into the byte at it --, +10 the busy bits (8: read,
+    0: burn) the driver polls, +14 a burn's result (bit 0 clear: done).
+    Commands complete at once.  A board's sidecar may give contents
+    (device.otp, dump_catalog.otp); none does: the Fergusons' firmwares look
+    at two 64-byte halves of a signature at 0x1C0 and 0x3A0 -- blank, every
+    minute of play their UI shows "STB not signed!", as an unsigned box's
+    would -- and a non-blank stand-in there sends their start-up down the
+    signed path (its RSA check), where the simulator crashed."""
+    BASE = 0x42000
+    SIZE = 0x400
+    ADDRESS, DATA, COMMAND, DATA_OUT = 0x04, 0x08, 0x0C, 0x18
+
+    def __init__(self, sim, contents=None):
+        self.sim = sim
+        self.data = bytearray(self.SIZE)
+        for offset, blob in (contents or {}).items():
+            self.data[offset:offset + len(blob)] = blob[:self.SIZE - offset]
+        self.reads = self.burns = 0
+        sim._mmio_on('w', self._write_command, self.BASE + self.COMMAND, self.BASE + self.COMMAND + 3)
+
+    def _reg(self, offset, size=4):
+        return int.from_bytes(self.sim.mu.mem_read(0xB8000000 + self.BASE + offset, size), 'little')
+
+    def _write_command(self, uc, access, address, size, value, user_data):
+        """Run a read or burn command; its start bits read back clear."""
+        self.sim._device_access(uc)
+        value <<= 8 * ((address & 0xFFFFFF) - self.BASE - self.COMMAND)
+        at = self._reg(self.ADDRESS) & (self.SIZE - 1)
+        if value & 0x100:
+            word = at & ~3
+            uc.mem_write(0xB8000000 + self.BASE + self.DATA_OUT, bytes(self.data[word:word + 4]))
+            self.reads += 1
+        if value & 0x001:
+            self.data[at] |= self._reg(self.DATA, 1)
+            uc.mem_write(0xB8000000 + self.BASE + 0x14, bytes(4))
+            self.burns += 1
+        cleared = value & ~0x101
+        return (cleared >> (8 * ((address & 0xFFFFFF) - self.BASE - self.COMMAND))) & ((1 << (8 * size)) - 1)
+
+
 class Demodulator(DemodulatorLock):
     """The chip's own DVB-T / T2 demodulator ("NIM_S3821_0"), registers memory-
     mapped at 0xB804C000 + register (the nim_device's base address).  Its
@@ -446,6 +491,9 @@ class M3821(ChipFamily):
         # whose PID filters this generation's driver writes as single entries; it polls the ring
         from dmx_m36 import Demux
         self.dmx = Demux(sim, pid_entries=True)
+        # the OTP memory, with what the board's sidecar says its chip holds
+        import dump_catalog
+        self.otp = Otp(sim, dump_catalog.otp(sim.dump_path) if getattr(sim, "dump_path", None) else None)
         self.ready = ReadyBits(sim, {
             0x000633: 0x80,     # the PLL at 0xB8000600..: locked (polled after it is programmed)
         })

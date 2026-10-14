@@ -142,7 +142,13 @@ M3503).
   transfer; the dumped flash's own
   main code is damaged, see its sidecar). The
   simulator itself gained CP0 EBase for it (the application moves the
-  exception vectors).
+  exception vectors). The family also models the chip's OTP memory
+  (`m3821.Otp` at 0xB8042000: 1 KB read a word at a time, burnt a byte at a
+  time) with what a board's sidecar says it holds (`device.otp`; none does
+  yet): the Fergusons' firmwares look for a signature there every minute of
+  play and show "STB not signed!" while it is blank, as on an unsigned box;
+  a non-blank stand-in sends their start-up down the signed path (an RSA
+  check), where the simulator crashed.
   The M3329 (`chips/m3329.py`, the 2005 board in `dumps/other/`, an M3327
   platform chip recognised by its bootloader chunk's ID 0xE3000010) is the
   oldest: its bootloader reads the chip revision from the chip word's low
@@ -463,7 +469,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   filters the PAT, SDT, NIT and the PMT the PAT names, consumes every packet
   and ends on "Zakończono wyszukiwanie kanałów" with "AliSimulator TV" among
   its TV channels, its clock at the TDT's "13:00, sobota 10 października"
-  (`run_dump_r265lite_signal_capture_screen.py`).
+  (`run_dump_r265lite_signal_capture_screen.py`); the Ferguson T750i (the
+  same driver) in its automatic search, and in its manual search on CH05,
+  after which it stores and plays the channel, its banner showing "10/10/2026
+  14:00" and the stream's now / next events -- with "STB not signed!" popping
+  up every minute of play, its OTP signature being blank (see the M3821
+  above), which makes those screens too timing-dependent for a regression.
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
 * **Real-time clock** (`rtc_m36.py`, 0xB8018A00): the SDK's RTC driver
@@ -903,6 +914,8 @@ with SHA-1 on the crypto engine model and checks its interrupt.
 program, sector and chip erase, unlock bypass) and, on a simulator in both
 modes, the M3329 driver's probe -- the reset in a branch delay slot -- and an
 SPI flash's store in a delay slot, each instruction running once.
+`test_otp_m3821.py` reads and burns the M3821's OTP model the way the
+firmware's driver does, on the T750i's blank OTP.
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn
