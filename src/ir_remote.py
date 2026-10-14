@@ -130,7 +130,7 @@ def ir16_to_nec(ir16):
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
-              ("ESR-250", "necfirst"), ("ArivaT50", "cmd")]
+              ("ESR-250", "necfirst"), ("UNI_S60", "necfirst"), ("ArivaT50", "cmd")]
 
 
 def coding_for(dump):

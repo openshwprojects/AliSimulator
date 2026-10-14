@@ -777,7 +777,8 @@ wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
 its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
 whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
-switch's fault flag on GPIO 25 pulled up, about 3) and
+switch's fault flag on GPIO 25 pulled up, then the remote's OK opens its
+channel list and DOWN moves the highlight, about 4) and
 `run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
 run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
 moves, about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
@@ -830,7 +831,7 @@ bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
 Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
 Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
 M3601E firmwares (URZ0083, KM0183, THT501), standard NEC whose table code keeps the first
-address byte for the Echosonic ESR-250's 2015 firmware, and only the command half for the
+address byte for the Echosonic ESR-250's 2015 firmware and the Opticum S60's, and only the command half for the
 Ferguson T50, whose control task drops a key unless the code's address half is its remote's
 (extended NEC 0x01 / 0xFC); a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;
