@@ -18,10 +18,11 @@ follow the firmware's GPIO writes and answer its key reads.
     driver acts on a key held for several polls.
   * TM1628-class (3-wire: CLK, DIO, STB): Cabletech URZ0083Q (PCB
     6390-M3801) and the Strong SRT 8115 (MC6422-M3801) -- CLK = GPIO 31, DIO =
-    GPIO 9, STB = GPIO 11; the Cabletech's digits in RAM
-    0, 2, 4, 6 with its own segment wiring (" ON " at boot, "noCH" without
-    channels); its panel driver reacts to KS9/K1 (down), KS9/K2 (up) and
-    KS10/K1 (power -> standby, "oFF ").  The Cabletech URZ0195 has a
+    GPIO 9, STB = GPIO 11; their digits in RAM 0, 2, 4, 6 with their own
+    segment wiring (" ON " at boot, "noCH" without channels); the
+    Cabletech's panel driver reacts to KS9/K1 (down), KS9/K2 (up) and
+    KS10/K1 (power -> standby, "oFF "), the Strong's to the same three with
+    up and down swapped.  The Cabletech URZ0195 has a
     uPD16312-class chip on the same bus with STB = GPIO 14, its digits in
     grids 4, 2, 3, 1 with their own segment wiring (" ON ", "----", then the
     channel number "0004"); its firmwares' key maps have no panel keys.
@@ -85,9 +86,17 @@ PANELS = [
     # value, KS8/K1 = menu (its main menu opens), KS8/K2 = down, KS9/K2 = power (standby "oFF ")
     ("urz0194", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6),
                      labels={(7, 1): "◀", (9, 1): "▶", (8, 1): "MENU", (8, 2): "▼", (9, 2): "PWR"})),
-    # Strong SRT 8115 (MC6422-M3801): the same 3-wire bus and pins as the Cabletech URZ0083Q
-    # (GPIO 31 clocks, 9 carries the data, 11 strobes); digit layout and keys not mapped yet
-    ("srt8115", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6), labels={})),
+    # Strong SRT 8115 (MC6422-M3801): the Cabletech URZ0083Q's panel -- the same 3-wire bus and
+    # pins (GPIO 31 clocks, 9 carries the data, 11 strobes), digits in RAM 0, 2, 4, 6 with the same
+    # segment wiring (its font table is the URZ0083Q's byte for byte: '0' = 0xDD, '1' = 0x05,
+    # '-' = 0x02), RAM 1 and 11 indicator LEDs: " ON " from the bootloader, "----" from the
+    # application.  Its panel code reads 5 key bytes, takes the first that is neither 0 nor 0x3F
+    # and looks it up in a table of {value, code, byte index} (0x8052EB78): byte 4 = 1 (KS9/K1)
+    # up, 2 (KS9/K2) down, 8 (KS10/K1) power -- the URZ0083Q's table has up and down the other
+    # way round, as its keys were found by pressing them
+    ("srt8115", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6),
+                     seg_map=(4, 2, 0, 6, 7, 3, 1, 5),
+                     labels={(9, 1): "▲", (9, 2): "▼", (10, 1): "PWR"})),
     # Ferguson Ariva T650i: an FD650K ("PAN_FD650K"), TM1650-compatible, on the usual pins; its
     # digits are registers 0x6C, 0x6E, 0x6A, 0x68 from the left and its segments a..g, DP sit on
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:

@@ -34,8 +34,8 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": [" ON "],
-    "note": "Boots into its application and draws (run_dump_srt8115_capture_screen.py); its panel speaks the Cabletech URZ0195's protocol on the URZ0083Q's pins."
+    "panelText": [" ON ", "----", "0001"],
+    "note": "Boots into its application and draws (run_dump_srt8115_capture_screen.py).  Its panel is the Cabletech URZ0083Q's (2026-10-14): the same 3-wire chip and pins, digits in RAM 0, 2, 4, 6 with the same segment wiring -- its application's font table is the URZ0083Q's byte for byte ('0' = 0xDD, '1' = 0x05, '-' = 0x02) and its bootloader writes 0xDD 0x9D, \" ON \" -- RAM 1 and 11 indicator LEDs; then \"----\" and the channel number \"0001\".  Its panel code reads 5 key bytes, takes the first that is neither 0 nor 0x3F and looks it up in a {value, code, byte index} table (0x8052EB78): byte 4 = 1 (KS9/K1) up, 2 (KS9/K2) down, 8 (KS10/K1) power, the UI's panel codes 0xFF02 / 0xFF06 / 0xFF07; in its main menu the panel's down key moves the highlight."
   },
   "desc": [
     "The attachment \"Strong srt8115 MC6422-M3801.BIN\" of the elektroda thread \"Aktualizacja BIOS w telewizorze Strong SRT8115 MC6422-M3801\" (topic3612217, 5 September 2019) is byte-identical to this file (same SHA-1), so it is not kept separately."

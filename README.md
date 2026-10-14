@@ -302,8 +302,11 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   KS10/K1 = power). The Cabletech URZ0195's uPD16312-class chip (STB = GPIO 14,
   LED port command; its digits in grids 4, 2, 3, 1 with their own segment
   wiring, read off its firmware's font table: " ON ", "----", then the channel
-  number "0004") and the Strong SRT 8115's chip (the Cabletech's pins) speak
-  the same protocol. The Ferguson Ariva T650i has an FD650K
+  number "0004") speaks the same protocol, and the Strong SRT 8115 has the
+  URZ0083Q's panel outright (the same pins, digit wiring and font table:
+  " ON ", "----", then the channel number), whose panel code looks the key
+  bytes up in a small table -- byte 4 = 1, 2, 8: up, down, power; the
+  URZ0083Q's has up and down the other way round. The Ferguson Ariva T650i has an FD650K
   (TM1650-compatible, the usual pins) whose digits are registers 0x6C, 0x6E,
   0x6A, 0x68 from the left, with the segments on its own bits (read off the
   font table its application builds in RAM): " On ", "Strt", "Find"; the
@@ -818,7 +821,8 @@ for the GE to go quiet, and the final capture waits until the screen has become
 the expected one, so a slow machine or CI runner only takes longer): the Globo opens its main menu, moves the highlight and
 returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its panel
 keys and the URZ0194S steps its wizard's Region value with its (the whole
-wizard switches language); the SRT 8115 opens and closes its main menu; the
+wizard switches language); the SRT 8115 opens its main menu, moves its
+highlight with the front panel's down key and closes it; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
 (its panel keys do nothing: neither URZ0195 firmware's key map has a panel
 entry); the T650i, once its search, the programme-guide
