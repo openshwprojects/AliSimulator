@@ -182,7 +182,13 @@ M3503).
 * `tests/expected/` -- the expected screens of the screen regressions
   (`<dump>_screen.png`, `<dump>_nav.png`), remade with `--make-expected`.
 * `docs/` -- pictures (the Opticum wizard's screens).
-* `tools/` -- one-off exploration and tracing scripts, kept for reference.
+* `tools/` -- `dump_table.py` (above), `screen_survey.py` (boots every
+  image, or those whose path holds a given word, each in its own process,
+  until its screen shows something, and reports how soon, the GE command
+  count and the front panel's texts, flagging an image whose sidecar says
+  otherwise -- the screen regressions check one image per family in depth;
+  `--jobs 2`, `--out DIR` for the screens), and one-off exploration and
+  tracing scripts, kept for reference.
 * `cpp/` -- the C++ port of the emulator core (work in progress).
 * `refs/` (not in git) -- the ALi SDK sources and libraries the firmware was
   built from, for reading. `report/` (not in git) is the test report.
