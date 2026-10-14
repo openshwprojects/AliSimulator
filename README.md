@@ -798,7 +798,9 @@ channel list, and the remote's and then the front panel's DOWN move the
 highlight, about 5) and
 `run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
 run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
-moves, about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
+moves and then its front panel's down key -- a TM1650-compatible chip on the
+HD-XS2's pins reading "Strt", whose raw key bytes its UI's key map holds as
+panel codes -- about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
 T50, an M3602: its boot logo shown on both outputs, then its installation
 wizard "Welcome", drawn by the M3602's own GE and scaled to its PAL layer,
 whose highlight DOWN moves, about 8) and `run_dump_hdxs2_capture_screen.py`

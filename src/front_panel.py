@@ -127,6 +127,13 @@ PANELS = [
     # 0xFF02, 0xFF01): KI1/DIG4 power (standby, "oFF "), KI2/DIG4 up and KI3/DIG4 down -- they move
     # the Reta image's language list; the SmartHD main menu's row of tiles takes neither
     ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
+    # Echosonic Mini ESR-250 (M3510A, the M3503 family): the HD-XS2's pins, SCL = GPIO 135, SDA =
+    # GPIO 134 (bank 4 bits 7 / 6 toggle).  Its UI's key map holds the raw key bytes as panel
+    # codes (0xFF44 ...), two sets of seven: DIG1 of KI1..KI7 -- up, down, OK, menu, right, left,
+    # power -- and the same keys on DIG2 / DIG3 positions
+    ("ESR-250", dict(chip="tm1650", scl=135, sda=134,
+                     labels={(1, 1): "▲", (2, 1): "▼", (3, 1): "OK", (4, 1): "MENU", (5, 1): "▶", (6, 1): "◀",
+                             (7, 1): "PWR"})),
     # UNI S60: SCL = GPIO 62, SDA = GPIO 63; the bootloader blanks the digits, the application
     # writes " ON ".  Its panel code (0x801639F4) reads the key byte every 100 ms and looks it up in
     # a table of seven DIG4 positions (0x8044375C), of which its UI's key map takes three: KI1/DIG4
