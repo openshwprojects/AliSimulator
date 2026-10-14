@@ -79,6 +79,10 @@ class GeM3602:
     def _write_control(self, uc, access, address, size, value, user_data):
         if address & 3 or size != 4 or value != 2:
             return None
+        # (a store an asynchronous stop rewound runs this again: the list ran already)
+        if self.sim._dev_replay_of(uc, 'ge3602', address, value) is not None:
+            return None
+        self.sim._dev_note(uc, 'ge3602', address, value)
         lo = self._rd(0x10)
         first = (self._rd(0x0C) & 0xF) << 24 | lo & 0xFFFFFF
         self.sim.ge_ops += 1

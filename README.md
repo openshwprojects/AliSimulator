@@ -13,6 +13,7 @@ their file names.
 
 * `src/` -- the simulator (`simulator.py`, `mips16_decoder.py`, the slice
   stopper and clocks) and the device models (`ge_m36f.py`, `ge_m3602.py`, `gma_capture.py`,
+  `crypto_engine.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
@@ -93,7 +94,14 @@ their file names.
   and its application runs with the SEE's program
   (`run_dump_hdxs2_app_starts.py`). The chip's DVB-S2 demodulator is on the
   chip: the CPU reads its registers at 0xB8028000 + the register number, and
-  its chip ID registers answer the S3501's ID (`InternalDemod`). The
+  its chip ID registers answer the S3501's ID (`InternalDemod`). Before it
+  goes on, the application asks the SEE (HLD_DSC.16) to hash its own code
+  with the crypto engine at 0xB8034000 -- the DMA feeding its SHA-256 unit,
+  whose done bit interrupts the SEE on line 44 (`crypto_engine.py`); without
+  that engine the call never returned and nothing was drawn. Both images of
+  the 1.3.5 pack then draw: the SmartHD one its main menu, the Reta one its
+  first-install wizard (`run_dump_hdxs2_capture_screen.py`,
+  `run_dump_hdxs2_reta_capture_screen.py`). The
   Echosonic Mini ESR-250's M3510A (`dumps/other/`, bootloader "3510-r1362")
   runs as this family -- the same XIP bootloader, whose set-up branches on
   the chip ID 0x3503 -- and its single-CPU application draws its Quick Setup
@@ -747,7 +755,12 @@ run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
 moves, about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
 T50, an M3602: its boot logo shown on both outputs, then its installation
 wizard "Welcome", drawn by the M3602's own GE and scaled to its PAL layer,
-whose highlight DOWN moves, about 8).
+whose highlight DOWN moves, about 8) and `run_dump_hdxs2_capture_screen.py`
+(the Globo HD-XS2's SmartHD image, an M3503 whose SEE hashes the
+application on its crypto engine first: its main menu, whose highlight RIGHT
+moves, about 6) and `run_dump_hdxs2_reta_capture_screen.py` (the Reta image
+of the same pack: its first-install wizard, where DOWN picks German and the
+wizard switches language, about 6).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
@@ -806,7 +819,9 @@ the SF_INS store, with the flash read hook installed between slices, also
 toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
 `test_ge_m3602.py` runs the M3602 GE's commands (fill, copy, a scaled copy
 through the palette inside a clip rectangle, a chained command) on a RAM
-image and captures an M3602 display layer of a PAL output.
+image and captures an M3602 display layer of a PAL output;
+`test_crypto_engine.py` hashes a DMA job with SHA-256 and a direct job
+with SHA-1 on the crypto engine model and checks its interrupt.
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn

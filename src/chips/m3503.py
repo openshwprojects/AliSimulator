@@ -71,6 +71,10 @@ class M3503(M3602):
         super().install()
         self.car = CacheAsRam(self.sim)
         self.nim = InternalDemod(self.sim)
+        # the crypto engine's DMA and SHA unit, which the SEE's program hashes the application with
+        from crypto_engine import CryptoEngine
+        self.ce = CryptoEngine(self.sim)
+        self.core_devices = self.core_devices + (self.ce,)
 
     def uninstall(self):
         self.car.remove()

@@ -45,6 +45,12 @@ class Sim:
     def poke(self, address, data):
         self.dev[address - 0xB8000000:address - 0xB8000000 + len(data)] = data
 
+    def _dev_replay_of(self, uc, kind, address, data=None):
+        return None                         # (no asynchronous stops here)
+
+    def _dev_note(self, uc, kind, address, data):
+        pass
+
     def store(self, offset, value):
         """A word store to the engine's register at offset, as the CPU's lands."""
         landed = self.handlers[0xC000 + offset](None, None, 0xB800C000 + offset, 4, value, None) \
