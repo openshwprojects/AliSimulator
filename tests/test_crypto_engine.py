@@ -36,6 +36,7 @@ class Sim:
         self.handlers = {}
         self.chip = Chip()
         self._ic = 0xB8000030
+        self._ic_en = 0xB8000038
         self._ic_lines = 0
         self.raised = []
 

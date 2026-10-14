@@ -144,7 +144,7 @@ class CryptoEngine:
         control = self._rd(DMA_CTRL) if control is None else control
         on = bool(self._rd(DMA_STATUS) & (control >> 8) & 0x3F)
         for core in self._cores():
-            enables = int.from_bytes(core.peek(core._ic + 8 + 4 * (CE_LINE // 32), 4), 'little')
+            enables = int.from_bytes(core.peek(core._ic_en + 4 * (CE_LINE // 32), 4), 'little')
             on_here = on and bool(enables >> (CE_LINE % 32) & 1)
             if on_here or core._ic_lines >> CE_LINE & 1:
                 core._ic_set_line(CE_LINE, on_here)

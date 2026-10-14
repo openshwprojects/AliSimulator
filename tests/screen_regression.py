@@ -59,7 +59,7 @@ class SimulatorCrash(Exception):
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
         signal=False, tuner=True, mux=False, slice_instructions=5_000_000, probe_s=10,
-        signal_frequencies=None):
+        signal_frequencies=None, ge=True):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -76,13 +76,16 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     The boot runs in slices of slice_instructions and looks for the drawn
     screen every probe_s seconds; a screen that is up for a few seconds only
     (a channel banner) is caught with small slices, probe_s=0 and settle_s=0:
-    the screen of the first slice that shows it is the one compared."""
+    the screen of the first slice that shows it is the one compared.
+    ge=False for a chip whose CPU draws its OSD itself (the M3329): the
+    screen alone tells drawn (min_ge_ops is not looked at) and when a redraw
+    is over (no change for a while)."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies)
+                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies, ge)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -93,7 +96,8 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
-         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies):
+         navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies,
+         ge=True):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -175,7 +179,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         # times out and clears before its no-signal message, and the
         # Cabletech's wizard keeps redrawing a little, so neither "N commands
         # done" nor "the GE went quiet" alone marks the screen to capture.
-        if drawn_t is None and sim.ge_ops >= min_ge_ops and now - last_probe >= probe_s:
+        if drawn_t is None and (sim.ge_ops >= min_ge_ops or not ge) and now - last_probe >= probe_s:
             last_probe = now
             rgb = sim.capture_screen()
             colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
@@ -270,13 +274,21 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         """Run until the GE has issued no command for quiet_s seconds (at
         least min_s, at most max_s): a redraw or a banner's timeout takes
         more wall time the busier the machine is, so a fixed wait captured
-        half-drawn menus and banners that had not gone yet."""
+        half-drawn menus and banners that had not gone yet.  Without a GE,
+        until the screen has not changed for quiet_s seconds."""
         t0 = time.time()
         last_ops, last_change = sim.ge_ops, t0
+        last_screen = None if ge else sim.capture_screen()
         while time.time() - t0 < max_s:
             sim.run(max_instructions=sim.instruction_count + 5_000_000)
             now = time.time()
-            if sim.ge_ops != last_ops:
+            if not ge:
+                screen = sim.capture_screen()
+                if not np.array_equal(screen, last_screen):
+                    last_screen, last_change = screen, now
+                elif now - last_change >= quiet_s and now - t0 >= min_s:
+                    return True
+            elif sim.ge_ops != last_ops:
                 last_ops, last_change = sim.ge_ops, now
             elif now - last_change >= quiet_s and now - t0 >= min_s:
                 return True
@@ -305,7 +317,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         t = time.time()
         while time.time() - t < 120:
             sim.run(max_instructions=sim.instruction_count + 5_000_000)
-            if sim.ge_ops - ops >= 2 and int((sim.capture_screen() != previous).any(axis=2).sum()) >= min_px:
+            if (sim.ge_ops - ops >= 2 or not ge) and \
+                    int((sim.capture_screen() != previous).any(axis=2).sum()) >= min_px:
                 break
         settle(120, 8, min_s=20)
         after = sim.capture_screen()

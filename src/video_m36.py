@@ -92,7 +92,7 @@ class _Device:
     def _set_line(self, line, on):
         for core in self._cores():
             if on:
-                enables = int.from_bytes(core.peek(core._ic + 8 + 4 * (line // 32), 4), 'little')
+                enables = int.from_bytes(core.peek(core._ic_en + 4 * (line // 32), 4), 'little')
                 on_here = bool(enables >> (line % 32) & 1)
             else:
                 on_here = False
@@ -101,7 +101,8 @@ class _Device:
 
 
 class VideoEngine(_Device):
-    def __init__(self, sim):
+    def __init__(self, sim, line=VE_LINE):
+        self.line = line                # (the M3329's DECV_M3327 is the same engine on line 9)
         self.status = 0
         self.pictures = 0
         super().__init__(sim)
@@ -130,7 +131,7 @@ class VideoEngine(_Device):
         self._advance_vld()
         self.status |= 1
         self._wr(VE_STATUS, self.status)
-        self._set_line(VE_LINE, True)
+        self._set_line(self.line, True)
 
     def _advance_vld(self):
         """The VLD's bit offset on at the end of the picture's slices."""
@@ -152,7 +153,7 @@ class VideoEngine(_Device):
         written = (value << shift) & mask
         self.status &= ~written
         if not self.status:
-            self._set_line(VE_LINE, False)
+            self._set_line(self.line, False)
         return (self.status & mask) >> shift
 
 

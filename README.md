@@ -7,13 +7,14 @@ headers); SRT Prima is from the same family. The firmware identifies the
 silicon as an S3811: its chip-ID function reads 0xB8000002 and knows 0x3811 but
 no 0x3801, and the simulator reports 0x3811, revision 0. The Echosonic dump
 (M3510A, DVB-S2) and the sat_main_ali3329 dump (M3329) are other chips, per
-their file names.
+their file names; both have families of their own now (the M3510A runs as the
+M3503).
 
 ## Layout
 
 * `src/` -- the simulator (`simulator.py`, `mips16_decoder.py`, the slice
   stopper and clocks) and the device models (`ge_m36f.py`, `ge_m3602.py`, `gma_capture.py`,
-  `crypto_engine.py`,
+  `crypto_engine.py`, `parallel_flash.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
   `python src/gui_simulator.py` (the debugger).
@@ -142,6 +143,25 @@ their file names.
   main code is damaged, see its sidecar). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors).
+  The M3329 (`chips/m3329.py`, the 2005 board in `dumps/other/`, an M3327
+  platform chip recognised by its bootloader chunk's ID 0xE3000010) is the
+  oldest: its bootloader reads the chip revision from the chip word's low
+  byte (0xF0: the newest that needs no boot-ROM call), its SDRAM controller
+  takes commands, its UART is at 0xB8001300, its interrupt controller keeps
+  status and enables at 0xB8000038 / 3C (`set_ic_layout`), and its
+  application runs in place from a parallel NOR flash, which its driver
+  identifies with the AMD autoselect command (`parallel_flash.py`: an
+  MX29LV400B; the probe stores its reset in a branch delay slot, see "Things
+  learned"). Its video decoder and output interrupt are the M36xx's
+  (`video_m36.py`, line 9), its IR receiver the later chips' at 0xB8001100
+  (line 7; the remote's codes come from the firmware's own table,
+  `M3329.remote_frame`), and its OSD (OSD_M3327C) is drawn by the CPU into
+  bitmaps that chains of region headers in RAM place on its PAL output, through
+  palettes written to a port (`gma_capture.m3327_regions`). After searching
+  its channel database byte by byte (~250 M instructions) it shows its
+  channel banner, then MENU its Channel menu (`run_dump_m3329_capture_screen.py`).
+  Its kernel ticks every 108000 Count cycles, so the family's Count runs at
+  10 MHz -- at 100 MHz the tick took most of the emulated time.
 * `dumps/` -- the firmware images, each with a `<name>.json` sidecar: the
   box (SoC, demodulator, tuner, flash part, front-panel chip and pins, IR
   coding), the image (dump or update, version, size, SHA-1, chunk layout),
@@ -565,12 +585,20 @@ then every 1000th.
   0xAFC00000 view. Memory hooks and faults report physical addresses
   (0xB8018300 -> 0x18018300), and the guest only reaches the physical mappings.
 * Unicorn 2.1.4 bug: after a load / store with a memory hook or a protection
-  fault in a branch delay slot, the branch target's first instruction runs
-  twice. `mmio_map` accesses are not affected (unless a debugging script adds
-  a memory hook over the device window), so this concerns the flash window;
-  the shipped dumps never access it in a delay slot (checked over 80M
-  instructions), and the simulator logs a `[WARN] device access in a branch
-  delay slot` once per PC for flash stores and command-mode reads.
+  fault in a branch delay slot, the branch flags of the CPU's hflags stay
+  set, so the next translation block -- at the branch's target -- runs as the
+  delay slot of a branch to that same target, and its first instruction runs
+  twice (a branch there means a branch in a delay slot: the M3329's flash
+  probe ended at PC 0). `mmio_map` accesses are not affected (unless a
+  debugging script adds a memory hook over the device window), so this
+  concerns the flash window. The simulator stops the emulation at such an
+  access -- the stop takes effect at the next block, after the branch -- and
+  clears those flags before the next `emu_start()` (`_device_access`,
+  `_clear_branch_flags`); it logs a `[DSLOT]` line once per PC.
+  Swapping the window for an `mmio_map` region while the flash driver works
+  was tried first and given up: code runs from the M3329's flash, and after
+  an instruction fetch had faulted on an `mmio_map` region, the next
+  `emu_start()` crashed natively, whatever was mapped there by then.
 * Unicorn 2.1.4 bug: translating an unhooked straight-line block of ~375 or
   more instructions (also a jump into zero-filled RAM) crashes with an access
   violation. Fast mode reports it as a RuntimeError; exact mode is not
@@ -760,7 +788,10 @@ whose highlight DOWN moves, about 8) and `run_dump_hdxs2_capture_screen.py`
 application on its crypto engine first: its main menu, whose highlight RIGHT
 moves, about 6) and `run_dump_hdxs2_reta_capture_screen.py` (the Reta image
 of the same pack: its first-install wizard, where DOWN picks German and the
-wizard switches language, about 6).
+wizard switches language, about 6) and `run_dump_m3329_capture_screen.py`
+(the M3329 board: its channel banner, then MENU opens its Channel menu and
+DOWN moves the highlight, about 3; its CPU draws the OSD, so this one watches
+the screen instead of GE commands: `ge=False`).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps
@@ -822,6 +853,10 @@ through the palette inside a clip rectangle, a chained command) on a RAM
 image and captures an M3602 display layer of a PAL output;
 `test_crypto_engine.py` hashes a DMA job with SHA-256 and a direct job
 with SHA-1 on the crypto engine model and checks its interrupt.
+`test_parallel_flash.py` runs the parallel NOR flash's commands (autoselect,
+program, sector and chip erase, unlock bypass) and, on a simulator in both
+modes, the M3329 driver's probe -- the reset in a branch delay slot -- and an
+SPI flash's store in a delay slot, each instruction running once.
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn

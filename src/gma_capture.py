@@ -31,6 +31,14 @@ are the output's: the T50's OSD driver has the GE scale its 912 x 640 CLUT8
 screen to the TV system's size itself (513 x 512 for PAL, at 103, 32), so
 the capture scales the layer up to its 1280 x 720 canvas (output_scale).
 
+The M3329's OSD (OSD_M3327C, chips/m3329.py) has two layers, enabled by
+bits 0 and 16 of 0xB80041A0, whose registers at 0xB80041A4 / 0xB80041C4 hold
+the address of the first of a chain of 16-byte region headers in RAM
+(m3327_regions); a region is a 2, 4 or 8 bpp bitmap through its layer's
+256-entry palette, which the driver writes through a port (0xB80041AC /
+0xB80041C8) and the simulator records, a 4 bpp region using one bank of 16.
+The application's PAL output (0xB800400C) is scaled to the canvas.
+
 The newer display engine of the Ferguson T750i (an M3821 with the SDK's
 dual-CPU build) has layers of its own at 0xB8006900 and 0xB8006B00, which
 no CPU store sets: the drivers build register lists in RAM and hand them to
@@ -181,6 +189,65 @@ def render_m3602(ram, layer):
     return np.clip(np.concatenate([rgb, alpha[..., None]], -1) + 0.5, 0, 255).astype(np.uint8)
 
 
+M3327_LAYER_ON = 0x41A0
+M3327_HEADS = ((0x41A4, 0x00001), (0x41C4, 0x10000))    # (first header register, its bit in M3327_LAYER_ON)
+M3327_TIMING_REG = 0x400C           # b16-26 the video output's total lines, as DE_TIMING_REG
+M3327_BPP = {0: 2, 1: 4, 2: 8, 3: 4}
+
+
+def m3327_regions(ram, dev):
+    """The M3329's OSD regions (OSD_M3327C): [(layer, region dict)] of the
+    enabled layers, each layer's chain of 16-byte headers in RAM from its
+    register:
+      +0  b2-3 colour mode (0 2 bpp, 1 4 bpp, 2 8 bpp, 3 4 bpp), b4-22 the
+          next header (0 ends), b24-27 the palette bank of a 2 / 4 bpp region
+      +4  b0-18 the bitmap address >> 4, b22-31 x end
+      +8  b0-9 the height, b22-31 x start
+      +C  b0-9 y end, b16-25 y start
+    a bitmap's rows being the width's bytes rounded up to 16."""
+    on = struct.unpack_from('<I', dev, M3327_LAYER_ON)[0]
+    regions = []
+    for layer, (reg, bit) in enumerate(M3327_HEADS):
+        a = struct.unpack_from('<I', dev, reg)[0] & 0x7FFFF0
+        seen = set()
+        while on & bit and a and a not in seen and len(seen) < 64:
+            seen.add(a)
+            w0, w1, w2, w3 = (_w(ram, a, 4 * i) for i in range(4))
+            bpp = M3327_BPP[(w0 >> 2) & 3]
+            x0, x1, y0, y1 = w2 >> 22, w1 >> 22, (w3 >> 16) & 0x3FF, w3 & 0x3FF
+            width = x1 - x0 + 1
+            regions.append((layer, {
+                'header': a, 'words': (w0, w1, w2, w3), 'bpp': bpp, 'bank': (w0 >> 24) & 0xF,
+                'x0': x0, 'y0': y0, 'width': width, 'height': y1 - y0 + 1,
+                'bitmap': (w1 & 0x7FFFF) << 4, 'pitch': (width * bpp // 8 + 15) & ~15,
+            }))
+            a = w0 & 0x7FFFF0
+    return regions
+
+
+def render_m3327(ram, region, palette):
+    """rgba uint8 (h, w, 4) of an M3327 OSD region through its layer's palette
+    ({index: Y << 16 | Cb << 8 | Cr}, chips/m3329.Osd); None if it does not fit."""
+    w, h, pitch, a = region['width'], region['height'], region['pitch'], region['bitmap']
+    if w <= 0 or h <= 0 or w > 1024 or h > 1024 or a + h * pitch > ram.size:
+        return None
+    raw = ram[a:a + h * pitch].reshape(h, pitch)
+    bpp = region['bpp']
+    if bpp == 8:
+        idx = raw[:, :w].astype(np.int32)
+    else:
+        shifts = range(8 - bpp, -1, -bpp)
+        idx = np.stack([(raw >> s) & ((1 << bpp) - 1) for s in shifts], -1).reshape(h, -1)[:, :w].astype(np.int32)
+        idx += region['bank'] << bpp
+    lut = np.zeros((256, 4), np.float32)
+    for i, v in palette.items():
+        cb, cr = (v >> 8) & 0xFF, v & 0xFF
+        lut[i & 0xFF] = (v >> 16, cb & 0xFC, cr & 0xFC, (((cb & 3) << 2) | (cr & 3)) * 17)
+    px = lut[idx & 0xFF]
+    rgb = ge_m36f.GeM36F._ycbcr_to_rgb(px[..., :3], 0)
+    return np.clip(np.concatenate([rgb, px[..., 3:4]], -1) + 0.5, 0, 255).astype(np.uint8)
+
+
 DE_LIST_CHANNELS = (0x6080, 0x6090, 0x60A0, 0x60B0)     # (list address, +4 load enable) of the register lists
 DE_LAYERS = (0x6900, 0x6B00)
 # the SDK's GE_PIXEL_FORMAT (ge.h) -> the GE's HW format codes ge_m36f decodes (no CLUT formats:
@@ -273,13 +340,15 @@ def output_scale(dev, screen=(1280, 720)):
     return screen[0] / out[0], screen[1] / out[1]
 
 
-def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0)):
+def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None):
     """Composite all enabled regions of GMA layers 0 and 1 over a solid
     background (the video plane).  Returns (rgb uint8 (H, W, 3), info dict).
     In an SD or 1080i output mode the regions are drawn at the size their
     bitmaps have, at the scaled-back position (the display engine's scaling
     undone, see output_scale), so the picture is what the TV shows, at the
-    OSD's own resolution."""
+    OSD's own resolution.  m3327_palettes: the M3329's OSD layers' palettes
+    (chips/m3329.Osd) -- its regions are drawn too, scaled from its output
+    frame to the canvas like the M3602's."""
     W, H = screen
     canvas = np.empty((H, W, 3), np.float32)
     canvas[...] = background
@@ -320,6 +389,20 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0)):
         rows = np.minimum((np.arange(round(h * fy)) / fy).astype(int), h - 1)
         cols = np.minimum((np.arange(round(w * fx)) / fx).astype(int), w - 1)
         _blend(canvas, rgba[rows][:, cols], round(layer['x0'] * fx), round(layer['y0'] * fy))
+    # the M3329's OSD layers, in its PAL output's coordinates: scaled up to the canvas
+    if m3327_palettes is not None:
+        lines = (struct.unpack_from('<I', dev, M3327_TIMING_REG)[0] >> 16) & 0x7FF
+        out = OUTPUT_SIZE.get(lines, (720, 576))
+        gx, gy = W / out[0], H / out[1]
+        info['m3327_regions'] = m3327_regions(ram, dev)
+        for layer, region in info['m3327_regions']:
+            rgba = render_m3327(ram, region, m3327_palettes[layer])
+            if rgba is None:
+                continue
+            h, w = rgba.shape[:2]
+            rows = np.minimum((np.arange(round(h * gy)) / gy).astype(int), h - 1)
+            cols = np.minimum((np.arange(round(w * gx)) / gx).astype(int), w - 1)
+            _blend(canvas, rgba[rows][:, cols], round(region['x0'] * gx), round(region['y0'] * gy))
     # the newer display engine's layers (the T750i), on top
     info['de_layers'] = de_layers(ram, dev)
     for layer in info['de_layers']:

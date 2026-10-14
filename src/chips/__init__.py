@@ -12,12 +12,13 @@ back to the common ones, and ChipFamily.uninstall gives back memory, hooks
 and simulator attributes the family changed).
 """
 from .c3505 import C3505
+from .m3329 import M3329
 from .m3503 import M3503
 from .m3602 import M3602
 from .m3801 import M3801
 from .m3821 import M3821
 
-FAMILIES = (M3821, C3505, M3503, M3602, M3801)     # M3801 last: it is the default
+FAMILIES = (M3821, C3505, M3503, M3602, M3329, M3801)     # M3801 last: it is the default
 
 
 def detect(image):

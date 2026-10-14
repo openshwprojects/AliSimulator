@@ -5,11 +5,11 @@
     "model": "satellite receiver main board \"s15125\"",
     "type": "satellite receiver",
     "board": "s15125",
-    "soc": "ALi M3329",
-    "family": "other",
-    "demod": "the firmware's NIM_M3327 driver",
+    "soc": "ALi M3329 (an M3327-platform chip: the SDK's NIM_M3327, DMX_M3327, DECV_M3327, VPO_M3327, SND_M3327 and OSD_M3327C drivers)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "the chip's internal one (the firmware's NIM_M3327 driver)",
     "tuner": null,
-    "flash": "512 KB (a 4 Mbit part)",
+    "flash": "512 KB parallel NOR on an 8-bit bus (a 4 Mbit part; the simulator answers the driver's autoselect as an MXIC MX29LV400B, bottom boot block)",
     "panel": null,
     "irCoding": "nec"
   },
@@ -19,7 +19,7 @@
     "date": "2005-02-25",
     "size": 524288,
     "sha1": "bcd6bb7a5d3c25935b331894f60eef873b71c890",
-    "layout": "the ALi chunk chain with a bootloader chunk at 0 (id 0xE3000010, next chunk at 0x4000)"
+    "layout": "the ALi chunk chain with a bootloader chunk at 0 (id 0xE3000010, next chunk at 0x4000): bootloader 0x00000 (1.1.0, 16 KB), pan bin 0x04000 (1.7.0, the front panel's driver, LZMA), logo 0x04C00, defaultdb(PRC) 0x07C00, tuner driver 0x09C00, common data 0x0A400, cy data 0x0AC00, maincode(CU-mx) 0x0B000 (1.7.0, 0x532F4 bytes, unpacked: it runs in place), userdb(64+64) 0x5FF80 (1.0.1, to the end of the flash)"
   },
   "source": {
     "url": null,
@@ -30,13 +30,13 @@
     "note": "Not recorded: added to this repository on 2026-02-19 under dumps/other with the file name it came with (read from a working unit, \"ok\")"
   },
   "simulator": {
-    "boots": false,
-    "application": false,
-    "display": false,
+    "boots": true,
+    "application": true,
+    "display": true,
     "panelText": null,
-    "note": "An older chip than the families the simulator models; no test runs it."
+    "note": "Runs as the M3329 family (2026-10-14): the bootloader (revision byte 0xF0: no boot-ROM call; its SDRAM commands complete at once) starts the application, which runs in place from the flash and prints \"APP  init ok\" on its UART at 0xB8001300.  Its flash driver probes the parallel NOR flash with the AMD autoselect command (parallel_flash.py) and matches an MX29LV400B; before, unidentified, it set up no database region, and its probe's reset, stored in a branch delay slot, had Unicorn run the branch target twice (simulator._device_access).  It then searches its channel database byte by byte through the flash driver (~250 M instructions) and shows the channel banner of channel 37 (its Arabic name, audio \"Left\") through OSD_M3327C (gma_capture.m3327_regions: region headers in RAM, 4 bpp bitmaps through a palette written to a port), later a \"No Signal\" box.  The remote (NEC address 0x04 / 0xBA, its own key table: chips/m3329.M3329.remote_frame) works: MENU opens the Channel menu, DOWN moves the highlight, OK opens the TV channel list of 1042 channels with its \"No Signal\" preview (run_dump_m3329_capture_screen.py).  Interrupts: the controller's status at 0xB8000038, enables at 0xB800003C; the video decoder and output (video_m36.py) on line 9, the IR receiver (the later chips' controller at 0xB8001100) on line 7.  Its kernel's tick is 108000 Count cycles, so the family's Count runs at 10 MHz.  The front panel's driver (the pan bin chunk, unpacked to 0xA01FA000) bit-banges GPIO 15 / 16 / 29 and is not decoded yet."
   },
   "desc": [
-    "Its application names a \"Djtuner driver\" and the NIM_M3327 front end."
+    "Its application names a \"Djtuner driver\" and the NIM_M3327 front end; its channel list holds 1042 TV channels (Nilesat, Arabic names first)."
   ]
 }

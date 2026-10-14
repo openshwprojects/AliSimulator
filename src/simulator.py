@@ -94,6 +94,7 @@ class AliMipsSimulator:
         self._shared = share_memory_with
         self.ic_base = ic_base
         self._ic = 0xB8000000 + ic_base     # its status words (+0 / +4) and enables (+8 / +0xC), no side effects
+        self._ic_en = self._ic + 8          # (the enables: elsewhere on older chips, set_ic_layout)
         self.base_addr = 0xAFC00000
         self.mu = None
         self.md = None
@@ -165,6 +166,8 @@ class AliMipsSimulator:
         from collections import deque
         self._irc_fifo = deque()      # IR controller run-length FIFO (see ir_send_nec)
         self._irc_status = 0          # IR controller interrupt status (+7)
+        self.irc_base = 0x18100       # its registers (device-window offset) and interrupt line:
+        self.irc_line = self._IC_IRC  # the M3329 has the same controller at 0x1100 on line 7
         self._irc_frames = deque()    # NEC frames waiting to be received (any thread may append)
         self.slice_services = []      # called between slices (emulation thread): device models that feed data
         self.signal_frequencies = None  # set_signal(frequencies=...): where a signal is (None: everywhere)
@@ -180,6 +183,8 @@ class AliMipsSimulator:
         self._dev_cb_depth = 0        # > 0 while a device access callback runs
         self._dev_replays = {}        # (pc, sp) -> access a stop left the PC on (its re-execution is a replay)
         self._ds_dev_warned = set()   # PCs of device accesses in delay slots already warned about
+        self._ds_flags_stale = False  # such an access left the branch flags set (_device_access)
+        self.ds_flag_fixes = 0        # ... cleared that many times
 
         # UART Receive simulation
         from collections import deque
@@ -509,6 +514,9 @@ class AliMipsSimulator:
         # hook is only installed around SPI command mode (or with
         # setSPIDump(True, flash_reads=True)), see _update_flash_read_hooks.
         self._flash_windows = [0x0F000000, 0x1F000000]
+        # A chip family's own flash device takes the stores to them instead (a
+        # parallel flash: parallel_flash.py)
+        self.flash_device = None
         self._flash_read_hooks = []
         self._flash_hooks_pending = False
         self._spi_cmd_vt = -1e9               # emulation time of the last SPI command mode
@@ -565,6 +573,8 @@ class AliMipsSimulator:
             try:
                 return self._orig_emu_start(*args, **kwargs)
             finally:
+                if self._ds_flags_stale:
+                    self._clear_branch_flags()
                 end = self._clk()
                 if self._vt_stop_t is not None:
                     end = min(end, self._vt_stop_t)
@@ -1060,14 +1070,18 @@ class AliMipsSimulator:
 
     def _device_access(self, uc, hooked=False):
         """Start of every device handler.  A new device access proves the
-        noted one completed (see _dev_note).  For an access that reached us
+        noted one completed (see _dev_note).  An access that reached us
         through a Unicorn memory hook / protection fault (hooked=True: the
-        flash window) also warn once per PC if it sits in a branch delay slot:
-        Unicorn 2.1.4 then runs the branch target's first instruction twice
-        (not seen in the shipped dumps).  mmio_map accesses (the device
-        registers) do not have that bug -- unless a Unicorn memory hook (a
-        debugging script's) covers the device window too, which is not
-        checked."""
+        flash window) in a branch delay slot meets a Unicorn 2.1.4 bug: the
+        branch flags of hflags stay set after it, so the next translation
+        block -- at the branch's target -- runs as the delay slot of a branch
+        to that target, and its first instruction runs twice (the M3329's
+        flash probe, whose target is another branch: PC 0 in the end).  So
+        the emulation stops there (before that block: the branch has
+        completed) and the emu_start() wrapper clears the flags
+        (_clear_branch_flags).  mmio_map accesses (the device registers) do
+        not have that bug -- unless a Unicorn memory hook (a debugging
+        script's) covers the device window too, which is not checked."""
         self._dev_last = None
         if hooked and self._hflags_off is not None:
             self.mu.context_update(self._ctx)
@@ -1075,8 +1089,23 @@ class AliMipsSimulator:
                 pc = uc.reg_read(UC_MIPS_REG_PC)
                 if pc not in self._ds_dev_warned and len(self._ds_dev_warned) < 16:
                     self._ds_dev_warned.add(pc)
-                    self.log(f"[WARN] device access in a branch delay slot at 0x{pc:08X}: Unicorn 2.1.4 "
-                             f"executes the branch target's first instruction twice after it")
+                    self.log(f"[DSLOT] device access in a branch delay slot at 0x{pc:08X}: stopping "
+                             f"after the branch to clear its flags (Unicorn 2.1.4 would run its target twice)")
+                self._ds_flags_stale = True
+                if not self.is_stepping:            # (a single step ends after the branch anyway)
+                    if self._stop_reason is None:
+                        self._stop_reason = 'dslot'
+                    self._orig_emu_stop()
+
+    def _clear_branch_flags(self):
+        """After an emu_start() that stopped for a hooked access in a delay
+        slot (_device_access): the branch has completed, clear its flags."""
+        self._ds_flags_stale = False
+        self.mu.context_update(self._ctx)
+        if self._hflags_view.value & self._HFLAG_BMASK:
+            self._hflags_view.value &= ~self._HFLAG_BMASK
+            self.mu.context_restore(self._ctx)
+            self.ds_flag_fixes += 1
 
     def _dev_note(self, uc, kind, address, data, exact=None):
         """Record a device access with a side effect (see the section comment).
@@ -1313,7 +1342,8 @@ class AliMipsSimulator:
         if any(w <= address < w + 0x01000000 for w in self._flash_windows):
             self._dev_cb_depth += 1
             try:
-                self._hook_spi_flash_write(uc, access, address, size, value, user_data)
+                (self.flash_device.store if self.flash_device else self._hook_spi_flash_write)(
+                    uc, access, address, size, value, user_data)
             finally:
                 self._dev_cb_depth -= 1
             return True
@@ -1321,16 +1351,16 @@ class AliMipsSimulator:
 
     def _hook_uart_write(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
-        # 0xb8018300 is base, store happens at offset 0 usually
-        # Check all aliases: 0x18018300, 0x98018300, 0xB8018300
-        if (address & 0xFFFFF) == 0x18300:
+        # the UART's block (0xB8018300; the M3329's 0xB8001300, chips/m3329.py) is
+        # 16-byte aligned: a store to its +0 is THR, in any segment's view
+        if (address & 0xF) == 0:
             if self._dev_replay_of(uc, 'thr', address, value) is None:
                 self._uart_log(value)
                 self._dev_note(uc, 'thr', address, value)
             # Set LSR bit 5 (0x20 = Transmitter Holding Register Empty)
             # so firmware's uart_write_char doesn't timeout and retry 3x.
             # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
-            lsr_addr = (address & ~0xFFFFF) | 0x18305
+            lsr_addr = (address & ~0xF) | 5
             uc.mem_write(lsr_addr, b'\x20')
 
     def _hook_uart_read(self, uc, access, address, size, value, user_data):
@@ -1586,7 +1616,9 @@ class AliMipsSimulator:
         if path is given.  Needs numpy (and Pillow or zlib for the PNG)."""
         import gma_capture
         ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
-        rgb, _ = gma_capture.capture(ram, bytes(self.mmio_buffer[0:0x10000]), screen)
+        osd = getattr(self.chip, "osd", None)          # (the M3329's OSD layers: their palettes)
+        rgb, _ = gma_capture.capture(ram, bytes(self.mmio_buffer[0:0x10000]), screen,
+                                     m3327_palettes=osd.palettes if osd is not None else None)
         if path:
             gma_capture.save_png(path, rgb)
         return rgb
@@ -1609,7 +1641,7 @@ class AliMipsSimulator:
 
     def _hook_irc_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
-        off = address & 0xFFF
+        off = address & 0xFFF                   # (0x1xx at either base, irc_base)
         if off == 0x101:                                     # FIFO byte count
             uc.mem_write(address, bytes([min(len(self._irc_fifo), 0x7F)]))
         elif off == 0x107:                                   # interrupt status
@@ -1629,8 +1661,8 @@ class AliMipsSimulator:
         self._irc_update_line()
 
     def _irc_update_line(self):
-        ier = self.mu.mem_read(0xB8018106, 1)[0]
-        self._ic_set_line(self._IC_IRC, bool(self._irc_status & ier & 3))
+        ier = self.mu.mem_read(0xB8000000 + self.irc_base + 6, 1)[0]
+        self._ic_set_line(self.irc_line, bool(self._irc_status & ier & 3))
 
     def _irc_service(self):
         """Between slices (emulation thread): receive the next queued IR frame
@@ -1639,7 +1671,7 @@ class AliMipsSimulator:
             return
         if self._vtime() - self._irc_last_vt < self.IR_FRAME_GAP_S:
             return
-        if not self.mu.mem_read(0xB8018100, 1)[0] & 0x80:   # IRCCFG: controller enabled
+        if not self.mu.mem_read(0xB8000000 + self.irc_base, 1)[0] & 0x80:   # IRCCFG: controller enabled
             return
         rlc, label = self._irc_frames.popleft()
         self._irc_fifo.extend(rlc)
@@ -1802,8 +1834,14 @@ class AliMipsSimulator:
         'OK', 'MENU', 'EXIT', '0'..'9', ...) or a virtual key number.  The NEC
         code is looked up in the UI's own key table, found in RAM the first
         time (so only after the application has started).  Returns the
-        (address, command) sent."""
+        (address, command) sent.  A chip family whose firmware keeps another
+        kind of table (the M3329's) gives the frame itself: remote_frame()."""
         import ir_remote
+        frame = self.chip.remote_frame(key) if hasattr(self.chip, "remote_frame") else None
+        if frame is not None:
+            address, command, address_hi = frame
+            self.ir_send_nec(address, command, label=f"key {key}", address_hi=address_hi)
+            return address, command
         vkey = ir_remote.VKEYS[key.upper()] if isinstance(key, str) else int(key)
         if not self._ir_key_table:
             ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
@@ -1854,9 +1892,19 @@ class AliMipsSimulator:
     def _ic_ip3(self):
         """IP3 from the interrupt controller: a modelled line asserted and
         enabled, or the other CPU's doorbell (_doorbell_ip3)."""
-        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(self._ic + 8, 8), 'little'):
+        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(self._ic_en, 8), 'little'):
             return True
         return self._doorbell_ip3()
+
+    def set_ic_layout(self, status, enable):
+        """Where an older chip's interrupt controller keeps its status and
+        enable words (device-window offsets; the M3329's 0x38 and 0x3C, which
+        take lines 0..31 only): the modelled devices' lines go there.  A chip
+        family calls it from install() (and with 0x30, 0x38 from uninstall())."""
+        self._ic = 0xB8000000 + status
+        self._ic_en = 0xB8000000 + enable
+        if status != self.ic_base:
+            self._mmio_on('r', self._hook_ic_status_read, status, status + 3)
 
     def _doorbell_ip3(self):
         """The other CPU of a dual-CPU chip rings this one (chips/see.py
@@ -2049,10 +2097,14 @@ class AliMipsSimulator:
             pos += n
 
     def _rom_restore(self):
-        """Undo transient writes to the memory-mapped flash window (see rom_image)."""
+        """Undo transient writes to the memory-mapped flash window (see rom_image;
+        a parallel flash in autoselect mode shows its IDs there instead)."""
         for off, size in self._rom_dirty:
             end = min(off + size, self.rom_size)
-            self._rom_write(off, self.rom_image[off:end])
+            if self.flash_device is None:
+                self._rom_write(off, self.rom_image[off:end])
+            else:
+                self._rom_write(off, self.flash_device.read(off, end - off))
         self._rom_dirty.clear()
 
     def _flash_program(self, off, byte):
@@ -2928,7 +2980,7 @@ class AliMipsSimulator:
         self._uart_irq_retries += 1
         # ALi interrupt controller: EISR/EIER bit 16 = UART IRQ 24
         uart_ic_bit = 1 << 16
-        eisr, eier = self._ic, self._ic + 8
+        eisr, eier = self._ic, self._ic_en
         try:
             eisr_val = int.from_bytes(uc.mem_read(eisr, 4), 'little')
             uc.mem_write(eisr, (eisr_val | uart_ic_bit).to_bytes(4, 'little'))

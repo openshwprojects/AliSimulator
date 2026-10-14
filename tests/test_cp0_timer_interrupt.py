@@ -45,7 +45,8 @@ counted slices (small budgets right after start-up) and fast with timed slices
   counted_external_stop - emu_stop() from the UART callback during the
                 start-up counted slices does not duplicate a character
   ds_warning  - a device register store in a branch delay slot runs once (mmio_map);
-                a flash-window store there (Unicorn bug) is reported
+                so does a flash-window store there, which meets a Unicorn bug
+                the simulator works around (and reports once)
 """
 import os
 import sys
@@ -568,10 +569,11 @@ def scenario_counted_external_stop(fails):
 
 def scenario_ds_warning(fails):
     # A load / store that reaches a Unicorn memory hook (or protection fault)
-    # in a branch delay slot hits a Unicorn 2.1.4 bug: the branch target's
-    # first instruction runs twice.  Device registers are an mmio_map region,
-    # which is not affected; the flash window (write-protected) is, and the
-    # simulator warns about it (once per PC).
+    # in a branch delay slot hits a Unicorn 2.1.4 bug: the branch flags stay
+    # set and the branch target's first instruction runs twice.  Device
+    # registers are an mmio_map region, which is not affected; the flash
+    # window (write-protected) is, and the simulator stops after the branch,
+    # clears the flags (simulator._device_access) and reports it once per PC.
     for what, base, warned in (("UART THR (mmio_map)", 0xB8018300, False),
                                ("flash window (write-protected)", 0xAFC00100, True)):
         logs, out = [], []
@@ -581,10 +583,13 @@ def scenario_ds_warning(fails):
         sim.log_callback = logs.append
         sim.setUartHandler(out.append)
         sim.run(max_instructions=200)
-        warns = [m for m in logs if 'delay slot' in m and 'WARN' in m]
         if warned:
-            check(len(warns) == 1, f"{what}: a store in a delay slot is reported once ({warns[:1]})", fails)
+            reports = [m for m in logs if 'delay slot' in m and 'DSLOT' in m]
+            check(len(reports) == 1 and sim.mu.reg_read(UC_MIPS_REG_S0) == 1,
+                  f"{what}: a store in a delay slot returns once (return-site instruction ran "
+                  f"{sim.mu.reg_read(UC_MIPS_REG_S0)}x) and is reported once ({reports[:1]})", fails)
         else:
+            warns = [m for m in logs if 'delay slot' in m]
             check(not warns and sim.mu.reg_read(UC_MIPS_REG_S0) == 1 and out == ['A'],
                   f"{what}: a store in a delay slot runs once and returns once "
                   f"(return-site instruction ran {sim.mu.reg_read(UC_MIPS_REG_S0)}x, output {out}, "
