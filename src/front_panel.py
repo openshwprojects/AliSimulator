@@ -98,9 +98,10 @@ PANELS = [
     # LNB fault line not pulled up -- the sidecar's gpioPullUps -- it showed "LnbP" instead)
     ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={})),
     # Globo HD-XS2 (both builds): on GPIO bank 4, SCL = GPIO 135, SDA = GPIO 134 -- " ON " from the
-    # bootloader, " on " from the application, which then polls the keys (none of the 28 positions
-    # gets it out of the wait it is in)
-    ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    # bootloader, " on " from the application; its UI's key map has three panel keys (codes 0xFF04,
+    # 0xFF02, 0xFF01): KI1/DIG4 power (standby, "oFF "), KI2/DIG4 up and KI3/DIG4 down -- they move
+    # the Reta image's language list; the SmartHD main menu's row of tiles takes neither
+    ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
     # UNI S60: SCL = GPIO 62, SDA = GPIO 63; the bootloader blanks the digits, the application
     # writes " ON "
     ("UNI_S60", dict(chip="tm1650", scl=62, sda=63, labels={})),
