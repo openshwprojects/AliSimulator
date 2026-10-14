@@ -789,9 +789,10 @@ application on its crypto engine first: its main menu, whose highlight RIGHT
 moves, about 6) and `run_dump_hdxs2_reta_capture_screen.py` (the Reta image
 of the same pack: its first-install wizard, where DOWN picks German and the
 wizard switches language, about 6) and `run_dump_m3329_capture_screen.py`
-(the M3329 board: its channel banner, then MENU opens its Channel menu and
-DOWN moves the highlight, about 3; its CPU draws the OSD, so this one watches
-the screen instead of GE commands: `ge=False`).
+(the M3329 board: its channel banner, its panel showing the channel number,
+then the panel's MENU button opens its Channel menu and the remote's DOWN
+moves the highlight, about 3; its CPU draws the OSD, so this one watches the
+screen instead of GE commands: `ge=False`).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio
 pages into the channel search and checks that the progress screen keeps

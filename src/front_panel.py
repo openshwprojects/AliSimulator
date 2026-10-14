@@ -12,6 +12,8 @@ follow the firmware's GPIO writes and answer its key reads.
     order and segment wiring.  The Opticum Blue R265 Lite (M3822P, the M3821
     family) has an HD2015 -- TM1650-compatible too -- on SCL = GPIO 57, SDA =
     GPIO 58 (bank 0xB80000D4 bits 25 / 26); its firmware writes " ON " at boot.
+    The 2005 M3329 board's chip sits on SCL = GPIO 15, SDA = GPIO 16; its
+    driver acts on a key held for several polls.
   * TM1628-class (3-wire: CLK, DIO, STB): Cabletech URZ0083Q (PCB
     6390-M3801) and the Strong SRT 8115 (MC6422-M3801) -- CLK = GPIO 31, DIO =
     GPIO 9, STB = GPIO 11; the Cabletech's digits in RAM
@@ -109,6 +111,13 @@ PANELS = [
     # Comsat TE 1050 HD (dump.bin): the same SDK key task on the same pins -- GPIO 31 sends its
     # virtual key 12 (UP), GPIO 9 its 13 (DOWN)
     ("dump.bin", dict(chip="gpio_keys", keys=(31, 9), labels={31: "UP", 9: "DOWN"})),
+    # the M3329 board s15125 (chips/m3329.py): a TM1650-compatible chip on SCL = GPIO 15, SDA =
+    # GPIO 16, driven by its "pan bin" chunk's code (unpacked to 0xA01FA000) -- "  --" from the
+    # bootloader, then the channel number ("0037"); its panel key map (0x8003E0AC) has the seven
+    # DIG4 positions: KI1 down, KI2 up, KI3 OK, KI4 menu, KI5 left, KI6 right, KI7 power
+    ("ali3329", dict(chip="tm1650", scl=15, sda=16,
+                     labels={(1, 4): "▼", (2, 4): "▲", (3, 4): "OK", (4, 4): "MENU", (5, 4): "◀",
+                             (6, 4): "▶", (7, 4): "PWR"})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 
