@@ -9,9 +9,11 @@ follow the firmware's GPIO writes and answer its key reads.
     HD N3 -- SCL = GPIO 31, SDA = GPIO 9; the panel driver reacts to the key
     matrix positions KI1/DIG4 (up) and KI2/DIG4 (down).  The Ferguson Ariva
     T650i's FD650K is TM1650-compatible on the same pins, with its own digit
-    order and segment wiring.  The Opticum Blue R265 Lite (M3822P, the M3821
-    family) has an HD2015 -- TM1650-compatible too -- on SCL = GPIO 57, SDA =
-    GPIO 58 (bank 0xB80000D4 bits 25 / 26); its firmware writes " ON " at boot.
+    order and segment wiring and eight keys on DIG1 / DIG2 of KI4..KI7 (the
+    T750i's and T760i's the same, on other pins).  The Opticum Blue R265 Lite
+    (M3822P, the M3821 family) has an HD2015 -- TM1650-compatible too -- on
+    SCL = GPIO 57, SDA = GPIO 58 (bank 0xB80000D4 bits 25 / 26); its firmware
+    writes " ON " at boot.
     The 2005 M3329 board's chip sits on SCL = GPIO 15, SDA = GPIO 16; its
     driver acts on a key held for several polls.
   * TM1628-class (3-wire: CLK, DIO, STB): Cabletech URZ0083Q (PCB
@@ -22,7 +24,7 @@ follow the firmware's GPIO writes and answer its key reads.
     KS10/K1 (power -> standby, "oFF ").  The Cabletech URZ0195 has a
     uPD16312-class chip on the same bus with STB = GPIO 14, its digits in
     grids 4, 2, 3, 1 with their own segment wiring (" ON ", "----", then the
-    channel number "0004"); its keys are not driven by the decoder yet.
+    channel number "0004"); its firmwares' key maps have no panel keys.
   * Buttons straight on GPIO inputs, no chip and no display (gpio_keys.py):
     the Strong Prima VIII -- GPIO 31 (channel up) and 9 (channel down),
     pulled up, low while pressed.
@@ -46,6 +48,15 @@ from tm1650_decoder import TM1650Decoder
 # update images (T2GEN265_*.abs) are this board.
 _R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={(1, 4): "▼", (7, 4): "▲", (2, 4): "PWR"})
 
+# The Ferguson Ariva T650i / T750i / T760i panel (an FD650K): eight keys on DIG1 / DIG2 of rows
+# KI4..KI7, which their PAN_FD650K driver turns into the panel codes 0xFFFF0001..80 their UIs map
+# -- KI4/DIG1 0x02 down, KI4/DIG2 0x40 exit, KI5/DIG1 0x10 left, KI5/DIG2 0x80 menu, KI6/DIG1 0x08
+# right, KI6/DIG2 0x04 power, KI7/DIG1 0x01 up, KI7/DIG2 0x20 OK (read off the driver's switch on
+# the key byte; on the T750i's wizard right steps the Region value, exit leaves the wizard for its
+# channel-editing menu, down moves that menu's highlight)
+_FERGUSON_KEYS = {(4, 1): "▼", (4, 2): "EXIT", (5, 1): "◀", (5, 2): "MENU", (6, 1): "▶", (6, 2): "PWR",
+                  (7, 1): "▲", (7, 2): "OK"}
+
 # (substring of the dump's path, case-insensitive) -> panel spec
 PANELS = [
     ("dump_maciej", dict(chip="tm1650", scl=31, sda=9, labels={(1, 4): "▲", (2, 4): "▼"})),
@@ -62,8 +73,10 @@ PANELS = [
     # a uPD16312 / PT6312-class driver with the same 3-wire command set.  Its 4 digits are the
     # low bytes of grids 4, 2, 3, 1 (RAM 6, 2, 4, 0) with their own segment wiring -- read off the
     # 2012 firmware's font table ('0' = 0xEE, '4' = 0x87, '-' = 0x01) and its texts: " ON " at
-    # boot, "----" while it tunes, then the channel number ("0004"), "oFF " in standby.  No panel
-    # key does anything on that firmware (all 40 key bits tried on its live-TV screen).
+    # boot, "----" while it tunes, then the channel number ("0004"), "oFF " in standby; the 2013
+    # firmware has the same font and digits ("0005").  No panel key can do anything on either: their
+    # UIs' key maps (58 entries each) hold remote keys only, not one panel code (and all 40 key
+    # bits pressed on the 2012 firmware's live-TV screen changed nothing).
     ("URZ0195", dict(chip="tm1628", clk=31, dio=9, stb=14, digit_addrs=(6, 2, 4, 0),
                      seg_map=(3, 7, 1, 5, 6, 2, 0, 4), labels={})),
     # Cabletech URZ0194S: the URZ0083Q's bootloader build, remote (same wake code) and panel bus,
@@ -79,18 +92,19 @@ PANELS = [
     # digits are registers 0x6C, 0x6E, 0x6A, 0x68 from the left and its segments a..g, DP sit on
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:
     # '0' = 0xEF, '1' = 0x60, '8' = 0xF7, '-' = 0x10): " On " from the bootloader, "Strt"
-    # when the application starts (keys not mapped yet)
+    # when the application starts
     ("T650i", dict(chip="tm1650", scl=31, sda=9, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     # Ferguson Ariva T750i / T760i (the M3821 generation): the T650i's FD650K and digit layout on
     # other pins -- the T750i's on GPIO bank 4 (0xB8000454), SCL = GPIO 128 (bit 0, always an
     # output), SDA = GPIO 129 (bit 1, switched to an input for the chip's answers); the T760i's on
     # bank 3 (0xB8000354), SCL = GPIO 107, SDA = GPIO 110.  Both write " On " from the
-    # bootloader, the T750i " on ", "Strt" and "Find" from its application (keys not mapped yet)
+    # bootloader, the T750i " on ", "Strt" and "Find" from its application.  All three Fergusons'
+    # PAN_FD650K drivers switch on the key byte (key - 0x5C, a jump table: _FERGUSON_KEYS)
     ("T750i", dict(chip="tm1650", scl=128, sda=129, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     ("T760i", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels={})),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
     # Opticum X110TS (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "

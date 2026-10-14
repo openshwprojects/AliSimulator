@@ -308,7 +308,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   0x6A, 0x68 from the left, with the segments on its own bits (read off the
   font table its application builds in RAM): " On ", "Strt", "Find"; the
   T750i and T760i have the same panel on other banks (SCL / SDA = GPIO 128 /
-  129 and 107 / 110). The decoders get the pins' levels on every write of a
+  129 and 107 / 110). The three Fergusons' PAN_FD650K driver turns eight
+  positions, DIG1 / DIG2 of KI4..KI7, into the panel codes their UIs map (a
+  switch on the key byte): down, exit, left, menu, right, power, up, OK -- on
+  the T750i's and T760i's first-install wizards exit opens the main menu's
+  channel-editing page and down moves its highlight. The decoders get the
+  pins' levels on every write of a
   bank's DO or DIR register -- an output pin at its DO bit, an input pin high,
   the pull-up -- because some drivers bit-bang the bus open-drain, DO kept 0
   and only the direction switched: the Opticum Blue R265 Lite's application
@@ -764,9 +769,13 @@ menu the remote's MENU opens, and the front panel's down button moving its
 highlight to Installation, about 8 minutes)
 and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
-display engine's layer, captured as it comes up, about 3 minutes) and
+display engine's layer, captured as it comes up, then the front panel's exit
+key opens the main menu's "Edytuj kanały" page before the wizard's countdown
+starts the channel search, and its down key highlights the first item, about
+4 minutes) and
 `run_dump_t760i_capture_screen.py` (the Ferguson Ariva T760i, a C3505 with
-its ATBM7812 demodulator: its wizard "Welcome" the same way, about 4) and
+its ATBM7812 demodulator: its wizard "Welcome" the same way, then the panel's
+exit and down keys -- "Edit Channel", "Favorite" highlighted -- about 5) and
 `run_dump_prima8_update_capture_screen.py` (the Strong Prima VIII's update
 image, without the dump's channel database: its first-install wizard,
 about 5) and `run_dump_urz0195_2013_capture_screen.py` (the Cabletech
@@ -811,7 +820,8 @@ returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its p
 keys and the URZ0194S steps its wizard's Region value with its (the whole
 wizard switches language); the SRT 8115 opens and closes its main menu; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
-(its panel keys do nothing); the T650i, once its search, the programme-guide
+(its panel keys do nothing: neither URZ0195 firmware's key map has a panel
+entry); the T650i, once its search, the programme-guide
 download that gives up (the multiplex has no EIT schedule) and its live
 picture are through (a `("wait", seconds)` step), opens its channel list
 with OK: "1 AliSimulator TV", the multiplex's now / next events beside it;

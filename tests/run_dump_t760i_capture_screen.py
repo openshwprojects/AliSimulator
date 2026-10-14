@@ -10,6 +10,10 @@ application opens its first-install wizard ("Welcome": region Poland,
 English, 720p_60, "OK (10 sec)" counting down), then starts its automatic
 channel search ("Auto Scan"); this test captures the wizard as soon as it
 is up (0.5 M instruction slices) and compares it with t760i_screen.png.
+Then the front panel's keys (its FD650K, the T750i's key map:
+front_panel._FERGUSON_KEYS) leave the wizard for the main menu's "Edit
+Channel" page (KI4/DIG2, exit) and highlight "Favorite" (KI4/DIG1, down),
+compared with t760i_nav.png.
 
 Usage: python run_dump_t760i_capture_screen.py [--make-expected]
 """
@@ -17,10 +21,11 @@ import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
+from tm1650_decoder import TM1650Decoder
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Ferguson Ariva T760i (update V1.5B4)", "chips": ["ALi C3505", "ATBM7812"],
-            "shows": ["boots to screen", "second CPU (SEE)"]}
+            "shows": ["boots to screen", "second CPU (SEE)", "panel keys"]}
 
 screen_regression.run(
     dump="Ferguson_T760i_V1.5B4-14092021.abs",
@@ -34,4 +39,7 @@ screen_regression.run(
     probe_s=0,
     title="Ferguson Ariva T760i (update V1.5B4)",
     retries=2,
+    # panel exit before the countdown starts the channel search, then panel down
+    navigation=[(("panel", TM1650Decoder.key_code(4, 2, pressed=False)), 100000),
+                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000)],
 )
