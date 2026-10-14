@@ -11,7 +11,7 @@
     "tuner": "probably a Silicon Labs Si2144 option: the image's only tuner-name string is \"Si2144\", and at start (4 M instructions in) the application reads a single status byte at I2C 0x60 over and over (447 reads in 300 M instructions, no write) -- a Silicon Labs tuner's clear-to-send poll, which a chip answering zeros never satisfies; the box's own 2015 firmware (dumps/STRONG PRIMA VIII/) drives an MxL603 family chip at the same address",
     "flash": "4 MB SPI (the box of dumps/STRONG PRIMA VIII/)",
     "panel": null,
-    "irCoding": "nec"
+    "irCoding": "ext00"
   },
   "image": {
     "kind": "update",
@@ -34,7 +34,7 @@
     "application": true,
     "display": true,
     "panelText": null,
-    "note": "run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader (\"bl_flash_init!\", \"bl_verify_sw\", \"check_program!\", \"success!\") into the main application.  Without a channel database it opens its first-install wizard (2026-10-13, run_dump_prima8_update_capture_screen.py): \"Welcome\" -- language English, region United Kingdom, subtitle off, aspect mode auto, scan mode free, connection HDMI -- drawn by ~20 GE commands (~230 M instructions) through the M3801's GE and GMA."
+    "note": "run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader (\"bl_flash_init!\", \"bl_verify_sw\", \"check_program!\", \"success!\") into the main application.  Without a channel database it opens its first-install wizard (2026-10-13, run_dump_prima8_update_capture_screen.py): \"Welcome\" -- language English, region United Kingdom, subtitle off, aspect mode auto, scan mode free, connection HDMI -- drawn by ~20 GE commands (~230 M instructions) through the M3801's GE and GMA.  Its remote takes the flash dump's extended-NEC coding (ext00; under the default \"nec\" DOWN did nothing): DOWN / UP move the wizard's highlight, RIGHT steps a value (2026-10-14).  Unlike the dump's application it does not poll GPIO 31 / 9 for buttons on its wizard (it reads only the GPIO bank of its CH455 driver's pinless software I2C bus, GPIO 127), so it has no panel entry."
   },
   "desc": [
     "Despite the .abs name it is a complete 4 MB flash image."

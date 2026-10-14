@@ -13,7 +13,9 @@ compares it with t750i_screen.png.  Then the front panel's keys (its FD650K:
 the PAN_FD650K driver's switch maps KI4/DIG2 to exit, KI4/DIG1 to down,
 front_panel._FERGUSON_KEYS) leave the wizard for the main menu's "Edytuj
 kanały" page (no item highlighted) and highlight its first item, "Lista
-kanałów TV", compared with t750i_nav.png.
+kanałów TV", and the IR remote's RIGHT (the T650i's extended-NEC coding,
+see ir_remote.IR_CODINGS) turns to the menu's next page, "Instalacja"
+(the same frame: some 9000 pixels change), compared with t750i_nav.png.
 
 Usage: python run_dump_t750i_capture_screen.py [--make-expected]
 """
@@ -25,7 +27,7 @@ from tm1650_decoder import TM1650Decoder
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Ferguson Ariva T750i (firmware V1.20B2)", "chips": ["ALi M3821", "MxL603"],
-            "shows": ["boots to screen", "second CPU (SEE)", "panel keys"]}
+            "shows": ["boots to screen", "second CPU (SEE)", "reacts to remote", "panel keys"]}
 
 screen_regression.run(
     dump="Ferguson_T750i_V1.20B2_18092019.abs",
@@ -39,7 +41,9 @@ screen_regression.run(
     probe_s=0,
     title="Ferguson Ariva T750i (firmware V1.20B2)",
     retries=2,
-    # panel exit before the countdown starts the channel search, then panel down
+    # panel exit before the countdown starts the channel search (a step's settling waits for the
+    # GE to go quiet, which the wizard's per-second countdown never does), panel down, then the
+    # remote's right: the main menu's next page
     navigation=[(("panel", TM1650Decoder.key_code(4, 2, pressed=False)), 100000),
-                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000)],
+                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000), ("RIGHT", 5000)],
 )

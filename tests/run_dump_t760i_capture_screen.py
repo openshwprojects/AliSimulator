@@ -13,7 +13,9 @@ is up (0.5 M instruction slices) and compares it with t760i_screen.png.
 Then the front panel's keys (its FD650K, the T750i's key map:
 front_panel._FERGUSON_KEYS) leave the wizard for the main menu's "Edit
 Channel" page (KI4/DIG2, exit) and highlight "Favorite" (KI4/DIG1, down),
-compared with t760i_nav.png.
+and the IR remote's RIGHT (the T650i's extended-NEC coding, see
+ir_remote.IR_CODINGS) turns to the menu's next page, "Installation" (the
+same frame: some 15000 pixels change), compared with t760i_nav.png.
 
 Usage: python run_dump_t760i_capture_screen.py [--make-expected]
 """
@@ -25,7 +27,7 @@ from tm1650_decoder import TM1650Decoder
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Ferguson Ariva T760i (update V1.5B4)", "chips": ["ALi C3505", "ATBM7812"],
-            "shows": ["boots to screen", "second CPU (SEE)", "panel keys"]}
+            "shows": ["boots to screen", "second CPU (SEE)", "reacts to remote", "panel keys"]}
 
 screen_regression.run(
     dump="Ferguson_T760i_V1.5B4-14092021.abs",
@@ -39,7 +41,9 @@ screen_regression.run(
     probe_s=0,
     title="Ferguson Ariva T760i (update V1.5B4)",
     retries=2,
-    # panel exit before the countdown starts the channel search, then panel down
+    # panel exit before the countdown starts the channel search (a step's settling waits for the
+    # GE to go quiet, which the wizard's per-second countdown never does), panel down, then the
+    # remote's right: the main menu's next page
     navigation=[(("panel", TM1650Decoder.key_code(4, 2, pressed=False)), 100000),
-                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000)],
+                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000), ("RIGHT", 5000)],
 )

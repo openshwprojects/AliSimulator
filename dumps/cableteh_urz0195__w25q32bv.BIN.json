@@ -12,7 +12,7 @@
     "tunerModel": {"chip": "mxl603", "address": 96},
     "flash": "W25Q32BV (4 MB SPI)",
     "panel": {"chip": "uPD16312-class 3-wire", "clk": 31, "dio": 9, "stb": 14},
-    "irCoding": "nec"
+    "irCoding": "ext00"
   },
   "image": {
     "kind": "dump",
@@ -35,7 +35,7 @@
     "application": true,
     "display": true,
     "panelText": [" ON ", "----", "0005"],
-    "note": "Boots into its application, which plays the first channel of its database (\"prog id : 4\", TVN, ~86 M instructions) and draws (2026-10-13, run_dump_urz0195_2013_capture_screen.py): its channel banner (channel 5, \"Brak informacji\", 0 %) ~20 GE commands in, then, when the banner has timed out, the live-TV \"Brak sygnału!\" (no signal) screen, scaled from the 1080i output (an earlier simulator had seen no graphics-engine command 14 minutes after its banner).  Its uPD16312-class panel is wired and driven like the 2012 firmware's (the same font table): \" ON \", \"----\", then the channel number \"0005\" (2026-10-14, checked by the test); it polls 4 key bytes, but its UI's key map (58 entries) holds remote keys only, so no panel key can do anything."
+    "note": "Boots into its application, which plays the first channel of its database (\"prog id : 4\", TVN, ~86 M instructions) and draws (2026-10-13, run_dump_urz0195_2013_capture_screen.py): its channel banner (channel 5, \"Brak informacji\", 0 %) ~20 GE commands in, then, when the banner has timed out, the live-TV \"Brak sygnału!\" (no signal) screen, scaled from the 1080i output (an earlier simulator had seen no graphics-engine command 14 minutes after its banner).  Its uPD16312-class panel is wired and driven like the 2012 firmware's (the same font table): \" ON \", \"----\", then the channel number \"0005\" (2026-10-14, checked by the test); it polls 4 key bytes, but its UI's key map (58 entries) holds remote keys only, so no panel key can do anything.  Its remote takes the 2012 firmware's extended-NEC coding (ext00; under the default \"nec\" neither OK nor DOWN did anything): OK on live TV opens the channel list, DOWN moves its highlight (2026-10-14)."
   },
   "desc": [
     "The newer of the two URZ0195 dumps in this repository (the other is urz0195_full_dump(ESMTF25L3204).bin, with an older firmware).  The forum names the chip in later threads about this model; the firmware's chip-ID table is the M3801 family's.",

@@ -774,16 +774,19 @@ and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
 display engine's layer, captured as it comes up, then the front panel's exit
 key opens the main menu's "Edytuj kanały" page before the wizard's countdown
-starts the channel search, and its down key highlights the first item, about
-4 minutes) and
+starts the channel search, its down key highlights the first item and the
+remote's RIGHT turns to the menu's next page, about 5 minutes) and
 `run_dump_t760i_capture_screen.py` (the Ferguson Ariva T760i, a C3505 with
 its ATBM7812 demodulator: its wizard "Welcome" the same way, then the panel's
-exit and down keys -- "Edit Channel", "Favorite" highlighted -- about 5) and
+exit and down keys -- "Edit Channel", "Favorite" highlighted -- and the
+remote's RIGHT, about 6) and
 `run_dump_prima8_update_capture_screen.py` (the Strong Prima VIII's update
 image, without the dump's channel database: its first-install wizard,
-about 5) and `run_dump_urz0195_2013_capture_screen.py` (the Cabletech
-URZ0195's 2013 firmware: its channel banner, then its "Brak sygnału!"
-screen, the panel reading "0005", about 4) and `run_dump_urz0083_capture_screen.py` (the Cabletech
+whose highlight the remote's DOWN moves, about 5) and
+`run_dump_urz0195_2013_capture_screen.py` (the Cabletech URZ0195's 2013
+firmware: its channel banner, then its "Brak sygnału!" screen, the panel
+reading "0005", then the remote's OK opens its channel list and DOWN moves
+the highlight, about 5) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
 4) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
@@ -846,7 +849,7 @@ maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
 bit-reversed, inverted bytes for the Opticum / Globo, an extended-NEC
 address for the SRT 8115, the
-Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
+Prima VIII (the flash dump and the update image), both URZ0195 firmwares, the Fergusons T650i, T750i and T760i, dump.bin and the
 M3601E firmwares (URZ0083, KM0183, THT501), standard NEC whose table code keeps the first
 address byte for the Echosonic ESR-250's 2015 firmware, the Opticum S60's and
 the Cabletech URZ0083Q's and URZ0194S's -- whose remotes long seemed to stop

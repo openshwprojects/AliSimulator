@@ -8,6 +8,9 @@ banner has timed out, the live-TV "Brak sygnału!" (no signal) screen; that
 stable screen is compared with urz0195_2013_screen.png.  Its uPD16312-class
 front panel, wired and driven like the 2012 firmware's (the same font table),
 must show the channel number "0005" by then (the decoder renders it "OOOS").
+Then the IR remote -- the 2012 firmware's extended-NEC coding, see
+ir_remote.IR_CODINGS -- opens the channel list with OK and moves its
+highlight with DOWN; that screen is compared with urz0195_2013_nav.png.
 
 Usage: python run_dump_urz0195_2013_capture_screen.py [--make-expected]
 """
@@ -26,4 +29,5 @@ screen_regression.run(
     panel_text="OOOS",    # the channel number "0005"
     title="Cabletech URZ0195 (2013 firmware)",
     retries=2,
+    navigation=[("OK", 100000), ("DOWN", 5000)],
 )

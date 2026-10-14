@@ -102,9 +102,14 @@ def ir16_to_nec(ir16):
 # form and watching the OSD, 2026-10-06):
 #   nec    dump_maciej / Globo (Libcore 8.9 / 8.13): see ir16_to_nec above --
 #          standard NEC, address = ~rev8(hi), command = ~rev8(lo)
-#   ext00  Strong SRT 8115 (Libcore 8.7j), Strong Prima VIII (Libcore 8.32),
-#          the Cabletech URZ0195's 2012 firmware (Libcore 8.1.0,
-#          "urz0195_full_dump"), the Ferguson Ariva T650i and the Comsat
+#   ext00  Strong SRT 8115 (Libcore 8.7j), Strong Prima VIII (Libcore 8.32;
+#          the flash dump and the update image "SRT_Prima_VIII_V1.0.6"), both
+#          Cabletech URZ0195 firmwares (Libcore 8.1.0 and 8.1c: on the 2013
+#          one, which had fallen to the default "nec", OK did nothing and DOWN
+#          neither -- 2026-10-14), the Ferguson Ariva T650i, T750i and T760i
+#          (the last two, on the default "nec", ignored DOWN on their
+#          first-install wizards, whose countdown then started the channel
+#          search; under "necfirst" too their DOWN moves the highlight) and the Comsat
 #          TE 1050 HD (dump.bin; both Libcore 8.1c): extended NEC whose two
 #          address bytes are both rev8(hi) (0x00 on the Strongs' remotes, 0x01
 #          on the Cabletech's and the Ferguson's, 0xDF on the Comsat's),
@@ -132,7 +137,8 @@ def ir16_to_nec(ir16):
 #          only when the code's high half is 0x803F (0x8000AD0C): extended NEC
 #          with the address bytes 0x01, 0xFC -- with 0x00 every key was dropped
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"),
-              ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
+              ("srt8115", "ext00"), ("urz0195", "ext00"), ("PRIMA VIII", "ext00"), ("Prima_VIII", "ext00"),
+              ("T650i", "ext00"), ("T750i", "ext00"), ("T760i", "ext00"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
               ("ESR-250", "necfirst"), ("UNI_S60", "necfirst"), ("URZ0083Q", "necfirst"), ("urz0194", "necfirst"),
               ("ArivaT50", "cmd")]
