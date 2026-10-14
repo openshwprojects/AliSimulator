@@ -398,18 +398,22 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   regressions attach the dump's tuner without a signal (`screen_regression`'s
   `tuner=True`), so they keep their no-signal screens and every capture in the
   report shows the frequency it was taken at; the simulator itself attaches
-  nothing unless asked. There is
-  no transport stream behind the lock: the Globo N3 with a signal shows its
+  nothing unless asked. A lock alone has
+  no transport stream behind it: the Globo N3 with a signal shows its
   channel banner and then a clear black picture instead of its red "Brak
   sygnału" box (`run_dump_globo_signal.py`), and the R265 Lite's manual scan
   page shows 100 % signal strength and 30 % quality instead of 0 % and 0 %
-  (`run_dump_r265lite_signal_capture_screen.py`).
+  (`run_dump_r265lite_signal_capture_screen.py`, which then adds the stream
+  below and runs the search).
 * **Demultiplexer and transport stream** (`dmx_m36.py`, `transport_stream.py`):
   a lock alone is not a channel: after a tune the firmware filters the
   programme tables (PAT, PMT, SDT, EIT ...) and shows what they carry.
   `dmx_m36.Demux` models the DMX0
   demultiplexer the M3801 and M3601E firmwares program at 0xB8022000 (DMX1 at
-  0xB8024000): 48 PID filters loaded through a RAM port (+0x60 type and
+  0xB8024000), and the M3821 generation's too (its driver, "DMX_S3601_0" as
+  on the M3801, writes each PID filter as one entry -- type bits 0, the PID's
+  header bytes, no mask -- and polls the ring instead of taking the
+  interrupt): 48 PID filters loaded through a RAM port (+0x60 type and
   filter, +0x62 go, +0x64 mask / value: the driver writes mask `1F FF` and the
   PID), the filter enable bits (+0x40), one "united" ring of 188-byte packets
   whose physical base, length and interrupt threshold the driver writes
@@ -455,6 +459,11 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   remote's EPG key then opens the programme guide on that channel at "13:00
   10/10", the two events on its time line ("TVP Opole now" from 13:00, "TVP
   Opole next" from 14:00).
+  The Opticum R265 Lite (the M3821) takes it in its channel search: it
+  filters the PAT, SDT, NIT and the PMT the PAT names, consumes every packet
+  and ends on "Zakończono wyszukiwanie kanałów" with "AliSimulator TV" among
+  its TV channels, its clock at the TDT's "13:00, sobota 10 października"
+  (`run_dump_r265lite_signal_capture_screen.py`).
   `sim.dmx_info()` sums it up for the report; `screen_regression.run(...,
   mux=True)` boots a test with it.
 * **Real-time clock** (`rtc_m36.py`, 0xB8018A00): the SDK's RTC driver

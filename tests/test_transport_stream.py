@@ -155,5 +155,22 @@ check(sim.tuned_to_signal() and guest_read(lock, 1) & 0x60 == 0x60 and dmx.packe
 sim.set_signal(True)
 tuner.write(bytes([0x10, 0x80, 0x11, 0x76]))
 check(sim.tuned_to_signal() and guest_read(lock, 1) & 0x60 == 0x60, "set_signal(True) without frequencies: a signal everywhere again")
+
+# the M3821's driver (the R265 Lite's) writes each PID filter as one entry: +60 = the filter's
+# number with the type bits 0, +64 = the PID's two header bytes, no mask
+m21 = AliMipsSimulator(log_handler=lambda m: None)
+m21.setSPIDump(False)
+m21.setUartHandler(lambda c: None)
+m21.loadFile("Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs")
+d21 = m21.chip.dmx
+check(d21 is not None and d21.base == 0x22000 and d21.pid_entries, "the M3821 family has DMX0 at 0xB8022000, with PID entries")
+b21 = 0xB8000000 + d21.base
+for index, pid in ((0, ts.PID_PAT), (1, ts.PID_SDT)):
+    m21.mu.mem_write(b21 + 0x64, bytes([pid >> 8, pid & 0xFF, 0, 0, 0, 0, 0, 0]))
+    m21.mu.mem_write(b21 + 0x60, bytes([index]))
+    for h in m21._mmio_wr.get((b21 + 0x62) & 0xFFFFFF, []):
+        h(m21.mu, 0, b21 + 0x62, 1, 2, None)
+check(d21.filter_pid(0) == ts.PID_PAT and d21.filter_pid(1) == ts.PID_SDT,
+      "an M3821 filter entry is its PID: filters 0 / 1 on the PAT / SDT")
 print(f"\n[{'PASS' if ok else 'FAIL'}] transport stream and demultiplexer model")
 sys.exit(0 if ok else 1)

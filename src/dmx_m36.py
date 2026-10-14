@@ -39,6 +39,13 @@ field, payload_unit_start, pointer field, continuity counter, the software
 mask / value over the section header), assembling the sections the
 application asked for (dmx_get_section / dmx_async_get_section).
 
+The M3821's driver (the Opticum R265 Lite's "DMX_S3601_0", the same block at
+0xB8022000) writes each PID filter as one entry: +60 = the filter's number
+with the type bits 0, +64 = the PID's two header bytes (00 11 for the SDT),
+no mask -- the hardware compares the 13-bit PID (pid_entries=True) -- and it
+polls the ring's pointers instead of taking the threshold interrupt (it
+leaves +300 at 0).
+
 The model keeps the filters the driver programs, and once a multiplex is
 attached (transport_stream.Mux, sim.attach_mux) it writes that multiplex's
 tables for every enabled PID into the ring between emulation slices -- the
@@ -59,10 +66,11 @@ class Demux:
     PERIODS = {0x0000: 0.1, 0x0014: 0.25, 0x0011: 1.0, 0x0010: 1.0, 0x0012: 1.0}
     PMT_PERIOD = 0.1
 
-    def __init__(self, sim, base=0x22000, line=7):
+    def __init__(self, sim, base=0x22000, line=7, pid_entries=False):
         self.sim = sim
         self.base = base                    # offset in the device window
         self.line = line
+        self.pid_entries = pid_entries      # a type-0 RAM write is a whole PID filter (the M3821's)
         self.mux = None
         self.adaptive = True                # follow the firmware's PMT PID / programme number
         self._pmt_next = False              # the next filter on a non-standard PID is the PMT's
@@ -145,7 +153,11 @@ class Demux:
         kind, index = sel & 0xC0, sel & 0x3F
         data = bytes(self.sim.mu.mem_read(0xB8000000 + self.base + 0x64, 16 if kind == 0x80 else 8))
         entry = self.filters.setdefault(index, {})
-        entry[{0x00: 'mask', 0x40: 'value'}.get(kind, 'cw')] = data
+        if self.pid_entries and kind == 0x00:
+            entry['mask'], entry['value'] = b"\x1f\xff" + bytes(6), data
+            kind = 0x40                         # (logged, and followed, as a PID filter's value)
+        else:
+            entry[{0x00: 'mask', 0x40: 'value'}.get(kind, 'cw')] = data
         pid = self.filter_pid(index)
         self.sim.log(f"[DMX] filter {index} {('mask', 'value', 'cw')[kind >> 6 if kind < 0xC0 else 2]} "
                      f"{data.hex()}" + (f" (PID 0x{pid:04X})" if pid is not None else ""))

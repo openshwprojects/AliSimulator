@@ -442,6 +442,10 @@ class M3821(ChipFamily):
         self.spi = SpiStream(sim)
         self.dma = DmaRings(sim)
         self.demod = Demodulator(sim)
+        # the transport-stream demultiplexer DMX0 at 0xB8022000, the M3801's block (dmx_m36.py),
+        # whose PID filters this generation's driver writes as single entries; it polls the ring
+        from dmx_m36 import Demux
+        self.dmx = Demux(sim, pid_entries=True)
         self.ready = ReadyBits(sim, {
             0x000633: 0x80,     # the PLL at 0xB8000600..: locked (polled after it is programmed)
         })
