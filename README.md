@@ -795,7 +795,9 @@ reading "0005", then the remote's OK opens its channel list and DOWN moves
 the highlight, about 5) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
-4) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
+4) and `run_dump_tht501_capture_screen.py` (the Thomson THT501, the same
+generation: its English wizard in a flat skin of seven colours, whose
+highlight DOWN moves, about 5) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
 its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
 whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power

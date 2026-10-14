@@ -1,9 +1,11 @@
 """
 Screen survey: boot every firmware image under dumps/ -- or those whose path
 contains one of the given words -- each in its own Python process, until its
-screen shows something (at least MIN_COLOURS colours in sim.capture_screen()),
-and report how many instructions that took, the graphics engine's command
-count and what the front panel showed on the way.  An image whose sidecar
+screen shows something (at least MIN_COLOURS colours in sim.capture_screen():
+a blank screen has one, the Thomson THT501's flat wizard seven), and report
+how many instructions that took, the graphics engine's command count and what
+the front panel showed on the way (a text held for two slices, not one caught
+half rewritten).  An image whose sidecar
 says "display": true but that draws nothing within the budget (or the other
 way round) is flagged.  The screen regressions under tests/ check one image
 per family in depth; this checks that every image still gives a screen, in an
@@ -29,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))   # the simulator's modules
 
-MIN_COLOURS = 8
+MIN_COLOURS = 4
 SLICE = 5_000_000
 PROBE_EVERY = 10_000_000
 
@@ -56,11 +58,15 @@ def survey_one(path, budget_m, out_dir):
         except Exception:
             pass                                    # no tuner model for this dump
         next_probe = PROBE_EVERY
+        previous_text = None
         while sim.instruction_count < budget_m * 1_000_000:
             sim.run(max_instructions=sim.instruction_count + SLICE)
             text = panel.get_display_text()
-            if text.strip() and (not result["panel"] or result["panel"][-1] != text):
+            # a text the firmware is still writing digit by digit would show up mixed: keep a text
+            # only once it has been on the display at the end of two slices in a row
+            if text == previous_text and text.strip() and (not result["panel"] or result["panel"][-1] != text):
                 result["panel"].append(text)
+            previous_text = text
             if sim.instruction_count >= next_probe:
                 next_probe = sim.instruction_count + PROBE_EVERY
                 rgb = sim.capture_screen()
