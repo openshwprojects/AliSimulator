@@ -95,8 +95,10 @@ PANELS = [
     ("T2GEN265", _R265_LITE),
     # Opticum X110TS (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
     # from the bootloader, "Strt" and the channel number ("OOO1") from the application (with its
-    # LNB fault line not pulled up -- the sidecar's gpioPullUps -- it showed "LnbP" instead)
-    ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={})),
+    # LNB fault line not pulled up -- the sidecar's gpioPullUps -- it showed "LnbP" instead).  Its
+    # panel code maps three DIG4 positions (a {code, key byte} table in its main code): KI1/DIG4
+    # down, KI2/DIG4 power, KI3/DIG4 up -- held for two reads, a key steps twice
+    ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={(1, 4): "▼", (2, 4): "PWR", (3, 4): "▲"})),
     # Globo HD-XS2 (both builds): on GPIO bank 4, SCL = GPIO 135, SDA = GPIO 134 -- " ON " from the
     # bootloader, " on " from the application; its UI's key map has three panel keys (codes 0xFF04,
     # 0xFF02, 0xFF01): KI1/DIG4 power (standby, "oFF "), KI2/DIG4 up and KI3/DIG4 down -- they move
