@@ -778,7 +778,8 @@ its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
 whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
 switch's fault flag on GPIO 25 pulled up, then the remote's OK opens its
-channel list and DOWN moves the highlight, about 4) and
+channel list, and the remote's and then the front panel's DOWN move the
+highlight, about 5) and
 `run_dump_esr250_capture_screen.py` (the Echosonic Mini ESR-250, an M3510A
 run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
 moves, about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva

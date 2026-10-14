@@ -103,8 +103,10 @@ PANELS = [
     # the Reta image's language list; the SmartHD main menu's row of tiles takes neither
     ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
     # UNI S60: SCL = GPIO 62, SDA = GPIO 63; the bootloader blanks the digits, the application
-    # writes " ON "
-    ("UNI_S60", dict(chip="tm1650", scl=62, sda=63, labels={})),
+    # writes " ON ".  Its panel code (0x801639F4) reads the key byte every 100 ms and looks it up in
+    # a table of seven DIG4 positions (0x8044375C), of which its UI's key map takes three: KI1/DIG4
+    # up, KI2/DIG4 power, KI3/DIG4 down (their codes 0xFFFF0010 / 40 / 02)
+    ("UNI_S60", dict(chip="tm1650", scl=62, sda=63, labels={(1, 4): "▲", (2, 4): "PWR", (3, 4): "▼"})),
     # Strong Prima VIII (MC6501-M3801, the GD25Q32B flash dump): two buttons straight on GPIO 31
     # and 9, polled by its application, which sends them on as the panel keys 0xFFFF0001 / 0002
     # (its CH455 driver, "PAN_CH455_0", sits on a software I2C bus with no pins: GPIO 127)

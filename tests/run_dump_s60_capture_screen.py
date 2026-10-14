@@ -12,9 +12,10 @@ compared with s60_screen.png.  GPIO 25 is pulled up (the sidecar's
 device.gpioPullUps): the USB power switch's fault flag -- while it read
 low, a task of the application cut the port's power, showed "USB Short
 circuit!!" for 3 s and tried again ~10 s later.  The remote's OK opens the
-channel list "All Satellites" and DOWN moves its highlight to ZDF HD
-(s60_nav.png): its key task keeps a frame's first address byte as the key
-table code's high byte -- the IR coding "necfirst", like the ESR-250's.
+channel list "All Satellites" and DOWN moves its highlight to ZDF HD, and the
+front panel's down button (KI3/DIG4) on to RTL Television (s60_nav.png): its
+key task keeps a frame's first address byte as the key table code's high
+byte -- the IR coding "necfirst", like the ESR-250's.
 
 Usage: python run_dump_s60_capture_screen.py [--make-expected]
 """
@@ -22,9 +23,10 @@ import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import screen_regression
+from tm1650_decoder import TM1650Decoder
 
 FEATURED = {"device": "Opticum HD S60 (universal update 1.0.4.1)", "chips": ["ALi M3601S (C3603)", "S3501"],
-            "shows": ["boots to screen", "remote navigation"]}
+            "shows": ["boots to screen", "remote navigation", "panel keys"]}
 
 screen_regression.run(
     dump="OPTICUM S60/Software_UNI_S60_1.0.4.1_PVR_2012-08-28.abs",
@@ -35,5 +37,5 @@ screen_regression.run(
     max_diff_pct=1.0,
     title="Opticum HD S60 (universal update 1.0.4.1)",
     retries=1,
-    navigation=[("OK", 20000), ("DOWN", 2000)],
+    navigation=[("OK", 20000), ("DOWN", 2000), (("panel", TM1650Decoder.key_code(3, 4, pressed=False)), 2000)],
 )
