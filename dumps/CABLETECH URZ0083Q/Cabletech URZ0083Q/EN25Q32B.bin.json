@@ -12,7 +12,7 @@
     "tunerModel": {"chip": "mxl603", "address": 96},
     "flash": "eFeon Q32B-104HIP (read by the programmer as EN25Q32B; 4 MB SPI)",
     "panel": {"chip": "TM1628-class 3-wire", "clk": 31, "dio": 9, "stb": 11},
-    "irCoding": "plain"
+    "irCoding": "necfirst"
   },
   "image": {
     "kind": "dump",
@@ -35,7 +35,7 @@
     "application": true,
     "display": true,
     "panelText": [" ON ", "noCH"],
-    "note": "Scans its flash channel database for 12-17 minutes, then draws its first-install wizard (run_dump_cabletech_capture_screen.py); the 3-wire panel reads \" ON \" at boot and \"noCH\" without channels, and its wizard reacts to the panel's keys."
+    "note": "Scans its flash channel database for 12-17 minutes, then draws its first-install wizard (run_dump_cabletech_capture_screen.py); the 3-wire panel reads \" ON \" at boot and \"noCH\" without channels, and its wizard reacts to the panel's keys.  Its remote (2026-10-14): the IR driver (on the URZ0083Q the HSR 0x80237E50, the NEC decoder 0x80245734, which checks no complement byte) sends every frame on as a key press and a release, and the key task keeps (code >> 24) << 8 | (code & 0xFF) of the received code -- the \"necfirst\" coding.  The \"plain\" coding chosen on 2026-10-06 gave MENU, 0x0017, the same frame (rev8(~0x17) = 0x17) but every other key a wrong code (DOWN 0x0037 as 0x0013), so only MENU worked.  On its wizard the remote's DOWN / UP move the highlight and RIGHT steps the value (the language list)."
   },
   "desc": [
     "Cabletech URZ0083Q DVB-T receiver on the ALi M3801 (PCB 6390-M3801-VER1.0), read from a working decoder.",

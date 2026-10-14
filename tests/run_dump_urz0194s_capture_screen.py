@@ -9,10 +9,11 @@ panel must read "noCH" (no channels) by then, after " ON " and "----", and the
 front panel's keys drive the wizard -- differently from the URZ0083Q: on this
 box KS9/K1 steps the highlighted Region value (Polska -> Hungary -> Italian,
 and the whole wizard switches language with it) and KS9/K2 is power
-(standby, panel "oFF "); the screen after two steps, the Italian wizard, is
-compared with urz0194s_nav.png.  (Over IR, MENU -- the URZ0083Q's plain
-NEC coding -- opens the main menu, but no second key is acted on afterwards,
-on this box as on the URZ0083Q; not understood yet.)
+(standby, panel "oFF "); two steps make it the Italian wizard.  Then the IR
+remote (the URZ0083Q's "necfirst" coding, see ir_remote.IR_CODINGS) opens the
+main menu with MENU and moves on with DOWN; that screen is compared with
+urz0194s_nav.png.  (With the "plain" coding used before, only MENU worked:
+it is the one key whose frame is the same under both.)
 
 Usage: python run_dump_urz0194s_capture_screen.py [--make-expected]
 """
@@ -26,7 +27,7 @@ RIGHT = TM1628Decoder.key_code(9, 1)         # steps the highlighted value (KS9/
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Cabletech URZ0194S", "chips": ["ALi M3801", "TM1628-class", "MxL603"],
-            "shows": ["boots to screen", "shows noCH on its panel", "reacts to panel keys"]}
+            "shows": ["boots to screen", "shows noCH on its panel", "reacts to panel keys", "reacts to remote"]}
 
 screen_regression.run(
     dump="CABLETECH_urz0194s_v1_0_8.bin",
@@ -38,5 +39,5 @@ screen_regression.run(
     panel_text="noCH",
     title="Cabletech URZ0194S",
     retries=2,            # its byte-wise flash scan hits the sporadic async-stop race more often
-    navigation=[(("panel", RIGHT), 2000), (("panel", RIGHT), 2000)],
+    navigation=[(("panel", RIGHT), 2000), (("panel", RIGHT), 2000), ("MENU", 100000), ("DOWN", 5000)],
 )

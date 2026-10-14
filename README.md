@@ -820,8 +820,9 @@ screen (`*_nav.png`; each step waits for its own change to appear and then
 for the GE to go quiet, and the final capture waits until the screen has become
 the expected one, so a slow machine or CI runner only takes longer): the Globo opens its main menu, moves the highlight and
 returns to live TV; the Cabletech URZ0083Q moves its wizard highlight with its panel
-keys and the URZ0194S steps its wizard's Region value with its (the whole
-wizard switches language); the SRT 8115 opens its main menu, moves its
+keys and then the remote's DOWN, and the URZ0194S steps its wizard's Region value with its (the whole
+wizard switches language), then opens its main menu with the remote's MENU
+and moves on with DOWN; the SRT 8115 opens its main menu, moves its
 highlight with the front panel's down key and closes it; the
 URZ0195 (2012) opens its channel list with OK and moves the highlight down
 (its panel keys do nothing: neither URZ0195 firmware's key map has a panel
@@ -843,11 +844,15 @@ pins, the SDK's key task: its virtual keys 12 / 13 there) had hidden that
 behind their channel hopping. How a firmware's key table
 maps to the NEC frame bytes differs between SDK generations
 (`ir_remote.IR_CODINGS`, chosen from the dump's name: standard NEC with
-bit-reversed, inverted bytes for the Opticum / Globo, the plain bytes for the
-Cabletech URZ0083Q / URZ0194S, an extended-NEC address for the SRT 8115, the
+bit-reversed, inverted bytes for the Opticum / Globo, an extended-NEC
+address for the SRT 8115, the
 Prima VIII, the URZ0195's 2012 firmware, the Ferguson T650i, dump.bin and the
 M3601E firmwares (URZ0083, KM0183, THT501), standard NEC whose table code keeps the first
-address byte for the Echosonic ESR-250's 2015 firmware and the Opticum S60's, and only the command half for the
+address byte for the Echosonic ESR-250's 2015 firmware, the Opticum S60's and
+the Cabletech URZ0083Q's and URZ0194S's -- whose remotes long seemed to stop
+after one key: their MENU, 0x0017, is the same frame under the "plain bytes"
+reading first chosen for them, rev8(~0x17) being 0x17, and every other key
+came out as a code their tables do not hold -- and only the command half for the
 Ferguson T50, whose control task drops a key unless the code's address half is its remote's
 (extended NEC 0x01 / 0xFC); a firmware may also number its
 virtual keys differently, see `ir_remote.VKEY_FALLBACKS`). `--jobs 2` runs two tests at a time (the simulations are independent;

@@ -102,8 +102,6 @@ def ir16_to_nec(ir16):
 # form and watching the OSD, 2026-10-06):
 #   nec    dump_maciej / Globo (Libcore 8.9 / 8.13): see ir16_to_nec above --
 #          standard NEC, address = ~rev8(hi), command = ~rev8(lo)
-#   plain  Cabletech URZ0083Q (Libcore 8.1h): the table holds the bytes as
-#          sent, address = hi, command = lo (standard NEC frame)
 #   ext00  Strong SRT 8115 (Libcore 8.7j), Strong Prima VIII (Libcore 8.32),
 #          the Cabletech URZ0195's 2012 firmware (Libcore 8.1.0,
 #          "urz0195_full_dump"), the Ferguson Ariva T650i and the Comsat
@@ -121,16 +119,23 @@ def ir16_to_nec(ir16):
 #          (code & 0xFF) -- the frame's first address byte where the older
 #          SDKs keep the second (~address): address = rev8(hi), command =
 #          ~rev8(lo).  Under "nec" its frames came out 0xFFxx and under
-#          "ext00" (both address bytes the same) not at all.
+#          "ext00" (both address bytes the same) not at all.  Also the
+#          Cabletech URZ0083Q (Libcore 8.1h) and URZ0194S (8.1j), whose NEC
+#          decoder (the URZ0083Q's 0x80245734) checks no complement byte:
+#          the MENU search of 2026-10-06 had settled on "address = hi,
+#          command = lo", but their MENU, 0x0017, is the same frame both ways
+#          (rev8(~0x17) = 0x17), and every other key's code came out wrong --
+#          DOWN, 0x0037, as 0x0013 -- so only MENU (and OK, 0x000F) worked
 #   cmd    the Ferguson Ariva T50 (Libcore 1.1.6): its table code is the low
 #          half of the received code, rev8(command) << 8 | rev8(~command), with
 #          no address byte; command = rev8(hi).  Its control task keeps a key
 #          only when the code's high half is 0x803F (0x8000AD0C): extended NEC
 #          with the address bytes 0x01, 0xFC -- with 0x00 every key was dropped
-IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"), ("URZ0083Q", "plain"), ("urz0194", "plain"),
+IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"),
               ("srt8115", "ext00"), ("urz0195_full", "ext00"), ("PRIMA VIII", "ext00"), ("T650i", "ext00"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
-              ("ESR-250", "necfirst"), ("UNI_S60", "necfirst"), ("ArivaT50", "cmd")]
+              ("ESR-250", "necfirst"), ("UNI_S60", "necfirst"), ("URZ0083Q", "necfirst"), ("urz0194", "necfirst"),
+              ("ArivaT50", "cmd")]
 
 
 def coding_for(dump):
@@ -147,8 +152,6 @@ def frame_from_ir16(ir16, coding="nec"):
     """(address, command, address_hi) of the NEC frame for a key-table code
     under `coding` (address_hi None = standard NEC, the second byte is ~address)."""
     hi, lo = ir16 >> 8, ir16 & 0xFF
-    if coding == "plain":
-        return hi, lo, None
     if coding == "ext00":
         return _rev8(hi), (~_rev8(lo)) & 0xFF, _rev8(hi)
     if coding == "necfirst":

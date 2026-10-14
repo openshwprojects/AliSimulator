@@ -8,10 +8,11 @@ ratio).  The screen is captured and compared with
 cabletech_urz0083q_screen.png (with a small tolerance: the wizard keeps
 redrawing a little), and the TM1628-class front panel must read "noCH" (no
 channels) by then, after " ON " and "----".  Then the front panel's keys drive
-the wizard (this firmware ignores the IR codes of its key table as the
-simulator rebuilds them): KS9/K1 = down moves the highlight from Region to
-Język and on to Tryb Wyświetlania, KS9/K2 = up moves it back; the last screen
-is compared with cabletech_urz0083q_nav.png.
+the wizard: KS9/K1 = down moves the highlight from Region to Język and on to
+Tryb Wyświetlania, KS9/K2 = up moves it back; then the IR remote's DOWN (its
+key task keeps the code's first and last bytes, ir_remote's "necfirst"
+coding) moves it on again; the last screen is compared with
+cabletech_urz0083q_nav.png.
 
 Usage: python run_dump_cabletech_capture_screen.py [--make-expected]
 """
@@ -25,7 +26,7 @@ DOWN, UP = TM1628Decoder.key_code(9, 1), TM1628Decoder.key_code(9, 2)
 
 # this box's card at the top of the report (run_all_tests.py reads it from the source)
 FEATURED = {"device": "Cabletech URZ0083Q", "chips": ["ALi M3801", "TM1628-class", "MxL603"],
-            "shows": ["boots to screen", "shows noCH on its panel", "reacts to panel keys"]}
+            "shows": ["boots to screen", "shows noCH on its panel", "reacts to panel keys", "reacts to remote"]}
 
 screen_regression.run(
     dump="CABLETECH URZ0083Q/Cabletech URZ0083Q/EN25Q32B.bin",
@@ -37,5 +38,5 @@ screen_regression.run(
     panel_text="noCH",
     title="Cabletech URZ0083Q",
     retries=2,            # its byte-wise flash scan hits the sporadic async-stop race more often
-    navigation=[(("panel", DOWN), 20000), (("panel", DOWN), 20000), (("panel", UP), 20000)],
+    navigation=[(("panel", DOWN), 20000), (("panel", DOWN), 20000), (("panel", UP), 20000), ("DOWN", 20000)],
 )

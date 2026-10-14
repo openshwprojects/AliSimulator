@@ -300,11 +300,11 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 * **Tuner:** MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: the application writes the MxL603 register table at start (3.7 M instructions in), the Cabletech URZ0194S's sequence
 * **Flash:** eFeon Q32B-104HIP (read by the programmer as EN25Q32B; 4 MB SPI)
 * **Front panel:** TM1628-class 3-wire (CLK 31, DIO 9, STB 11)
-* **IR coding:** plain
+* **IR coding:** necfirst
 * **Image:** dump, maincode "URZ0083Q" 2013-4-2, 2013-04-02, 4194304 bytes, SHA-1 b417d177a667d3540c335031401e68eeb2b63a27
 * **Layout:** bootloader 0x000000, HDCPKey 0x01FE00 ("Demo M3801"), maincode 0x020000, Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80 -- the dump.bin layout
 * **Source:** [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2842886.html#13677891), Fairgrounds (2014-05-14) -- login needed. Thread "CABLETECH URZ0083Q Wsad pamięci EFEON Q32B-104HIP", post #1 ("zgrane ze sprawnego dekodera" = read from a working decoder): attachment "CABLETECH URZ0083Q.RAR" (4.74 MB) with this image, INFO.txt and two board photos (the photos are not kept in git)
-* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> 'noCH'. Scans its flash channel database for 12-17 minutes, then draws its first-install wizard (run_dump_cabletech_capture_screen.py); the 3-wire panel reads " ON " at boot and "noCH" without channels, and its wizard reacts to the panel's keys.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> 'noCH'. Scans its flash channel database for 12-17 minutes, then draws its first-install wizard (run_dump_cabletech_capture_screen.py); the 3-wire panel reads " ON " at boot and "noCH" without channels, and its wizard reacts to the panel's keys.  Its remote (2026-10-14): the IR driver (on the URZ0083Q the HSR 0x80237E50, the NEC decoder 0x80245734, which checks no complement byte) sends every frame on as a key press and a release, and the key task keeps (code >> 24) << 8 | (code & 0xFF) of the received code -- the "necfirst" coding.  The "plain" coding chosen on 2026-10-06 gave MENU, 0x0017, the same frame (rev8(~0x17) = 0x17) but every other key a wrong code (DOWN 0x0037 as 0x0013), so only MENU worked.  On its wizard the remote's DOWN / UP move the highlight and RIGHT steps the value (the language list).
 
 Cabletech URZ0083Q DVB-T receiver on the ALi M3801 (PCB 6390-M3801-VER1.0), read from a working decoder.
 
@@ -455,11 +455,11 @@ Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GP
 * **Tuner:** MaxLinear MxL603 family at I2C 0x60 on the first hardware I2C master: the application writes the MxL603 register table at start (3.8 M instructions in: 0xFF=0, 0x14=0x13, 0x6D=0x8A then 0x0A, 0xDF=0x19, 0x45=0x1B, 0xA9=0x59, 0xAA=0x6A, 0xBE=0x4C ... the Strong SRT 8115's sequence), puts the chip in standby (0x12=0) and wakes it again (0x0B and 0x12 set to 1)
 * **Flash:** 25Q32FV (4 MB SPI)
 * **Front panel:** TM1628-class 3-wire (CLK 31, DIO 9, STB 11)
-* **IR coding:** plain
+* **IR coding:** necfirst
 * **Image:** dump, 1.0.8 (maincode "URZ0194" 2013-9-16), 2013-09-16, 4194304 bytes, SHA-1 82438d88edcaaf37da8086184c793cb126abe48d
 * **Layout:** bootloader 0x000000 (Libcore 1.1.6, vic.wang, Mon Oct 15 2012 -- the URZ0083Q's build), HDCPKey 0x01FE00 ("Demo M3801"), maincode 0x020000, Radioback 0x320000, defaultdb 0x330000, userdb 0x34FF80 -- the URZ0083Q / dump.bin layout
 * **Source:** [elektroda.pl](https://www.elektroda.pl/rtvforum/topic2981605.html#14403424), Krzyś122333 (2015-02-04) -- login needed. Thread "CABLETECH URZ0194S wsad pamięci 25Q32FV", post #1 ("zgrane ze sprawnego dekodera" = read from a working decoder): attachment "CABLETECH_urz0194s_v1_0_8.bin"
-* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '----' -> 'noCH'. The application (Libcore 8.1j.0@SDK4.0bd.8.1j_20130424) prints its banner 8 s after start, scans its flash channel database for about 11 minutes and then draws the same first-install wizard as the URZ0083Q (run_dump_urz0194s_capture_screen.py).
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '----' -> 'noCH'. The application (Libcore 8.1j.0@SDK4.0bd.8.1j_20130424) prints its banner 8 s after start, scans its flash channel database for about 11 minutes and then draws the same first-install wizard as the URZ0083Q (run_dump_urz0194s_capture_screen.py).  Its remote (2026-10-14): the IR driver (on the URZ0083Q the HSR 0x80237E50, the NEC decoder 0x80245734, which checks no complement byte) sends every frame on as a key press and a release, and the key task keeps (code >> 24) << 8 | (code & 0xFF) of the received code -- the "necfirst" coding.  The "plain" coding chosen on 2026-10-06 gave MENU, 0x0017, the same frame (rev8(~0x17) = 0x17) but every other key a wrong code (DOWN 0x0037 as 0x0013), so only MENU worked.  Its MENU opens the main menu and DOWN / UP move through its pages.
 
 The firmware's chip-ID table is the M3801 family's and its demodulator driver is the S3811's.  Its bootloader's standby wake code 00FDBA45 is the URZ0083Q's too, so the same remote: a newer application on the URZ0083Q's hardware family.
 
