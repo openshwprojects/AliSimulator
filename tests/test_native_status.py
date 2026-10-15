@@ -14,6 +14,11 @@ MTC0 Status running natively while its hook follows it.
                instruction), as in exact mode and under the forced ERL
   same       - the programs give the same registers and EPC logs in all three
                (native Status, forced ERL, exact mode)
+  disable    - the TDS RTOS's interrupt disable (two MTC0 Status of the Status
+               it read with IE cleared) has no hooks under the native Status
+               (skip_irq_disable; the forced ERL and skip_irq_disable = False
+               hook them), its enable has; a tick that comes due between the
+               two is still taken right after the enable's MTC0, in all three
   eret       - an ERET whose hook is skipped runs natively (to the native EPC,
                0, or under the forced ERL to ErrorEPC, 0) and is redone, in both
                fast modes; the ticks go on
@@ -126,6 +131,56 @@ for name, cls, exact in MODES:
 print("--- same")
 check(len(set(results.values())) == 1 and len(set(map(tuple, logs.values()))) == 1,
       "the kuseg and interrupt programs give the same results in all three modes")
+
+print("--- disable")
+
+
+def jal(target): return 0x0C000000 | (target >> 2) & 0x03FFFFFF
+
+
+# the TDS RTOS's interrupt disable / enable (os_disable_interrupt / os_enable_interrupt)
+DISABLE = [mfc0(T0, STATUS), NOP, NOP, NOP, addiu(T1, 0, 6), 0x01284824, bne(T1, 0, 8),   # and t1, t1, t0
+           addiu(T1, 0, -2), 0x01094024, mtc0(T0, STATUS), NOP, NOP, mtc0(T0, STATUS), NOP, NOP,  # and t0, t0, t1
+           0x03E00008, NOP]                                                               # jr ra
+ENABLE = [mfc0(T0, STATUS), NOP, NOP, NOP, addiu(T1, 0, 6), 0x01284824, bne(T1, 0, 5),
+          0x35080001, mtc0(T0, STATUS), NOP, NOP, NOP, 0x03E00008, NOP]                    # ori t0, t0, 1
+
+
+def disable_program(first, spin):
+    """Interrupts on, the RTOS's disable, a spin past Compare, its enable:
+    (program, the disable's two MTC0 Status, the enable's)."""
+    head = li(S4, EPC_LOG) + timer_prologue(0x7FFFFFFF, first, 0x10008001)
+    n = len(head) + 2 + 5 + 2 + len(IDLE)
+    dis, ena = address_of(None, n), address_of(None, n + len(DISABLE))
+    main = head + [jal(dis), NOP] + li(T3, spin) + [addiu(T3, T3, -1), bne(T3, 0, -2), NOP] + \
+        [jal(ena), NOP] + IDLE + DISABLE + ENABLE
+    return main, (dis + 4 * 9, dis + 4 * 12), ena + 4 * 8
+
+
+for name, cls, exact in MODES:
+    program, disables, enable_at = disable_program(2_000 if exact else 50_000, 2_000 if exact else 200_000)
+    sim = cls(log_handler=lambda m: None)
+    sim.hook_every_instruction = exact
+    sim.exact_count_threshold = 0
+    sim.calibration_slices = 0
+    load(sim, program, handler)
+    end = address_of(program, len(program) - len(DISABLE) - len(ENABLE) - 2)
+    for _ in range(20):
+        sim.run(max_instructions=sim.instruction_count + 200_000)
+        if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == end:
+            break
+    log = epc_log(sim)[:1]
+    check(log == [enable_at + 4], f"{name}: the tick that came due inside the disabled section is taken after the "
+                                  f"enable's MTC0 (EPC {[hex(e) for e in log]}, 0x{enable_at + 4:08X} wanted)")
+    if not exact:
+        hooked = [a in sim._cp0_site_hooks for a in disables + (enable_at,)]
+        want = [False, False, True] if cls is AliMipsSimulator else [True, True, True]
+        check(hooked == want, f"{name}: the disable's MTC0 Status hooked {hooked[:2]}, the enable's {hooked[2]}")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+sim.skip_irq_disable = False
+program, disables, enable_at = disable_program(50_000, 200_000)
+load(sim, program, handler)
+check(all(a in sim._cp0_site_hooks for a in disables + (enable_at,)), "skip_irq_disable = False: all three hooked")
 
 print("--- eret")
 for name, cls in (("native Status", AliMipsSimulator), ("forced ERL", ForcedErl)):

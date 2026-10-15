@@ -4,6 +4,7 @@ from capstone import *
 import sys
 import os
 import re
+import struct
 import threading
 import time
 try:
@@ -3291,7 +3292,7 @@ class AliMipsSimulator:
                 x = _np.frombuffer(data, dtype='<u4', count=n // 4)[cand]
                 hit = (x == self._ERET_WORD) | _np.isin(x & _np.uint32(0xFFE0FFFF), self._site_word_array)
                 out.update((base + 4 * cand[hit]).tolist())
-            return out
+            return self._drop_disable_sites(data, base, out)
         data = bytes(data)
         n = len(data)
         fullmatch = self._CP0_SITE_RE.fullmatch
@@ -3308,7 +3309,46 @@ class AliMipsSimulator:
         if len(self._site_words) != len(self._CP0_WORDS):    # (native Status: no MFC0 Status sites)
             out = {a for a in out if (int.from_bytes(data[a - base:a - base + 4], 'little') & 0xFFE0FFFF)
                    in self._site_words or data[a - base:a - base + 4] == b"\x18\x00\x00\x42"}
-        return out
+        return self._drop_disable_sites(data, base, out)
+
+    # The TDS RTOS's interrupt disable, a quarter to a third of all hooked CP0
+    # instructions of an application (dump_maciej, the S60: 232,000 calls in
+    # their first 150 M instructions, with ~232,000 enables):
+    #   mfc0 T, Status; nop x3; addiu X, zero, 6; and X, X, T; bnez X, out
+    #   addiu X, zero, -2; and T, T, X; mtc0 T, Status; nop x2; mtc0 T, Status
+    # Both writes store the Status it has just read with IE cleared: they can
+    # bring no interrupt, so under the native Status (where the CPU executes
+    # them itself) their hooks would only follow the value -- run() takes the
+    # native Status over at every slice boundary, and the enable's hook, which
+    # stays, sees the write that can bring one.  Meanwhile the shadow keeps IE
+    # set: a hook that asks whether an interrupt is deliverable may end a slice
+    # in vain, the boundary then finding it masked.  Not with the forced ERL,
+    # whose hooks emulate every MTC0 Status.
+    skip_irq_disable = True
+
+    def _drop_disable_sites(self, data, base, sites):
+        """sites without the two MTC0 Status of each interrupt disable (see
+        skip_irq_disable) in data (code at `base`)."""
+        if self.force_erl or not self.skip_irq_disable:
+            return sites
+        drop = set()
+        n = len(data)
+        for a in sites:
+            p = a - base
+            if p < 48 or p + 4 > n:
+                continue
+            w = struct.unpack_from("<12I", data, p - 44)            # w[11]: the site
+            mtc0 = w[11]
+            if (mtc0 & 0xFFE0FFFF) != 0x40806000:
+                continue
+            if w[8] == mtc0 and w[9] == w[10] == 0:                  # (the second write)
+                w = struct.unpack_from("<12I", data, p - 56) if p >= 60 else (0,) * 12
+            t, x = (mtc0 >> 16) & 31, (w[9] >> 16) & 31
+            if w[2:] == (0x40006000 | t << 16, 0, 0, 0, 0x24000006 | x << 16, 0x24 | x << 21 | t << 16 | x << 11,
+                         w[8] if (w[8] & 0xFFFF0000) == (0x14000000 | x << 21) else -1, 0x2400FFFE | x << 16,
+                         0x24 | t << 21 | x << 16 | t << 11, mtc0) and x != t:
+                drop.add(a)
+        return sites - drop if drop else sites
 
     def _add_cp0_sites(self, sites):
         for addr in sites:

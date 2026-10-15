@@ -297,7 +297,13 @@ M3503).
   from the RAM buffer); an MTC0 Status that only disables interrupts or
   rewrites the value does not re-plan the slice, and the same MTC0 again after
   nothing but NOPs (the RTOS's interrupt disable writes Status twice) is
-  passed over by the first one's hook. (Interpreting the ALU code between
+  passed over by the first one's hook. Under the native Status the TDS
+  RTOS's interrupt disable is not hooked at all (`skip_irq_disable`): its two
+  MTC0 Status store the Status it has just read with IE cleared, which can
+  bring no interrupt, and run() takes the native Status over at every slice
+  boundary -- the enable's hook stays. That is ~40% of the hooks: dump_maciej's
+  first 150 M instructions ran 0.74 M hooks instead of 1.22 M, in 57 s
+  instead of 68 s (`test_native_status.py`). (Interpreting the ALU code between
   close CP0 instructions in Python, to take them in one hook, cost more than
   the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
   read the RAM buffer in place (numpy over the words' top bytes), and the
@@ -1030,8 +1036,10 @@ Python's work (no interrupt while it is paid, the latched tick after it).
 `test_native_status.py` checks the native Status against the forced ERL and
 exact mode: kuseg stores and device reads with ERL clear, MFC0 Status native,
 a tick that came due with interrupts off taken right after the enabling MTC0
-Status, the same results in all three, a native ERET redone in both fast
-modes, a Status written behind the hooks' back taken over.
+Status, the same results in all three, the RTOS's interrupt disable left
+unhooked (and a tick that came due after it still taken right after the
+enable), a native ERET redone in both fast modes, a Status written behind
+the hooks' back taken over.
 `test_cp0_sites.py` checks the CP0-site scan (numpy and regex paths agree on
 planted words; MFC0 Status a site only under the forced ERL), the vector page
 scanned again only when it changed, the periodic rescan, CP0 instructions run
