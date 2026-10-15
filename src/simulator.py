@@ -4196,7 +4196,11 @@ class AliMipsSimulator:
             if any(s is not None and (entry <= s < entry + len(code) or get_count <= s < get_count + 48)
                    for s in stops):
                 return None
-        if self._guest_bytes(entry, len(code)) != code:
+        phys = entry & 0x1FFFFFFF
+        if (entry >> 29) in (4, 5) and phys + len(code) <= self.ram_size:
+            if self._ram_view[phys:phys + len(code)] != code:      # (in place: no copy)
+                return None
+        elif self._guest_bytes(entry, len(code)) != code:
             return None
         return routine
 
@@ -4221,7 +4225,12 @@ class AliMipsSimulator:
             return
         code, gp_off, get_count, kind = routine
         build = self._DELAYS[kind]
-        clock = int.from_bytes(self._guest_bytes((self._reg_read(UC_MIPS_REG_GP) + gp_off) & 0xFFFFFFFF, 4), 'little')
+        a = (self._reg_read(UC_MIPS_REG_GP) + gp_off) & 0xFFFFFFFF
+        words = self._ram_words
+        if words is not None and not a & 3 and (a >> 29) in (4, 5) and (a & 0x1FFFFFFF) < self.ram_size:
+            clock = words[(a & 0x1FFFFFFF) >> 2]
+        else:
+            clock = int.from_bytes(self._guest_bytes(a, 4), 'little')
         per_us = (((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF if build["clock"] == "mul" else
                   clock // 2_000_000 if build["clock"] == "div" else clock)
         ticks = ((self._reg_read(UC_MIPS_REG_A0) & build["mask"]) * per_us) & 0xFFFFFFFF
