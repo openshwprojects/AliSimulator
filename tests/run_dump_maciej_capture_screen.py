@@ -1,6 +1,6 @@
 """
-Screen regression for dump_maciej.bin, the Opticum STB HD N2 (slow, about 3
-minutes): boots the firmware into its application, whose first-install wizard
+Screen regression for dump_maciej.bin, the Opticum STB HD N2 (slow, about 1
+minute): boots the firmware into its application, whose first-install wizard
 draws its first page with some 350 GE commands (rectangle fills, palette and
 RLE bitmap blits, anti-aliased 4-bit font glyphs, executed into RAM by
 ge_m36f.py) about 45 s in and then leaves it alone; that screen, read through

@@ -1,6 +1,6 @@
 """
 Screen regression for the Cabletech URZ0086 (ALi M3606: the M3602 family with
-the SEE co-processor, chips/m3602.py and chips/see.py; about 7 minutes):
+the SEE co-processor, chips/m3602.py and chips/see.py; about 3 minutes):
 boots "URZ0086_V1.2.1.abs" with the chip ID its board reads, 0x3603 (its
 sidecar's device.chipId; the bootloader then reads the flash with the quad
 I/O read 0xEB).  The application starts the SEE's program on the second core

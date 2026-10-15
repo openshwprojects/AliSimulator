@@ -1,5 +1,5 @@
 """
-Screen regression for the Strong Prima VIII flash dump (slow, about 8
+Screen regression for the Strong Prima VIII flash dump (slow, about 4
 minutes): boots "STRONG PRIMA VIII/GD25Q32B_20190128_141501.BIN" (main board
 MC6501-M3801, firmware "Prima_viii" of April 2015, Libcore 8.32) into its
 application, which draws its live-TV channel banner -- the channel name,

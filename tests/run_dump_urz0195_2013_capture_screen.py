@@ -1,6 +1,6 @@
 """
 Screen regression for the Cabletech URZ0195 with its 2013 firmware (slow,
-about 5 minutes): boots "cableteh_urz0195__w25q32bv.BIN" into its
+about 3 minutes): boots "cableteh_urz0195__w25q32bv.BIN" into its
 application (Libcore 8.1c.0@SDK4.0bd.8.7_20121127), which plays the first
 channel of its database ("prog id : 4", TVN) and draws its channel banner
 (channel 5, "Brak informacji", 0 %) some 20 GE commands in, then, when the

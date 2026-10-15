@@ -1,6 +1,6 @@
 """
 Screen regression for the Globo HD-XS2 / Opticum Blue XS65 satellite update
-1.3.5 "SmartHD" (slow, about 6 minutes): an ALi M3503 (chips/m3503.py),
+1.3.5 "SmartHD" (slow, about 3 minutes): an ALi M3503 (chips/m3503.py),
 dual-CPU, whose application asks the SEE (HLD_DSC.16) to hash its own code
 with the crypto engine's DMA and SHA-256 unit (crypto_engine.py) before it
 goes on -- without that engine the call never returned and nothing was

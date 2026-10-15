@@ -1,5 +1,5 @@
 """
-Screen regression for the Strong Prima VIII update V1.0.6 (slow, about 7
+Screen regression for the Strong Prima VIII update V1.0.6 (slow, about 2
 minutes): the manufacturer's update image of the Prima VIII, whose flash dump
 run_dump_prima8_capture_screen.py runs.  Without the dump's channel database
 the application opens its first-install wizard ("Welcome": language English,

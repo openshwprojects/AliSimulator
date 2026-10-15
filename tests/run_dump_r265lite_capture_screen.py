@@ -1,6 +1,6 @@
 """
 Screen regression for the Opticum Blue R265 Lite (ALi M3822P, the DVB-T2
-generation, chips/m3821.py; about 10 minutes): boots the official firmware
+generation, chips/m3821.py; about 2 minutes): boots the official firmware
 image "Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs" through its
 bootloader's two stages and the LZMA decompression into the application
 (ALi SDK 4.0, Libcore 19.9), which draws its home menu through the same GE

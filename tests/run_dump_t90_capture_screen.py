@@ -1,6 +1,6 @@
 """
 Screen regression for the Opticum HD T90 / STB HD N2 / N3 official update
-1.3.2 PVR (slow, about 10 minutes): boots "OPTICUM HD T90/STB_HD_T90_N2-3_
+1.3.2 PVR (slow, about 4 minutes): boots "OPTICUM HD T90/STB_HD_T90_N2-3_
 1.3.2PVR_2014-01-05.abs" -- the manufacturer's 2015 firmware for the family
 of dump_maciej.bin (an N2) and the Globo N3 dump -- through its LZMA
 bootloader ("success!" after about 90 s) into the application (Libcore

@@ -1,6 +1,6 @@
 """
 Screen regression for the Cabletech URZ0195 with its 2012 firmware (slow, about
-12 minutes): boots "urz0195_full_dump(ESMTF25L3204).bin" through its LZMA
+4 minutes): boots "urz0195_full_dump(ESMTF25L3204).bin" through its LZMA
 bootloader into the application (Libcore 8.1.0@SDK4.0bd.8.1_20120713), which
 draws right away -- the channel banner ("Polsat", channel 4, no signal) some 14
 GE commands in, then, when the banner has timed out, the live-TV "Brak

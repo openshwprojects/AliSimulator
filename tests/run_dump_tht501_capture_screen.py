@@ -1,6 +1,6 @@
 """
 Screen regression for the Thomson THT501 update V1.1.5a (ALi M36xx, the
-Cabletech URZ0083's generation, chips/m3602.py; about 5 minutes): boots
+Cabletech URZ0083's generation, chips/m3602.py; about 2 minutes): boots
 "THT501_V1.1.5a_20120925.abs" with the chip ID its board reads, 0x3603 (its
 sidecar's device.chipId), into its application (SDK4.0ba.6.4_GLS_T), which
 decodes its boot logo (video_m36.py) and draws its first-install wizard in

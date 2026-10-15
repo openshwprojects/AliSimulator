@@ -1,6 +1,7 @@
 """
-Regression test (slow, about 2 minutes): dump_maciej.bin boots through the
-whole bootloader and starts the main application.
+Regression test (slow, about 20 s since the bootloader's LZMA decoder runs in
+Python): dump_maciej.bin boots through the whole bootloader and starts the
+main application.
 
   1. the UART shows the boot sequence up to the bootloader's 'success!',
   2. execution reaches the application entry (chunk header codestart, default

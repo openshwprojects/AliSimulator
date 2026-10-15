@@ -1,6 +1,6 @@
 """
 Screen regression for the Ferguson Ariva T750i firmware V1.20B2 (slow, about
-5 minutes): an M3821 with the SDK's dual-CPU build, whose SEE program runs on
+2 minutes): an M3821 with the SDK's dual-CPU build, whose SEE program runs on
 the second core (chips/see.py).  Its OSD is not the M36F GMA's but a layer
 of the newer display engine at 0xB8006900, which the drivers set up through
 register lists in RAM the display engine loads every frame (gma_capture.py:

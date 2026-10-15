@@ -1,6 +1,6 @@
 """
 Screen regression for the Opticum HD S60 universal update 1.0.4.1 PVR (slow,
-about 4 minutes): an M3601S satellite receiver (the M3602 family,
+about 5 minutes): an M3601S satellite receiver (the M3602 family,
 chips/m3602.py), single-CPU, whose board reads the chip ID 0x3603 (its
 sidecar's device.chipId): under the family's own 0x3602 its application's
 USB host attach gave its controller no base and the host's start ran into its

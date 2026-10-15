@@ -1,6 +1,6 @@
 """
 Screen regression for the Globo HD-XS2 / Opticum Blue XS65 update 1.3.5
-"Reta" (Polish, slow, about 6 minutes): the same ALi M3503 pack as the
+"Reta" (Polish, slow, about 3 minutes): the same ALi M3503 pack as the
 SmartHD image (run_dump_hdxs2_capture_screen.py), which hashes its code on
 the SEE's crypto engine (crypto_engine.py) before it goes on.  Its
 first-install wizard ("Wybierz język") is captured and compared with

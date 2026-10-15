@@ -1,6 +1,6 @@
 """
 Screen regression for the Ferguson Ariva T650i update image with a signal on
-one channel (slow, about 30 minutes): boots "FERGUSON ARIVA T650i/
+one channel (slow, about 13 minutes): boots "FERGUSON ARIVA T650i/
 T650i_V1.13B4_20160721.abs" -- an 8 MB manufacturer update (bootloader, OTA
 loader, maincode, empty channel database), the first image of an 8 MB flash
 part here -- through its LZMA bootloader into the application (Libcore 8.1c,
@@ -44,7 +44,7 @@ FEATURED = {"device": "Ferguson Ariva T650i", "chips": ["ALi M3801", "FD650K", "
 screen_regression.run(
     dump="FERGUSON ARIVA T650i/T650i_V1.13B4_20160721.abs",
     expected="t650i_screen.png",
-    boot_limit_s=75 * 60,     # ~20 min alone (a 4-6 min unpack, then the search)
+    boot_limit_s=75 * 60,     # ~13 min with another test beside it (the unpack takes seconds, then the search)
     settle_s=5,               # the last search screen is up some 20 s; its redraw is done within 5
     min_ge_ops=2550,          # ... at 2558 GE commands (73 per searched channel)
     min_colours=150,

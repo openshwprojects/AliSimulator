@@ -1,5 +1,5 @@
 """
-Screen regression for the Ferguson Ariva T760i update V1.5B4 (slow, about 5
+Screen regression for the Ferguson Ariva T760i update V1.5B4 (slow, about 2
 minutes): a C3505 whose SEE program runs on the second core (chips/see.py),
 with its AltoBeam ATBM7812 demodulator on the I2C bus (demods.py, the
 sidecar's demodModel: without it the NIM driver retried its power-on for

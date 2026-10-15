@@ -1,5 +1,5 @@
 """
-Screen regression for the Strong SRT 8115 dump (slow, about 15 minutes): boots
+Screen regression for the Strong SRT 8115 dump (slow, about 5 minutes): boots
 srt8115.BIN (main board MC6422-M3801) into its application, which scans its
 flash channel database for some 8 minutes before it draws its first screen at
 about 12 minutes: its live-TV "Brak sygnału" (no signal) icon and text, some 40

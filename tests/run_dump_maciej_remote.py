@@ -1,5 +1,5 @@
 """
-Remote-control regression for dump_maciej.bin (slow, about 8 minutes): boots
+Remote-control regression for dump_maciej.bin (slow, about 2 minutes): boots
 the firmware to its first-install wizard, then drives it with IR remote keys
 and checks that the OSD reacts.
 

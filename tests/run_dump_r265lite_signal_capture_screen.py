@@ -1,5 +1,5 @@
 """
-Signal screen regression for the Opticum Blue R265 Lite (slow, about 10
+Signal screen regression for the Opticum Blue R265 Lite (slow, about 12
 minutes): boots "Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs" with
 sim.set_signal(True) -- its sidecar's tuner model (the MxL603 family's
 protocol for the board's MxL608, tuners.py) on the I2C bus and the M3821's

@@ -1,6 +1,6 @@
 """
 Screen regression for the Cabletech URZ0083 (ALi M3601E, the M3602 family,
-chips/m3602.py; about 4 minutes): boots "URZ0083_v1.1.2.abs" with the chip ID
+chips/m3602.py; about 2 minutes): boots "URZ0083_v1.1.2.abs" with the chip ID
 its board reads, 0x3603 (its sidecar's device.chipId; the bootloader then
 reads the flash with the quad I/O read 0xEB), into its application, which
 first decodes its boot logo from the flash: the MPEG decoder programs the

@@ -1,5 +1,5 @@
 """
-Screen regression for the Cabletech URZ0083Q dump (slow, about 20 minutes):
+Screen regression for the Cabletech URZ0083Q dump (slow, about 8 minutes):
 boots "CABLETECH URZ0083Q/Cabletech URZ0083Q/EN25Q32B.bin" into its
 application, which first scans its flash channel database backwards a few
 bytes at a time (about 90k timer ticks, 12-17 minutes of wall time), then

@@ -1,6 +1,6 @@
 """
 Screen regression for the Opticum X110TS / X110TSE official update 1.4.0C
-PVR (slow, about 7 minutes): an M3606 twin-tuner satellite PVR, whose SEE
+PVR (slow, about 4 minutes): an M3606 twin-tuner satellite PVR, whose SEE
 co-processor's program runs on the second core (chips/see.py) and draws
 the OSD the application asks for -- through the same M36F GMA layers as the
 M3801's (gma_capture.py).  The application shows the banner of its first

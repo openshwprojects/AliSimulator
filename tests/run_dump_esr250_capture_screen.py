@@ -1,5 +1,5 @@
 """
-Screen regression for the Echosonic Mini ESR-250 (slow, about 4 minutes): an
+Screen regression for the Echosonic Mini ESR-250 (slow, about 2 minutes): an
 ALi M3510A satellite receiver, run as the M3503 family (chips/m3503.py) --
 its bootloader ("3510-r1362") is the Globo HD-XS2's XIP kind, with its stack
 in cache-as-RAM lines until the DDR is up, and its set-up code branches on

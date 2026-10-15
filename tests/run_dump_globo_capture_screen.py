@@ -1,5 +1,5 @@
 """
-Screen regression for the Globo STB HD N3 dump (slow, about 6 minutes): boots
+Screen regression for the Globo STB HD N3 dump (slow, about 4 minutes): boots
 "Ali_3801_Globo_DVBT_dump SPI 4mb.bin" through its LZMA bootloader into the
 application, waits for the OSD: the application first shows its channel banner ("41. WP",
 clock and date, about 600 GE commands) and clears it again when the banner

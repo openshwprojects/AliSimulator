@@ -1,5 +1,5 @@
 """
-Screen regression for dump.bin, the Comsat TE 1050 HD (slow, about 7
+Screen regression for dump.bin, the Comsat TE 1050 HD (slow, about 6
 minutes): boots dump.bin into its application, which reads its flash channel
 database word by word and byte by byte before it tunes its first channel and
 draws the channel banner (Russian UI) and, once that has timed out, the

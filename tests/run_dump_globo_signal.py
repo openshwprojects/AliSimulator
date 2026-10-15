@@ -1,5 +1,5 @@
 """
-Signal regression for the Globo STB HD N3 (slow, about 4 minutes): boots
+Signal regression for the Globo STB HD N3 (slow, about 3 minutes): boots
 "Ali_3801_Globo_DVBT_dump SPI 4mb.bin" with sim.set_signal(True) -- its
 sidecar's tuner, a Rafael R820T at I2C 0x1A (tuners.py), on the I2C bus, and
 the M3801's internal demodulator reporting lock (chips/m3801.py).  The

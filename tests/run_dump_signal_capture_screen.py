@@ -1,6 +1,6 @@
 """
 Screen regression for dump.bin, the Comsat TE 1050 HD, with a signal and a
-transport stream (slow, about 15 minutes): boots dump.bin with
+transport stream (slow, about 2 minutes): boots dump.bin with
 sim.set_signal(True) -- its MxL603 tuner model and the M3801's demodulator
 reporting lock -- and sim.attach_mux(), the demultiplexer model fed with a
 made-up multiplex (transport_stream.py).  The application tunes its channel,

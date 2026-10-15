@@ -1,6 +1,6 @@
 """
 Screen regression for the Opticum Blue R265 Lite's newest firmware, 1.2.0
-(ALi M3822P, chips/m3821.py; about 10 minutes): boots "Opticum Blue R265
+(ALi M3822P, chips/m3821.py; about 3 minutes): boots "Opticum Blue R265
 Lite/T2GEN265_1.2.0-2023-03-17.abs" through its 2023 bootloader (silent on
 the UART, its stage 2 copies the application through the flash window word
 by word) into the application (Libcore 19.17, 2021), which draws the same

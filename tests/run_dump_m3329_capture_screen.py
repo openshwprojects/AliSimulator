@@ -1,6 +1,6 @@
 """
 Screen regression for the M3329 dump (dumps/other/sat_main_ali3329-s15125_
-dump_eeprom_by_h2h_ok.bin, a 2005 satellite receiver, slow: about 4
+dump_eeprom_by_h2h_ok.bin, a 2005 satellite receiver, slow: about 2
 minutes).  The M3327 platform's chip (chips/m3329.py) boots its application
 from the parallel NOR flash (parallel_flash.py: the driver identifies an
 MX29LV400B through the autoselect command, whose reset it stores in a branch

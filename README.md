@@ -787,13 +787,17 @@ then every 1000th.
 Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
 `python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
 or all of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
---slow` adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
-through expand() into the main application (about 2 minutes, a minute of it
-the bootloader's unoptimised LZMA decompression), checks the
+--slow` (about 2 hours with `--jobs 2`; 4.2 hours before the speed work of
+2026-10-15: idle skipping, cheaper CP0 hooks, the bootloaders' LZMA decoder in
+Python, the native Status, waits in the firmware's time) adds
+`run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
+through expand() into the main application (about 20 s; the bootloader's
+unoptimised LZMA decompression, which took a minute of that, runs in Python
+now), checks the
 decompressed image against an offline LZMA decompression of the flash chunk,
 and checks that the application's RTOS runs on timer ticks (it prints its
 init banner, compared exactly). `run_dump_to_main_app.py` and
-`run_dump_Prima_to_main_app.py` (about 20 s each, in the default run) do the
+`run_dump_Prima_to_main_app.py` (about 10-15 s each, in the default run) do the
 same for dump.bin and SRT Prima: their whole UART output -- bootloader lines
 plus the application's 'MC: APP  init ok' / SDK / Libcore / Application
 banner -- must match byte for byte, timer interrupts must be taken, and the
@@ -822,65 +826,66 @@ start, the URZ0083Q and URZ0194S once their wizard is up: its default "Tryb
 Wyświetlania" is 1080i@50HZ), so the display engine scales the OSD layer to
 the output and the region heads hold output coordinates -- it undoes that
 scaling, read from the display engine's timing register, so the capture shows
-the whole OSD where the TV shows it; each capture logs the output mode): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
-about 4 minutes), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
-banner, about 6), `run_dump_t90_capture_screen.py` (the official 2015 update
+the whole OSD where the TV shows it; each capture logs the output mode; the
+durations below are from a `--slow --jobs 2` run of 2026-10-15): `run_dump_maciej_capture_screen.py` (the Opticum's wizard,
+about 1 minute), `run_dump_globo_capture_screen.py` (the Globo N3's no-signal
+banner, about 4), `run_dump_t90_capture_screen.py` (the official 2015 update
 of the same Opticum / Globo family, "OPTICUM HD T90/", the same no-signal box
-and menu, about 10), `run_dump_capture_screen.py` (dump.bin's no-signal box
+and menu, about 4), `run_dump_capture_screen.py` (dump.bin's no-signal box
 after its flash scan and channel banner, then its channel list and main menu
-over the remote, about 10), `run_dump_signal_capture_screen.py` (the
+over the remote, about 6), `run_dump_signal_capture_screen.py` (the
 same boot with a signal and the transport stream: the channel banner with the
 multiplex's EIT text, captured as it is drawn -- 0.5 M instruction slices,
-`settle_s=0` -- before it times out, about 8) and `run_dump_cabletech_capture_screen.py`
-(the URZ0083Q's first-install wizard after its 12-17 minute database scan,
-with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
-(the Strong SRT 8115's no-signal screen, about 15) and
+`settle_s=0` -- before it times out, about 2) and `run_dump_cabletech_capture_screen.py`
+(the URZ0083Q's first-install wizard after its flash database scan, about 8 in
+all, with the TM1628 panel reading "noCH") `run_dump_srt8115_capture_screen.py`
+(the Strong SRT 8115's no-signal screen, about 5) and
 `run_dump_urz0194s_capture_screen.py` (the Cabletech URZ0194S, the URZ0083Q's
-family with a newer application: the same wizard after an 11-minute scan) and
+family with a newer application: the same wizard after its scan, about 6) and
 `run_dump_urz0195_capture_screen.py` (the Cabletech URZ0195 with its 2012
 firmware, which draws its channel banner and no-signal screen seconds after
-starting, with the panel reading "0004", about 12 minutes; the 2013 firmware
+starting, with the panel reading "0004", about 4 minutes; the 2013 firmware
 of the same box has a test of its own, below) and
 `run_dump_prima8_capture_screen.py` (the Strong Prima VIII flash dump -- unlike
 the manufacturer's update of the same box it carries a channel database --
-whose Bulgarian channel banner is up 3 minutes after the start, then its
-"Няма сигнал!" no-signal box, about 8 minutes) and
+whose Bulgarian channel banner comes up first, then its
+"Няма сигнал!" no-signal box, about 4 minutes) and
 `run_dump_t650i_capture_screen.py` (the Ferguson Ariva T650i's 8 MB update
 image with a signal on UHF channel 34, 578 MHz, and the transport stream
 behind it: with its empty channel database it runs the first-install
 automatic search, which reads the multiplex's tables there and finds
 "AliSimulator TV", and nothing on the other channels up to 858 MHz -- its
-last search screen is compared, the panel reading "Find" --, about 30
+last search screen is compared, the panel reading "Find" --, about 13
 minutes; without a signal the search ends on "nie znaleziono kanału!") and
 `run_dump_x110ts_capture_screen.py` (the Opticum X110TS, an M3606
 twin-tuner satellite PVR whose SEE program on the second core drives the
 display: its channel banner, then its red "No Signal!" box, the main
 menu the remote's MENU opens, and the front panel's down button moving its
-highlight to Installation, about 8 minutes)
+highlight to Installation, about 4 minutes)
 and `run_dump_t750i_capture_screen.py` (the Ferguson Ariva T750i, an M3821
 with the dual-CPU build: its first-install wizard "Witamy" through the newer
 display engine's layer, captured as it comes up, then the front panel's exit
 key opens the main menu's "Edytuj kanały" page before the wizard's countdown
 starts the channel search, its down key highlights the first item and the
-remote's RIGHT turns to the menu's next page, about 5 minutes) and
+remote's RIGHT turns to the menu's next page, about 2 minutes) and
 `run_dump_t760i_capture_screen.py` (the Ferguson Ariva T760i, a C3505 with
 its ATBM7812 demodulator: its wizard "Welcome" the same way, then the panel's
 exit and down keys -- "Edit Channel", "Favorite" highlighted -- and the
-remote's RIGHT, about 6) and
+remote's RIGHT, about 2) and
 `run_dump_prima8_update_capture_screen.py` (the Strong Prima VIII's update
 image, without the dump's channel database: its first-install wizard,
-whose highlight the remote's DOWN moves, about 5) and
+whose highlight the remote's DOWN moves, about 2) and
 `run_dump_urz0195_2013_capture_screen.py` (the Cabletech URZ0195's 2013
 firmware: its channel banner, then its "Brak sygnału!" screen, the panel
 reading "0005", then the remote's OK opens its channel list and DOWN moves
-the highlight, about 5) and `run_dump_urz0083_capture_screen.py` (the Cabletech
+the highlight, about 3) and `run_dump_urz0083_capture_screen.py` (the Cabletech
 URZ0083, an M3601E: its boot logo decoded and shown, then its first-install
 wizard "Welcome" in Polish, whose highlight the remote's DOWN moves, about
-4) and `run_dump_tht501_capture_screen.py` (the Thomson THT501, the same
+2) and `run_dump_tht501_capture_screen.py` (the Thomson THT501, the same
 generation: its English wizard in a flat skin of seven colours, whose
-highlight DOWN moves, about 5) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
+highlight DOWN moves, about 2) and `run_dump_urz0086_capture_screen.py` (the Cabletech URZ0086, an M3606:
 its SEE decodes the boot logo and its OSD driver draws the wizard "Witaj",
-whose highlight DOWN moves, about 7) and `run_dump_s60_capture_screen.py`
+whose highlight DOWN moves, about 3) and `run_dump_s60_capture_screen.py`
 (the Opticum HD S60, an M3601S: its "No Signal!" message, with its USB power
 switch's fault flag on GPIO 25 pulled up, then the remote's OK opens its
 channel list, and the remote's and then the front panel's DOWN move the
@@ -889,19 +894,19 @@ highlight, about 5) and
 run as the M3503: its Quick Setup menu, whose highlight the remote's DOWN
 moves and then its front panel's down key -- a TM1650-compatible chip on the
 HD-XS2's pins reading "Strt", whose raw key bytes its UI's key map holds as
-panel codes -- about 4) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
+panel codes -- about 2) and `run_dump_t50_capture_screen.py` (the Ferguson Ariva
 T50, an M3602: its boot logo shown on both outputs, then its installation
 wizard "Welcome", drawn by the M3602's own GE and scaled to its PAL layer,
-whose highlight DOWN moves, about 8) and `run_dump_hdxs2_capture_screen.py`
+whose highlight DOWN moves, about 2) and `run_dump_hdxs2_capture_screen.py`
 (the Globo HD-XS2's SmartHD image, an M3503 whose SEE hashes the
 application on its crypto engine first: its main menu, whose highlight RIGHT
-moves, about 6) and `run_dump_hdxs2_reta_capture_screen.py` (the Reta image
+moves, about 3) and `run_dump_hdxs2_reta_capture_screen.py` (the Reta image
 of the same pack: its first-install wizard, where DOWN picks German and the
 wizard switches language, then the front panel's down button English, about
-6) and `run_dump_m3329_capture_screen.py`
+3) and `run_dump_m3329_capture_screen.py`
 (the M3329 board: its channel banner, its panel showing the channel number,
 then the panel's MENU button opens its Channel menu and the remote's DOWN
-moves the highlight, about 3; its CPU draws the OSD, so this one watches the
+moves the highlight, about 2; its CPU draws the OSD, so this one watches the
 screen instead of GE commands: `ge=False`).
 `run_dump_maciej_remote.py` drives the
 Opticum's wizard with the IR remote through the language and aspect-ratio

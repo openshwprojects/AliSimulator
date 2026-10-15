@@ -1,5 +1,5 @@
 """
-Screen regression for the Cabletech URZ0194S dump (slow, about 20 minutes):
+Screen regression for the Cabletech URZ0194S dump (slow, about 6 minutes):
 boots CABLETECH_urz0194s_v1_0_8.bin -- the URZ0083Q's hardware family with a
 newer application (Libcore 8.1j, September 2013) -- into its application,
 which scans its flash channel database for some 11 minutes before it draws its

@@ -1,6 +1,6 @@
 """
 Screen regression for the Ferguson Ariva T50 firmware V1.02B214 (slow, about
-8 minutes): an M3602 DVB-T receiver (chips/m3602.py) whose OSD is drawn by
+2 minutes): an M3602 DVB-T receiver (chips/m3602.py) whose OSD is drawn by
 the M3602's own graphics engine at 0xB800C000 (ge_m3602.py) -- its OSD
 driver keeps a 912 x 640 CLUT8 screen and has the engine scale it through
 its palette into the AYCbCr8888 layer of the PAL output, 513 x 512 at
