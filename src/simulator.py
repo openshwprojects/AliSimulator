@@ -302,6 +302,7 @@ class AliMipsSimulator:
         self._virgin_hooks = {}              # chunk base -> hook handle
         self._idle_loops = {}                # idle loop address -> hook handle (idle_skip)
         self._poll_loops = {}                # mailbox poll address -> hook handle (poll_skip)
+        self._irq_enable_sites = set()       # CP0 sites hooked by _hook_irq_enable
         self.poll_skipped = 0.0              # emulation time mailbox polls skipped (seconds)
         self.idle_skipped = 0.0              # emulation time idle_skip moved on (seconds)
         self.busy_pending = 0.0              # emulation time still owed for work done in Python
@@ -3381,8 +3382,48 @@ class AliMipsSimulator:
     def _add_cp0_sites(self, sites):
         for addr in sites:
             if addr not in self._cp0_site_hooks:
-                self._cp0_site_hooks[addr] = self.mu.hook_add(UC_HOOK_CODE, self._hook_cp0_site, begin=addr, end=addr)
+                hook = self._hook_cp0_site
+                if self._is_irq_enable_at(addr):
+                    hook = self._hook_irq_enable
+                    self._irq_enable_sites.add(addr)
+                self._cp0_site_hooks[addr] = self.mu.hook_add(UC_HOOK_CODE, hook, begin=addr, end=addr)
                 self._tb_flush_needed = True
+
+    # The interrupt enable's MTC0 Status (os_enable_interrupt: mfc0 T, Status;
+    # 1-8 NOPs / EHBs; addiu X, zero, 6; and X, X, T; bnez X, out; ori T, T, 1;
+    # mtc0 T, Status), the most hooked CP0 instruction once the disable is not
+    # hooked (the T650i: 39% of them).  With the disable unfollowed the shadow
+    # keeps IE set, so the follow finds nothing to change; what matters is the
+    # deadline check, which ends the slice for an interrupt that came due
+    # meanwhile.  Its hook (_hook_irq_enable) returns at once while the shadow
+    # has IE set (and no exception level), no slice deadline has passed and
+    # no breakpoint is set; else it is the site's full hook.  Native Status
+    # only, with skip_irq_disable.
+    def _is_irq_enable_at(self, addr):
+        """Whether the CP0 site at addr is the interrupt enable's MTC0 Status."""
+        if self.force_erl or not self.skip_irq_disable or addr < 64:
+            return False
+        data = self._guest_bytes(addr - 60, 64)
+        if len(data) < 64:
+            return False
+        words = struct.unpack("<16I", data)                     # words[15]: the site
+        mtc0, t = words[15], (words[15] >> 16) & 31
+        x = (words[13] >> 21) & 31
+        if (mtc0 & 0xFFE0FFFF) != 0x40806000 or x == t or words[14] != 0x34000001 | t << 21 | t << 16 \
+                or (words[13] & 0xFFFF0000) != 0x14000000 | x << 21 or words[12] != 0x24 | x << 21 | t << 16 | x << 11 \
+                or words[11] != 0x24000006 | x << 16:
+            return False
+        k = 10
+        while k > 1 and words[k] in (0, 0xC0):                  # (1-8 NOPs / EHBs)
+            k -= 1
+        return 1 <= 10 - k <= 8 and words[k] == 0x40006000 | t << 16
+
+    def _hook_irq_enable(self, uc, address, size, user_data):
+        """The interrupt enable's MTC0 Status (see _is_irq_enable_at)."""
+        if (self.cp0_status & 0x7) == 0x1 and not self.breakpoints and self.stop_instr is None \
+                and not self._rom_dirty and (self._slice_deadline is None or time.perf_counter() < self._slice_deadline):
+            return
+        self._hook_cp0_site(uc, address, size, user_data)
 
     def _rescan_cp0_sites(self, ranges=None):
         """Scan ROM (cached) and RAM for CP0 instruction encodings and hook each

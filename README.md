@@ -327,7 +327,11 @@ M3503).
   first 150 M instructions ran 0.74 M hooks instead of 1.22 M, in 57 s
   instead of 68 s (`test_native_status.py`; the newer SDK's disable, with
   EHBs among its NOPs, and the R265 Lite 1.2.0's, with five NOPs -- its
-  screen regression 171 s instead of 210 s -- too). (Interpreting the ALU code between
+  screen regression 171 s instead of 210 s -- too). The enable's MTC0 then
+  gets a lean hook (`_hook_irq_enable`): with the shadow's IE still set its
+  follow has nothing to do, so it returns at once unless a slice deadline
+  has passed (an interrupt came due in the disabled section: then the full
+  hook) -- the T650i's first 150 M instructions ran 40 s instead of 42.5 s. (Interpreting the ALU code between
   close CP0 instructions in Python, to take them in one hook, cost more than
   the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
   read the RAM buffer in place (numpy over the words' top bytes), and the

@@ -17,7 +17,8 @@ MTC0 Status running natively while its hook follows it.
   disable    - the TDS RTOS's interrupt disable (two MTC0 Status of the Status
                it read with IE cleared) has no hooks under the native Status
                (skip_irq_disable; the forced ERL and skip_irq_disable = False
-               hook them), its enable has; a tick that comes due between the
+               hook them), its enable has -- the lean one (_hook_irq_enable)
+               under the native Status --; a tick that comes due between the
                two is still taken right after the enable's MTC0, in all three
   eret       - an ERET whose hook is skipped runs natively (to the native EPC,
                0, or under the forced ERL to ErrorEPC, 0) and is redone, in both
@@ -191,7 +192,10 @@ for (name, cls, exact), (form, disable, enable) in [(m, f) for m in MODES for f 
     if not exact:
         hooked = [a in sim._cp0_site_hooks for a in disables + (enable_at,)]
         want = [False, False, True] if cls is AliMipsSimulator else [True, True, True]
-        check(hooked == want, f"{name}{form}: the disable's MTC0 Status hooked {hooked[:2]}, the enable's {hooked[2]}")
+        lean = enable_at in sim._irq_enable_sites
+        check(hooked == want and lean == (cls is AliMipsSimulator),
+              f"{name}{form}: the disable's MTC0 Status hooked {hooked[:2]}, the enable's {hooked[2]} "
+              f"({'the lean' if lean else 'the full'} hook)")
 sim = AliMipsSimulator(log_handler=lambda m: None)
 sim.skip_irq_disable = False
 program, disables, enable_at = disable_program(50_000, 200_000)
