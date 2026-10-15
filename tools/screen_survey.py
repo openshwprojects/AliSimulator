@@ -8,8 +8,10 @@ the front panel showed on the way (a text held for two slices, not one caught
 half rewritten).  An image whose sidecar
 says "display": true but that draws nothing within the budget (or the other
 way round) is flagged.  The screen regressions under tests/ check one image
-per family in depth; this checks that every image still gives a screen, in an
-hour or two for all of them (not part of run_all_tests.py).
+per family in depth; this checks that every image still gives a screen, in
+about half an hour for all of them with --jobs 3 (2026-10-15: 48 of 50 draw,
+within 35-130 s each; ali_sdk.bin has no display, the R265 Lite's M3822P.bin
+dump a damaged main code) -- not part of run_all_tests.py.
 
   python tools/screen_survey.py                      every image, one at a time
   python tools/screen_survey.py --jobs 2 URZ0083 KM0183   these only, two at a time
