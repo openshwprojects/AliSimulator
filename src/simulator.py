@@ -306,7 +306,8 @@ class AliMipsSimulator:
         self._lzma_hooks = {}                # LzmaDecode() entry -> hook handle (_hook_lzma)
         self.lzma_decodes = []               # (entry, input, output address, output size) per decode
         self._delay_hooks = {}               # the RTOS's delay() entry -> its hooks (_hook_delay, _hook_delay_loop)
-        self._delay_routines = {}            # ... -> (its code, the clock's gp offset, its get_count())
+        self._delay_routines = {}            # ... -> (its code, the clock's gp offset, its get_count(), its build)
+        self._delay_loops = {}               # its loop's get_count() call -> its entry
         self.delay_calls = 0                 # delay() calls returned from at their entry
         self.delay_jumps = 0                 # time moves in their loops (longer waits)
         self.delay_skipped = 0.0             # the emulation time both moved on (seconds)
@@ -3262,8 +3263,15 @@ class AliMipsSimulator:
                     self._bp_hooks[addr] = self.mu.hook_add(UC_HOOK_CODE, self._hook_breakpoint, begin=addr, end=addr)
                     self._tb_flush_needed = True
             if not self._virgin_hooks:
+                chunks = set(range(0, min(self.ram_size, self._RAM_CODE_LIMIT), self._VIRGIN_CHUNK))
+                # and the chunks of the chip's code beyond that (a SEE core's program,
+                # whose delay() and LzmaDecode() only these scans find)
+                for start, length in self.chip.code_ranges():
+                    phys = start & 0x1FFFFFFF
+                    if phys + length <= self.ram_size:
+                        chunks.update(range(phys & -self._VIRGIN_CHUNK, phys + length, self._VIRGIN_CHUNK))
                 for seg in (0x80000000, 0xA0000000):
-                    for base in range(seg, seg + min(self.ram_size, self._RAM_CODE_LIMIT), self._VIRGIN_CHUNK):
+                    for base in sorted(seg + c for c in chunks):
                         self._virgin_hooks[base] = self.mu.hook_add(
                             UC_HOOK_CODE, self._hook_virgin, begin=base, end=base + self._VIRGIN_CHUNK - 1)
                 self._tb_flush_needed = True
@@ -3316,6 +3324,7 @@ class AliMipsSimulator:
     # their first 150 M instructions, with ~232,000 enables):
     #   mfc0 T, Status; nop x3; addiu X, zero, 6; and X, X, T; bnez X, out
     #   addiu X, zero, -2; and T, T, X; mtc0 T, Status; nop x2; mtc0 T, Status
+    # (the newer SDK's has an EHB among the NOPs: 1-4 NOPs / EHBs taken).
     # Both writes store the Status it has just read with IE cleared: they can
     # bring no interrupt, so under the native Status (where the CPU executes
     # them itself) their hooks would only follow the value -- run() takes the
@@ -3331,24 +3340,40 @@ class AliMipsSimulator:
         skip_irq_disable) in data (code at `base`)."""
         if self.force_erl or not self.skip_irq_disable:
             return sites
-        drop = set()
-        n = len(data)
-        for a in sites:
-            p = a - base
-            if p < 48 or p + 4 > n:
-                continue
-            w = struct.unpack_from("<12I", data, p - 44)            # w[11]: the site
-            mtc0 = w[11]
-            if (mtc0 & 0xFFE0FFFF) != 0x40806000:
-                continue
-            if w[8] == mtc0 and w[9] == w[10] == 0:                  # (the second write)
-                w = struct.unpack_from("<12I", data, p - 56) if p >= 60 else (0,) * 12
-            t, x = (mtc0 >> 16) & 31, (w[9] >> 16) & 31
-            if w[2:] == (0x40006000 | t << 16, 0, 0, 0, 0x24000006 | x << 16, 0x24 | x << 21 | t << 16 | x << 11,
-                         w[8] if (w[8] & 0xFFFF0000) == (0x14000000 | x << 21) else -1, 0x2400FFFE | x << 16,
-                         0x24 | t << 21 | x << 16 | t << 11, mtc0) and x != t:
-                drop.add(a)
+        drop = {a for a in sites if self._is_irq_disable(data, a - base)}
         return sites - drop if drop else sites
+
+    def _is_irq_disable(self, data, p):
+        """Whether the word at offset p of data is an MTC0 Status of the
+        interrupt disable (skip_irq_disable): its first, or the same again
+        after 1-4 NOPs / EHBs."""
+        n = len(data)
+
+        def word(q):
+            return struct.unpack_from("<I", data, q)[0] if 0 <= q <= n - 4 else None
+
+        def skip_nops(q, most):
+            """The offset of the first word before q that is not a NOP / EHB,
+            or None after more than `most` of them."""
+            for _ in range(most):
+                if word(q) not in (0, 0xC0):
+                    return q
+                q -= 4
+            return None if word(q) in (0, 0xC0) else q
+
+        mtc0 = word(p)
+        if mtc0 is None or (mtc0 & 0xFFE0FFFF) != 0x40806000:
+            return False
+        q = skip_nops(p - 4, 4)
+        if q is not None and q < p - 4 and word(q) == mtc0:
+            p = q                                   # (the second write: the first is checked)
+        t, x = (mtc0 >> 16) & 31, ((word(p - 8) or 0) >> 16) & 31
+        if x == t or word(p - 4) != 0x24 | t << 21 | x << 16 | t << 11 or word(p - 8) != 0x2400FFFE | x << 16 \
+                or ((word(p - 12) or 0) & 0xFFFF0000) != 0x14000000 | x << 21 \
+                or word(p - 16) != 0x24 | x << 21 | t << 16 | x << 11 or word(p - 20) != 0x24000006 | x << 16:
+            return False
+        q = skip_nops(p - 24, 4)
+        return q is not None and q < p - 24 and word(q) == 0x40006000 | t << 16
 
     def _add_cp0_sites(self, sites):
         for addr in sites:
@@ -3915,40 +3940,99 @@ class AliMipsSimulator:
     # where get_count() ends the loop.  Outside a timed slice (a counted one,
     # emu_start() called directly) only waits up to delay_hle_max_s are
     # skipped; none in exact mode or over a breakpoint.
+    # The newer SDK's build (the C3505 T760i's: delay(4) 115,000 times in its
+    # first 150 M instructions, a third of its hooked CP0 instructions) waits
+    # (us * per_us) ticks, the whole argument, until get_count() - start
+    # passes them (one tick more), keeps them in s2 and returns v0 = 1; its
+    # get_count() has an EHB among the NOPs.  Its bootloader's reads the ticks
+    # per microsecond from a variable of their own (a delay_ms() calls it with
+    # 1000 as often as it waits milliseconds) and leaves v1 alone; its SEE
+    # program's divides the clock by 2,000,000 (DIVU) and keeps the ticks in
+    # s0 (98,000 calls of the SEE core's 184,000 get_count() calls).
     delay_hle = True
     delay_hle_max_s = 200e-6
-    _DELAY_LOOP = 56                    # (the loop's get_count() call)
-    _DELAY_SIG_RE = re.compile(
-        re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + rb"[\x00-\xff]{3}[\x0c-\x0f]" +
-        re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
-        re.escape(bytes.fromhex("1b43023c" "83de4234" "19006200" "10180000" "c21c0300" "02800372")) +
-        rb"[\x00-\xff]{3}[\x0c-\x0f]" +
-        re.escape(bytes.fromhex("00000000" "23105100" "2b105000" "fbff4014" "1800bf8f" "1400b18f" "1000b08f"
-                                "0800e003" "2000bd27")))
-    _GET_COUNT = bytes.fromhex("00480240" + "00000000" * 5 + "0800e003" "00000000")   # mfc0 v0, Count; ...; jr ra
+    _JAL = rb"[\x00-\xff]{3}[\x0c-\x0f]"
+    _DELAY_TAIL = bytes.fromhex("00000000" "23105100" "2b105000" "fbff4014" "1800bf8f" "1400b18f" "1000b08f"
+                                "0800e003" "2000bd27")     # (nop; subu; sltu; bnez loop; lw ra / s1 / s0; jr ra)
+    # Each build: its words (the calls' target and the clock's gp offset
+    # masked), the offsets of its first and its loop's get_count() call, the
+    # loop's registers holding the ticks to wait and the Count it started at,
+    # the argument's mask, how the variable at gp gives the ticks per
+    # microsecond (the CPU clock "mul"tiplied by 0x431BDE83 >> 51 or "div"ided
+    # by 2,000,000, or None: they are its value), whether the loop ends only
+    # past the ticks, v0 at its end and v1 ("per_us", the last "count" or
+    # None: untouched).
+    _DELAYS = (
+        dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
+                            re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
+                            re.escape(bytes.fromhex("1b43023c" "83de4234" "19006200" "10180000" "c21c0300"
+                                                    "02800372")) + _JAL + re.escape(_DELAY_TAIL)),
+             first=16, loop=56, ticks=16, start=17, mask=0xFFFF, clock="mul", past=False, v0=0, v1="per_us"),
+        dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1c00bfaf" "1800b2af" "1400b1af" "1000b0af")) +
+                            _JAL + re.escape(bytes.fromhex("21808000" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
+                            re.escape(bytes.fromhex("1b43023c" "83de4234" "19006200" "10180000" "c2940300"
+                                                    "02905072")) + _JAL +
+                            re.escape(bytes.fromhex("00000000" "21184000" "2b102202" "06004010" "23107100"
+                                                    "2b104202" "07004014" "1c00bf8f" "f6ff0010" "00000000"
+                                                    "ffff4224" "2b104202" "f2ff4010" "1c00bf8f" "1800b28f"
+                                                    "1400b18f" "1000b08f" "0800e003" "2000bd27"))),
+             first=20, loop=60, ticks=18, start=17, mask=0xFFFFFFFF, clock="mul", past=True, v0=1, v1="count"),
+        dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
+                            re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x82\x8f" +
+                            re.escape(bytes.fromhex("02800272")) + _JAL + re.escape(_DELAY_TAIL)),
+             first=16, loop=36, ticks=16, start=17, mask=0xFFFF, clock=None, past=False, v0=0, v1=None),
+        dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
+                            re.escape(bytes.fromhex("21808000" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
+                            re.escape(bytes.fromhex("1e00023c" "80844234" "1b006200" "f4014000" "12180000"
+                                                    "00000000" "00000000" "18007000" "12800000")) + _JAL +
+                            re.escape(bytes.fromhex("00000000" "21184000" "2b102202" "06004010" "23107100"
+                                                    "2b100202" "07004014" "1800bf8f" "f6ff0010" "00000000"
+                                                    "ffff4224" "2b100202" "f2ff4010" "1800bf8f" "1400b18f"
+                                                    "1000b08f" "0800e003" "2000bd27"))),
+             first=16, loop=68, ticks=16, start=17, mask=0xFFFFFFFF, clock="div", past=True, v0=1, v1="count"),
+    )
 
     def _find_delay_routines(self, data, base, views):
         """Hook the RTOS's delay() wherever data -- code at physical offset `base`
-        -- holds it (calling a get_count()), at that offset in each view."""
+        -- holds one of its builds (calling a get_count()), at that offset in
+        each view."""
         if not self.delay_hle:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
-        for m in self._DELAY_SIG_RE.finditer(data):
-            call = data[m.start() + 16:m.start() + 20]
-            if m.start() % 4 or data[m.start() + self._DELAY_LOOP:m.start() + self._DELAY_LOOP + 4] != call:
-                continue                            # (both calls go to the same get_count())
-            gp_off = int.from_bytes(m.group(1), 'little', signed=True)
-            for view in views:
-                a = view + base + m.start()
-                target = (a & 0xF0000000) | (int.from_bytes(call, 'little') & 0x03FFFFFF) << 2
-                if self._guest_bytes(target, 32) != self._GET_COUNT:
-                    continue
-                self._delay_routines[a] = (bytes(data[m.start():m.end()]), gp_off, target)
-                if a not in self._delay_hooks:
-                    loop = a + self._DELAY_LOOP
-                    self._delay_hooks[a] = (self.mu.hook_add(UC_HOOK_CODE, self._hook_delay, begin=a, end=a),
-                                            self.mu.hook_add(UC_HOOK_CODE, self._hook_delay_loop, begin=loop, end=loop))
-                    self._tb_flush_needed = True
+        for kind, build in enumerate(self._DELAYS):
+            first, loop_at = build["first"], build["loop"]
+            for m in build["sig"].finditer(data):
+                call = data[m.start() + first:m.start() + first + 4]
+                if m.start() % 4 or data[m.start() + loop_at:m.start() + loop_at + 4] != call:
+                    continue                        # (both calls go to the same get_count())
+                gp_off = int.from_bytes(m.group(1), 'little', signed=True)
+                for view in views:
+                    a = view + base + m.start()
+                    target = (a & 0xF0000000) | (int.from_bytes(call, 'little') & 0x03FFFFFF) << 2
+                    if not self._is_get_count(target):
+                        continue
+                    self._delay_routines[a] = (bytes(data[m.start():m.end()]), gp_off, target, kind)
+                    self._delay_loops[a + loop_at] = a
+                    if a not in self._delay_hooks:
+                        loop = a + loop_at
+                        self._delay_hooks[a] = (
+                            self.mu.hook_add(UC_HOOK_CODE, self._hook_delay, begin=a, end=a),
+                            self.mu.hook_add(UC_HOOK_CODE, self._hook_delay_loop, begin=loop, end=loop))
+                        self._tb_flush_needed = True
+
+    def _is_get_count(self, address):
+        """Whether a get_count() is at address: mfc0 v0, Count, NOPs / EHBs,
+        jr ra, nop."""
+        code = self._guest_bytes(address, 48)
+        if len(code) < 48 or struct.unpack_from("<I", code)[0] != 0x40024800:
+            return False
+        for k in range(1, 11):
+            w = struct.unpack_from("<I", code, 4 * k)[0]
+            if w == 0x03E00008:
+                return struct.unpack_from("<I", code, 4 * k + 4)[0] == 0
+            if w not in (0, 0xC0):
+                return False
+        return False
 
     def _delay_routine(self, entry):
         """The delay() found at `entry` if the shortcut may take it now (fast
@@ -3957,10 +4041,10 @@ class AliMipsSimulator:
         routine = self._delay_routines.get(entry)
         if routine is None or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
             return None
-        code, gp_off, get_count = routine
+        code, gp_off, get_count, kind = routine
         if self.breakpoints or self.stop_instr is not None:
             stops = set(self.breakpoints) | {self.stop_instr}
-            if any(s is not None and (entry <= s < entry + len(code) or get_count <= s < get_count + 32)
+            if any(s is not None and (entry <= s < entry + len(code) or get_count <= s < get_count + 48)
                    for s in stops):
                 return None
         if self._guest_bytes(entry, len(code)) != code:
@@ -3986,31 +4070,48 @@ class AliMipsSimulator:
         routine = self._delay_routine(address) if size == 4 else None
         if routine is None:
             return
-        code, gp_off, get_count = routine
+        code, gp_off, get_count, kind = routine
+        build = self._DELAYS[kind]
         clock = int.from_bytes(self._guest_bytes((self._reg_read(UC_MIPS_REG_GP) + gp_off) & 0xFFFFFFFF, 4), 'little')
-        per_us = ((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF
-        wait = (((self._reg_read(UC_MIPS_REG_A0) & 0xFFFF) * per_us) & 0xFFFFFFFF) / self.count_hz
+        per_us = (((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF if build["clock"] == "mul" else
+                  clock // 2_000_000 if build["clock"] == "div" else clock)
+        ticks = ((self._reg_read(UC_MIPS_REG_A0) & build["mask"]) * per_us) & 0xFFFFFFFF
+        if build["past"]:
+            if ticks == 0xFFFFFFFF:
+                return                              # (it never ends)
+            ticks += 1
+        wait = ticks / self.count_hz
         if self._slice_cap_end is not None and self._slice_armed_end is not None:
             room = self._slice_armed_end - self._vtime()
         else:
             room = self.delay_hle_max_s
         if wait > room:
             return                                  # (the routine runs: _hook_delay_loop)
-        self._reg_write(self.gpr_map[2], 0)                    # v0: the loop's last sltu
-        self._reg_write(self.gpr_map[3], per_us)               # v1: ticks per microsecond
+        self._reg_write(self.gpr_map[2], build["v0"])          # v0: the loop's last sltu
+        if build["v1"] == "per_us":
+            self._reg_write(self.gpr_map[3], per_us)
+        elif build["v1"] == "count":
+            self._reg_write(self.gpr_map[3], (self._cp0_count_now() + ticks) & 0xFFFFFFFF)
         self._reg_write(UC_MIPS_REG_PC, self._reg_read(UC_MIPS_REG_RA))
         self.delay_calls += 1
         self._delay_jump(wait)
 
     def _hook_delay_loop(self, uc, address, size, user_data):
-        """delay()'s loop at its get_count() call -- s0 the Count ticks to
-        wait, s1 the Count it started at --, in a timed slice: the emulation
-        time moved on to the end of the wait (the call then ends the loop), or
-        to the end of the slice, which ends there (see delay_hle)."""
-        routine = self._delay_routine(address - self._DELAY_LOOP) if size == 4 else None
+        """delay()'s loop at its get_count() call -- the Count ticks to wait and
+        the Count it started at in the build's registers --, in a timed slice:
+        the emulation time moved on to the end of the wait (the call then ends
+        the loop), or to the end of the slice, which ends there (see
+        delay_hle)."""
+        entry = self._delay_loops.get(address)
+        routine = self._delay_routine(entry) if size == 4 and entry is not None else None
         if routine is None or self._slice_cap_end is None or self._slice_armed_end is None:
             return
-        ticks, start = self._reg_read(self.gpr_map[16]), self._reg_read(self.gpr_map[17])
+        build = self._DELAYS[routine[3]]
+        ticks, start = self._reg_read(self.gpr_map[build["ticks"]]), self._reg_read(self.gpr_map[build["start"]])
+        if build["past"]:
+            if ticks == 0xFFFFFFFF:
+                return
+            ticks += 1
         waited = (self._cp0_count_now() - start) & 0xFFFFFFFF
         if waited >= ticks:
             return

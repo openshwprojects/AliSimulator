@@ -291,7 +291,14 @@ M3503).
   code at its entry leave it to run (`test_delay_hle.py`). dump_maciej's
   screen regression takes 46 s instead of 50 s, and the S60 draws its OSD
   after 26 s instead of 43 s of wall time (43 s of firmware time instead of
-  51 s: its driver loops' `delay(1)` lasts ~10 us instead of ~25 us).
+  51 s: its driver loops' `delay(1)` lasts ~10 us instead of ~25 us). Four
+  builds of the routine are known (`_DELAYS`): besides that one, the newer
+  SDK's (the T760i's: the whole argument, the loop ending only past the
+  ticks, an EHB in its `get_count()`), its bootloader's (the ticks per
+  microsecond in a variable of their own) and its SEE program's (the clock
+  divided by 2,000,000); the SEE's code, above the first 32 MB, gets the same
+  first-execution chunk scans as the RAM below. The T760i's first 150 M
+  instructions took 75 s instead of 86 s.
   Cost per hooked CP0 instruction: ~9-12 us (the binding's reg_read /
   reg_write / mem_read are bypassed: direct `uc_reg_*` calls, code words read
   from the RAM buffer); an MTC0 Status that only disables interrupts or
@@ -303,7 +310,8 @@ M3503).
   bring no interrupt, and run() takes the native Status over at every slice
   boundary -- the enable's hook stays. That is ~40% of the hooks: dump_maciej's
   first 150 M instructions ran 0.74 M hooks instead of 1.22 M, in 57 s
-  instead of 68 s (`test_native_status.py`). (Interpreting the ALU code between
+  instead of 68 s (`test_native_status.py`; the newer SDK's disable, with
+  EHBs among its NOPs, too). (Interpreting the ALU code between
   close CP0 instructions in Python, to take them in one hook, cost more than
   the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
   read the RAM buffer in place (numpy over the words' top bytes), and the
@@ -820,9 +828,10 @@ then every 1000th.
 Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
 `python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
 or all of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
---slow` (about 2 hours with `--jobs 2`; 4.2 hours before the speed work of
-2026-10-15: idle skipping, cheaper CP0 hooks, the bootloaders' LZMA decoder in
-Python, the native Status, waits in the firmware's time) adds
+--slow` (100 tests, about 52 minutes with `--jobs 2`; 4.2 hours before the speed
+work of 2026-10-15: idle skipping, cheaper CP0 hooks, the bootloaders' LZMA
+decoder in Python, the native Status, waits in the firmware's time, the RTOS's
+delay() and interrupt disable without hooks) adds
 `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 20 s; the bootloader's
 unoptimised LZMA decompression, which took a minute of that, runs in Python
@@ -1045,14 +1054,16 @@ planted words; MFC0 Status a site only under the forced ERL), the vector page
 scanned again only when it changed, the periodic rescan, CP0 instructions run
 from the flash window, and the direct register access (`mips_asm.py` holds
 the instruction encoders and loader these tests share).
-`test_delay_hle.py` checks the RTOS delay's shortcut on a copy of the routine:
-a short wait returned from at the entry with the routine's registers and its
-Count ticks, a 50 ms one moved on through its loop slice by slice, 1 ms ticks
-on time while short and long waits are called over and over (inside the long
-ones, which still last their length), counted slices, the cases it leaves to
-the routine (exact mode, a breakpoint in its `get_count()`, the stop address in
-its loop, its code changed, `delay_hle` off) and the scan (not a copy whose
-calls go elsewhere or differ, nor a misaligned one).
+`test_delay_hle.py` checks the RTOS delay's shortcut on copies of its four
+builds: a short wait returned from at the entry with the routine's registers
+and its Count ticks, a 50 ms one moved on through its loop slice by slice, 1 ms
+ticks on time while short and long waits are called over and over (inside the
+long ones, which still last their length), counted slices, each build's own
+rules (the newer SDK's whole argument and one tick more, the bootloader's
+ticks per microsecond, the SEE's division), the cases it leaves to the
+routine (exact mode, a breakpoint in its `get_count()`, the stop address in its
+loop, its code changed, `delay_hle` off) and the scan (not a copy whose calls
+go elsewhere or differ, whose `get_count()` does more, nor a misaligned one).
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn

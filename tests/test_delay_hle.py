@@ -14,6 +14,14 @@ variable (gp-relative) says 200 MHz, 100 Count ticks per microsecond:
   clock 0   - a clock variable still 0: no wait, v1 0, as the routine does
   loop      - a 50 ms wait in 10 ms slices: the routine runs, its loop moves
               the time on to each slice's end and then to the end of the wait
+  newer build - the newer SDK's (35 words, its get_count() with an EHB):
+              past the ticks (one more), v0 1, s0 / s1 / s2 kept, the whole
+              argument (65,546 us, not 10), and its loop
+  bootloader build - its bootloader's (the ticks per microsecond from a
+              variable): the registers as it leaves them (v1 untouched), its
+              loop
+  SEE build - its SEE program's (the clock divided by 2,000,000, the ticks in
+              s0): past the ticks, the registers, its loop
   ticks     - 1 ms timer ticks while delay(1) / delay(2500) are called over
               and over: the ticks come on time (none late by more than
               0.5 ms; fast mode's own lateness reaches ~0.2 ms) -- inside the
@@ -23,9 +31,10 @@ variable (gp-relative) says 200 MHz, 100 Count ticks per microsecond:
   fallbacks - the routine runs in exact mode, over a breakpoint in its
               get_count(), up to a stop address in its loop, and once its code
               changed after the scan
-  scan      - _find_delay_routines: the gp offset read, both views hooked;
-              not a copy whose calls go elsewhere, whose two calls differ, a
-              misaligned one, nor anything with delay_hle off
+  scan      - _find_delay_routines: both builds, the gp offset read, both views
+              hooked; not a copy whose calls go elsewhere, whose two calls
+              differ, whose get_count() does more, a misaligned one, nor
+              anything with delay_hle off
 """
 import os
 import struct
@@ -71,7 +80,49 @@ def routine(call=GET_COUNT, again=None, gp_off=GP_OFF):
             0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s1 / s0; jr ra; addiu sp, 32
 
 
+def routine2(call=GET_COUNT, again=None, gp_off=GP_OFF):
+    """The newer SDK's build: wait until get_count() - start > us * (clock *
+    0x431BDE83 >> 51), the whole argument; the ticks in s2; v0 = 1 at the end."""
+    return [0x27BDFFE0, 0xAFBF001C, 0xAFB20018, 0xAFB10014, 0xAFB00010,      # sw ra / s2 / s1 / s0
+            jal(call), 0x00808021, 0x00408821,                              # move s0, a0; move s1, v0
+            0x8F830000 | (gp_off & 0xFFFF), 0x3C02431B, 0x3442DE83,         # lw v1, clock(gp); li v0, K
+            0x00620019, 0x00001810, 0x000394C2, 0x72509002,                 # multu; mfhi; srl s2, 19; mul s2, s0
+            jal(call if again is None else again), NOP,                     # loop: jal get_count
+            0x00401821, 0x0222102B, 0x10400006, 0x00711023, 0x0242102B,    # move v1, v0; sltu v0, s1, v0; ...
+            0x14400007, 0x8FBF001C, 0x1000FFF6, NOP,                        # ... (now - start > ticks: out)
+            0x2442FFFF, 0x0242102B, 0x1040FFF2, 0x8FBF001C,                 # (Count wrapped)
+            0x8FB20018, 0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s2 / s1 / s0; jr ra
+
+
+def routine3(call=GET_COUNT, again=None, gp_off=GP_OFF):
+    """The newer SDK's bootloader's: the first build's loop, the ticks per
+    microsecond from a variable of their own; v1 left alone."""
+    return [0x27BDFFE0, 0xAFBF0018, 0xAFB10014, 0xAFB00010,    # addiu sp, -32; sw ra / s1 / s0
+            jal(call), 0x3090FFFF, 0x00408821,                  # andi s0, a0, 0xffff; move s1, v0
+            0x8F820000 | (gp_off & 0xFFFF), 0x72028002,         # lw v0, per_us(gp); mul s0, s0, v0
+            jal(call if again is None else again), NOP,         # loop: jal get_count
+            0x00511023, 0x0050102B, 0x1440FFFB, 0x8FBF0018,     # subu v0, s1; sltu v0, s0; bnez loop; lw ra
+            0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s1 / s0; jr ra; addiu sp, 32
+
+
+def routine4(call=GET_COUNT, again=None, gp_off=GP_OFF):
+    """The newer SDK's SEE program's: the clock divided by 2,000,000 (DIVU),
+    the ticks in s0, past them, v0 = 1."""
+    return [0x27BDFFE0, 0xAFBF0018, 0xAFB10014, 0xAFB00010,    # addiu sp, -32; sw ra / s1 / s0
+            jal(call), 0x00808021, 0x00408821,                  # move s0, a0; move s1, v0
+            0x8F830000 | (gp_off & 0xFFFF), 0x3C02001E, 0x34428480,      # lw v1, clock(gp); li v0, 2000000
+            0x0062001B, 0x004001F4, 0x00001812, NOP, NOP,       # divu v1, v0; teq v0, zero; mflo v1
+            0x00700018, 0x00008012,                             # mult v1, s0; mflo s0
+            jal(call if again is None else again), NOP,         # loop: jal get_count
+            0x00401821, 0x0222102B, 0x10400006, 0x00711023, 0x0202102B, 0x14400007, 0x8FBF0018,
+            0x1000FFF6, NOP, 0x2442FFFF, 0x0202102B, 0x1040FFF2, 0x8FBF0018,     # (as the newer build's)
+            0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s1 / s0; jr ra; addiu sp, 32
+
+
 GET_COUNT_CODE = [mfc0(2, COUNT)] + [NOP] * 5 + [0x03E00008, NOP]   # mfc0 v0, Count; ...; jr ra
+GET_COUNT_CODE2 = [mfc0(2, COUNT), NOP, 0x000000C0] + [NOP] * 4 + [0x03E00008, NOP]   # (an EHB)
+BUILDS = {1: (routine, GET_COUNT_CODE), 2: (routine2, GET_COUNT_CODE2), 3: (routine3, GET_COUNT_CODE),
+          4: (routine4, GET_COUNT_CODE2)}
 SETUP = li(GP, GP_VALUE) + li(SP, STACK)
 
 
@@ -79,7 +130,7 @@ def pack(words):
     return struct.pack(f"<{len(words)}I", *words)
 
 
-def make(main, handler=None, clock=200_000_000, hle=True, **settings):
+def make(main, handler=None, clock=200_000_000, hle=True, build=1, **settings):
     """Timed slices from the start (as in a firmware run after its first ones)."""
     sim = AliMipsSimulator(log_handler=lambda m: None)
     sim.exact_count_threshold = 0
@@ -87,9 +138,11 @@ def make(main, handler=None, clock=200_000_000, hle=True, **settings):
     sim.delay_hle = hle
     for name, value in settings.items():
         setattr(sim, name, value)
-    sim.mu.mem_write(DELAY, pack(routine()))
-    sim.mu.mem_write(GET_COUNT, pack(GET_COUNT_CODE))
-    sim.mu.mem_write(CLOCK, struct.pack("<I", clock))
+    code, get_count = BUILDS[build]
+    sim.mu.mem_write(DELAY, pack(code()))
+    sim.mu.mem_write(GET_COUNT, pack(get_count))
+    # (the third build's variable holds the ticks per microsecond themselves)
+    sim.mu.mem_write(CLOCK, struct.pack("<I", (clock * 0x431BDE83) >> 51 if build == 3 else clock))
     load(sim, main, handler)
     return sim
 
@@ -97,13 +150,14 @@ def make(main, handler=None, clock=200_000_000, hle=True, **settings):
 def call_once(us):
     """Registers set, Count read, delay(us), Count read again (t1: the ticks
     between), then `done`: a `b .` with interrupts off."""
-    main = SETUP + li(S0, 0x11111111) + li(S1, 0x22222222) + li(T0, 0x33333333) + li(A0, us) + \
-        [mfc0(S4, COUNT), jal(DELAY), NOP, mfc0(T1, COUNT), subu(T1, T1, S4), b(-1), NOP]
+    main = SETUP + li(S0, 0x11111111) + li(S1, 0x22222222) + li(S2, 0x44444444) + li(T0, 0x33333333) + \
+        li(A0, us) + [mfc0(S4, COUNT), jal(DELAY), NOP, mfc0(T1, COUNT), subu(T1, T1, S4), b(-1), NOP]
     return main, address_of(main, len(main) - 2)
 
 
 REGS = (("v0", UC_MIPS_REG_V0), ("v1", UC_MIPS_REG_V1), ("s0", UC_MIPS_REG_S0), ("s1", UC_MIPS_REG_S1),
-        ("sp", UC_MIPS_REG_SP), ("ra", UC_MIPS_REG_RA), ("a0", UC_MIPS_REG_A0), ("t0", UC_MIPS_REG_T0))
+        ("s2", UC_MIPS_REG_S2), ("sp", UC_MIPS_REG_SP), ("ra", UC_MIPS_REG_RA), ("a0", UC_MIPS_REG_A0),
+        ("t0", UC_MIPS_REG_T0))
 
 
 def run_to(sim, address, budget=200_000_000):
@@ -156,6 +210,53 @@ check(pc == done and sim.delay_calls == 0 and sim.delay_jumps >= 5 and 0.045 <= 
       f"(set-up and run took {took * 1e3:.0f} ms of host time)")
 check(ticks >= 5_000_000 and regs == nregs, f"{ticks} Count ticks (5,000,000 or more wanted; {nticks} when it "
       f"runs), registers {show(regs)} (it: {show(nregs)})")
+
+print("--- newer build")
+
+
+def but_v1(regs):
+    return {n: v for n, v in regs.items() if n != "v1"}      # (v1: the last Count it read)
+
+
+sim, pc, regs, ticks, done = call(5, build=2)
+_, npc, nregs, nticks, _ = call(5, hle=False, build=2)
+check(pc == done and sim.delay_calls == 1 and abs(sim.delay_skipped - 5.01e-6) < 1e-12 and ticks >= 501,
+      f"delay(5) returned at once: {sim.delay_calls} call, {sim.delay_skipped * 1e6:.3f} us skipped (5.01 wanted: "
+      f"past 500 ticks), {ticks} Count ticks between the reads ({nticks} when it runs)")
+check(regs["v0"] == 1 and but_v1(regs) == but_v1(nregs) and npc == done,
+      f"the registers as it leaves them: {show(regs)} (it: {show(nregs)})")
+sim, pc, regs, ticks, done = call(50_000, build=2, batch_timeout_us=10_000)
+_, _, nregs, nticks, _ = call(50_000, hle=False, build=2, batch_timeout_us=10_000)
+check(pc == done and sim.delay_calls == 0 and sim.delay_jumps >= 5 and 0.045 <= sim.delay_skipped <= 0.0501
+      and ticks > 5_000_000 and but_v1(regs) == but_v1(nregs),
+      f"a 50 ms wait in 10 ms slices: {sim.delay_jumps} loop jumps, {sim.delay_skipped * 1e3:.2f} ms skipped, "
+      f"{ticks} Count ticks ({nticks} when it runs), {show(regs)}")
+sim, pc, regs, ticks, done = call(0x10000 + 10, build=2, batch_timeout_us=50_000)
+check(pc == done and ticks > 6_554_600 and 0.06 < sim.delay_skipped < 0.065547,
+      f"delay(65,546): the whole argument (65.5 ms, not 10 us), {ticks} Count ticks (over 6,554,600 wanted), "
+      f"{sim.delay_skipped * 1e3:.2f} ms skipped")
+
+print("--- bootloader build")
+sim, pc, regs, ticks, done = call(5, build=3)
+_, npc, nregs, nticks, _ = call(5, hle=False, build=3)
+check(pc == done and sim.delay_calls == 1 and abs(sim.delay_skipped - 5e-6) < 1e-12 and ticks >= 500
+      and regs == nregs and regs["v0"] == 0,
+      f"delay(5) returned at once ({sim.delay_calls} call, {sim.delay_skipped * 1e6:.3f} us skipped), {ticks} "
+      f"Count ticks ({nticks} when it runs), the registers as it leaves them -- v1 untouched: {show(regs)}")
+sim, pc, regs, ticks, done = call(50_000, build=3, batch_timeout_us=10_000)
+check(pc == done and sim.delay_jumps >= 5 and 0.045 <= sim.delay_skipped <= 0.0501 and ticks >= 5_000_000,
+      f"a 50 ms wait in 10 ms slices: {sim.delay_jumps} loop jumps, {sim.delay_skipped * 1e3:.2f} ms skipped")
+
+print("--- SEE build")
+sim, pc, regs, ticks, done = call(5, build=4)
+_, npc, nregs, nticks, _ = call(5, hle=False, build=4)
+check(pc == done and sim.delay_calls == 1 and abs(sim.delay_skipped - 5.01e-6) < 1e-12 and ticks >= 501
+      and regs["v0"] == 1 and but_v1(regs) == but_v1(nregs),
+      f"delay(5) returned at once ({sim.delay_calls} call, {sim.delay_skipped * 1e6:.3f} us skipped: past 500 "
+      f"ticks), {ticks} Count ticks ({nticks} when it runs), {show(regs)} (it: {show(nregs)})")
+sim, pc, regs, ticks, done = call(50_000, build=4, batch_timeout_us=10_000)
+check(pc == done and sim.delay_jumps >= 5 and 0.045 <= sim.delay_skipped <= 0.0501 and ticks > 5_000_000,
+      f"a 50 ms wait in 10 ms slices: {sim.delay_jumps} loop jumps, {sim.delay_skipped * 1e3:.2f} ms skipped")
 
 
 def ticking(us, seconds=0.3):
@@ -225,23 +326,29 @@ check(pc == done and sim.delay_calls == 1 and sim.mu.reg_read(UC_MIPS_REG_T1) >=
 print("--- scan")
 
 
-def scan(data, base=0x00140000, hle=True):
+def scan(data, base=0x00140000, hle=True, get_count=GET_COUNT_CODE):
     sim = AliMipsSimulator(log_handler=lambda m: None)
     sim.delay_hle = hle
-    sim.mu.mem_write(GET_COUNT, pack(GET_COUNT_CODE))
+    sim.mu.mem_write(GET_COUNT, pack(get_count))
     sim._find_delay_routines(data, base, (0x80000000, 0xA0000000))
     return sim
 
 
-sim = scan(pack(routine()) + bytes(64))
-check(sorted(sim._delay_hooks) == [DELAY, DELAY | 0x20000000] and sim._delay_routines[DELAY][1:] == (GP_OFF, GET_COUNT),
-      f"found in both views ({[hex(a) for a in sorted(sim._delay_hooks)]}), gp offset "
-      f"{sim._delay_routines[DELAY][1]:#x}, get_count() at 0x{sim._delay_routines[DELAY][2]:08X}")
-for what, data, hle in (("calls going elsewhere", pack(routine(call=GET_COUNT + 0x40)), True),
-                        ("two calls that differ", pack(routine(again=GET_COUNT + 0x40)), True),
-                        ("a misaligned copy", b"\0\0" + pack(routine()), True),
-                        ("delay_hle off", pack(routine()), False)):
-    sim = scan(data, hle=hle)
+for build, (code, get_count) in BUILDS.items():
+    sim = scan(pack(code()) + bytes(64), get_count=get_count)
+    found = sim._delay_routines.get(DELAY, (None,) * 4)
+    check(sorted(sim._delay_hooks) == [DELAY, DELAY | 0x20000000] and found[1:] == (GP_OFF, GET_COUNT, build - 1),
+          f"build {build}: found in both views ({[hex(a) for a in sorted(sim._delay_hooks)]}), gp offset "
+          f"{found[1]:#x}, get_count() at 0x{found[2]:08X}, build index {found[3]}")
+for what, data, hle, get_count in (
+        ("calls going elsewhere", pack(routine(call=GET_COUNT + 0x40)), True, GET_COUNT_CODE),
+        ("two calls that differ", pack(routine(again=GET_COUNT + 0x40)), True, GET_COUNT_CODE),
+        ("the newer build's two calls differing", pack(routine2(again=GET_COUNT + 0x40)), True, GET_COUNT_CODE2),
+        ("a get_count() with another instruction", pack(routine2()), True,
+         [mfc0(2, COUNT), NOP, addiu(2, 2, 1)] + [NOP] * 4 + [0x03E00008, NOP]),
+        ("a misaligned copy", b"\0\0" + pack(routine()), True, GET_COUNT_CODE),
+        ("delay_hle off", pack(routine()), False, GET_COUNT_CODE)):
+    sim = scan(data, hle=hle, get_count=get_count)
     check(not sim._delay_hooks, f"{what}: nothing hooked ({len(sim._delay_hooks)})")
 
 print()
