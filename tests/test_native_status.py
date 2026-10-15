@@ -151,6 +151,12 @@ DISABLE_EHB = [mfc0(T0, STATUS), EHB, NOP, NOP, NOP, addiu(T1, 0, 6), 0x01284824
                0x03E00008, NOP]
 ENABLE_EHB = [mfc0(T0, STATUS), EHB, NOP, NOP, NOP, addiu(T1, 0, 6), 0x01284824, bne(T1, 0, 6),
               0x35080001, mtc0(T0, STATUS), EHB, NOP, NOP, NOP, 0x03E00008, NOP]
+# the R265 Lite 1.2.0's: five NOPs in each gap
+DISABLE_5 = [mfc0(T0, STATUS)] + [NOP] * 5 + [addiu(T1, 0, 6), 0x01284824, bne(T1, 0, 14), addiu(T1, 0, -2),
+                                              0x01094024, mtc0(T0, STATUS)] + [NOP] * 5 + [mtc0(T0, STATUS)] + \
+    [NOP] * 5 + [0x03E00008, NOP]
+ENABLE_5 = [mfc0(T0, STATUS)] + [NOP] * 5 + [addiu(T1, 0, 6), 0x01284824, bne(T1, 0, 7), 0x35080001,
+                                             mtc0(T0, STATUS)] + [NOP] * 5 + [0x03E00008, NOP]
 
 
 def disable_program(first, spin, disable=DISABLE, enable=ENABLE):
@@ -166,7 +172,7 @@ def disable_program(first, spin, disable=DISABLE, enable=ENABLE):
 
 
 for (name, cls, exact), (form, disable, enable) in [(m, f) for m in MODES for f in (
-        ("", DISABLE, ENABLE), (" (with EHBs)", DISABLE_EHB, ENABLE_EHB))]:
+        ("", DISABLE, ENABLE), (" (with EHBs)", DISABLE_EHB, ENABLE_EHB), (" (five NOPs)", DISABLE_5, ENABLE_5))]:
     program, disables, enable_at = disable_program(2_000 if exact else 50_000, 2_000 if exact else 200_000,
                                                    disable, enable)
     sim = cls(log_handler=lambda m: None)

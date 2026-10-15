@@ -326,7 +326,8 @@ M3503).
   boundary -- the enable's hook stays. That is ~40% of the hooks: dump_maciej's
   first 150 M instructions ran 0.74 M hooks instead of 1.22 M, in 57 s
   instead of 68 s (`test_native_status.py`; the newer SDK's disable, with
-  EHBs among its NOPs, too). (Interpreting the ALU code between
+  EHBs among its NOPs, and the R265 Lite 1.2.0's, with five NOPs -- its
+  screen regression 171 s instead of 210 s -- too). (Interpreting the ALU code between
   close CP0 instructions in Python, to take them in one hook, cost more than
   the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
   read the RAM buffer in place (numpy over the words' top bytes), and the

@@ -3326,7 +3326,8 @@ class AliMipsSimulator:
     # their first 150 M instructions, with ~232,000 enables):
     #   mfc0 T, Status; nop x3; addiu X, zero, 6; and X, X, T; bnez X, out
     #   addiu X, zero, -2; and T, T, X; mtc0 T, Status; nop x2; mtc0 T, Status
-    # (the newer SDK's has an EHB among the NOPs: 1-4 NOPs / EHBs taken).
+    # (the newer SDK's has an EHB among the NOPs, the R265 Lite 1.2.0's five
+    # NOPs: 1-8 NOPs / EHBs taken).
     # Both writes store the Status it has just read with IE cleared: they can
     # bring no interrupt, so under the native Status (where the CPU executes
     # them itself) their hooks would only follow the value -- run() takes the
@@ -3348,7 +3349,7 @@ class AliMipsSimulator:
     def _is_irq_disable(self, data, p):
         """Whether the word at offset p of data is an MTC0 Status of the
         interrupt disable (skip_irq_disable): its first, or the same again
-        after 1-4 NOPs / EHBs."""
+        after 1-8 NOPs / EHBs."""
         n = len(data)
 
         def word(q):
@@ -3366,7 +3367,7 @@ class AliMipsSimulator:
         mtc0 = word(p)
         if mtc0 is None or (mtc0 & 0xFFE0FFFF) != 0x40806000:
             return False
-        q = skip_nops(p - 4, 4)
+        q = skip_nops(p - 4, 8)
         if q is not None and q < p - 4 and word(q) == mtc0:
             p = q                                   # (the second write: the first is checked)
         t, x = (mtc0 >> 16) & 31, ((word(p - 8) or 0) >> 16) & 31
@@ -3374,7 +3375,7 @@ class AliMipsSimulator:
                 or ((word(p - 12) or 0) & 0xFFFF0000) != 0x14000000 | x << 21 \
                 or word(p - 16) != 0x24 | x << 21 | t << 16 | x << 11 or word(p - 20) != 0x24000006 | x << 16:
             return False
-        q = skip_nops(p - 24, 4)
+        q = skip_nops(p - 24, 8)
         return q is not None and q < p - 24 and word(q) == 0x40006000 | t << 16
 
     def _add_cp0_sites(self, sites):
