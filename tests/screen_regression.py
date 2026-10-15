@@ -71,8 +71,9 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
     slice-stop race, see README "Things learned": a hooked CP0 instruction
-    running natively ends in a jump to a stale register) is retried `retries`
-    times from a fresh boot before it counts as a failure.  tuner=True puts the
+    running natively ends in a jump to a stale register) -- during the boot or
+    any later phase -- is retried `retries` times from a fresh boot before it
+    counts as a failure.  tuner=True puts the
     dump's tuner model on the I2C bus (sim.attach_tuner: a tuner that takes its
     settings, but no signal -- the demodulator stays unlocked), so every capture
     can show the frequency it is tuned to; signal=True boots with
@@ -217,9 +218,13 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     # channel change in progress) is given up to a minute to come back
     def advance(until):
         """One run() toward `until` (firmware time); False once the firmware
-        no longer moves on (a stopped CPU), so no wait loops for ever."""
+        no longer moves on (a stopped CPU), so no wait loops for ever.  A
+        crash here is retried from a fresh boot like one during the boot."""
         before = fw()
-        sim.run(max_instructions=sim.instruction_count + 5_000_000, max_vtime=until)
+        try:
+            sim.run(max_instructions=sim.instruction_count + 5_000_000, max_vtime=until)
+        except Exception as e:
+            raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s (after the boot)") from e
         return fw() > before
 
     def run_for(seconds):

@@ -42,7 +42,7 @@ class Run:
 
 
 def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart=(), ebase=None, see_ebase=None,
-        setup=None, wait_for=None, abort=None, checks=()):
+        setup=None, wait_for=None, abort=None, checks=(), retries=1):
     """Boot `dump` and run until the SEE has taken `calls` of the main CPU's
     remote calls and the main CPU their answers, the main CPU `see_calls` of
     the SEE's own calls and the SEE their answers -- and wait_for(run), when
@@ -53,7 +53,9 @@ def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart
     message counts, that the UART output holds each of `uart`, the main CPU's
     and the SEE core's CP0 EBase (ebase / see_ebase, when given), each of
     `checks` -- check(run) returns (ok, description) -- and that the
-    simulator ran without an error."""
+    simulator ran without an error.  A run the simulator crashes (the
+    asynchronous slice-stop race, README "Things learned") is booted again,
+    `retries` times, before the error counts."""
     print(f"=== Regression Test: {title} ===")
     path = resolve_dump(dump)
     r = None
@@ -62,15 +64,6 @@ def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart
         if msg.startswith(LOGGED):
             print(f"[{r.sim.instruction_count:>11,}] {msg}", flush=True)
             r.logs.append(msg)
-
-    r = Run(AliMipsSimulator(rom_size=flash_size_for(path), log_handler=log))
-    sim = r.sim
-    sim.setSPIDump(False)
-    sim.setI2CDump(False)
-    sim.setUartHandler(lambda c: r.uart.append(c if isinstance(c, str) else chr(c)))
-    sim.loadFile(path)
-    if setup:
-        setup(sim)
 
     def exchanges():
         """[(done, wanted, what)]: the main CPU's calls with their answers, the
@@ -81,15 +74,27 @@ def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart
                 (min(t["main"][0], t["SEE"][1]), see_calls,
                  f"the main CPU answers the SEE's own calls ({t['main'][0]} / {t['SEE'][1]}")]
 
-    t0 = time.time()
-    try:
-        while sim.instruction_count < limit and not (abort and abort(r)) \
-                and not (all(done >= wanted for done, wanted, _ in exchanges()) and (wait_for is None or wait_for(r))):
-            sim.run(max_instructions=sim.instruction_count + STEP)
-    except Exception as e:
-        r.error = e
-    print(f"\n{time.time() - t0:.1f}s, {sim.instruction_count:,} instructions, messages taken {r.taken}"
-          + (f", stopped: {r.error!r}" if r.error else ""))
+    for attempt in range(retries + 1):
+        r = Run(AliMipsSimulator(rom_size=flash_size_for(path), log_handler=log))
+        sim = r.sim
+        sim.setSPIDump(False)
+        sim.setI2CDump(False)
+        sim.setUartHandler(lambda c, r=r: r.uart.append(c if isinstance(c, str) else chr(c)))
+        sim.loadFile(path)
+        if setup:
+            setup(sim)
+        t0 = time.time()
+        try:
+            while sim.instruction_count < limit and not (abort and abort(r)) \
+                    and not (all(done >= wanted for done, wanted, _ in exchanges()) and (wait_for is None or wait_for(r))):
+                sim.run(max_instructions=sim.instruction_count + STEP)
+        except Exception as e:
+            r.error = e
+        print(f"\n{time.time() - t0:.1f}s, {sim.instruction_count:,} instructions, messages taken {r.taken}"
+              + (f", stopped: {r.error!r}" if r.error else ""))
+        if r.error is None or attempt == retries:
+            break
+        print(f"[WARN] simulator crashed ({r.error!r}); booting again (retry {attempt + 1} of {retries})")
 
     name = type(sim.chip).__name__
     results = [(name == family and chip_id in (None, sim.chip.chip_id),

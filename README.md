@@ -838,10 +838,15 @@ then every 1000th.
   slice boundary (redone / adopted) and logged as `[WARN] native ...`;
   `sim.native_cp0_repairs` counts them. A native MFC0 of EPC / Count / Cause
   (Unicorn's stale registers) or MTC0 Compare / EPC / Count / Cause is *not*
-  visible and not repaired; these have become rare (heavy-load soaks: none
-  observed), and exact mode is immune. The kuseg TLB entry was half of the full
-  fix proposed here before; mirroring EPC / Count into Unicorn's own CP0
-  registers is the other half.
+  visible and not repaired; these are rare, and exact mode is immune. (On
+  2026-10-16, with four runs at a time, about one X110TS SEE run in 40 and
+  one dump.bin signal run of the slow suite ended in an unmapped read with
+  garbage registers, no native repair logged before it -- one of the
+  invisible kinds; with the slice history recorded it did not happen in 60
+  runs.  The regressions boot again once after a simulator crash in any
+  phase: screen_regression.run, see_regression.run.) The kuseg TLB entry was
+  half of the full fix proposed here before; mirroring EPC / Count into
+  Unicorn's own CP0 registers is the other half.
 
 ## Tests
 
