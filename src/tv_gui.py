@@ -261,6 +261,7 @@ class TvGui:
     # ---- emulation thread ---------------------------------------------------
     def emulate(self):
         sim = AliMipsSimulator(rom_size=flash_size_for(self.dump), log_handler=lambda m: None)
+        sim.lzma_insns_per_byte = 0             # the bootloader's unpacking costs no firmware time here
         sim.setSPIDump(False)
         sim.setI2CDump(False)
         uart = self.uart

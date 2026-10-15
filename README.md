@@ -246,6 +246,25 @@ M3503).
   the waiting costs no host time: a third of dump_maciej's first 150 M
   instructions. `tv_gui.py` keeps such a firmware from running ahead of the
   wall clock.
+  **The bootloaders' LZMA decoder** (`sim.lzma_hle`, default on): the ALi SDK
+  boot library unpacks the main code (and the SEE's) with the LZMA SDK 4.0x
+  `LzmaDecode()` compiled without optimisation, a function call per decoded
+  bit -- emulated, dump_maciej's 7.3 MB took 40 s and the Ferguson T750i's
+  3.4 + 8.6 MB 72 s of wall time. 47 of the 50 images carry that routine byte
+  for byte (its first 43 instructions, `_LZMA_DECODE_SIG`); found in the flash
+  image and by each RAM chunk's first-execution scan, its entry is hooked:
+  the stream is decoded with Python's `lzma` module (0.1-0.2 s), written to
+  the output buffer (whose CP0 sites are scanned at once), `*outSizeProcessed`
+  set and 0 returned to the caller. The call is charged the time the emulated
+  decoder took, `lzma_insns_per_byte` (4.0) of the instruction count per output
+  byte, which run() moves on like idle time (`busy_pending`; interrupts wait
+  for it), so the boot's timeline stays what it was: dump_maciej prints its
+  bootloader's "success!" at 30.5 M instructions (29.9 M emulated) after 2 s
+  instead of 41 s, the T750i at 50.5 M (50.3 M) after 4 s instead of 75 s.
+  Anything unexpected -- the arguments, a stream the module rejects or that
+  ends early, output outside the RAM, exact mode, a breakpoint in the decoder
+  -- leaves the call to the emulated decoder (`test_lzma_hle.py`). `tv_gui.py`
+  sets `lzma_insns_per_byte = 0`: no firmware time for it, a quick boot.
   Cost per hooked CP0 instruction: ~9-12 us (the binding's reg_read /
   reg_write / mem_read are bypassed: direct `uc_reg_*` calls, code words read
   from the RAM buffer); an MTC0 Status that only disables interrupts or
@@ -936,6 +955,10 @@ modes, the M3329 driver's probe -- the reset in a branch delay slot -- and an
 SPI flash's store in a delay slot, each instruction running once.
 `test_otp_m3821.py` reads and burns the M3821's OTP model the way the
 firmware's driver does, on the T750i's blank OTP.
+`test_lzma_hle.py` checks the bootloaders' LZMA decoder run in Python: the
+routine in the flash images, dump_maciej's main code decoded to what its
+stream holds with its bootloader's "success!" at the emulated decoder's
+instruction count, and both switches (no time charged, the emulated decoder).
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn

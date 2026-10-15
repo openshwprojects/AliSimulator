@@ -301,6 +301,9 @@ class AliMipsSimulator:
         self._virgin_hooks = {}              # chunk base -> hook handle
         self._idle_loops = {}                # idle loop address -> hook handle (idle_skip)
         self.idle_skipped = 0.0              # emulation time idle_skip moved on (seconds)
+        self.busy_pending = 0.0              # emulation time still owed for work done in Python
+        self._lzma_hooks = {}                # LzmaDecode() entry -> hook handle (_hook_lzma)
+        self.lzma_decodes = []               # (entry, input, output address, output size) per decode
         self._run_max_vtime = None           # run()'s max_vtime, for _hook_idle_loop
         self._rescan_due = False
         self._last_rescan_icount = -1
@@ -966,6 +969,8 @@ class AliMipsSimulator:
         for master in self.i2c_masters:
             master.reset()
         self.timer_irq_count = self.ic_irq_count = self.ge_ops = 0
+        self.busy_pending = 0.0
+        self.lzma_decodes = []
         self._last_eret_vt = -1e9
         self._dev_replays = {}
         self.visit_counts = {}
@@ -2648,18 +2653,8 @@ class AliMipsSimulator:
         sel = w & 0x7
         funct = w & 0x3F
         if rs == 0x00:                      # MFC0 rt, rd
-            if rd == 9:
-                val = self._cp0_count_now()
-                self._timer_update(val)
-                self._count_observed = val
-            elif rd == 11: val = self.cp0_compare
-            elif rd == 12: val = self.cp0_status
-            elif rd == 13:
-                self._timer_update()
-                val = self._cause_value()
-            elif rd == 14: val = self.cp0_epc
-            elif rd == 15 and sel == 1: val = self.cp0_ebase
-            else:
+            val = self._cp0_read(rd, sel)
+            if val is None:
                 return False                # other registers: let Unicorn handle
             if in_delay_slot:
                 self._delay_slot_skips += 1
@@ -2668,36 +2663,8 @@ class AliMipsSimulator:
             self._reg_write(UC_MIPS_REG_PC, address + 4)
             return True
         if rs == 0x04:                      # MTC0 rt, rd
-            val = self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF
-            resched = rd in (9, 11, 12, 13)     # (what can change when the next interrupt comes)
-            if rd == 12:
-                if self.force_erl:
-                    val &= ~0x4             # never adopt the ERL that only the native Status carries
-                old = self.cp0_status
-                self.cp0_status = val
-                self._write_native_status(uc, val)
-                # Only enabling (IE, an IM bit) or a change of EXL / ERL can make an
-                # interrupt deliverable or move the slice's deadline: an interrupt
-                # disable or a rewrite of the same value (critical sections) cannot.
-                resched = bool((old ^ val) & 0xFF06 or val & ~old & 0x1)
-            elif rd == 9:
-                self._timer_update()        # crossings before the write still count
-                self.cp0_count = val
-                self._count_icount = self.instruction_count
-                self._count_t0 = self._vtime()
-                self._timer_anchor = val
-                self._count_observed = val
-                self._timer_next_icount = 0
-            elif rd == 11:
-                self._write_compare(val)
-            elif rd == 13:
-                # Only IP1..0 (software interrupts), WP, IV and DC are writable.
-                self.cp0_cause = (self.cp0_cause & ~0x08C00300) | (val & 0x08C00300)
-            elif rd == 14:
-                self.cp0_epc = val
-            elif rd == 15 and sel == 1:     # EBase: bits 29..12 writable, 31..30 read as 0b10,
-                self.cp0_ebase = 0x80000000 | (val & 0x3FFFF000) | (self.cp0_ebase & 0x3FF)    # CPUNum read-only
-            else:
+            resched = self._cp0_write(uc, rd, sel, self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF)
+            if resched is None:
                 return False
             if in_delay_slot:
                 self._delay_slot_skips += 1  # shadow updated; native MTC0 still executes
@@ -2716,6 +2683,65 @@ class AliMipsSimulator:
             self._reschedule_slice()
             return True
         return False
+
+    def _cp0_read(self, rd, sel):
+        """What MFC0 of CP0 register rd, sel reads (Count, Compare, Status,
+        Cause, EPC, EBase), or None for a register Unicorn keeps."""
+        if rd == 12:
+            return self.cp0_status
+        if rd == 9:
+            val = self._cp0_count_now()
+            self._timer_update(val)
+            self._count_observed = val
+            return val
+        if rd == 14:
+            return self.cp0_epc
+        if rd == 13:
+            self._timer_update()
+            return self._cause_value()
+        if rd == 11:
+            return self.cp0_compare
+        if rd == 15 and sel == 1:
+            return self.cp0_ebase
+        return None
+
+    def _cp0_write(self, uc, rd, sel, val):
+        """MTC0 of val to CP0 register rd, sel: None for a register Unicorn
+        keeps, else whether the write can change when the next interrupt comes
+        (then the slice is re-planned: _reschedule_slice)."""
+        if rd == 12:
+            if self.force_erl:
+                val &= ~0x4             # never adopt the ERL that only the native Status carries
+            old = self.cp0_status
+            self.cp0_status = val
+            self._write_native_status(uc, val)
+            # Only enabling (IE, an IM bit) or a change of EXL / ERL can make an
+            # interrupt deliverable or move the slice's deadline: an interrupt
+            # disable or a rewrite of the same value (critical sections) cannot.
+            return bool((old ^ val) & 0xFF06 or val & ~old & 0x1)
+        if rd == 9:
+            self._timer_update()        # crossings before the write still count
+            self.cp0_count = val
+            self._count_icount = self.instruction_count
+            self._count_t0 = self._vtime()
+            self._timer_anchor = val
+            self._count_observed = val
+            self._timer_next_icount = 0
+            return True
+        if rd == 11:
+            self._write_compare(val)
+            return True
+        if rd == 13:
+            # Only IP1..0 (software interrupts), WP, IV and DC are writable.
+            self.cp0_cause = (self.cp0_cause & ~0x08C00300) | (val & 0x08C00300)
+            return True
+        if rd == 14:
+            self.cp0_epc = val
+            return False
+        if rd == 15 and sel == 1:       # EBase: bits 29..12 writable, 31..30 read as 0b10,
+            self.cp0_ebase = 0x80000000 | (val & 0x3FFFF000) | (self.cp0_ebase & 0x3FF)    # CPUNum read-only
+            return False
+        return None
 
     def _eret(self, uc):
         """CP0 side of ERET (EXL cleared, UART re-arm); returns the target PC
@@ -3176,6 +3202,7 @@ class AliMipsSimulator:
             if self._rom_sites_dirty:
                 self._rom_sites = self._find_cp0_sites(self.rom_image, 0)
                 self._rom_sites_dirty = False
+                self._find_lzma_decoders(self.rom_image, 0, (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000))
             # Flash executes from KSEG1 (and the BEV vector) -- and through KSEG0: the
             # T750i's XIP bootloader runs its set-up (MTC0 EBase, Status) from the
             # flash window's cached view, where its CP0 instructions ran natively.
@@ -3198,6 +3225,8 @@ class AliMipsSimulator:
             found = self._find_cp0_sites(ram, phys)                 # physical offsets
             for seg in (0x80000000, 0xA0000000):                     # KSEG0 and KSEG1 views
                 sites |= {seg + off for off in found}
+            if not full and (start >> 29) in (4, 5):                # (a chunk's first execution, new code)
+                self._find_lzma_decoders(ram, phys, (0x80000000, 0xA0000000))
         self._add_cp0_sites(sites)
         if full:
             self._update_short_block_hook()
@@ -3544,14 +3573,41 @@ class AliMipsSimulator:
             self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
             self._tb_flush_needed = True
         skipped = until - self._vtime()
-        self._vt_accum += skipped
         self.idle_skipped += skipped
-        counted = round(skipped * self._insn_rate)
+        self._advance_time(skipped)
+        return True
+
+    def _advance_time(self, seconds):
+        """Between slices: move the emulation time on, and the estimated
+        instruction count with it (at most to the budget); no CP0 rescan is
+        due for that time, no code ran."""
+        self._vt_accum += seconds
+        counted = round(seconds * self._insn_rate)
         budget = self._budget()
         if budget is not None:
             counted = min(counted, budget)
         self.instruction_count += counted
         self._last_rescan_icount += counted
+
+    def _skip_busy(self, max_vtime):
+        """Fast mode, between slices: the emulation time the CPU still owes for
+        work done in Python (busy_pending: the LZMA decoder), moved on in steps
+        of at most batch_timeout_us (the slice services -- a SEE core -- see it
+        pass), within run()'s limits.  Interrupts wait until it is paid, as
+        if they had been masked meanwhile: the time charged is what the whole
+        emulated call took, its interrupts included (lzma_insns_per_byte).
+        Returns whether it moved."""
+        now = self._vtime()
+        step = min(self.busy_pending, self.batch_timeout_us / 1e6)
+        if max_vtime is not None:
+            step = min(step, max_vtime - now)
+        budget = self._budget()
+        if budget is not None:
+            step = min(step, budget / self._insn_rate)
+        if step <= 0:
+            return False
+        self.busy_pending -= step
+        self._advance_time(step)
         return True
 
     def _hook_idle_loop(self, uc, address, size, user_data):
@@ -3565,6 +3621,111 @@ class AliMipsSimulator:
                 and (self.cp0_status & 0x7) == 0x1:
             self._stop_reason = 'idle'
             self._orig_emu_stop()
+
+    # The ALi SDK bootloaders unpack the main code (and the SEE's) with the
+    # LZMA SDK 4.0x LzmaDecode() of their boot library, compiled without
+    # optimisation -- a function call per decoded bit: emulated, ~5 us per
+    # output byte (the T750i's 3.4 MB SEE code took 23 s, its 8.6 MB main code
+    # 48 s; Python's lzma module needs 0.1 s for each).  All but three of the
+    # images carry that routine byte for byte (its first 43 instructions, up to
+    # its first absolute jump: _LZMA_DECODE_SIG).  Found in the flash image and
+    # by each RAM chunk's first-execution scan, its entry gets a code hook
+    # (_hook_lzma) that decodes the stream with the lzma module, writes the
+    # output and *outSizeProcessed, returns 0 (LZMA_RESULT_OK) to the caller and
+    # charges the time the emulated decoder would have taken, as instructions
+    # (lzma_insns_per_byte of the estimated count: 3.8-4.6 per output byte on
+    # the T750i and dump_maciej; run() moves the emulation time on as
+    # busy_pending), so instruction counts -- every test's timeline -- stay
+    # what they were (0: no time, tv_gui).
+    # Anything unexpected -- the arguments, a stream the module rejects or that
+    # ends early, output outside the RAM, exact mode -- leaves the call to the
+    # emulated decoder.  LzmaDecode(buffer, bufferSize, lc, lp, pb, inStream,
+    # inSize, outStream, outSize, &outSizeProcessed): a0..a3, then the stack.
+    lzma_hle = True
+    lzma_insns_per_byte = 4.0
+    _LZMA_DECODE_SIG = bytes.fromhex(
+        "78ffbd278400bfaf8000beaf21f0a0038800c4af8c00c5af9000c6af9400c7af"
+        "9000c38f9400c28f211862000003022404106200360742241000c2af8800c28f"
+        "1400c2af3400c0af3800c0af3c00c0a3010002244000c2af4400c2af4800c2af"
+        "4c00c2af5000c0af010003249800c28f04104300ffff42245400c2af9400c28f"
+        "04104300ffff42245800c2af5c00c0af1000c28f401802008c00c28f2b104300"
+        "040040100000000002000224")
+
+    def _find_lzma_decoders(self, data, base, views):
+        """Hook LzmaDecode() wherever data -- code at physical offset `base` --
+        holds it, at that offset in each view (segment base)."""
+        if not self.lzma_hle:
+            return
+        data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
+        i = data.find(self._LZMA_DECODE_SIG)
+        while i >= 0:
+            if i % 4 == 0:
+                for view in views:
+                    a = view + base + i
+                    if a not in self._lzma_hooks:
+                        self._lzma_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_lzma, begin=a, end=a)
+                        self._tb_flush_needed = True
+            i = data.find(self._LZMA_DECODE_SIG, i + 1)
+
+    def _guest_bytes(self, address, size):
+        """Up to `size` bytes of guest memory from `address`, as many as are
+        mapped there (RAM straight from its buffer)."""
+        phys = address & 0x1FFFFFFF
+        if (address >> 29) in (0, 4, 5) and phys < self.ram_size:
+            return bytes(self._ram_view[phys:min(phys + size, self.ram_size)])
+        out = bytearray()
+        while len(out) < size:
+            try:
+                out += self.mu.mem_read(address + len(out), min(0x10000, size - len(out)))
+            except UcError:
+                break
+        return bytes(out)
+
+    def _hook_lzma(self, uc, address, size, user_data):
+        """LzmaDecode()'s entry: decode the stream with the lzma module and
+        return to the caller, or leave the call to the emulated decoder."""
+        if size != 4 or not self.lzma_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        near = range(address - 0x1000, address + 0x1000)    # (the decoder's functions: a breakpoint
+        if self.stop_instr in near or any(b in near for b in self.breakpoints):     # there is honoured)
+            return
+        import lzma
+        import struct
+        try:
+            if self._guest_bytes(address, len(self._LZMA_DECODE_SIG)) != self._LZMA_DECODE_SIG:
+                return                              # (code changed since the scan)
+            buf_size, lc, lp = (self._reg_read(self.gpr_map[n]) for n in (5, 6, 7))
+            sp, ra = self._reg_read(UC_MIPS_REG_SP), self._reg_read(UC_MIPS_REG_RA)
+            pb, in_addr, in_size, out_addr, out_size, done_ptr = struct.unpack("<6I", uc.mem_read(sp + 16, 24))
+            uc.mem_read(done_ptr, 4)                # (mapped)
+            out_phys = out_addr & 0x1FFFFFFF
+            if lc > 8 or lp > 4 or pb > 4 or buf_size < (0x736 + (0x300 << (lc + lp))) * 2 \
+                    or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self.ram_size:
+                return
+            dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
+                "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": max(1 << 12, out_size)}])
+            out = dec.decompress(self._guest_bytes(in_addr, min(in_size, 1 << 26)), max_length=out_size)
+        except (lzma.LZMAError, UcError, ValueError, struct.error):
+            return
+        if len(out) < out_size and not dec.eof:
+            return                                  # (the input ran out: the decoder's error)
+        if self._stop_reason is None:
+            self._stop_reason = 'lzma'
+        self._orig_emu_stop()                       # (what follows is host time)
+        # The output is written behind Unicorn's back (its buffer): the next
+        # slice starts with its translations dropped (_sync_hooks).  It is code:
+        # scanned for CP0 sites now (the emulated decoder took long enough for
+        # the periodic rescans to see it appear).
+        self._ram_view[out_phys:out_phys + len(out)] = out
+        uc.mem_write(done_ptr, struct.pack("<I", len(out)))
+        self._reg_write(self.gpr_map[2], 0)
+        self._reg_write(UC_MIPS_REG_PC, ra)
+        self._tb_flush_needed = True
+        self._rescan_cp0_sites([(0x80000000 | out_phys, len(out))])
+        self.busy_pending += len(out) * self.lzma_insns_per_byte / self._insn_rate
+        self.lzma_decodes.append((address, in_addr, out_addr, len(out)))
+        self.log(f"[LZMA] LzmaDecode at 0x{address:08X} (from 0x{ra:08X}): 0x{in_addr:08X} -> 0x{out_addr:08X}, "
+                 f"{len(out)} bytes decoded in Python (lc {lc}, lp {lp}, pb {pb})")
 
     def run(self, max_instructions=None, max_vtime=None):
         """Run until max_instructions (an instruction count; estimated in fast
@@ -3614,6 +3775,8 @@ class AliMipsSimulator:
 
                 # Interrupts that could not be injected inside the previous slice
                 # (fast mode: all of them; exact mode: MIPS16 branch self-loops).
+                if self.busy_pending > 1e-9 and not full and self._skip_busy(max_vtime):
+                    continue
                 cur_pc = self._take_interrupt_at_boundary(cur_pc)
                 if self.idle_skip and not full and self._skip_idle(cur_pc, max_vtime):
                     continue
