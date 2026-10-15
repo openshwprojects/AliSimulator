@@ -235,6 +235,23 @@ M3503).
   relies on "nothing ticks within the next millisecond" in places (the RTOS's
   first task dispatch writes Count=0 / Compare=+1 ms and then runs ~50
   instructions with interrupts enabled), and a host stall used to break that.
+  **Idle skipping** (`sim.idle_skip`, default on): when a slice ends in the
+  RTOS's idle task -- a `b .` with a nop in its delay slot, interrupts enabled
+  -- run() moves the emulation time (Count, and the estimated instruction
+  count at the measured rate) on to the next timer interrupt instead of
+  spinning there, in steps of at most `batch_timeout_us` (the slice services
+  see the time pass) and never past the run's instruction budget; a code
+  hook on the loop ends the slices that reach it. Instruction counts thus stay
+  a measure of emulation time and every test's timeline is what it was, only
+  the waiting costs no host time: a third of dump_maciej's first 150 M
+  instructions. `tv_gui.py` keeps such a firmware from running ahead of the
+  wall clock.
+  Cost per hooked CP0 instruction: ~9-12 us (the binding's reg_read /
+  reg_write / mem_read are bypassed: direct `uc_reg_*` calls, code words read
+  from the RAM buffer); an MTC0 Status that only disables interrupts or
+  rewrites the value does not re-plan the slice. Periodic CP0-site rescans
+  read the RAM buffer in place (numpy over the words' top bytes), and the
+  tick's vector page is rescanned only when it changed.
 * **Exact mode** - `sim.hook_every_instruction = True` (the GUI sets this)
   installs a per-instruction hook: exact instruction counts, instruction
   history / loop counts, `trace_instructions`, `verify_isa_mode`. About 100x
@@ -269,8 +286,10 @@ Single steps always use the exact hook. Both modes read the real ISA mode
     tick handler) fires at once instead of after a 43 s Count wrap.
   * Fast mode only: after an ERET the guest runs at least `irq_min_gap_us`
     (200 us) before the next timer interrupt. Hooked CP0 instructions cost
-    ~50 us of host time each, which Count sees, so without this a handler
-    that takes longer than the tick period would starve the interrupted code.
+    ~10 us of host time each (~50 us before 2026-10-15), which Count sees, so
+    without this a handler that takes longer than the tick period would starve
+    the interrupted code. (An idle loop has nothing to run in that gap: idle
+    skipping moves the time on to its end.)
 * **Software interrupts** (Cause.IP1..0 written by the firmware) use the same
   path. MFC0 Cause returns the live value; MTC0 Cause only changes the
   writable bits (IP1..0, IV, WP, DC).
@@ -656,10 +675,11 @@ then every 1000th.
   core's: turns of so many instructions did not work (fast-mode counts are
   estimates; with the SEE's rate estimated low, a million-instruction turn
   took minutes). Its idle task's `b .` would spin away as much host time as
-  the turn lasts, so `idle_skip` moves the core's emulation time (and its
-  Count) on to its next timer interrupt instead, and a code hook on the loop
-  ends the slices that reach it -- most turns start in the tick handler, which
-  returns into the loop (the URZ0086: 8 M instructions in 16 s instead of 22 s).
+  the turn lasts, so `idle_skip` (first made for this core, on for every core
+  now) moves the core's emulation time (and its Count) on to its next timer
+  interrupt instead, and a code hook on the loop ends the slices that reach it
+  -- most turns start in the tick handler, which returns into the loop (the
+  URZ0086: 8 M instructions in 16 s instead of 22 s).
 * A device register that is plain memory keeps what the firmware stores into
   it: the URZ0083's bootloader pulses bit 31 of the chip ID word, and its
   application then read its chip as 0xB602 and rebooted itself every ~38 M

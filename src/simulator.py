@@ -250,6 +250,7 @@ class AliMipsSimulator:
         self._clk = time.perf_counter        # clock of the current emulation thread
         self._clk_key = None                 # (native thread id, count_clock) it was made for
         self._clk_cache = None               # one clock reading per CP0 hook
+        self._in_cp0_hook = False            # (taken at the hook's first use of the time)
         self._vt_accum = 0.0                 # emulation seconds of finished emu_start() calls
         self._vt_slice_t0 = None             # clock at the start of the running call
         self._vt_stop_t = None               # clock when a stop was requested in this call
@@ -276,8 +277,8 @@ class AliMipsSimulator:
         self._slice_armed_exl = False
         self._slice_deadline = None          # perf_counter() at which hooked CP0 code ends the slice
         self.native_cp0_repairs = 0          # native MTC0 Status seen after an asynchronous stop
-        # Fast mode: a hooked CP0 instruction costs ~50 us of host time, which
-        # Count sees.  A tick handler can therefore take longer than a short
+        # Fast mode: a hooked CP0 instruction costs ~10 us of host time (~50 us
+        # before), which Count sees.  A tick handler can take longer than a short
         # timer period, and every ERET would find the next tick due: the
         # interrupted code would never run again.  After an ERET the guest runs
         # at least this long before the next timer/software interrupt.
@@ -291,11 +292,15 @@ class AliMipsSimulator:
         self.rescan_interval = 1_000_000     # periodic RAM rescan for new CP0 sites (instructions)
         self._rom_sites = set()
         self._rom_sites_dirty = True
+        self._rom_sites_hooked = False       # the flash's sites are in _cp0_site_hooks
+        self._vector_page = None             # (page, its bytes) when the tick's vector page was last scanned
+        self._delay_slot_words = {}          # word before a CP0 site -> it has a delay slot
         self._code_hook_h = None
         self._cp0_site_hooks = {}            # address -> hook handle
         self._bp_hooks = {}                  # address -> hook handle
         self._virgin_hooks = {}              # chunk base -> hook handle
         self._idle_loops = {}                # idle loop address -> hook handle (idle_skip)
+        self.idle_skipped = 0.0              # emulation time idle_skip moved on (seconds)
         self._run_max_vtime = None           # run()'s max_vtime, for _hook_idle_loop
         self._rescan_due = False
         self._last_rescan_icount = -1
@@ -431,7 +436,8 @@ class AliMipsSimulator:
         self.mu.mem_map_ptr(0x80000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         self.mu.mem_map_ptr(0xA0000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         self.mu.mem_map_ptr(0x00000000, self.ram_size, UC_PROT_ALL, ram_ptr)
-        
+        self._init_fast_access()
+
         # Map MMIO: one shared register buffer.  The guest reaches it at the
         # physical 0x18000000 (from any segment), an mmio_map region whose
         # callbacks dispatch to the device handlers registered with _mmio_on
@@ -631,6 +637,39 @@ class AliMipsSimulator:
         first core's (share_memory_with)."""
         import ctypes
         return getattr(self._shared, name) if self._shared else ctypes.create_string_buffer(size)
+
+    def _init_fast_access(self):
+        """What the fast-mode CP0 hooks read and write many times a second goes
+        around the Unicorn binding, whose reg_read / reg_write / mem_read build
+        ctypes objects per call (2.6-3.5 us each, against ~1 us for the C call):
+        _reg_read / _reg_write call uc_reg_read / uc_reg_write with one
+        preallocated value (GPRs, PC and CP0 Status: 32-bit registers), and
+        _ram_words views the RAM buffer that kuseg, KSEG0 and KSEG1 map, as
+        little-endian words (None on a big-endian host)."""
+        import ctypes
+        mu = self.mu
+        try:
+            lib = sys.modules[type(mu).__module__].uclib
+            uch, val = mu._uch, ctypes.c_uint64()
+            ref, c_write, c_read = ctypes.byref(val), lib.uc_reg_write, lib.uc_reg_read
+
+            def reg_write(reg, value):
+                val.value = value
+                err = c_write(uch, reg, ref)
+                if err:
+                    raise UcError(err)
+
+            def reg_read(reg):
+                err = c_read(uch, reg, ref)
+                if err:
+                    raise UcError(err)
+                return val.value & 0xFFFFFFFF
+
+            self._reg_write, self._reg_read = reg_write, reg_read
+        except Exception:                    # another binding: its own calls
+            self._reg_write, self._reg_read = mu.reg_write, mu.reg_read
+        self._ram_view = memoryview(self.ram_buffer).cast('B')
+        self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
@@ -2625,12 +2664,23 @@ class AliMipsSimulator:
             if in_delay_slot:
                 self._delay_slot_skips += 1
                 return False
-            uc.reg_write(self.gpr_map[rt], val & 0xFFFFFFFF)
-            uc.reg_write(UC_MIPS_REG_PC, address + 4)
+            self._reg_write(self.gpr_map[rt], val & 0xFFFFFFFF)
+            self._reg_write(UC_MIPS_REG_PC, address + 4)
             return True
         if rs == 0x04:                      # MTC0 rt, rd
-            val = uc.reg_read(self.gpr_map[rt]) & 0xFFFFFFFF
-            if rd == 9:
+            val = self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF
+            resched = rd in (9, 11, 12, 13)     # (what can change when the next interrupt comes)
+            if rd == 12:
+                if self.force_erl:
+                    val &= ~0x4             # never adopt the ERL that only the native Status carries
+                old = self.cp0_status
+                self.cp0_status = val
+                self._write_native_status(uc, val)
+                # Only enabling (IE, an IM bit) or a change of EXL / ERL can make an
+                # interrupt deliverable or move the slice's deadline: an interrupt
+                # disable or a rewrite of the same value (critical sections) cannot.
+                resched = bool((old ^ val) & 0xFF06 or val & ~old & 0x1)
+            elif rd == 9:
                 self._timer_update()        # crossings before the write still count
                 self.cp0_count = val
                 self._count_icount = self.instruction_count
@@ -2640,11 +2690,6 @@ class AliMipsSimulator:
                 self._timer_next_icount = 0
             elif rd == 11:
                 self._write_compare(val)
-            elif rd == 12:
-                if self.force_erl:
-                    val &= ~0x4             # never adopt the ERL that only the native Status carries
-                self.cp0_status = val
-                self._write_native_status(uc, val)
             elif rd == 13:
                 # Only IP1..0 (software interrupts), WP, IV and DC are writable.
                 self.cp0_cause = (self.cp0_cause & ~0x08C00300) | (val & 0x08C00300)
@@ -2656,18 +2701,18 @@ class AliMipsSimulator:
                 return False
             if in_delay_slot:
                 self._delay_slot_skips += 1  # shadow updated; native MTC0 still executes
-                if rd in (9, 11, 12, 13):
+                if resched:
                     self._reschedule_slice() # a stop here takes effect after the branch
                 return False
-            uc.reg_write(UC_MIPS_REG_PC, address + 4)
-            if rd in (9, 11, 12, 13):
+            self._reg_write(UC_MIPS_REG_PC, address + 4)
+            if resched:
                 self._reschedule_slice()
             return True
         if rs == 0x10 and funct == 0x18:    # ERET
             if in_delay_slot:
                 return False
             target = self._eret(uc)
-            uc.reg_write(UC_MIPS_REG_PC, target)   # bit 0 selects the ISA mode
+            self._reg_write(UC_MIPS_REG_PC, target)   # bit 0 selects the ISA mode
             self._reschedule_slice()
             return True
         return False
@@ -2711,7 +2756,7 @@ class AliMipsSimulator:
         if self.force_erl:
             val |= 0x4
         try:
-            uc.reg_write(UC_MIPS_REG_CP0_STATUS, val & 0xFFFFFFFF)
+            (self._reg_write if uc is self.mu else uc.reg_write)(UC_MIPS_REG_CP0_STATUS, val & 0xFFFFFFFF)
         except Exception:
             pass
 
@@ -2721,7 +2766,11 @@ class AliMipsSimulator:
         if self._vt_slice_t0 is not None:
             now = self._vt_stop_t
             if now is None:
-                now = self._clk_cache if self._clk_cache is not None else self._clk()
+                now = self._clk_cache
+                if now is None:
+                    now = self._clk()
+                    if self._in_cp0_hook:
+                        self._clk_cache = now       # one reading per hooked CP0 instruction
             t += max(0.0, now - self._vt_slice_t0)
         return t
 
@@ -2893,13 +2942,16 @@ class AliMipsSimulator:
             exl = bool(self.cp0_status & 0x2)
             if exl and not self._slice_armed_exl:
                 # The guest entered exception level itself (a context switch:
-                # MTC0 Status with EXL, then ERET a few instructions later).  The
+                # MTC0 Status with EXL, then ERET a few instructions later): the
+                # backstop needs the long EXL margin.  Before the deadline it is
+                # async_stop_margin_us away, so it is simply moved; after it, the
                 # short backstop may already be firing, so end the slice here
-                # (synchronously, the MTC0 is done); the next slice, which runs
+                # (synchronously, the MTC0 is done) -- the next slice, which runs
                 # the ERET, starts with the long EXL backstop.
-                self._stop_reason = 'resched'
-                self._orig_emu_stop()
-                return
+                if self._slice_deadline is None or time.perf_counter() >= self._slice_deadline:
+                    self._stop_reason = 'resched'
+                    self._orig_emu_stop()
+                    return
             # (IE toggles: deadline unchanged; leaving EXL shortens the backstop)
             if abs(end - self._slice_armed_end) > 50e-6 or exl != self._slice_armed_exl:
                 self._arm_deadline(max(end - now, 0.0))
@@ -3039,6 +3091,7 @@ class AliMipsSimulator:
             for h in list(self._cp0_site_hooks.values()) + list(self._bp_hooks.values()) + list(self._virgin_hooks.values()):
                 self.mu.hook_del(h)
             self._cp0_site_hooks.clear(); self._bp_hooks.clear(); self._virgin_hooks.clear()
+            self._rom_sites_hooked, self._vector_page = False, None
             self._rebase_count()            # Count: emulation time -> instruction count
             self._code_hook_h = self.mu.hook_add(UC_HOOK_CODE, self._hook_code)
             self._tb_flush_needed = True
@@ -3076,6 +3129,7 @@ class AliMipsSimulator:
     # (word & 0xFFE0FFFF) of MFC0/MTC0 rt, {Count, Compare, Status, Cause, EPC} sel 0 and EBase (15 sel 1)
     _CP0_WORDS = frozenset([op | (rd << 11) | sel for op in (0x40000000, 0x40800000)
                             for rd, sel in ((9, 0), (11, 0), (12, 0), (13, 0), (14, 0), (15, 1))])
+    _CP0_WORD_ARRAY = None if _np is None else _np.array(sorted(_CP0_WORDS), dtype=_np.uint32)
     _ERET_WORD = 0x42000018
 
     def _find_cp0_sites(self, data, base):
@@ -3083,14 +3137,14 @@ class AliMipsSimulator:
         out = set()
         if _np is not None:
             n = len(data) & ~3
-            w = _np.frombuffer(data, dtype='<u4', count=n // 4)
-            # opcode 0x10 (COP0) words are rare in code and data: filter them in
-            # one vector pass, then classify the few candidates.
-            cand = _np.flatnonzero((w & _np.uint32(0xFC000000)) == _np.uint32(0x40000000))
-            words = w[cand].tolist()
-            for i, x in zip(cand.tolist(), words):
-                if x == self._ERET_WORD or (x & 0xFFE0FFFF) in self._CP0_WORDS:
-                    out.add(base + 4 * i)
+            # The words' top bytes (a strided view): MFC0 / MTC0 have 0x40, ERET
+            # 0x42 -- rare in code and data, so one vector pass over them finds
+            # the few candidates, a second classifies those.
+            cand = _np.flatnonzero((_np.frombuffer(data, dtype=_np.uint8, count=n)[3::4] | 2) == 0x42)
+            if len(cand):
+                x = _np.frombuffer(data, dtype='<u4', count=n // 4)[cand]
+                hit = (x == self._ERET_WORD) | _np.isin(x & _np.uint32(0xFFE0FFFF), self._CP0_WORD_ARRAY)
+                out.update((base + 4 * cand[hit]).tolist())
             return out
         data = bytes(data)
         n = len(data)
@@ -3117,25 +3171,31 @@ class AliMipsSimulator:
         """Scan ROM (cached) and RAM for CP0 instruction encodings and hook each
         site.  ranges: list of (start, length) in the 0x80000000 RAM view; None
         scans the whole tracked RAM area."""
-        if self._rom_sites_dirty:
-            self._rom_sites = self._find_cp0_sites(self.rom_image, 0)
-            self._rom_sites_dirty = False
         sites = set()
-        # Flash executes from KSEG1 (and the BEV vector) -- and through KSEG0: the
-        # T750i's XIP bootloader runs its set-up (MTC0 EBase, Status) from the
-        # flash window's cached view, where its CP0 instructions ran natively.
-        for base in (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000):
-            sites |= {base + off for off in self._rom_sites}
+        if self._rom_sites_dirty or not self._rom_sites_hooked:
+            if self._rom_sites_dirty:
+                self._rom_sites = self._find_cp0_sites(self.rom_image, 0)
+                self._rom_sites_dirty = False
+            # Flash executes from KSEG1 (and the BEV vector) -- and through KSEG0: the
+            # T750i's XIP bootloader runs its set-up (MTC0 EBase, Status) from the
+            # flash window's cached view, where its CP0 instructions ran natively.
+            for base in (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000):
+                sites |= {base + off for off in self._rom_sites}
+            self._rom_sites_hooked = True
         full = ranges is None
         if full:
             ranges = [(0x80000000, min(self.ram_size, self._RAM_CODE_LIMIT))] + self.chip.code_ranges()
         for start, length in ranges:
-            try:
-                ram = self.mu.mem_read(start, length)
-            except UcError as e:
-                self.log(f"Warning: RAM scan for CP0 sites failed at {hex(start)}: {e}")
-                continue
-            found = self._find_cp0_sites(ram, start & 0x1FFFFFFF)   # physical offsets
+            phys = start & 0x1FFFFFFF
+            if (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size:
+                ram = self._ram_view[phys:phys + length]            # (the RAM buffer itself, no copy)
+            else:
+                try:
+                    ram = self.mu.mem_read(start, length)
+                except UcError as e:
+                    self.log(f"Warning: RAM scan for CP0 sites failed at {hex(start)}: {e}")
+                    continue
+            found = self._find_cp0_sites(ram, phys)                 # physical offsets
             for seg in (0x80000000, 0xA0000000):                     # KSEG0 and KSEG1 views
                 sites |= {seg + off for off in found}
         self._add_cp0_sites(sites)
@@ -3179,21 +3239,33 @@ class AliMipsSimulator:
 
     def _hook_cp0_site(self, uc, address, size, user_data):
         """Fast-mode hook on one MFC0/MTC0/ERET encoding found by scanning."""
-        if size != 4 or self.is_mips16_mode():
-            return                      # MIPS16 code / data that matched by accident
+        # MIPS16 code that matched by accident is 2-byte instructions here: no
+        # site's first halfword is an EXTEND or JAL(X) prefix (op 0x1E / 0x03;
+        # they are ADDIUSP, ADDIU8, SLTIU, I8, LI, CMPI or XORI).
+        if size != 4:
+            return
         # The previous word tells whether this is a branch delay slot (a PC
         # redirect would be ignored there); treat it as MIPS32 (a MIPS16 caller
         # reaches MIPS32 code only via JALX, whose target is never a delay slot).
         if self._rom_dirty:
             self._rom_restore()
-        try:
-            both = uc.mem_read(address - 4, 8)
-            prev, w = both[:4], int.from_bytes(both[4:], 'little')
-        except UcError:
-            prev, w = None, int.from_bytes(uc.mem_read(address, 4), 'little')
+        words = self._ram_words
+        i = (address & 0x1FFFFFFF) >> 2
+        if words is not None and 0 < i < len(words) and (address >> 29) in (0, 4, 5):
+            prev, w = words[i - 1], words[i]            # RAM (kuseg, KSEG0, KSEG1): its buffer
+        else:
+            try:
+                both = uc.mem_read(address - 4, 8)
+                prev, w = int.from_bytes(both[:4], 'little'), int.from_bytes(both[4:], 'little')
+            except UcError:
+                prev, w = None, int.from_bytes(uc.mem_read(address, 4), 'little')
         if (w >> 26) != 0x10:
             return                      # code changed since the scan
-        in_ds = prev is not None and self._insn_has_delay_slot(prev, 4, False)
+        in_ds = False
+        if prev is not None:
+            in_ds = self._delay_slot_words.get(prev)
+            if in_ds is None:
+                in_ds = self._delay_slot_words[prev] = self._insn_has_delay_slot(prev.to_bytes(4, 'little'), 4, False)
         # A breakpoint / stop address on this instruction: its hook may be queued
         # behind this one, and Unicorn skips the remaining hooks of an instruction
         # once a stop is requested (an interrupt made deliverable here does that).
@@ -3210,13 +3282,14 @@ class AliMipsSimulator:
             self._stop_reason = bp_reason
             uc.emu_stop()
             return
-        # One clock reading for this instruction (Count, timer checks): the
-        # thread clock costs a few microseconds per read.
-        if self._vt_slice_t0 is not None:
-            self._clk_cache = self._clk()
+        # One clock reading for this instruction (Count, timer checks), taken
+        # when first needed (_vtime): the thread clock costs ~0.5 us per read,
+        # and MFC0 Status / EPC need none.
+        self._in_cp0_hook = True
         try:
             self._emulate_cop0(uc, address, w, in_ds)
         finally:
+            self._in_cp0_hook = False
             self._clk_cache = None
         if bp_reason and self._stop_reason == 'irq':
             self._stop_reason = bp_reason   # (delay slot: Unicorn completes the branch first)
@@ -3309,12 +3382,17 @@ class AliMipsSimulator:
             # an application that writes its handler over the bootloader's takes
             # its first tick before the periodic rescan sees the new code, and an
             # EBase read that runs natively reports Unicorn's CPU number 0x3FF
-            # (the URZ0086's handler then takes its second-CPU path).
+            # (the URZ0086's handler then takes its second-CPU path).  The page
+            # is scanned again only when its bytes changed.
             vector = self._enter_interrupt(self.mu, epc)
-            if self._code_hook_h is None and (vector & 0x1FFFFFFF) < min(self.ram_size, self._RAM_CODE_LIMIT):
-                self._rescan_cp0_sites([(0x80000000 | (vector & 0x1FFFF000), 0x1000)])
-                if self._tb_flush_needed:
-                    self._flush_tb()
+            page = vector & 0x1FFFF000
+            if self._code_hook_h is None and page < min(self.ram_size, self._RAM_CODE_LIMIT):
+                seen = self._vector_page
+                if seen is None or seen[0] != page or self._ram_view[page:page + 0x1000] != seen[1]:
+                    self._rescan_cp0_sites([(0x80000000 | page, 0x1000)])
+                    self._vector_page = (page, bytes(self._ram_view[page:page + 0x1000]))
+                    if self._tb_flush_needed:
+                        self._flush_tb()
         self.mu.reg_write(UC_MIPS_REG_PC, vector)
         return vector
 
@@ -3395,35 +3473,65 @@ class AliMipsSimulator:
             self._slice_deadline = None
         return self._vtime() - v0
 
-    # A core whose program waits for an interrupt in a branch-to-self (the SEE's
-    # idle task) spins away as much host time as it emulates: with idle_skip set
-    # (chips/see.py SeeCore) run() moves its emulation time -- its Count with
-    # it -- on to its next timer interrupt instead, or to max_vtime if that
-    # comes first.  A loop found that way also ends the slices that reach it
-    # (_hook_idle_loop): the SEE's turns mostly start in its tick handler, which
-    # returns into the loop.
-    idle_skip = False
+    # A core whose program waits for an interrupt in a branch-to-self (the RTOS's
+    # idle task; the SEE's) spins away as much host time as it emulates: with
+    # idle_skip (the default) run() moves its emulation time -- its Count and
+    # its estimated instruction count with it -- on to its next timer interrupt
+    # instead (_idle_until).  A loop found that way also ends the slices that
+    # reach it (_hook_idle_loop): most turns start in the tick handler, which
+    # returns into the loop.  dump_maciej's first 150 M instructions are a
+    # third idle.
+    idle_skip = True
     _IDLE_LOOP = bytes.fromhex("ffff0010" "00000000")      # b . / nop
+
+    def _budget(self):
+        """Fast mode: the instructions run() may still count -- up to
+        max_instructions, and to a UART interrupt armed so many instructions
+        ahead (setUartReceiveData) -- or None (no limit)."""
+        budget = None
+        if self.max_instructions:
+            budget = self.max_instructions - self.instruction_count
+        if self._pending_uart_irq and not self._uart_irq_delivered and \
+                self._uart_irq_arm_after > self.instruction_count:
+            arm = self._uart_irq_arm_after - self.instruction_count
+            budget = arm if budget is None else min(budget, arm)
+        return budget
 
     def _idle_until(self, max_vtime):
         """The emulation time an idle loop can skip to -- when interrupts are
-        enabled (IE, not EXL / ERL) and none is deliverable: the next timer
-        interrupt (one Count tick past Compare, where the timer latches) or
-        max_vtime, whichever comes first --, or None (nothing to skip to)."""
-        if (self.cp0_status & 0x7) != 0x1 or self._irq_deliverable() or self._irq_due():
+        enabled (IE, not EXL / ERL): the next timer interrupt (one Count tick
+        past Compare, where the timer latches), max_vtime, the end of the
+        instruction budget (_budget) or batch_timeout_us on (the slice services
+        see the time pass in steps), whichever comes first; with an interrupt
+        deliverable, the end of irq_min_gap_us after the last ERET (the loop
+        has nothing to run meanwhile) --, or None (nothing to skip to)."""
+        if (self.cp0_status & 0x7) != 0x1 or self._irq_due():
             return None
         now = self._vtime()
-        until = max_vtime
-        wait = self._timer_wait_us()
-        if wait is not None:
-            tick = now + wait / 1e6 + 1.0 / self.count_hz
-            until = tick if until is None else min(until, tick)
-        return until if until is not None and until > now else None
+        if self._irq_deliverable():
+            hold = self._irq_gap_left(now)
+            if hold <= 0:
+                return None
+            until = now + hold
+        else:
+            until = now + self.batch_timeout_us / 1e6
+            wait = self._timer_wait_us()
+            if wait is not None:
+                until = min(until, now + wait / 1e6 + 1.0 / self.count_hz)
+        if max_vtime is not None:
+            until = min(until, max_vtime)
+        budget = self._budget()
+        if budget is not None:
+            until = min(until, now + budget / self._insn_rate)
+        return until if until > now else None
 
     def _skip_idle(self, pc, max_vtime):
         """Fast mode, between slices: in an idle loop that only an interrupt
         ends -- `b .` with a nop in its delay slot (_idle_until) --, the
-        emulation time skips on.  Returns whether it moved."""
+        emulation time skips on, and the instruction count with it, at the
+        estimated rate (instruction counts stay a measure of emulation time,
+        as the loop's spinning would have made them; no CP0 rescan for those).
+        Returns whether it moved."""
         until = self._idle_until(max_vtime)
         if until is None:
             return False
@@ -3435,14 +3543,26 @@ class AliMipsSimulator:
         if pc not in self._idle_loops:
             self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
             self._tb_flush_needed = True
-        self._vt_accum += until - self._vtime()
+        skipped = until - self._vtime()
+        self._vt_accum += skipped
+        self.idle_skipped += skipped
+        counted = round(skipped * self._insn_rate)
+        budget = self._budget()
+        if budget is not None:
+            counted = min(counted, budget)
+        self.instruction_count += counted
+        self._last_rescan_icount += counted
         return True
 
     def _hook_idle_loop(self, uc, address, size, user_data):
-        """A slice reached an idle loop (_skip_idle): end it there if the time
-        can skip on, instead of spinning to the slice's end."""
-        if self._code_hook_h is None and self._stop_reason is None \
-                and self._idle_until(self._run_max_vtime) is not None:
+        """A slice reached an idle loop (_skip_idle): with interrupts enabled
+        only an interrupt leaves it, so end the slice there -- run() takes the
+        interrupt, or moves the time on to it -- instead of spinning to the
+        slice's end.  (Also when one is deliverable already: Cause.TI latches
+        at CP0 hooks and slice boundaries, so a tick that came due in the
+        slice's last task waited for the asynchronous backstop.)"""
+        if self.idle_skip and self._code_hook_h is None and self._stop_reason is None \
+                and (self.cp0_status & 0x7) == 0x1:
             self._stop_reason = 'idle'
             self._orig_emu_stop()
 
@@ -3511,13 +3631,7 @@ class AliMipsSimulator:
                     # Fast mode: native batches, interrupts are taken at their boundaries.
                     # Exact (counted) slice when close to a limit, otherwise a
                     # wall-clock slice whose instruction count is estimated.
-                    budget = None
-                    if self.max_instructions:
-                        budget = self.max_instructions - self.instruction_count
-                    if self._pending_uart_irq and not self._uart_irq_delivered and \
-                            self._uart_irq_arm_after > self.instruction_count:
-                        arm = self._uart_irq_arm_after - self.instruction_count
-                        budget = arm if budget is None else min(budget, arm)
+                    budget = self._budget()
                     small_budget = budget is not None and budget <= self.exact_count_threshold
                     calibrating = self._counted_slices < self.calibration_slices
                     if self._timeout_slices == 0 and (small_budget or calibrating):

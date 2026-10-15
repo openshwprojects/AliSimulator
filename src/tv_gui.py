@@ -270,12 +270,20 @@ class TvGui:
         t0 = time.time()
         shown_ops, shown_at, last_ops, note, app = -1, 0.0, 0, "", False
         while not self.stop:
+            w0, v0 = time.time(), sim._vtime()
             try:
-                sim.run(max_instructions=sim.instruction_count + 2_000_000)
+                # A quarter of a second of the firmware's time per step, and no
+                # faster than real time: the simulator skips the time an idle
+                # firmware waits for its next tick (idle_skip), which would run
+                # its clock and animations ahead of the wall clock.
+                sim.run(max_instructions=sim.instruction_count + 2_000_000, max_vtime=v0 + 0.25)
             except Exception as e:
                 # keep the window (and its last frame) alive, show what happened
                 self.status = f"{time.time() - t0:6.0f}s  EMULATION STOPPED: {e!r}"
                 return
+            ahead = (sim._vtime() - v0) - (time.time() - w0)
+            if ahead > 0:
+                time.sleep(ahead)
             while not self.keys.empty():
                 key = self.keys.get()
                 try:
