@@ -1033,6 +1033,15 @@ toggled hundreds of times) and `test_mips16_decoder_encodings.py`.
 `test_ge_m3602.py` runs the M3602 GE's commands (fill, copy, a scaled copy
 through the palette inside a clip rectangle, a chained command) on a RAM
 image and captures an M3602 display layer of a PAL output;
+`test_ge_fast_paths.py` runs random GE_M36F commands -- copies (PTN and SRC
+bypass) and fills in every packed and index format, with random layout bits,
+clip rectangles, sub-byte surfaces, regions past the end of the RAM -- on
+two copies of a RAM image, with and without the model's fast paths, and
+compares them byte for byte (a plain copy in the surface's own format and a
+one-colour fill skip the float ARGB path: the R265 Lite's channel search had
+copied 200 Mpx of full-screen ARGB1555 surfaces through it, 34 s of its
+regression; region reads and writes are one strided view, sub-byte writes
+one `ufunc.at`);
 `test_crypto_engine.py` hashes a DMA job with SHA-256 and a direct job
 with SHA-1 on the crypto engine model and checks its interrupt.
 `test_parallel_flash.py` runs the parallel NOR flash's commands (autoselect,

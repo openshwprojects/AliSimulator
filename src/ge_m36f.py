@@ -72,6 +72,8 @@ def _u32(v):
 class GeM36F:
     """Executes GE commands on a RAM image (numpy uint8 array, physical address 0 = index 0)."""
 
+    fast_paths = True                   # plain copies / one-colour fills without the float path (_execute)
+
     def __init__(self, ram, log=None):
         self.ram = ram
         self.log = log
@@ -143,11 +145,13 @@ class GeM36F:
         ram = self.ram
         if bpp >= 8:
             bp = bpp // 8
-            rows = []
-            for j in range(h):
-                a = addr + (y + j) * stride + x * bp
-                rows.append(ram[a:a + w * bp])
-            buf = np.stack(rows) if rows else np.zeros((0, w * bp), np.uint8)
+            buf = self._rows(addr + y * stride + x * bp, stride, w * bp, h)
+            if buf is None:                     # (not a plain strided region: row by row)
+                rows = []
+                for j in range(h):
+                    a = addr + (y + j) * stride + x * bp
+                    rows.append(ram[a:a + w * bp])
+                buf = np.stack(rows) if rows else np.zeros((0, w * bp), np.uint8)
             if buf.shape[1] != w * bp:          # clipped at the end of RAM
                 buf = np.zeros((h, w * bp), np.uint8)
             if bp == 4:
@@ -163,6 +167,17 @@ class GeM36F:
         vals = np.zeros((h, w), np.uint8)
         vals[ok] = (ram[byte[ok]] >> shift[ok]) & ((1 << bpp) - 1)
         return vals
+
+    def _rows(self, start, stride, row_bytes, h):
+        """The (h, row_bytes) region of RAM whose rows start `stride` bytes
+        apart from `start`, as one view (writes through it land in RAM), or
+        None if it leaves the RAM or its rows overlap."""
+        if h <= 0 or row_bytes <= 0 or start < 0 or stride < row_bytes:
+            return None
+        end = start + (h - 1) * stride + row_bytes
+        if end > self.ram.size:
+            return None
+        return np.lib.stride_tricks.as_strided(self.ram[start:end], shape=(h, row_bytes), strides=(stride, 1))
 
     @staticmethod
     def _subbyte_pos(addr, pfreg, x, y, w, h, bpp):
@@ -228,6 +243,14 @@ class GeM36F:
             if bp > 1 and (pfreg >> 23) & 1:
                 dt = dt.replace('<', '>')
             v = vals.astype(dt)
+            region = self._rows(addr + y * stride + x * bp, stride, w * bp, h)
+            if region is not None:
+                region = region.view(dt)
+                if mask is None:
+                    region[:] = v
+                else:
+                    region[mask] = v[mask]
+                return
             for j in range(h):
                 a = addr + (y + j) * stride + x * bp
                 if a < 0 or a + w * bp > ram.size:
@@ -245,8 +268,10 @@ class GeM36F:
         if mask is not None:
             sel &= mask
         byte, shift, v = byte[sel], shift[sel].astype(np.int64), vals[sel].astype(np.int64)
-        for b, s, val in zip(byte.tolist(), shift.tolist(), v.tolist()):     # several pixels share a byte
-            ram[b] = (int(ram[b]) & ~(pm << s)) | ((val & pm) << s)
+        # several pixels share a byte: unbuffered ufunc.at clears each pixel's
+        # bits, then sets them (different pixels of a byte hold different bits)
+        np.bitwise_and.at(ram, byte, ((~(pm << shift)) & 0xFF).astype(np.uint8))
+        np.bitwise_or.at(ram, byte, (((v & pm) << shift) & 0xFF).astype(np.uint8))
 
     # ------------------------------------------------------------------
     # pixel formats
@@ -334,6 +359,30 @@ class GeM36F:
         self.unsupported[('decode format', fmt)] += 1
         out[...] = 0
         return out
+
+    def _raw_copy(self, addr, pfreg, xy, w, h):
+        """A surface region's raw values as a fast-path copy writes them: the
+        bits of a packed format that no channel uses come out 0, as encoding
+        decoded pixels would leave them."""
+        fmt = (pfreg >> 12) & 0x1F
+        raw = self._read_raw(addr, pfreg, xy & 0xFFF, (xy >> 16) & 0xFFF, w, h)
+        used = sum(_PACKED.get(fmt, ()))
+        if fmt in _PACKED and used < BPP[fmt]:
+            raw = raw & ((1 << used) - 1)
+        return raw
+
+    @staticmethod
+    def _same_raw(fmt, src_pf, dst_pf, clut_en, index_domain):
+        """Whether pixels of format fmt, decoded with src_pf and encoded with
+        dst_pf, come back as the same raw values: a packed RGB format (not
+        YCbCr) in the same channel order and byte order -- with alpha bits the
+        same polarity and no alpha range, which halves --, or an index format
+        copied without a CLUT."""
+        if fmt in _PACKED and fmt not in _YCBCR:
+            if (src_pf ^ dst_pf) & 0x00860000:          # (RGB order b17-18, byte endian b23)
+                return False
+            return not _PACKED[fmt][0] or (not (src_pf | dst_pf) & 0x01000000 and not (src_pf ^ dst_pf) & 0x02000000)
+        return index_domain and fmt in INDEX_FORMATS and not clut_en and not (src_pf ^ dst_pf) & 0x00800000
 
     def _encode(self, px, fmt, pfreg):
         """float32 (h, w, 4) A, R, G, B -> raw values for format fmt."""
@@ -469,6 +518,32 @@ class GeM36F:
 
         index_domain = dst_fmt in INDEX_FORMATS and not (clut_en and dst_fmt not in INDEX_FORMATS)
         col_fmt = r[0x9C >> 2] & 0x1F
+
+        # Fast paths, the same pixels as the general path below: a bitmap copied
+        # unchanged (PTN bypass, the DST's own format and layout -- decoding and
+        # encoding it would give back the raw values) and a fill with one colour
+        # (encoded once).  The R265 Lite's channel search copied 200 Mpx of
+        # full-screen ARGB1555 surfaces through the float path, 34 s of its run.
+        plain = self.fast_paths and not (ckey_en or bmask_en or msk_mode or cc_en) \
+            and ((r[0x84 >> 2] >> 20) & 3) != 3
+        if plain and rop == 1 and ptn_type == 1 and ptn_fmt == dst_fmt and not (m >> 16) & 1 \
+                and not (ptn_pf >> 28) & 3 and self._same_raw(ptn_fmt, ptn_pf, dst_pf, clut_en, index_domain):
+            pxy = r[0x58 >> 2]
+            self._write_raw(dst, dst_pf, dx, dy, self._raw_copy(self._addr(r, 0x50), ptn_pf, pxy, w, h), wmask)
+            return
+        if plain and rop == 0 and src_mode in (1, 2) and ptn_type == 0 and prim == 0:     # (SRC bypass)
+            s_pf = src_pf if (src_pf & 0xFFF) else dst_pf
+            s_fmt = (s_pf >> 12) & 0x1F
+            if s_fmt == dst_fmt and self._same_raw(s_fmt, s_pf, dst_pf, clut_en, index_domain):
+                sxy = r[0x4C >> 2]
+                raw = self._raw_copy(self._addr(r, 0x44) or dst, s_pf, dxy if sxy == 0x0FFF0FFF else sxy, w, h)
+                self._write_raw(dst, dst_pf, dx, dy, raw, wmask)
+                return
+        if plain and rop == 1 and ptn_type == 0 and prim in (3, 4) and api not in (1, 2) and not index_domain:
+            colour = self._decode(np.array([[r[0x90 >> 2] if prim == 3 else r[0x98 >> 2]]], np.uint32), col_fmt, 0)
+            self._write_raw(dst, dst_pf, dx, dy, np.full((h, w), self._encode(colour, dst_fmt, dst_pf)[0, 0], np.uint32),
+                            wmask)
+            return
 
         # ---------------- PTN (foreground) ----------------
         ptn = None          # raw (index domain) or float (h, w, 4)
