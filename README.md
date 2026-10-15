@@ -598,7 +598,19 @@ then every 1000th.
   MIPS16 JRC/JALRC, and raises "Unhandled CPU exception" (or is ignored) on
   MIPS16 B/BEQZ/BNEZ/BTEQZ/BTNEZ: those complete inside the instruction.
 * The firmware uses kuseg addresses (0x18000058, 0x0FC00000); QEMU only maps
-  kuseg 1:1 with Status.ERL set, so the native Status always carries ERL.
+  kuseg 1:1 with Status.ERL set. Since 2026-10-15 (`native_status`, default) a
+  wired TLB entry -- two 256 MB pages at physical 0, uncached, global, put in
+  by a stub run once at start-up (`_setup_kuseg_tlb`) -- maps kuseg's lower
+  512 MB 1:1 instead (none of the firmwares writes the TLB; Unicorn's 24KF
+  has no segmentation control, its SegCtl registers read 0xFFFFFFFF), and the
+  native Status is the guest's own: MFC0 Status runs natively (no CP0 site),
+  MTC0 Status runs natively too while its hook follows the write
+  (`_follow_status_write`: the shadow, the slice re-planned; the hook writes it
+  itself and moves on only when the slice ends there), and run() takes the
+  native Status over at each slice boundary. That halves the RTOS's interrupt
+  disable / enable pair (61 -> 31 us). Before (and with `native_status = False`
+  or a TLB entry that cannot be set up), the native Status carried a forced
+  ERL and every MFC0 / MTC0 Status was emulated.
 * SPI flash responses and command-trigger stores land in the flash window;
   `rom_image` keeps the pristine flash contents and every transient write is
   reverted before the firmware can read it (this corruption of flash word 0
@@ -751,22 +763,24 @@ then every 1000th.
   it calls `cpu_exit()`, and the code-hook dispatcher skips *all* hooks while
   `stop_request` is set (in a branch delay slot it does not even exit first).
   A hooked CP0 instruction reached in that window runs natively: `mfc0 Count`
-  reads 0, `eret` jumps to ErrorEPC = 0 (ERL is forced), `mtc0 Status` drops
-  the forced ERL. So fast-mode slices end synchronously: every hooked CP0
+  reads 0, `eret` jumps to the native EPC, which nothing writes, 0 (under the
+  forced ERL: to ErrorEPC = 0), `mtc0 Status` drops the forced ERL (with the
+  native Status it is just the guest's write, taken over at the boundary). So
+  fast-mode slices end synchronously: every hooked CP0
   instruction checks the slice deadline, the asynchronous stopper is only a
   backstop 1 ms later (50 ms while EXL is set, i.e. in exception / context
   switch code), and a slice ends synchronously when the guest itself enters
   EXL. The stopper's disarm waits for a callback in flight, so a stale stop
-  cannot hit the next slice. A native `mtc0 Status` or `eret` that still slips
-  through is visible (the forced ERL is gone) and is repaired at the slice
-  boundary (adopted / redone, also when the native `eret` faulted at address 0)
-  and logged as `[WARN] native ...`; `sim.native_cp0_repairs` counts them. A
-  native MFC0 (Status reads the forced ERL, EPC / Count / Cause read Unicorn's
-  stale registers) or MTC0 Compare / EPC / Count / Cause is *not* visible and
-  not repaired; these have become rare (heavy-load soaks: none observed), and
-  exact mode is immune. The full fix would be to stop forcing ERL (identity-map
-  kuseg with a wired TLB entry instead) and to mirror EPC / Count into
-  Unicorn's own CP0 registers.
+  cannot hit the next slice. A native `eret` that still slips through is
+  visible (at address 0, EXL cleared natively but not in the shadow; under the
+  forced ERL also a native `mtc0 Status`, the ERL gone) and is repaired at the
+  slice boundary (redone / adopted) and logged as `[WARN] native ...`;
+  `sim.native_cp0_repairs` counts them. A native MFC0 of EPC / Count / Cause
+  (Unicorn's stale registers) or MTC0 Compare / EPC / Count / Cause is *not*
+  visible and not repaired; these have become rare (heavy-load soaks: none
+  observed), and exact mode is immune. The kuseg TLB entry was half of the full
+  fix proposed here before; mirroring EPC / Count into Unicorn's own CP0
+  registers is the other half.
 
 ## Tests
 

@@ -1,12 +1,17 @@
 """
-Test: fast mode's repeated-MTC0 skip (simulator._repeated).
+Test: fast mode's repeated-MTC0 skip (simulator._repeated), and the RTOS's
+interrupt disable under the native Status (simulator.native_status).
 
-The RTOS's interrupt disable writes Status twice (`mtc0 t0, Status; nop; nop;
-mtc0 t0, Status`, a hazard padding); the same MTC0 again after nothing but
-NOPs writes the same value, so the first one's hook moves the PC past both.
+The same MTC0 again after nothing but NOPs writes the same value, so the
+first one's hook moves the PC past both (an emulated register's: the RTOS's
+interrupt disable writes Status twice, `mtc0 t0, Status; nop; nop; mtc0 t0,
+Status`, a hazard padding -- with the native Status the CPU executes those
+itself and the hooks only follow them).
 
   same       - the disable function in fast and exact mode: the same registers
-               and Status, and in fast mode the second MTC0's hook never runs
+               and Status
+  skip       - `mtc0 t0, EPC; nop; nop; mtc0 t0, EPC`: in fast mode the second
+               MTC0's hook never runs, EPC is written
   breakpoint - a breakpoint on a NOP in between: no skip, the run stops there
   different  - a second MTC0 of another register (t1): both hooks run, both
                writes land
@@ -40,7 +45,7 @@ DISABLE = [mfc0(8, 12), 0, 0, 0, 0x24090006, 0x01284824, 0x15200008, 0x2409FFFE,
 
 
 def run(words, exact=False, breakpoint=None):
-    """(registers 1..31, end PC, Status, hook calls per address)."""
+    """(registers 1..31, end PC, Status, hook calls per address, EPC)."""
     sim = AliMipsSimulator(log_handler=lambda m: None)
     sim.hook_every_instruction = exact
     calls = {}
@@ -61,20 +66,26 @@ def run(words, exact=False, breakpoint=None):
         if sim.mu.reg_read(UC_MIPS_REG_PC) in (sim.stop_instr, breakpoint):
             break
     return ([sim.mu.reg_read(sim.gpr_map[r]) for r in range(1, 32)], sim.mu.reg_read(UC_MIPS_REG_PC),
-            sim.cp0_status, calls)
+            sim.cp0_status, calls, sim.cp0_epc)
 
 
 words = PROLOGUE + DISABLE
-second = MAIN + 4 * (len(PROLOGUE) + 12)
 fast, exact = run(words), run(words, exact=True)
 print("--- same")
 check(fast[:3] == exact[:3], f"same registers, end 0x{fast[1]:08X} and Status 0x{fast[2]:08X} in both modes")
+
+print("--- skip")
+words = PROLOGUE + [i_type(15, 8, 0, 0x8012), i_type(13, 8, 8, 0x3456), mtc0(8, 14), 0, 0, mtc0(8, 14), 0, 0]
+second = MAIN + 4 * (len(PROLOGUE) + 5)
+fast, exact = run(words), run(words, exact=True)
+check(fast[:3] == exact[:3] and fast[4] == exact[4] == 0x80123456,
+      f"same registers and EPC (0x{fast[4]:08X}) in both modes")
 check(fast[3].get(second, 0) == 0 and fast[3].get(second - 12, 0) == 1,
       f"fast mode: the first MTC0's hook ran once, the second's not ({fast[3].get(second, 0)} calls)")
 
 print("--- breakpoint")
 bp = second - 4
-regs, pc, status, calls = run(words, breakpoint=bp)
+regs, pc, status, calls, epc = run(words, breakpoint=bp)
 check(pc == bp, f"a breakpoint on the NOP before the second MTC0 stops there (PC 0x{pc:08X})")
 
 print("--- different")

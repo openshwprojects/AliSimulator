@@ -440,6 +440,11 @@ class AliMipsSimulator:
         self.mu.mem_map_ptr(0xA0000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         self.mu.mem_map_ptr(0x00000000, self.ram_size, UC_PROT_ALL, ram_ptr)
         self._init_fast_access()
+        # kuseg 1:1 through a wired TLB entry and the guest's own native Status,
+        # or (without it) the forced ERL (see native_status)
+        self.force_erl = not (self.native_status and self._setup_kuseg_tlb())
+        self._site_words = self._CP0_WORDS - ({0x40006000} if not self.force_erl else set())
+        self._site_word_array = None if _np is None else _np.array(sorted(self._site_words), dtype=_np.uint32)
 
         # Map MMIO: one shared register buffer.  The guest reaches it at the
         # physical 0x18000000 (from any segment), an mmio_map region whose
@@ -634,6 +639,68 @@ class AliMipsSimulator:
             self.log(f"Warning: Could not set CP0 Status: {e}")
 
         self._calibrate_hflags()
+
+    # The firmwares address peripherals and the flash window through kuseg
+    # (0x18000058, 0x0FC00000) as if it were identity mapped.  QEMU maps kuseg
+    # 1:1 only while Status.ERL is set, so the simulator forced ERL into the
+    # native Status (force_erl) -- and had to emulate every MFC0 / MTC0 Status,
+    # whose native result would show it: in the RTOS's interrupt disable and
+    # enable alone, half of all the hooked CP0 instructions.  With native_status
+    # a wired TLB entry -- two 256 MB pages, physical 0x00000000 and
+    # 0x10000000, uncached, global -- maps kuseg's lower 512 MB 1:1 instead
+    # (none of the firmwares writes the TLB) and the native Status is the
+    # guest's own: MFC0 Status runs natively (it is not a CP0 site), the hook
+    # of MTC0 Status only follows the write unless the slice must end there
+    # (_emulate_cop0), and the run loop takes the native Status over at each
+    # slice boundary.  An ERET that runs natively (its hook skipped under an
+    # asynchronous stop) goes to the native EPC, which nothing writes, 0:
+    # run() redoes it (as it did with ErrorEPC under the forced ERL).
+    native_status = True
+
+    def _setup_kuseg_tlb(self):
+        """Install the wired TLB entry that maps kuseg 1:1 (a stub run once on
+        a scratch page) and check it: a kuseg load with ERL clear reads RAM.
+        False if that cannot be done (the forced ERL stays)."""
+        import struct
+        page = 0x0EFFF000                   # (physical; above the RAM, below the flash window)
+        if self.ram_size > page:
+            return False
+        mu = self.mu
+
+        def li(v):
+            return [0x3C080000 | (v >> 16), 0x35080000 | (v & 0xFFFF)]        # lui / ori t0
+
+        def mtc0(rd):
+            return 0x40880000 | rd << 11                                     # mtc0 t0, rd
+
+        def entry_lo(pa):
+            return ((pa >> 12) << 6) | (2 << 3) | 0x7                        # PFN, uncached, D, V, G
+
+        install = (li(0x1FFFE000) + [mtc0(5)] + li(0) + [mtc0(10)] + li(entry_lo(0)) + [mtc0(2)] +
+                   li(entry_lo(0x10000000)) + [mtc0(3)] + li(0) + [mtc0(0)] + li(1) + [mtc0(6)] +
+                   [0x42000002, 0])                                          # tlbwi
+        check = [0x3C090000, 0x8D2A0000, 0]                                  # lui t1, 0; lw t2, 0(t1)
+        saved = [mu.reg_read(r) for r in (UC_MIPS_REG_T0, UC_MIPS_REG_T1, UC_MIPS_REG_T2, UC_MIPS_REG_PC)]
+        ok = False
+        try:
+            mu.mem_map(page, 0x1000)
+            for code, status in ((install, 0x10400004), (check, 0x10400000)):
+                mu.mem_write(page, struct.pack(f"<{len(code)}I", *code))
+                mu.ctl_flush_tb()
+                mu.reg_write(UC_MIPS_REG_CP0_STATUS, status)
+                mu.emu_start(0x80000000 | page, (0x80000000 | page) + 4 * len(code), count=len(code))
+            ok = mu.reg_read(UC_MIPS_REG_T2) == int.from_bytes(self._ram_view[0:4], 'little')
+        except UcError as e:
+            self.log(f"Warning: the kuseg TLB entry could not be set up ({e}); forcing Status.ERL")
+        finally:
+            try:
+                mu.mem_unmap(page, 0x1000)
+            except UcError:
+                pass
+            mu.ctl_flush_tb()
+            for r, v in zip((UC_MIPS_REG_T0, UC_MIPS_REG_T1, UC_MIPS_REG_T2, UC_MIPS_REG_PC), saved):
+                mu.reg_write(r, v)
+        return ok
 
     def _buffer(self, name, size):
         """A memory buffer the Unicorn mappings point into: a second core's is the
@@ -2663,6 +2730,8 @@ class AliMipsSimulator:
             self._reg_write(UC_MIPS_REG_PC, address + 4)
             return True
         if rs == 0x04:                      # MTC0 rt, rd
+            if rd == 12 and not self.force_erl and not in_delay_slot and self._code_hook_h is None:
+                return self._follow_status_write(uc, address, rt)
             resched = self._cp0_write(uc, rd, sel, self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF)
             if resched is None:
                 return False
@@ -2683,6 +2752,25 @@ class AliMipsSimulator:
             self._reschedule_slice()
             return True
         return False
+
+    def _follow_status_write(self, uc, address, rt):
+        """Fast mode, native Status: an MTC0 Status the CPU executes itself --
+        the hook takes the value over and re-plans the slice when the write can
+        bring an interrupt (_cp0_write's rule); only when that ends the slice
+        here does the hook complete the write and move past it (the stop comes
+        before the instruction).  Returns whether the PC moved."""
+        val = self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF
+        old = self.cp0_status
+        self.cp0_status = val
+        if not ((old ^ val) & 0xFF06 or val & ~old & 0x1):
+            return False
+        before = self._stop_reason
+        self._reschedule_slice()
+        if self._stop_reason is before:
+            return False
+        self._write_native_status(uc, val)
+        self._reg_write(UC_MIPS_REG_PC, address + 4)
+        return True
 
     def _repeated(self, address, w):
         """Fast mode, an MTC0 at address just emulated: how many words the PC
@@ -3192,7 +3280,7 @@ class AliMipsSimulator:
             cand = _np.flatnonzero((_np.frombuffer(data, dtype=_np.uint8, count=n)[3::4] | 2) == 0x42)
             if len(cand):
                 x = _np.frombuffer(data, dtype='<u4', count=n // 4)[cand]
-                hit = (x == self._ERET_WORD) | _np.isin(x & _np.uint32(0xFFE0FFFF), self._CP0_WORD_ARRAY)
+                hit = (x == self._ERET_WORD) | _np.isin(x & _np.uint32(0xFFE0FFFF), self._site_word_array)
                 out.update((base + 4 * cand[hit]).tolist())
             return out
         data = bytes(data)
@@ -3208,6 +3296,9 @@ class AliMipsSimulator:
                 q = (p & ~3) + 4
                 if q + 4 <= n and fullmatch(data, q, q + 4):
                     out.add(base + q)
+        if len(self._site_words) != len(self._CP0_WORDS):    # (native Status: no MFC0 Status sites)
+            out = {a for a in out if (int.from_bytes(data[a - base:a - base + 4], 'little') & 0xFFE0FFFF)
+                   in self._site_words or data[a - base:a - base + 4] == b"\x18\x00\x00\x42"}
         return out
 
     def _add_cp0_sites(self, sites):
@@ -3882,6 +3973,24 @@ class AliMipsSimulator:
                         if self.native_cp0_repairs <= 8:
                             self.log(f"[WARN] native {what} after an asynchronous stop")
                     self._write_native_status(self.mu, self.cp0_status)
+                elif not full:
+                    # Native Status: the CPU's own register is the guest's (its
+                    # MTC0 Status ran natively, followed by the hook -- or not, its
+                    # hook skipped under an asynchronous stop).  An ERET that ran
+                    # natively went to the native EPC, 0: redo it to the shadow EPC.
+                    native = self._reg_read(UC_MIPS_REG_CP0_STATUS)
+                    if (self.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0 and self.cp0_status & 0x2 \
+                            and not native & 0x2:
+                        self.native_cp0_repairs += 1
+                        self.cp0_status = native | 0x2
+                        target = self._eret(self.mu)
+                        self.mu.reg_write(UC_MIPS_REG_PC, target)
+                        if self._stop_reason == 'null':
+                            self._stop_reason = None
+                        if self.native_cp0_repairs <= 8:
+                            self.log(f"[WARN] native ERET (redone to 0x{target:08X}) after an asynchronous stop")
+                    else:
+                        self.cp0_status = native
                 cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
 
                 if (cur_pc & ~1) == 0 or self._stop_reason == 'null':
