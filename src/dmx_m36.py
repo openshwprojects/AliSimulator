@@ -99,7 +99,8 @@ class Demux:
     # -- registers ------------------------------------------------------------
 
     def _reg(self, off, size=1):
-        return int.from_bytes(self.sim.mu.mem_read(0xB8000000 + self.base + off, size), 'little')
+        a = self.base + off                     # (the registers' buffer in place: no binding call)
+        return int.from_bytes(self.sim._mmio_view[a:a + size], 'little')
 
     def _set(self, off, value, size=1):
         self.sim.mu.mem_write(0xB8000000 + self.base + off, value.to_bytes(size, 'little'))

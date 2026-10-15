@@ -465,6 +465,7 @@ class AliMipsSimulator:
         # 0xB8000000 map the same buffer for Python (no side effects).
         MMIO_SIZE = 0x01000000
         self.mmio_buffer = self._buffer('mmio_buffer', MMIO_SIZE)
+        self._mmio_view = memoryview(self.mmio_buffer).cast('B')    # (handlers read it in place: _mmio_word)
         mmio_ptr = ctypes.addressof(self.mmio_buffer)
         self._mmio_rd = {}          # offset -> [handler]: reads starting at that offset
         self._mmio_wr = {}          # offset -> [handler]: writes starting at that offset
@@ -752,6 +753,12 @@ class AliMipsSimulator:
             self._reg_write, self._reg_read = mu.reg_write, mu.reg_read
         self._ram_view = memoryview(self.ram_buffer).cast('B')
         self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
+
+    def _mmio_word(self, address):
+        """The device register word at address (any view of the window, word
+        aligned down) from its buffer: no device side effect, no binding call."""
+        off = address & 0xFFFFFC
+        return int.from_bytes(self._mmio_view[off:off + 4], 'little')
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
@@ -1545,12 +1552,12 @@ class AliMipsSimulator:
         base = address & ~3
         shift = (address & 3) * 8
         mask = ((1 << (size * 8)) - 1) << shift
-        word = int.from_bytes(uc.mem_read(base, 4), 'little') & ~mask | ((value << shift) & mask)
+        word = self._mmio_word(base) & ~mask | ((value << shift) & mask)
         if (base & 0xFFF) in self._GPIO_DO_OFFSETS:
-            do_addr, do_val, dir_val = base, word, int.from_bytes(uc.mem_read(base + 4, 4), 'little')
+            do_addr, do_val, dir_val = base, word, self._mmio_word(base + 4)
         else:
             do_addr, dir_val = base - 4, word
-            do_val = int.from_bytes(uc.mem_read(do_addr, 4), 'little')
+            do_val = self._mmio_word(do_addr)
         levels = (do_val & dir_val | ~dir_val) & 0xFFFFFFFF
         if self.gpio_callback:
             self.gpio_callback(do_addr, 4, levels)
