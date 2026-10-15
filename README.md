@@ -252,6 +252,21 @@ M3503).
   the waiting costs no host time: a third of dump_maciej's first 150 M
   instructions. `tv_gui.py` keeps such a firmware from running ahead of the
   wall clock.
+  **Mailbox polls** (`sim.poll_skip`, default on): a core waiting for the
+  other one in the dual-CPU SDK's tight poll of a mailbox register (`lw rt,
+  off(rs); beq / bne rt, rX, back; nop` on 0xB8000200 / 204 or 0xB8040200 /
+  204: the T760i's main CPU on the SEE's 0xB8040204, its SEE on 0xB8000200,
+  a third of all their device reads) reads the same value until the other
+  core has stored, and that core only runs between this one's slices: the
+  spin is idle time, moved on like an idle loop's -- with interrupts enabled
+  to the next one, else to the end of the turn --, and a code hook on the
+  load ends the slices that reach it while the poll holds; only while a
+  second core runs (`test_poll_skip.py`). A poll is recognised at every
+  slice boundary, at its load or its branch, before an interrupt is taken
+  there: a tick ends most slices, and its handler returns into the poll. The
+  T760i's SEE turns over its first 150 M instructions took 32 s instead of
+  44 s; the dual-CPU screen regressions, whose time goes to other phases,
+  gain 1-2%.
   **The bootloaders' LZMA decoder** (`sim.lzma_hle`, default on): the ALi SDK
   boot library unpacks the main code (and the SEE's) with the LZMA SDK 4.0x
   `LzmaDecode()` compiled without optimisation, a function call per decoded

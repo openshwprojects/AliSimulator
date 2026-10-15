@@ -301,6 +301,8 @@ class AliMipsSimulator:
         self._bp_hooks = {}                  # address -> hook handle
         self._virgin_hooks = {}              # chunk base -> hook handle
         self._idle_loops = {}                # idle loop address -> hook handle (idle_skip)
+        self._poll_loops = {}                # mailbox poll address -> hook handle (poll_skip)
+        self.poll_skipped = 0.0              # emulation time mailbox polls skipped (seconds)
         self.idle_skipped = 0.0              # emulation time idle_skip moved on (seconds)
         self.busy_pending = 0.0              # emulation time still owed for work done in Python
         self._lzma_hooks = {}                # LzmaDecode() entry -> hook handle (_hook_lzma)
@@ -3769,6 +3771,104 @@ class AliMipsSimulator:
         self._advance_time(skipped)
         return True
 
+    # A core waiting for the other one in a tight poll of a mailbox register --
+    # lw rt, off(rs); beq / bne rt, rX, back; nop: the T760i's main CPU on the
+    # SEE's 0xB8040204, its SEE on 0xB8000200, a third of all their device
+    # reads -- reads the same value until the other core, which runs between
+    # this core's slices (chips/see.py SeeCore), has stored: the spin is idle
+    # time.  run() moves the emulation time on as for an idle loop
+    # (_skip_poll): with interrupts enabled to the next one, else to the end
+    # of the turn; a code hook on the load ends the slices that reach it while
+    # the poll still holds and the time can move on.  Only while a second core
+    # runs (the mailboxes are the dual-CPU SDK's).
+    poll_skip = True
+    _MAILBOXES = frozenset((0x200, 0x204, 0x40200, 0x40204))     # (device-window offsets)
+
+    def _mailbox_peer(self):
+        """Whether another core runs whose stores end this core's mailbox polls."""
+        if self._shared is not None:
+            return True                             # (a SEE core: the main CPU)
+        core = getattr(getattr(self.chip, "see", None), "core", None)
+        return core is not None and core.service in self.slice_services
+
+    def _poll_loop(self, pc):
+        """The mailbox address a tight poll loop at pc reads, while the loop's
+        condition holds, or None."""
+        words = self._ram_words
+        i = (pc & 0x1FFFFFFF) >> 2
+        if not self.poll_skip or words is None or (pc >> 29) not in (4, 5) or not 0 <= i < len(words) - 3:
+            return None
+        lw, br = words[i], words[i + 1]
+        if (lw >> 26) != 0x23 or words[i + 2] != 0 or (br & 0xFFFF) != 0xFFFE or (br >> 26) not in (4, 5):
+            return None
+        rs, rt, a, b = (lw >> 21) & 31, (lw >> 16) & 31, (br >> 21) & 31, (br >> 16) & 31
+        if rt not in (a, b):
+            return None
+        address = (self._reg_read(self.gpr_map[rs]) + ((lw & 0xFFFF) ^ 0x8000) - 0x8000) & 0xFFFFFFFF
+        try:
+            offset = self._mmio_offset(address)
+        except ValueError:
+            return None
+        if address & 3 or offset not in self._MAILBOXES or not self._mailbox_peer():
+            return None
+        other = b if a == rt else a
+        value = int.from_bytes(self.peek(address, 4), 'little')
+        x = self._reg_read(self.gpr_map[other]) if other else 0
+        return address if (value == x) == ((br >> 26) == 4) else None
+
+    def _poll_until(self, max_vtime):
+        """The emulation time a mailbox poll can skip to: with interrupts
+        enabled as an idle loop's (_idle_until), else the end of the turn
+        (batch_timeout_us on, max_vtime, the budget); None in an exception
+        level or with nothing to skip."""
+        if (self.cp0_status & 0x7) == 0x1:
+            return self._idle_until(max_vtime)
+        if self.cp0_status & 0x6:
+            return None
+        now = self._vtime()
+        until = now + self.batch_timeout_us / 1e6
+        if max_vtime is not None:
+            until = min(until, max_vtime)
+        budget = self._budget()
+        if budget is not None:
+            until = min(until, now + budget / self._insn_rate)
+        return until if until > now else None
+
+    def _poll_start(self, pc):
+        """The start (its load) of the mailbox poll whose load or branch is at
+        pc, while it holds; its code hook is installed then.  None otherwise."""
+        if not self.poll_skip or not self._mailbox_peer():
+            return None
+        for start in (pc, pc - 4):
+            if self._poll_loop(start) is not None:
+                if start not in self._poll_loops:
+                    self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
+                                                               begin=start, end=start)
+                    self._tb_flush_needed = True
+                return start
+        return None
+
+    def _skip_poll(self, pc, max_vtime):
+        """Fast mode, between slices: a mailbox poll's spin skipped as idle
+        time (see poll_skip).  Returns whether the time moved."""
+        if self._poll_start(pc) is None:
+            return False
+        until = self._poll_until(max_vtime)
+        if until is None:
+            return False
+        skipped = until - self._vtime()
+        self.poll_skipped += skipped
+        self._advance_time(skipped)
+        return True
+
+    def _hook_poll_loop(self, uc, address, size, user_data):
+        """A slice reached a mailbox poll (_skip_poll): end it there while the
+        poll holds and the time can move on."""
+        if self._code_hook_h is None and self._stop_reason is None and self._poll_loop(address) is not None \
+                and self._poll_until(self._run_max_vtime) is not None:
+            self._stop_reason = 'poll'
+            self._orig_emu_stop()
+
     def _advance_time(self, seconds):
         """Between slices: move the emulation time on, and the estimated
         instruction count with it (at most to the budget); no CP0 rescan is
@@ -4175,8 +4275,15 @@ class AliMipsSimulator:
                 # (fast mode: all of them; exact mode: MIPS16 branch self-loops).
                 if self.busy_pending > 1e-9 and not full and self._skip_busy(max_vtime):
                     continue
+                if not full and self.poll_skip:
+                    # (a slice that the tick ended in a mailbox poll: its hook now,
+                    # so that the poll is caught when the handler returns into it)
+                    self._poll_start(cur_pc)
+                    if self._tb_flush_needed:
+                        self._flush_tb()
                 cur_pc = self._take_interrupt_at_boundary(cur_pc)
-                if self.idle_skip and not full and self._skip_idle(cur_pc, max_vtime):
+                if self.idle_skip and not full and (self._skip_idle(cur_pc, max_vtime) or
+                                                    self._skip_poll(cur_pc, max_vtime)):
                     continue
 
                 if full:
