@@ -124,7 +124,7 @@ class M3602(ChipFamily):
         # the video engine's completion and the HD and SD video outputs' field interrupts: a boot
         # logo gets decoded and shown (video_m36.py); on the M3606 the SEE drives them
         from video_m36 import DEO_FIELD_BIT, DEO_INT, DEO_LINE, VideoEngine, VideoOutput
-        self.video_engine = VideoEngine(sim)
+        self.video_engine = VideoEngine(sim, reset=(0x80, 0x02))    # (0xB8000080 bit 1 resets it)
         self.video_output = VideoOutput(sim)
         self.sd_output = VideoOutput(sim, DEO_INT, DEO_LINE, DEO_FIELD_BIT)
         self.core_devices = (self.dma, self.video_engine, self.video_output, self.sd_output)

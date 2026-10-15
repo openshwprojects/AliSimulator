@@ -68,7 +68,13 @@ M3503).
   SEE runs those drivers -- the models are wired onto the SEE core and
   interrupt the core whose controller has the line enabled --, draw theirs
   too (`run_dump_urz0086_capture_screen.py`), and the S60 shows its "No
-  Signal!" message (`run_dump_s60_capture_screen.py`). The M3606's bootloader starts its SEE co-processor --
+  Signal!" message (`run_dump_s60_capture_screen.py`). At a channel change
+  the S60's decoder driver resets the video engine (bit 1 of 0xB8000080)
+  and then reads +0x228, on the M36xx the VLD's bit offset, as a status
+  word: any of bits 8..25 set sends it to its fatal path, a reboot into the
+  bootloader. The model left the last picture's offset there, and the box
+  started over a few seconds after a key in 7 of 11 runs of its regression;
+  the engine's reset now puts it back to 0. The M3606's bootloader starts its SEE co-processor --
   the second MIPS core of ALi's dual-CPU chips, which runs the audio / video
   decoders' and the display's drivers -- and waits for it: `chips/see.py`
   runs the SEE's boot code for that handshake on a light Unicorn instance
@@ -984,7 +990,8 @@ Mechanism tests that need no firmware dump: `test_isa_mode_tracking.py`
 `test_flash_window_isolation.py` (SPI responses vs flash contents, page program,
 sector erase), `test_cp0_count_emulation.py`, `test_cp0_timer_interrupt.py`
 (timer latch, masking, MIPS16 EPC, late Compare, software interrupts),
-`test_device_models.py` (PMU, VCAP, graphics engine command -> interrupt ->
+`test_device_models.py` (PMU, VCAP, the video engine's status bits and the
+M36xx's engine reset, graphics engine command -> interrupt ->
 acknowledge, masked line, partial acknowledge, controller write-back, command
 stores replayed after asynchronous stops, add_mmio_hook, peek / poke),
 `test_rtc_m36.py` (the real-time clock's register layout, its calendar

@@ -18,7 +18,13 @@ anything else and wait until their decoder reports its first picture shown.
     the VLD's offset on at the next start code that is not a slice's (00 00
     01 01..AF) within the bits it was given -- the driver takes its buffer's
     read pointer from there.  No picture is decoded: the frame buffers keep
-    what they had.
+    what they had.  The chip's device reset (on the M36xx bit 1 of
+    0xB8000080, `reset`) puts the VLD's offset back to 0 and drops the
+    status: the S60's driver (0x802BF284) pulses it at a channel change and
+    then reads +0x228 as a status word, taking its fatal path -- a reboot
+    into the bootloader -- if any of bits 8..25 is set; a bit offset left
+    from the last picture had them set, and the box started over a few
+    seconds after a key in 7 of 11 runs of its screen regression.
   * Video output's interrupt (VPO_S3602F_HD, 0xB8006004): enables in bits
     0..5, status in bits 8..13 (write 1 to clear), the field the output is
     in at bit 18; interrupt-controller line 2 while an enabled status bit is
@@ -101,15 +107,19 @@ class _Device:
 
 
 class VideoEngine(_Device):
-    def __init__(self, sim, line=VE_LINE):
+    def __init__(self, sim, line=VE_LINE, reset=None):
         self.line = line                # (the M3329's DECV_M3327 is the same engine on line 9)
+        self.reset = reset              # (device-reset register offset, the engine's bit) or None
         self.status = 0
         self.pictures = 0
+        self.resets = 0
         super().__init__(sim)
 
     def wire(self, core):
         core._mmio_on('w', self._write_start, 0x4214, 0x4217)
         core._mmio_on('w', self._write_status, 0x4218, 0x421B)
+        if self.reset is not None:
+            core._mmio_on('w', self._write_reset, self.reset[0], self.reset[0] + 3)
 
     def _rd(self, offset):
         return int.from_bytes(self.sim.peek(VE + offset, 4), 'little')
@@ -155,6 +165,18 @@ class VideoEngine(_Device):
         if not self.status:
             self._set_line(self.line, False)
         return (self.status & mask) >> shift
+
+    def _write_reset(self, uc, access, address, size, value, user_data):
+        """The chip's device-reset register: the engine's bit set puts it in
+        reset -- its VLD bit offset back to 0, no status pending."""
+        if (value << (address & 3) * 8) & self.reset[1]:
+            self.resets += 1
+            self._wr(VE_VLD_BITS, 0)
+            if self.status:
+                self.status = 0
+                self._wr(VE_STATUS, 0)
+                self._set_line(self.line, False)
+        return None
 
 
 class VideoOutput(_Device):

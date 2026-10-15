@@ -14,6 +14,11 @@ fast timed slices):
               bits 8-25 read clear whatever was written (the decoder driver
               reboots the box if they are set after a VE reset), other bits
               and the neighbouring words keep their values
+  ve_reset  - the M36xx's video engine (M3602 family): +0x228 is its VLD bit
+              offset (written values read back), and the device reset's bit 1
+              (0xB8000080), which the S60's decoder driver pulses at a channel
+              change before it checks +0x228, puts it back to 0 -- another
+              device's bit does not
   ge        - graphics engine 0xB800A000: a command written to +4 completes
               at once; its status bit (+8, write 1 to clear) drives
               interrupt-controller line 4 (0xB8000030 bit 4) and IP3.  The
@@ -94,6 +99,26 @@ def scenario_ve(mode, fails):
     check(done(sim) and t3 == 0x18, f"+0x28: 0x318 written reads back with the status bits clear (0x{t3:X})", fails)
     check(t4 == 0x318, f"the neighbouring word +0x2C keeps what was written (0x{t4:X})", fails)
     check(t5 == 0x01234567 & ~0x037FFF00, f"+0x88: only bits 8-25 read clear (0x{t5:X})", fails)
+
+
+def scenario_ve_reset(mode, fails):
+    """The M36xx's video engine (M3602 family, video_m36.py): +0x228 is the
+    VLD's bit offset there -- written values read back --, and the device
+    reset's bit 1 (0xB8000080), pulsed as the S60's decoder driver does at a
+    channel change, puts it back to 0, which that driver then checks."""
+    from chips.m3602 import M3602
+    main = li(T1, 0xB8004228) + li(T2, 0x00012318) + [sw(T2, 0, T1), lw(S6, 0, T1)] + li(T3, 0xB8000080) + [
+        addiu(T4, ZERO, 4), sb(T4, 0, T3), sb(ZERO, 0, T3), lw(S4, 0, T1),     # another device's bit
+        addiu(T4, ZERO, 2), sb(T4, 0, T3), sb(ZERO, 0, T3), lw(S7, 0, T1),     # the engine's
+        addiu(S0, ZERO, 1), beq(ZERO, ZERO, -1), NOP]
+    sim = make_sim(mode, main, [ERET, NOP])
+    sim._switch_family(M3602)
+    run_until(sim, mode, 100, done)
+    s6, s4, s7 = (reg(sim, r) for r in (UC_MIPS_REG_S6, UC_MIPS_REG_S4, UC_MIPS_REG_S7))
+    check(done(sim) and s6 == 0x12318, f"+0x228: the bit offset written reads back (0x{s6:X})", fails)
+    check(s4 == 0x12318, f"another device's reset bit leaves it (0x{s4:X})", fails)
+    check(s7 == 0 and sim.chip.video_engine.resets == 1,
+          f"the engine's reset puts it back to 0 (0x{s7:X}, {sim.chip.video_engine.resets} reset)", fails)
 
 
 def ge_handler():
@@ -268,8 +293,8 @@ def scenario_observers(fails):
           "poke of the physical THR stores without printing a character", fails)
 
 
-SCENARIOS = [scenario_pmu, scenario_vcap, scenario_ve, scenario_ge, scenario_ge_masked, scenario_ge_writeback,
-             scenario_ge_partial_ack]
+SCENARIOS = [scenario_pmu, scenario_vcap, scenario_ve, scenario_ve_reset, scenario_ge, scenario_ge_masked,
+             scenario_ge_writeback, scenario_ge_partial_ack]
 
 
 def main():
