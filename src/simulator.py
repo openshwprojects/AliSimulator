@@ -304,6 +304,13 @@ class AliMipsSimulator:
         self.busy_pending = 0.0              # emulation time still owed for work done in Python
         self._lzma_hooks = {}                # LzmaDecode() entry -> hook handle (_hook_lzma)
         self.lzma_decodes = []               # (entry, input, output address, output size) per decode
+        self._delay_hooks = {}               # the RTOS's delay() entry -> its hooks (_hook_delay, _hook_delay_loop)
+        self._delay_routines = {}            # ... -> (its code, the clock's gp offset, its get_count())
+        self.delay_calls = 0                 # delay() calls returned from at their entry
+        self.delay_jumps = 0                 # time moves in their loops (longer waits)
+        self.delay_skipped = 0.0             # the emulation time both moved on (seconds)
+        self._slice_jumped = 0.0             # emulation time those moved on since the slice's deadline was armed
+        self._slice_delayed = 0.0            # ... and in the last slice
         self._run_max_vtime = None           # run()'s max_vtime, for _hook_idle_loop
         self._rescan_due = False
         self._last_rescan_icount = -1
@@ -1038,6 +1045,8 @@ class AliMipsSimulator:
         self.timer_irq_count = self.ic_irq_count = self.ge_ops = 0
         self.busy_pending = 0.0
         self.lzma_decodes = []
+        self.delay_calls = self.delay_jumps = 0
+        self.delay_skipped = 0.0
         self._last_eret_vt = -1e9
         self._dev_replays = {}
         self.visit_counts = {}
@@ -3341,6 +3350,7 @@ class AliMipsSimulator:
                 sites |= {seg + off for off in found}
             if not full and (start >> 29) in (4, 5):                # (a chunk's first execution, new code)
                 self._find_lzma_decoders(ram, phys, (0x80000000, 0xA0000000))
+                self._find_delay_routines(ram, phys, (0x80000000, 0xA0000000))
         self._add_cp0_sites(sites)
         if full:
             self._update_short_block_hook()
@@ -3544,6 +3554,7 @@ class AliMipsSimulator:
         first hooked CP0 instruction after that (_hook_cp0_site), or by the
         asynchronous stopper async_stop_margin_us later."""
         self._slice_deadline = time.perf_counter() + seconds
+        self._slice_jumped = 0.0
         if self._slice_uses_stopper:
             exl = bool(self.cp0_status & 0x2)
             self._slice_armed_exl = exl
@@ -3580,6 +3591,7 @@ class AliMipsSimulator:
         self._slice_armed_end = self._slice_planned_end
         self._slice_deadline = None
         self._stop_reason = None
+        delayed = self.delay_skipped
         try:
             if stopper is not None:
                 self._arm_deadline(slice_us / 1e6)
@@ -3614,6 +3626,7 @@ class AliMipsSimulator:
         finally:
             self._slice_cap_end = None
             self._slice_deadline = None
+            self._slice_delayed = self.delay_skipped - delayed
         return self._vtime() - v0
 
     # A core whose program waits for an interrupt in a branch-to-self (the RTOS's
@@ -3841,6 +3854,136 @@ class AliMipsSimulator:
         self.log(f"[LZMA] LzmaDecode at 0x{address:08X} (from 0x{ra:08X}): 0x{in_addr:08X} -> 0x{out_addr:08X}, "
                  f"{len(out)} bytes decoded in Python (lc {lc}, lp {lp}, pb {pb})")
 
+    # The TDS RTOS's microsecond delay -- delay(us): start = get_count(); wait
+    # until get_count() - start >= (us & 0xFFFF) * (cpu_clock * 0x431BDE83 >>
+    # 51), Count ticks per microsecond from the CPU clock variable at gp +
+    # offset -- polls get_count() (mfc0 v0, Count; jr ra): two hooked MFC0 Count
+    # or more per call, ~25 us of host time, for a wait of a few microseconds.
+    # The drivers' polling loops call delay(1) hundreds of thousands of times
+    # (dump_maciej: 327,000 times in its first 150 M instructions, the S60
+    # 436,000), and a few hundred calls wait milliseconds (1.6 s of the 118 s
+    # of emulation time either took).  Found by its 24 words (the two calls'
+    # target and the gp offset masked: _DELAY_SIG_RE) in each RAM chunk scan,
+    # it gets two hooks.  At its entry (_hook_delay) the wait, computed as the
+    # routine does, is moved on in emulation time inside the hook -- the caller
+    # goes on after it as after the loop --, v0 / v1 are set as the loop leaves
+    # them and the call returns to $ra, if the wait ends before the running
+    # slice does (the next tick, run()'s limits).  Otherwise the routine runs,
+    # and at its loop's get_count() call (_hook_delay_loop) the time moves on
+    # to the end of the slice, which ends there for run() to take the tick --
+    # inside the wait, as on the hardware --, and then to the end of the wait,
+    # where get_count() ends the loop.  Outside a timed slice (a counted one,
+    # emu_start() called directly) only waits up to delay_hle_max_s are
+    # skipped; none in exact mode or over a breakpoint.
+    delay_hle = True
+    delay_hle_max_s = 200e-6
+    _DELAY_LOOP = 56                    # (the loop's get_count() call)
+    _DELAY_SIG_RE = re.compile(
+        re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + rb"[\x00-\xff]{3}[\x0c-\x0f]" +
+        re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
+        re.escape(bytes.fromhex("1b43023c" "83de4234" "19006200" "10180000" "c21c0300" "02800372")) +
+        rb"[\x00-\xff]{3}[\x0c-\x0f]" +
+        re.escape(bytes.fromhex("00000000" "23105100" "2b105000" "fbff4014" "1800bf8f" "1400b18f" "1000b08f"
+                                "0800e003" "2000bd27")))
+    _GET_COUNT = bytes.fromhex("00480240" + "00000000" * 5 + "0800e003" "00000000")   # mfc0 v0, Count; ...; jr ra
+
+    def _find_delay_routines(self, data, base, views):
+        """Hook the RTOS's delay() wherever data -- code at physical offset `base`
+        -- holds it (calling a get_count()), at that offset in each view."""
+        if not self.delay_hle:
+            return
+        data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
+        for m in self._DELAY_SIG_RE.finditer(data):
+            call = data[m.start() + 16:m.start() + 20]
+            if m.start() % 4 or data[m.start() + self._DELAY_LOOP:m.start() + self._DELAY_LOOP + 4] != call:
+                continue                            # (both calls go to the same get_count())
+            gp_off = int.from_bytes(m.group(1), 'little', signed=True)
+            for view in views:
+                a = view + base + m.start()
+                target = (a & 0xF0000000) | (int.from_bytes(call, 'little') & 0x03FFFFFF) << 2
+                if self._guest_bytes(target, 32) != self._GET_COUNT:
+                    continue
+                self._delay_routines[a] = (bytes(data[m.start():m.end()]), gp_off, target)
+                if a not in self._delay_hooks:
+                    loop = a + self._DELAY_LOOP
+                    self._delay_hooks[a] = (self.mu.hook_add(UC_HOOK_CODE, self._hook_delay, begin=a, end=a),
+                                            self.mu.hook_add(UC_HOOK_CODE, self._hook_delay_loop, begin=loop, end=loop))
+                    self._tb_flush_needed = True
+
+    def _delay_routine(self, entry):
+        """The delay() found at `entry` if the shortcut may take it now (fast
+        mode, no breakpoint or stop address in it or in its get_count(), the
+        code found there still there), or None."""
+        routine = self._delay_routines.get(entry)
+        if routine is None or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return None
+        code, gp_off, get_count = routine
+        if self.breakpoints or self.stop_instr is not None:
+            stops = set(self.breakpoints) | {self.stop_instr}
+            if any(s is not None and (entry <= s < entry + len(code) or get_count <= s < get_count + 32)
+                   for s in stops):
+                return None
+        if self._guest_bytes(entry, len(code)) != code:
+            return None
+        return routine
+
+    def _delay_jump(self, wait):
+        """Move the emulation time on by `wait` seconds inside a slice."""
+        self._vt_accum += wait
+        self.delay_skipped += wait
+        if self._slice_cap_end is not None and self._slice_armed_end is not None:
+            # The slice's deadlines are host times: the hooked CP0 instructions'
+            # moves with the jump, the stopper's once the jumps add up to 100 us
+            if self._slice_deadline is not None:
+                self._slice_deadline -= wait
+            self._slice_jumped += wait
+            if self._slice_jumped > 100e-6 and self._slice_uses_stopper:
+                self._arm_deadline(max(0.0, self._slice_armed_end - self._vtime()))
+
+    def _hook_delay(self, uc, address, size, user_data):
+        """delay()'s entry: the wait moved on in emulation time and a return to
+        the caller, if it ends within the slice (see delay_hle)."""
+        routine = self._delay_routine(address) if size == 4 else None
+        if routine is None:
+            return
+        code, gp_off, get_count = routine
+        clock = int.from_bytes(self._guest_bytes((self._reg_read(UC_MIPS_REG_GP) + gp_off) & 0xFFFFFFFF, 4), 'little')
+        per_us = ((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF
+        wait = (((self._reg_read(UC_MIPS_REG_A0) & 0xFFFF) * per_us) & 0xFFFFFFFF) / self.count_hz
+        if self._slice_cap_end is not None and self._slice_armed_end is not None:
+            room = self._slice_armed_end - self._vtime()
+        else:
+            room = self.delay_hle_max_s
+        if wait > room:
+            return                                  # (the routine runs: _hook_delay_loop)
+        self._reg_write(self.gpr_map[2], 0)                    # v0: the loop's last sltu
+        self._reg_write(self.gpr_map[3], per_us)               # v1: ticks per microsecond
+        self._reg_write(UC_MIPS_REG_PC, self._reg_read(UC_MIPS_REG_RA))
+        self.delay_calls += 1
+        self._delay_jump(wait)
+
+    def _hook_delay_loop(self, uc, address, size, user_data):
+        """delay()'s loop at its get_count() call -- s0 the Count ticks to
+        wait, s1 the Count it started at --, in a timed slice: the emulation
+        time moved on to the end of the wait (the call then ends the loop), or
+        to the end of the slice, which ends there (see delay_hle)."""
+        routine = self._delay_routine(address - self._DELAY_LOOP) if size == 4 else None
+        if routine is None or self._slice_cap_end is None or self._slice_armed_end is None:
+            return
+        ticks, start = self._reg_read(self.gpr_map[16]), self._reg_read(self.gpr_map[17])
+        waited = (self._cp0_count_now() - start) & 0xFFFFFFFF
+        if waited >= ticks:
+            return
+        wait, room = (ticks - waited) / self.count_hz, self._slice_armed_end - self._vtime()
+        self.delay_jumps += 1
+        if wait <= room:
+            self._delay_jump(wait)
+            return
+        self._delay_jump(max(0.0, room))
+        if self._stop_reason is None:
+            self._stop_reason = 'deadline'          # (run() takes the tick, then the loop goes on)
+        self._orig_emu_stop()
+
     def run(self, max_instructions=None, max_vtime=None):
         """Run until max_instructions (an instruction count; estimated in fast
         mode) or, with max_vtime, until the emulation time (_vtime) reaches
@@ -3917,8 +4060,9 @@ class AliMipsSimulator:
                         dt = self._run_slice(cur_pc, end_addr, None, count=batch)
                         if self._stop_reason is None:
                             executed = batch
-                            if dt > 0 and batch >= 10_000:
-                                self._insn_rate = batch / dt
+                            ran = dt - self._slice_delayed      # (delay() waits: no instructions)
+                            if ran > 0 and batch >= 10_000:
+                                self._insn_rate = batch / ran
                         elif self._stop_reason == 'rescan':
                             executed = 0    # stopped before the first instruction of a new RAM chunk
                         elif self._stop_reason == 'flashhooks':

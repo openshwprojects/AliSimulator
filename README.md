@@ -265,6 +265,27 @@ M3503).
   ends early, output outside the RAM, exact mode, a breakpoint in the decoder
   -- leaves the call to the emulated decoder (`test_lzma_hle.py`). `tv_gui.py`
   sets `lzma_insns_per_byte = 0`: no firmware time for it, a quick boot.
+  **The RTOS's microsecond delay** (`sim.delay_hle`, default on): the TDS
+  RTOS's `delay(us)` polls a `get_count()` (one MFC0 Count) until `us` times
+  the Count ticks per microsecond it derives from the CPU clock variable have
+  passed -- two hooked CP0 instructions or more per call, ~25 us of host time
+  --, and the drivers' polling loops call `delay(1)` hundreds of thousands of
+  times (dump_maciej 327,000 times in its first 150 M instructions, the S60
+  436,000), a few hundred calls waiting milliseconds. Found by its 24 words
+  in each RAM chunk's first-execution scan (`_DELAY_SIG_RE`: the call target
+  and the clock's gp offset masked; both calls must go to a `get_count()`),
+  the routine gets two hooks. At its entry a wait that ends within the
+  running slice (before the next tick, within run()'s limits) is moved on in
+  emulation time inside the hook, and the call returns with v0 / v1 as the
+  routine leaves them; a longer one runs, and at its loop's `get_count()`
+  call the time moves on to the end of the slice -- where run() takes the
+  tick, inside the wait as on the hardware -- and then to the end of the wait.
+  Outside a timed slice only waits up to `delay_hle_max_s` (200 us) are
+  skipped; exact mode, a breakpoint or the stop address in the routine, other
+  code at its entry leave it to run (`test_delay_hle.py`). dump_maciej's
+  screen regression takes 46 s instead of 50 s, and the S60 draws its OSD
+  after 26 s instead of 43 s of wall time (43 s of firmware time instead of
+  51 s: its driver loops' `delay(1)` lasts ~10 us instead of ~25 us).
   Cost per hooked CP0 instruction: ~9-12 us (the binding's reg_read /
   reg_write / mem_read are bypassed: direct `uc_reg_*` calls, code words read
   from the RAM buffer); an MTC0 Status that only disables interrupts or
@@ -1009,6 +1030,14 @@ planted words; MFC0 Status a site only under the forced ERL), the vector page
 scanned again only when it changed, the periodic rescan, CP0 instructions run
 from the flash window, and the direct register access (`mips_asm.py` holds
 the instruction encoders and loader these tests share).
+`test_delay_hle.py` checks the RTOS delay's shortcut on a copy of the routine:
+a short wait returned from at the entry with the routine's registers and its
+Count ticks, a 50 ms one moved on through its loop slice by slice, 1 ms ticks
+on time while short and long waits are called over and over (inside the long
+ones, which still last their length), counted slices, the cases it leaves to
+the routine (exact mode, a breakpoint in its `get_count()`, the stop address in
+its loop, its code changed, `delay_hle` off) and the scan (not a copy whose
+calls go elsewhere or differ, nor a misaligned one).
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn
