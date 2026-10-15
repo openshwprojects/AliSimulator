@@ -21,6 +21,13 @@ another number) or ("wait", seconds) for no key -- the firmware
 goes on by itself for that long --, with the least number of pixels the step
 must change.  Every step's screen goes to the report and the last one is compared
 with <name>_nav.png (also made by --make-expected).
+
+Every wait here -- settle_s, probe_s, the navigation's settling, ("wait", s),
+nav_settle_s -- is in the firmware's own time (the simulator's emulation
+time, sim._vtime()), not the host's: the firmware's banners and timeouts
+follow it, whatever the host's load and however much of it the simulator
+skips (idle loops, the bootloaders' LZMA decoder).  Only boot_limit_s, the
+guard against a stalled or crashed boot, is wall-clock time.
 """
 import os
 import sys
@@ -142,9 +149,10 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                                panel_text=panel.get_display_text() if show else None,
                                tuner=sim.tuner_info())
 
+    fw = sim._vtime                     # the firmware's time (see the module's docstring)
     start = time.time()
-    app_t = drawn_t = None
-    last_probe = 0.0
+    app_t = drawn_t = drawn_fw = None
+    last_probe = -1e9
     last_ops = captured_ops = 0
     frames, prev = 0, None
     panel_texts = []
@@ -163,7 +171,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                 report_artifacts.panel(panel.digits, "front panel at the end", panel.get_display_text())
             raise SimulatorCrash(f"nothing drawn within {boot_limit_s:.0f} s (GE commands: {sim.ge_ops}, "
                                  f"UART: {''.join(uart)[-120:]!r})")
-        if drawn_t is not None and now - drawn_t > settle_s:
+        if drawn_t is not None and fw() - drawn_fw > settle_s:
             break
         try:
             sim.run(max_instructions=sim.instruction_count + slice_instructions)
@@ -179,14 +187,14 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         # times out and clears before its no-signal message, and the
         # Cabletech's wizard keeps redrawing a little, so neither "N commands
         # done" nor "the GE went quiet" alone marks the screen to capture.
-        if drawn_t is None and (sim.ge_ops >= min_ge_ops or not ge) and now - last_probe >= probe_s:
-            last_probe = now
+        if drawn_t is None and (sim.ge_ops >= min_ge_ops or not ge) and fw() - last_probe >= probe_s:
+            last_probe = fw()
             rgb = sim.capture_screen()
             colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
             if colours >= min_colours:
-                drawn_t = time.time()
+                drawn_t, drawn_fw = time.time(), fw()
                 print(f"[{drawn_t - start:6.1f}s] {sim.ge_ops} GE commands: the OSD is visible "
-                      f"({colours} colours), settling {settle_s:.0f} s")
+                      f"({colours} colours, firmware time {drawn_fw:.0f} s), settling {settle_s:.0f} s")
         if sim.ge_ops != last_ops:               # still drawing
             last_ops = sim.ge_ops
             continue
@@ -207,12 +215,23 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
     # a screen that is blank at this moment (a banner that has just cleared, a
     # channel change in progress) is given up to a minute to come back
+    def advance(until):
+        """One run() toward `until` (firmware time); False once the firmware
+        no longer moves on (a stopped CPU), so no wait loops for ever."""
+        before = fw()
+        sim.run(max_instructions=sim.instruction_count + 5_000_000, max_vtime=until)
+        return fw() > before
+
+    def run_for(seconds):
+        """Run the firmware for `seconds` of its own time."""
+        until = fw() + seconds
+        while fw() < until and advance(until):
+            pass
+
     for _ in range(12):
         if colours >= min_colours:
             break
-        run_for_s = time.time()
-        while time.time() - run_for_s < 5:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+        run_for(5)
         rgb = sim.capture_screen(out)
         colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
         if colours >= min_colours:
@@ -265,23 +284,19 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     against_expected(rgb, expected, max_diff_pct, "screen")
 
     # navigation: drive the UI with the remote / the front panel
-    def run_for(seconds):
-        t = time.time()
-        while time.time() - t < seconds:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
-
     def settle(max_s, quiet_s, min_s=0):
-        """Run until the GE has issued no command for quiet_s seconds (at
-        least min_s, at most max_s): a redraw or a banner's timeout takes
-        more wall time the busier the machine is, so a fixed wait captured
-        half-drawn menus and banners that had not gone yet.  Without a GE,
-        until the screen has not changed for quiet_s seconds."""
-        t0 = time.time()
+        """Run until the GE has issued no command for quiet_s seconds of the
+        firmware's time (at least min_s, at most max_s): a redraw or a
+        banner's timeout must be over, a fixed wait captured half-drawn menus
+        and banners that had not gone yet.  Without a GE, until the screen
+        has not changed for quiet_s seconds."""
+        t0 = fw()
         last_ops, last_change = sim.ge_ops, t0
         last_screen = None if ge else sim.capture_screen()
-        while time.time() - t0 < max_s:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
-            now = time.time()
+        while fw() - t0 < max_s:
+            if not advance(t0 + max_s):
+                return False
+            now = fw()
             if not ge:
                 screen = sim.capture_screen()
                 if not np.array_equal(screen, last_screen):
@@ -310,13 +325,12 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         except Exception as e:
             check(False, f"navigation step {i}: cannot press {key!r}: {e}")
             break
-        # wait for the step's own change to appear (up to 2 minutes: on a loaded
-        # machine a key is acted on late, and a firmware that redraws something
-        # small on its own -- a blinking no-signal text -- must not count as the
-        # redraw having started), then for the redraw to finish
-        t = time.time()
-        while time.time() - t < 120:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+        # wait for the step's own change to appear (up to 2 minutes of the
+        # firmware's time; a firmware that redraws something small on its own --
+        # a blinking no-signal text -- must not count as the redraw having
+        # started), then for the redraw to finish
+        t = fw()
+        while fw() - t < 120 and advance(t + 120):
             if (sim.ge_ops - ops >= 2 or not ge) and \
                     int((sim.capture_screen() != previous).any(axis=2).sum()) >= min_px:
                 break
@@ -346,7 +360,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
             if not make_expected and os.path.exists(nav_expected_path):
                 from PIL import Image
                 want = np.array(Image.open(nav_expected_path).convert("RGB"))
-                t0 = time.time()
+                t0 = fw()
                 while True:
                     previous = sim.capture_screen()
                     try:
@@ -354,10 +368,10 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                             break
                     except ValueError:
                         break
-                    if time.time() - t0 >= nav_settle_s:
+                    if fw() - t0 >= nav_settle_s:
                         break
                     run_for(10)
-                print(f"[{time.time() - start:6.1f}s] final screen settled after {time.time() - t0:.0f} s")
+                print(f"[{time.time() - start:6.1f}s] final screen settled after {fw() - t0:.0f} s of firmware time")
             else:
                 run_for(nav_settle_s)
                 previous = sim.capture_screen()

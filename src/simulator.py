@@ -2671,7 +2671,7 @@ class AliMipsSimulator:
                 if resched:
                     self._reschedule_slice() # a stop here takes effect after the branch
                 return False
-            self._reg_write(UC_MIPS_REG_PC, address + 4)
+            self._reg_write(UC_MIPS_REG_PC, address + 4 * self._repeated(address, w))
             if resched:
                 self._reschedule_slice()
             return True
@@ -2683,6 +2683,29 @@ class AliMipsSimulator:
             self._reschedule_slice()
             return True
         return False
+
+    def _repeated(self, address, w):
+        """Fast mode, an MTC0 at address just emulated: how many words the PC
+        moves on -- past up to three NOPs and the same MTC0 again, which writes
+        the same value (the RTOS's interrupt disable writes Status twice, a
+        hazard padding: one hook instead of two), unless a breakpoint or the
+        stop address lies there; else 1."""
+        words = self._ram_words
+        i = (address & 0x1FFFFFFF) >> 2
+        if self._code_hook_h is not None or words is None or (address >> 29) not in (4, 5) \
+                or not 0 < i < len(words) - 4:
+            return 1
+        for k in range(1, 5):
+            x = words[i + k]
+            if x == w:
+                end = address + 4 * k
+                if (self.stop_instr is not None and address < self.stop_instr <= end) or \
+                        any(address < b <= end for b in self.breakpoints):
+                    return 1
+                return k + 1
+            if x:
+                return 1
+        return 1
 
     def _cp0_read(self, rd, sel):
         """What MFC0 of CP0 register rd, sel reads (Count, Compare, Status,

@@ -14,7 +14,7 @@ redraw goes through the GE model (see ir_remote.py, ge_m36f.py).
   DOWN  -> the aspect-ratio highlight moves
   OK    -> step 3, the channel search, starts: its progress screen is drawn
            and then keeps changing (the GE never goes quiet while it scans),
-           which the last check verifies 40 s later
+           which the last check verifies 40 s (of the firmware's time) later
 
 Usage: python run_dump_maciej_remote.py [out_dir]
 Exit code 0 if every step changed the screen as expected.
@@ -82,9 +82,14 @@ def run():
         return False
 
     def run_for(seconds):
-        t = time.time()
-        while time.time() - t < seconds:
-            sim.run(max_instructions=sim.instruction_count + 5_000_000)
+        """Run the firmware for `seconds` of its own time (emulation time: the
+        simulator skips the time it waits idle), or until it no longer moves on."""
+        until = sim._vtime() + seconds
+        while sim._vtime() < until:
+            before = sim._vtime()
+            sim.run(max_instructions=sim.instruction_count + 5_000_000, max_vtime=until)
+            if sim._vtime() <= before:
+                break
 
     def snap(name, caption):
         """The screen now; saved and attached to the report (with the front

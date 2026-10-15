@@ -268,7 +268,11 @@ M3503).
   Cost per hooked CP0 instruction: ~9-12 us (the binding's reg_read /
   reg_write / mem_read are bypassed: direct `uc_reg_*` calls, code words read
   from the RAM buffer); an MTC0 Status that only disables interrupts or
-  rewrites the value does not re-plan the slice. Periodic CP0-site rescans
+  rewrites the value does not re-plan the slice, and the same MTC0 again after
+  nothing but NOPs (the RTOS's interrupt disable writes Status twice) is
+  passed over by the first one's hook. (Interpreting the ALU code between
+  close CP0 instructions in Python, to take them in one hook, cost more than
+  the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
   read the RAM buffer in place (numpy over the words' top bytes), and the
   tick's vector page is rescanned only when it changed.
 * **Exact mode** - `sim.hook_every_instruction = True` (the GUI sets this)
@@ -789,7 +793,11 @@ commands complete through the GE interrupt without timeouts.
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
 the display layer and compare it pixel for pixel with the expected screen, a PNG
 kept in `tests/expected/` (`screen_regression.py` is the shared body; an
-expected screen is remade with `--make-expected`; `gma_capture.py` composites the GMA layers' regions --
+expected screen is remade with `--make-expected`; its waits -- the settling
+after the OSD appears and after each navigation step, `("wait", s)` -- are in
+the firmware's own time, `sim._vtime()`, so the firmware's banners and timeouts
+come out the same whatever the host's load and however much time the simulator
+skips; `gma_capture.py` composites the GMA layers' regions --
 and the layers of the newer display engine at 0xB8006900 / 6B00 the T750i's
 drivers use, which no CPU store sets: the drivers hand the display engine
 register lists in RAM (0xB8006080 / 90 / A0 / B0: the list, +4 load enable),
@@ -955,6 +963,8 @@ modes, the M3329 driver's probe -- the reset in a branch delay slot -- and an
 SPI flash's store in a delay slot, each instruction running once.
 `test_otp_m3821.py` reads and burns the M3821's OTP model the way the
 firmware's driver does, on the T750i's blank OTP.
+`test_cp0_repeat.py` checks that skip of a repeated MTC0 (the same state as
+in exact mode, the second hook skipped, a breakpoint in between honoured).
 `test_lzma_hle.py` checks the bootloaders' LZMA decoder run in Python: the
 routine in the flash images, dump_maciej's main code decoded to what its
 stream holds with its bootloader's "success!" at the emulated decoder's
