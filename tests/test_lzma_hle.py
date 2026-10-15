@@ -8,6 +8,17 @@ simulator finds the routine by its first 43 instructions (_LZMA_DECODE_SIG),
 decodes the stream with Python's lzma module at its entry and returns to the
 caller, charging lzma_insns_per_byte of the instruction count for it.
 
+  hook       - the hook itself, on a synthetic call (the routine's bytes at an
+               entry, a raw LZMA1 stream, the arguments in a0..a3 and on the
+               stack): the output written, *outSizeProcessed, v0 = 0, back at
+               $ra, the time charged; a stream with an end marker shorter than
+               outSize; no time with lzma_insns_per_byte = 0 -- and every
+               fallback leaving the call to the emulated decoder untouched: a
+               stream the module rejects, the input cut short, a probability
+               buffer too small, output outside the RAM, lzma_hle off, exact
+               mode, a breakpoint or the stop address in the decoder, other
+               code at the entry
+  scan       - a RAM chunk's scan hooks the routine in both views (KSEG0, KSEG1)
   signature  - the routine is in the flash images of the families it runs
   decode     - dump_maciej: one decode, 0x6F37C0 bytes to 0x80000200, equal
                to the image's LZMA stream decoded on its own (its 13-byte
@@ -55,6 +66,86 @@ def boot(dump, until=None, max_m=40.0, **settings):
         sim.run(max_instructions=sim.instruction_count + 1_000_000)
     return sim, "".join(uart), seen[0]
 
+
+ENTRY, SRC, DST, DONE, BUF, SP, RA = 0x80200000, 0x80300000, 0x80400000, 0x80500000, 0x80600000, 0x80700000, \
+    0x80123450
+DATA = bytes(range(256)) * 64 + b"AliSimulator " * 500
+
+
+def call(data=DATA, stream=None, lc=0, lp=2, pb=2, buf_size=None, in_size=None, out=DST, out_size=None, **settings):
+    """A simulator stopped at the entry of a call LzmaDecode(BUF, buf_size, lc,
+    lp, pb, SRC, in_size, out, out_size, DONE), the routine's bytes there; then
+    the hook, as Unicorn would run it.  Returns the simulator."""
+    import struct
+    from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_RA, \
+        UC_MIPS_REG_SP
+    sim = AliMipsSimulator(log_handler=lambda m: None)
+    for k, v in settings.items():
+        setattr(sim, k, v)
+    if stream is None:
+        stream = lzma.compress(data, format=lzma.FORMAT_RAW, filters=[
+            {"id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": 1 << 16}])
+    sim.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_SIG)
+    sim.mu.mem_write(SRC, stream)
+    for reg, v in ((UC_MIPS_REG_A0, BUF), (UC_MIPS_REG_A1, buf_size or (0x736 + (0x300 << (lc + lp))) * 2),
+                   (UC_MIPS_REG_A2, lc), (UC_MIPS_REG_A3, lp), (UC_MIPS_REG_SP, SP), (UC_MIPS_REG_RA, RA),
+                   (UC_MIPS_REG_PC, ENTRY)):
+        sim.mu.reg_write(reg, v)
+    sim.mu.mem_write(SP + 16, struct.pack("<6I", pb, SRC, in_size or len(stream), out,
+                                          len(data) if out_size is None else out_size, DONE))
+    if settings.get("hook_every_instruction"):
+        sim._sync_hooks()                       # (the exact per-instruction hook installed)
+    sim._hook_lzma(sim.mu, ENTRY, 4, None)
+    return sim
+
+
+def applied(sim, n=len(DATA)):
+    """Whether the hook decoded the call: the output, *outSizeProcessed, v0, the PC."""
+    from unicorn.mips_const import UC_MIPS_REG_V0
+    return (bytes(sim.mu.mem_read(DST, n)) == DATA[:n] and int.from_bytes(sim.mu.mem_read(DONE, 4), "little") == n
+            and sim.mu.reg_read(UC_MIPS_REG_V0) == 0 and sim.mu.reg_read(UC_MIPS_REG_PC) == RA
+            and sim.lzma_decodes == [(ENTRY, SRC, DST, n)])
+
+
+def untouched(sim):
+    return (sim.mu.reg_read(UC_MIPS_REG_PC) == ENTRY and not sim.lzma_decodes and sim.busy_pending == 0
+            and not any(sim.mu.mem_read(DST, 64)))
+
+
+print("--- hook: a synthetic LzmaDecode call")
+sim = call()
+check(applied(sim) and abs(sim.busy_pending - len(DATA) * sim.lzma_insns_per_byte / sim._insn_rate) < 1e-9,
+      f"decoded {len(DATA)} bytes, back at $ra, {sim.busy_pending * sim._insn_rate:.0f} instructions charged")
+stream = lzma.compress(DATA[:5000], format=lzma.FORMAT_RAW,
+                       filters=[{"id": lzma.FILTER_LZMA1, "lc": 0, "lp": 2, "pb": 2, "dict_size": 1 << 16}])
+sim = call(stream=stream, out_size=len(DATA))
+check(applied(sim, 5000), "a stream whose end marker comes before outSize: *outSizeProcessed = 5000")
+sim = call(lzma_insns_per_byte=0)
+check(applied(sim) and sim.busy_pending == 0, "lzma_insns_per_byte = 0: decoded, no time charged")
+bad = bytearray(lzma.compress(DATA, format=lzma.FORMAT_RAW, filters=[
+    {"id": lzma.FILTER_LZMA1, "lc": 0, "lp": 2, "pb": 2, "dict_size": 1 << 16}]))
+bad[0] = 0xFF                                   # (a range coder's first byte is 0)
+cases = (("a stream the module rejects", dict(stream=bytes(bad))),
+         ("the input cut short", dict(in_size=200)),
+         ("a probability buffer too small", dict(buf_size=100)),
+         ("output outside the RAM", dict(out=0x8F000000)),
+         ("lzma_hle off", dict(lzma_hle=False)),
+         ("exact mode", dict(hook_every_instruction=True)),
+         ("a breakpoint in the decoder", dict(breakpoints={ENTRY + 0x200})),
+         ("the stop address in the decoder", dict(stop_instr=ENTRY - 0x300)))
+for what, kw in cases:
+    check(untouched(call(**kw)), f"{what}: left to the emulated decoder")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+sim.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_SIG[:8] + b"\0\0\0\0" + AliMipsSimulator._LZMA_DECODE_SIG[12:])
+sim.mu.reg_write(UC_MIPS_REG_PC, ENTRY)
+sim._hook_lzma(sim.mu, ENTRY, 4, None)
+check(untouched(sim), "other code at the entry: left alone")
+
+print("--- scan: the routine in a RAM chunk")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+sim.mu.mem_write(0x80A00100, AliMipsSimulator._LZMA_DECODE_SIG)
+sim._rescan_cp0_sites([(0x80A00000, 0x100000)])
+check({0x80A00100, 0xA0A00100} <= set(sim._lzma_hooks), f"hooked at {[hex(a) for a in sim._lzma_hooks]}")
 
 print("--- signature: LzmaDecode in the flash images")
 for name in ("dump_maciej.bin", "dump.bin", "Ferguson_T750i_V1.20B2_18092019.abs", "URZ0086_V1.2.1.abs",

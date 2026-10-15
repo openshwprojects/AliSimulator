@@ -984,10 +984,31 @@ SPI flash's store in a delay slot, each instruction running once.
 firmware's driver does, on the T750i's blank OTP.
 `test_cp0_repeat.py` checks that skip of a repeated MTC0 (the same state as
 in exact mode, the second hook skipped, a breakpoint in between honoured).
-`test_lzma_hle.py` checks the bootloaders' LZMA decoder run in Python: the
-routine in the flash images, dump_maciej's main code decoded to what its
-stream holds with its bootloader's "success!" at the emulated decoder's
-instruction count, and both switches (no time charged, the emulated decoder).
+`test_lzma_hle.py` checks the bootloaders' LZMA decoder run in Python: the hook
+on synthetic calls (the output, `*outSizeProcessed`, the return, the time
+charged, an end marker before `outSize`) and every case it leaves to the
+emulated decoder (a stream the module rejects, input cut short, a buffer too
+small, output outside the RAM, exact mode, a breakpoint or the stop address
+in the decoder, other code at the entry), the routine in the flash images and
+a RAM chunk's scan, dump_maciej's main code decoded to what its stream holds
+with its bootloader's "success!" at the emulated decoder's instruction count,
+and both switches (no time charged, the emulated decoder).
+`test_idle_skip.py` checks idle skipping on a ticking program waiting in
+`b .`: the ticks at the programmed rate of emulation time with most of it
+skipped and the instruction count following, the loop's hook, `idle_skip =
+False`, budgets and `max_vtime` met exactly, no skip with interrupts disabled,
+a UART byte arriving at its arming point, and the busy time charged for
+Python's work (no interrupt while it is paid, the latched tick after it).
+`test_native_status.py` checks the native Status against the forced ERL and
+exact mode: kuseg stores and device reads with ERL clear, MFC0 Status native,
+a tick that came due with interrupts off taken right after the enabling MTC0
+Status, the same results in all three, a native ERET redone in both fast
+modes, a Status written behind the hooks' back taken over.
+`test_cp0_sites.py` checks the CP0-site scan (numpy and regex paths agree on
+planted words; MFC0 Status a site only under the forced ERL), the vector page
+scanned again only when it changed, the periodic rescan, CP0 instructions run
+from the flash window, and the direct register access (`mips_asm.py` holds
+the instruction encoders and loader these tests share).
 `test_chip_families.py` and `test_family_switch.py` read firmware images
 without running them: the family each image is recognised as, and one
 simulator loading an M3821, an M3801, an M3503 and an M3602 image in turn
