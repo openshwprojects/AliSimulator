@@ -853,10 +853,11 @@ then every 1000th.
 Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
 `python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
 or all of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
---slow` (100 tests, about 52 minutes with `--jobs 2`; 4.2 hours before the speed
-work of 2026-10-15: idle skipping, cheaper CP0 hooks, the bootloaders' LZMA
-decoder in Python, the native Status, waits in the firmware's time, the RTOS's
-delay() and interrupt disable without hooks) adds
+--slow` (102 tests, about 45 minutes with `--jobs 2`, 89 minutes of test time;
+4.2 hours before the speed work of 2026-10-15/16: idle skipping, cheaper CP0
+hooks, the bootloaders' LZMA decoder in Python, the native Status, waits in
+the firmware's time, the RTOS's delay() and interrupt disable without hooks,
+mailbox polls skipped, the GE model's fast paths) adds
 `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 20 s; the bootloader's
 unoptimised LZMA decompression, which took a minute of that, runs in Python
