@@ -16,12 +16,15 @@ M3503).
   stopper and clocks) and the device models (`ge_m36f.py`, `ge_m3602.py`, `gma_capture.py`,
   `crypto_engine.py`, `parallel_flash.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
-  `python src/tv_gui.py <dump>` (the TV: OSD, panel, remote) and
-  `python src/gui_simulator.py` (the debugger).
+  `python src/tv_gui.py [<dump>] [--family <name>] [--json <sidecar>]` (the TV: OSD,
+  panel, remote, with a toolbar to pick any of the repo's 100 dumps or browse a file,
+  override the chip family, sidecar JSON and IR coding, and toggle live signal + TS) and
+  `python src/gui_simulator.py [<dump>] [--family <name>] [--json <sidecar>] [--fast]`
+  (the debugger, with the same target selectors and a Fast Mode toggle).
 * `src/chips/` -- the chip families, one module each (`m3602.py`, `m3801.py`,
-  `m3821.py`): what differs between ALi generations (the chip ID, how the CPU
+  `m3821.py`, `m3503.py`, `c3505.py`, `m3329.py`): what differs between ALi generations (the chip ID, how the CPU
   gets from reset to the flash's bootloader, extra memory, that generation's
-  devices). `loadFile()` picks the family from the image's chunk headers; the
+  devices). `loadFile()` picks the family from the image's chunk headers (or takes an explicit override); the
   M3801 is the default and everything `simulator.py` models by itself. A
   simulator starts as the M3801, and switching to another family drops the
   previous one's devices: the register handlers go back to the simulator's
@@ -30,8 +33,9 @@ M3503).
   M36xx generation before it (M3601E / M3602 / M3606: the Cabletech URZ0083
   and URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501 and Ferguson T50
   update images, recognised by their HDCPKey chunk's "Demo s3602", and the
-  Opticum S60 (M3601S) and X110TS (M3606) satellite updates, recognised by
-  the chip named in their main-code chunk's version) boots the
+  Opticum S50 / S60, Openbox S16 (M3601S) and Opticum X110p / X110TS, Amiko
+  Mini HD, Edision Miniplus Highspeed and Optimuss Underline (M3606) satellite
+  updates, recognised by the chip named in their main-code chunk's version) boots the
   same way and finds its first peripherals where the M3801's are, but its
   firmware wants an M36xx chip ID -- with the M3801's 0x3811 the
   applications start over through the bootloader. The family's own is
@@ -67,8 +71,10 @@ M3503).
   `run_dump_urz0083_app_runs.py`); the M3606 ones (URZ0086, KM0186), whose
   SEE runs those drivers -- the models are wired onto the SEE core and
   interrupt the core whose controller has the line enabled --, draw theirs
-  too (`run_dump_urz0086_capture_screen.py`), and the S60 shows its "No
-  Signal!" message (`run_dump_s60_capture_screen.py`). At a channel change
+  too (`run_dump_urz0086_capture_screen.py`), the S50 and S60 show their "No
+  Signal!" message (`run_dump_s50_capture_screen.py`,
+  `run_dump_s60_capture_screen.py`), and the Openbox S16 tunes its first
+  channel on its 4-digit panel (`run_dump_s16_capture_screen.py`). At a channel change
   the S60's decoder driver resets the video engine (bit 1 of 0xB8000080)
   and then reads +0x228, on the M36xx the VLD's bit offset, as a status
   word: any of bits 8..25 set sends it to its fatal path, a reboot into the
@@ -87,7 +93,9 @@ M3503).
   use (`run_dump_urz0086_see_start.py`: the URZ0086's application attaches
   its drivers through ~70 calls the SEE answers; the X110TS's too,
   `run_dump_x110ts_see_start.py`, and its OSD shows its channel banner and
-  then its "No Signal!" box, `run_dump_x110ts_capture_screen.py` -- the
+  then its "No Signal!" box, `run_dump_x110ts_capture_screen.py`; the
+  single-tuner X110p's too once its Airoha AV2011 tuner answers on the I2C
+  bus, `run_dump_x110p_capture_screen.py` -- the
   chip ID 0x3603 is the SDK's C3603, which reads a product with its DVB-S2
   demodulator, and that S3501 answers its chip ID on the I2C bus). The
   SEE's programs also read the chip's random number generator (`Trng`): a
@@ -115,15 +123,19 @@ M3503).
   menu once that demodulator answers: a task of it kept the OSD layer off
   until the NIM device reported an S3501's chip ID
   (`run_dump_esr250_capture_screen.py`).
-  The C3505 (`chips/c3505.py`, the Ferguson T760i update images) is the
+  The C3505 (`chips/c3505.py`, the Ferguson Ariva T760i, 54, 104, 154 Combo,
+  204 and 254 Combo update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
-  (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build, so the
-  family is recognised by the unpacked main code naming the C3505. Its
-  application runs with its SEE program (`run_dump_t760i_app_starts.py`)
-  and, with its board's AltoBeam ATBM7812 demodulator answering its chip ID
-  (`demods.py`, the sidecar's `demodModel`), opens its first-install wizard
-  and its channel search through the newer display engine's layer
-  (`run_dump_t760i_capture_screen.py`).
+  (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build (entry at
+  0x9FE00800 or 0xBFE00800), so the
+  family is recognised by the unpacked main code naming the C3505 or the
+  seecode chunk's "M3505 SEE". Its
+  application runs with its SEE program (`run_dump_t760i_app_starts.py`),
+  and with the T760i's AltoBeam ATBM7812 demodulator answering on the I2C
+  bus (`demods.py`, `run_dump_t760i_capture_screen.py`) or the satellite /
+  combo models' internal S3505 demodulator answering at 0xB8028000
+  (`run_dump_a104_capture_screen.py`), opens its first-install wizard or
+  System Setup menu through the newer display engine's layer.
   The Ferguson T750i's M3821 boots without the
   boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
   locked D-cache lines at the top of the flash window's cached view until
@@ -271,7 +283,7 @@ M3503).
   boot library unpacks the main code (and the SEE's) with the LZMA SDK 4.0x
   `LzmaDecode()` compiled without optimisation, a function call per decoded
   bit -- emulated, dump_maciej's 7.3 MB took 40 s and the Ferguson T750i's
-  3.4 + 8.6 MB 72 s of wall time. 47 of the 50 images carry that routine byte
+  3.4 + 8.6 MB 72 s of wall time. 97 of the 100 images carry that routine byte
   for byte (its first 43 instructions, `_LZMA_DECODE_SIG`); found in the flash
   image and by each RAM chunk's first-execution scan, its entry is hooked:
   the stream is decoded with Python's `lzma` module (0.1-0.2 s), written to
@@ -334,8 +346,10 @@ M3503).
   hook) -- the T650i's first 150 M instructions ran 40 s instead of 42.5 s. (Interpreting the ALU code between
   close CP0 instructions in Python, to take them in one hook, cost more than
   the hooks it saved: ~2.5 us per instruction.) Periodic CP0-site rescans
-  read the RAM buffer in place (numpy over the words' top bytes), and the
-  tick's vector page is rescanned only when it changed.
+  read the RAM buffer in place (numpy over the words' top bytes), skip
+  1 MB RAM chunks whose bytes have not changed since the last scan, use a
+  strided pre-filter for branchless long blocks (`_find_long_blocks`), and
+  rescan the tick's vector page only when it changed.
 * **Exact mode** - `sim.hook_every_instruction = True` (the GUI sets this)
   installs a per-instruction hook: exact instruction counts, instruction
   history / loop counts, `trace_instructions`, `verify_isa_mode`. About 100x
@@ -875,6 +889,30 @@ then check that the init got past the PMU handshake and the VCAP busy bit
 (a few reads of each; unmodelled: thousands of PMU polls, then an endless VCAP
 spin), and the slow dump_maciej test also that its UI's graphics-engine
 commands complete through the GE interrupt without timeouts.
+
+The UART console tests (`run_dump_*_console.py`, in the default run, 10-40 s
+each; `python run_all_tests.py -k console` runs only them) cover every firmware
+with the ODM's interactive console: `console_regression.ConsoleHarness` boots
+the dump, finds input_task's state variables and console function in the
+unpacked main code, routes printf to UART 0 for the silent builds, sends
+"comtest" (the SDK's upgrade handshake, echoed) and "startconsole", and then
+each command of the build's dispatch table, checking what it does -- HELP,
+VERSION, HEAP, MAINCODE, FLAG, TASK, TIME, CHANNELS, the USB file commands
+(their errors without a disk), the MAGICKEY / PALANTIR privilege escalation
+and the commands it unlocks (HMSG, GPIOCONFIG and PWMGPIO driving the GPIO /
+PWM registers), RCU's key emulation, the Conax / CI and DVB-T2 tuner
+diagnostics, CLS, EXIT and REBOOT.  dump_maciej, the Globo N3 and the T90
+(M3602 / M3801), both R265 Lite builds (M3821), the X110p and seven X110TS
+builds (M3606; `console_m3606.py` is the shared walk-through; the 1.4.0C patch
+build has the console linked in but no way into it, which its test checks) and
+the four Globo HD-XS2 builds (M3503; `console_m3503.py`: the newer console
+with categories, privilege levels, LOGIN and MAGICKEY / PALANTIR left as
+decoys).  The other firmwares have no such console, only the SDK's "comtest"
+serial-upgrade listener (`test_uart_console.py` checks it on the URZ0083).
+The harness drives the console by calling its function from the idle task
+with the RTOS timer masked; the firmware's time follows host CPU time, so on a
+heavily loaded host a run can still miss input, and each test boots again once
+after a simulator crash.
 
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
 the display layer and compare it pixel for pixel with the expected screen, a PNG

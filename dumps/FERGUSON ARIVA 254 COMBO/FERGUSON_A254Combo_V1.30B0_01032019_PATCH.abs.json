@@ -1,0 +1,61 @@
+{
+  "file": "FERGUSON_A254Combo_V1.30B0_01032019_PATCH.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 254 Combo (V1.30B0 PATCH build)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI+ slot, CA card reader and Ethernet / Wi-Fi",
+    "board": "BOARD_DB_M3527_01V01 (the bootloader chunk \"HAST1\" has version \"39082-01047\")",
+    "soc": "ALi C3505 (the maincode's \"ALI_C3505:0x%x\" chip-id print, seecode \"M3505 SEE\")",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0) + DVB-T2/C COFDM (NIM_COFDM_0)",
+    "tuner": "ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "ext00",
+    "tunerModel": {
+      "chip": "m3031",
+      "address": 32,
+      "secondary": {
+        "chip": "r836",
+        "address": 58
+      }
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.30B0 PATCH (bootloader << SDK4.0ba.4.0_20101217 >>; Libcore 17.13.0@SDK4.0ia.17.13_20170728)",
+    "date": "2019-03-01",
+    "size": 8388608,
+    "sha1": "5b794f593be0517ef8cf1a6cb1d64d6494ddd9ef",
+    "layout": "HASG1 0x000000 (39085-01047), HDCPKey 0x02FE00 (00000001), maincode 0x030000 (V1.30B0*), seecode 0x48F400 (M3505 SEE), osd_string 0x5BF400 (1.1.0), Radioback 0x5F0000 (1.0.0), cipluskey 0x61FF80 (1.0.0), data 0x68FF80 (1.0.0), cipluskey 0x6F0000 (1.0.0), defaultdb 0x700000 (1.0.0), userdb 0x72FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A254Combo_01032019_V1.30B0_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Ferguson",
+    "date": "2019-03-01",
+    "login": false,
+    "note": "Archive A254Combo_01032019_V1.30B0_PATCH.zip from the Ferguson / Ariva 154combo Ariva254combo directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " O  ",
+      " on ",
+      "Stn ",
+      "neAr",
+      "nenu"
+    ],
+    "note": "Boots as the C3505 family (chips/c3505.py): its boot-ROM bootloader at offset 0x800 sets $sp to 0xBFE04000, unpacks the 8.9 MB maincode into RAM and starts it.  The application starts the SEE co-processor program (\"M3505 SEE\") at 0xA6000200, finds the internal S3505 demodulator via C3505.nim, drives the FD650K front panel on GPIO 107 / 108 (\" O  \", \" on \", \"Stn \", \"neAr\", \"nenu\"), and renders its 1280x720 ARGB8888 \"System Setup\" OSD menu (10 GE commands, 146 unique colours) through the display engine at 0xB8006900."
+  },
+  "desc": [
+    "Ferguson Ariva 254 Combo firmware V1.30B0 PATCH (2019-03-01) for the H.265/HEVC DVB-S2 + DVB-T2/C CI+ combo receiver on the ALi C3505 SoC.",
+    "Combines the Ariva 154 Combo's dual DVB-S2 / DVB-T2/C front ends with the Ariva 204's CI+ conditional-access support (cipluskey chunk at 0x6E0000), using the FD650K front panel on SCL = GPIO 107, SDA = GPIO 108 and the 63-key extended-NEC remote coding (ext00)."
+  ]
+}

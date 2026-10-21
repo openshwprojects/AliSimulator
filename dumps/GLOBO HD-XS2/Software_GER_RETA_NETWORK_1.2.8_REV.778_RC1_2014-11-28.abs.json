@@ -1,0 +1,55 @@
+{
+  "file": "Software_GER_RETA_NETWORK_1.2.8_REV.778_RC1_2014-11-28.abs",
+  "device": {
+    "brand": "Globo / Opticum",
+    "model": "HD-XS2 (Globo) / Blue XS65 (Opticum): German retail network build",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": null,
+    "soc": "ALi M3503 (the bootloader chunk's version \"M3503---0.1.0\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build with the chip's internal NIM_S3503 demodulator driver)",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503 and the XIP bootloader's cache-as-RAM stack)",
+    "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
+    "tuner": "Airoha AV2011 at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.2.8 Rev.778 RC1 \"GER_RETA_NETWORK\" (main-code chunk 112003000100202, version 00000128; Libcore 11.2.0@SDK4.0fa.11.2_20130829, Application 1.0.0@SDK4.0fa.11.2_20130829, HDMI_ALI_E_130527_1; the SEE's uLibcore 1.1.5a@SDK_20111126)",
+    "date": "2014-11-28",
+    "size": 4194304,
+    "sha1": "0b32dce072a4dc20d0098a3713045eedaaaf6394",
+    "layout": "bootloader 0x000000 (M3503---0.1.0), HDCPKey 0x02EE00 (00000001), MemCfg 0x02F000 (00000001), maincode 0x030000 (chunk \"112003000100202\" 00000128, LZMA 0x190DD1 bytes -> 6.9 MB), seecode 0x1D0000 (00000128, LZMA 0xCEB1C -> 2.5 MB), storage_part 0x2B0000 (00000001), Radioback 0x2D0000 (1.0.0), ca 0x2DFF80 (00000001), defaultdb 0x2F0000 (1.1.0), userdb 0x2FFF80 (1.0.0, 0x100070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Software_GER_RETA_NETWORK_1.2.8_REV.778_RC1_2014-11-28.zip&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update archive Software_GER_RETA_NETWORK_1.2.8_REV.778_RC1_2014-11-28.zip; fetched 2026-10-18 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on ",
+      "Strt"
+    ],
+    "note": "Boots as the M3503 family (chips/m3503.py), completes the SEE's SHA-256 verification on the crypto engine and draws its German first-install wizard (\"Sprache wählen\") by ~100 M instructions (~241 GE commands), with the front panel showing \" ON \", \" on \", \"Strt\"."
+  },
+  "desc": [
+    "The 1.2.8 Rev.778 RC1 German retail network update (2014-11-28) for the Globo HD-XS2 / Opticum Blue XS65 satellite receiver (main-code chunk 112003000100202, accepting /c/Sw_Globo_HD-XS2_Reta_ger.abs and /c/XS2_Reta_ger.abs from USB).",
+    "Built on the earlier Libcore 11.2.0 (SDK4.0fa.11.2_20130829) release rather than the 2015 Libcore 13.8.0 used by the 1.3.5 and 1.4.0 Polish builds."
+  ]
+}

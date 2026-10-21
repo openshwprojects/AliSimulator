@@ -295,7 +295,8 @@ class AliMipsSimulator:
         self._rom_sites_dirty = True
         self._rom_sites_hooked = False       # the flash's sites are in _cp0_site_hooks
         self._vector_page = None             # (page, its bytes) when the tick's vector page was last scanned
-        self._delay_slot_words = {}          # word before a CP0 site -> it has a delay slot
+        self._scanned_ram_chunks = {}        # (phys, length) -> bytes when last scanned for CP0 sites
+        self._delay_slot_words = {None: False}  # word before a CP0 site -> it has a delay slot
         self._code_hook_h = None
         self._cp0_site_hooks = {}            # address -> hook handle
         self._bp_hooks = {}                  # address -> hook handle
@@ -310,6 +311,7 @@ class AliMipsSimulator:
         self.lzma_decodes = []               # (entry, input, output address, output size) per decode
         self._delay_hooks = {}               # the RTOS's delay() entry -> its hooks (_hook_delay, _hook_delay_loop)
         self._delay_routines = {}            # ... -> (its code, the clock's gp offset, its get_count(), its build)
+        self._delay_code_views = {}          # ... -> RAM memoryview slice of its code (when in RAM)
         self._delay_loops = {}               # its loop's get_count() call -> its entry
         self.delay_calls = 0                 # delay() calls returned from at their entry
         self.delay_jumps = 0                 # time moves in their loops (longer waits)
@@ -420,6 +422,8 @@ class AliMipsSimulator:
 
         # Shared ROM Buffer (Usually 4MB dumped flash)
         self.rom_buffer = self._buffer('rom_buffer', self.rom_size)
+        self._rom_view = memoryview(self.rom_buffer).cast('B')
+        self._spi_status_injected = False
 
         # Map ROM aliases to the same buffer
         # Ali SoCs commonly map flash repeatedly within a 16MB window
@@ -466,6 +470,8 @@ class AliMipsSimulator:
         MMIO_SIZE = 0x01000000
         self.mmio_buffer = self._buffer('mmio_buffer', MMIO_SIZE)
         self._mmio_view = memoryview(self.mmio_buffer).cast('B')    # (handlers read it in place: _mmio_word)
+        self._mmio_words = self._mmio_view.cast('I') if sys.byteorder == 'little' else None
+        self._mmio_halfwords = self._mmio_view.cast('H') if sys.byteorder == 'little' else None
         mmio_ptr = ctypes.addressof(self.mmio_buffer)
         self._mmio_rd = {}          # offset -> [handler]: reads starting at that offset
         self._mmio_wr = {}          # offset -> [handler]: writes starting at that offset
@@ -487,9 +493,9 @@ class AliMipsSimulator:
         self.mu.hook_add(UC_HOOK_MEM_WRITE_PROT, self._hook_flash_write_prot)
 
         # Device registers (offsets in the 0x18000000 window, any segment)
-        # UART: THR writes (TX), LSR / URBR / UIIR reads (RX simulation)
+        # UART: THR writes (TX), LSR / URBR / UIIR / URFC reads (RX simulation)
         self._mmio_on('w', self._hook_uart_write, 0x18300, 0x18305)
-        self._mmio_on('r', self._hook_uart_read, 0x18300, 0x18309)
+        self._mmio_on('r', self._hook_uart_read, 0x18300, 0x18312)
         # GPIO DO and DIR writes for I2C / panel decoding, DI reads loop DO back
         for gpio_off in self._GPIO_DO_OFFSETS:  # 0x054, 0x0D4, 0x0F4, 0x354, 0x454 and 0x0E8
             self._mmio_on('w', self._hook_gpio_write, gpio_off, gpio_off + 7)
@@ -522,10 +528,11 @@ class AliMipsSimulator:
         self._mmio_on('w', self._hook_irc_write, 0x18107, 0x18107)
         # SPI flash controller: both register bases, 0xB8000098 (default) and
         # 0xB802E098 (M3329E rev>=5), each SF_INS(+0x98), SF_FMT(+0x99),
-        # SF_DUM(+0x9A), SF_CFG(+0x9B)
+        # SF_DUM(+0x9A), SF_CFG(+0x9B).  Reads return the bytes stored in
+        # _mmio_view directly (initialised here and kept in sync on writes).
         for base in (0x00098, 0x2E098):
             self._mmio_on('w', self._hook_spi_write, base, base + 3)
-            self._mmio_on('r', self._hook_spi_read, base, base + 3)
+            self._mmio_view[base:base + 4] = b'\x03\x0d\x00\x00'
         # The hardware I2C masters the tuner / EEPROM drivers use (i2c_scb.py):
         # the slaves are sim.i2c_devices, none answers unless sim.i2c_ack_all
         # (a second core's are the first one's: one bus, the board's chips on it)
@@ -556,8 +563,10 @@ class AliMipsSimulator:
         # stop emulation instead of executing RAM as code.
         self.mu.hook_add(UC_HOOK_CODE, self._hook_null_jump, begin=0, end=3)
         # 0x80000200..0x80000FFF: a code hook while it holds the SDK's zero
-        # padding (_update_short_block_hook)
+        # padding (_update_short_block_hook), plus any 350+ instruction
+        # branchless code blocks in RAM (_find_long_blocks)
         self._short_block_hook = None
+        self._long_block_hooks = {}
 
         # The per-instruction hook (_hook_code) and the fast-mode hooks are
         # installed on demand by _sync_hooks() (see run()).
@@ -627,7 +636,7 @@ class AliMipsSimulator:
                         # check).  The access itself cannot tell its PC: in an
                         # mmio_map callback Unicorn's PC is the start of the
                         # translation block (last[4]).
-                        pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                        pc = self._reg_read(UC_MIPS_REG_PC)
                         if (last[3] is None or self._gpr_snapshot() == last[3]) and \
                                 self._phys(self._insn_mem_address(pc)) == self._phys(last[1]) and \
                                 (pc == last[4] if last[5] else self._same_block(last[4], pc)):
@@ -637,7 +646,7 @@ class AliMipsSimulator:
                             # running the same code must not take this entry.  On
                             # resume the rewound instruction starts a translation
                             # block, so its access sees this PC (_dev_replay_of).
-                            key = (pc, self.mu.reg_read(UC_MIPS_REG_SP))
+                            key = (pc, self._reg_read(UC_MIPS_REG_SP))
                             self._dev_replays[key] = last[0:3]
                     except UcError:
                         pass
@@ -753,12 +762,24 @@ class AliMipsSimulator:
             self._reg_write, self._reg_read = mu.reg_write, mu.reg_read
         self._ram_view = memoryview(self.ram_buffer).cast('B')
         self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
+        self._ram_words_len = len(self._ram_words) if self._ram_words is not None else 0
 
     def _mmio_word(self, address):
         """The device register word at address (any view of the window, word
         aligned down) from its buffer: no device side effect, no binding call."""
+        if self._mmio_words is not None:
+            return self._mmio_words[(address & 0xFFFFFF) >> 2]
         off = address & 0xFFFFFC
         return int.from_bytes(self._mmio_view[off:off + 4], 'little')
+
+    def _mmio_write_word(self, address, value):
+        """Write a 32-bit word into the device register buffer at address (word
+        aligned down) without a Unicorn C-API call."""
+        if self._mmio_words is not None:
+            self._mmio_words[(address & 0xFFFFFF) >> 2] = value & 0xFFFFFFFF
+        else:
+            off = address & 0xFFFFFC
+            self._mmio_view[off:off + 4] = (value & 0xFFFFFFFF).to_bytes(4, 'little')
 
     def _init_capstone(self):
         self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
@@ -803,6 +824,8 @@ class AliMipsSimulator:
         which slows every load of the emulation down (see _init_unicorn)."""
         self._spi_dump_enabled = enabled
         self._spi_dump_flash_reads = bool(enabled and flash_reads)
+        if enabled and self._spi_status_injected:
+            self._uninject_spi_status()
         if self._rom_dirty:
             self._rom_restore()
         self._update_flash_read_hooks()
@@ -835,8 +858,28 @@ class AliMipsSimulator:
     #    for flash_hook_idle_s of emulation time after command mode ends.
     flash_hook_idle_s = 0.05
 
+    def _spi_can_inline_status(self):
+        """Whether CMD 0x05 (Read Status Register) can be served inline from
+        offset 0 of the flash window without installing _flash_read_hooks."""
+        stream = self._spi_stream
+        return (self._spi_status == 0 and not self._spi_dump_enabled
+                and self.flash_device is None
+                and not (stream is not None and stream.active))
+
+    def _uninject_spi_status(self):
+        if self._spi_status_injected:
+            self._spi_status_injected = False
+            if self.rom_image is not None:
+                self._rom_view[0:4] = self.rom_image[0:4]
+
     def _flash_hooks_wanted(self):
-        return (not self._spi_is_passthrough()) or self._spi_dump_flash_reads
+        if self._spi_dump_flash_reads:
+            return True
+        if self._spi_is_passthrough():
+            return False
+        if self._spi_ins == 0x05 and self._spi_can_inline_status():
+            return False
+        return True
 
     def _update_flash_read_hooks(self):
         """The SPI controller mode or the logging setting changed."""
@@ -870,6 +913,8 @@ class AliMipsSimulator:
             self._flush_tb()
         elif self._flash_read_hooks and not wanted and \
                 (force or self._vtime() - self._spi_cmd_vt >= self.flash_hook_idle_s):
+            if self._rom_dirty:
+                self._rom_restore()
             for h in self._flash_read_hooks:
                 self.mu.hook_del(h)
             self._flash_read_hooks = []
@@ -909,7 +954,73 @@ class AliMipsSimulator:
 
     def _hook_short_blocks(self, uc, address, size, user_data):
         """Nothing: being hooked keeps Unicorn's translation blocks short there
-        (_update_short_block_hook)."""
+        (_update_short_block_hook, _find_long_blocks)."""
+
+    # Unicorn 2.1.4 also crashes translating unhooked straight-line code blocks
+    # of ~375+ MIPS32 instructions (such as the unrolled 64-round MD5 / SHA
+    # compression functions in the C3505 and M3606 maincodes).  Covering runs
+    # of >= _LONG_BLOCK_INSNS branchless non-zero instructions with
+    # _hook_short_blocks causes TCG to fill its micro-op buffer and split the
+    # translation block cleanly before the crash threshold.
+    _LONG_BLOCK_INSNS = 300
+
+    def _find_long_blocks(self, data, base, views):
+        """Hook branchless runs of >= _LONG_BLOCK_INSNS MIPS32 instructions in
+        data (code at physical offset `base`) with _hook_short_blocks."""
+        if _np is None:
+            return
+        n = len(data) // 4
+        low = self._LONG_BLOCK_INSNS
+        if n < low:
+            return
+        w = _np.frombuffer(data, dtype='<u4', count=n)
+        half = low >> 1
+        sw = w[::half]
+        sop = sw >> 26
+        sfn = sw & 0x3F
+        s_brk = ((sw == 0) | (sw == 0xFFFFFFFF) |
+                 ((sop >= 1) & (sop <= 7)) | (sop == 0x1D) | ((sop >= 20) & (sop <= 23)) |
+                 ((sop == 0) & (sfn >= 8) & (sfn <= 13)) |
+                 (sw == 0x42000018))
+        s_ok = ~s_brk
+        cand = _np.flatnonzero(s_ok[:-1] & s_ok[1:])
+        if len(cand) == 0:
+            return
+        spans = []
+        for k in cand.tolist():
+            w_st = max(0, (k - 1) * half)
+            w_en = min(n, (k + 2) * half + 1)
+            if spans and w_st <= spans[-1][1]:
+                spans[-1][1] = max(spans[-1][1], w_en)
+            else:
+                spans.append([w_st, w_en])
+        for w_st, w_en in spans:
+            sub = w[w_st:w_en]
+            op = sub >> 26
+            fn = sub & 0x3F
+            breaker = ((sub == 0) | (sub == 0xFFFFFFFF) |
+                       ((op >= 1) & (op <= 7)) | (op == 0x1D) | ((op >= 20) & (op <= 23)) |
+                       ((op == 0) & (fn >= 8) & (fn <= 13)) |
+                       (sub == 0x42000018))
+            raw_idx = _np.flatnonzero(breaker)
+            idx = _np.empty(len(raw_idx) + 2, dtype=_np.intp)
+            idx[0] = -1
+            idx[1:-1] = raw_idx
+            idx[-1] = len(sub)
+            gaps = _np.diff(idx)
+            for g in _np.flatnonzero(gaps >= low).tolist():
+                st = int(idx[g]) + 1
+                en = int(idx[g + 1])
+                sub_op = op[st:en]
+                valid = (sub_op == 0) | ((sub_op >= 8) & (sub_op <= 15)) | ((sub_op >= 28) & (sub_op <= 46))
+                if int(valid.sum()) >= (en - st) * 3 // 4:
+                    abs_st, abs_en = w_st + st, w_st + en
+                    for view in views:
+                        lo, hi = view + base + abs_st * 4, view + base + abs_en * 4 - 1
+                        if (lo, hi) not in self._long_block_hooks:
+                            self._long_block_hooks[(lo, hi)] = self.mu.hook_add(
+                                UC_HOOK_CODE, self._hook_short_blocks, begin=lo, end=hi)
+                            self._tb_flush_needed = True
 
     def setGpioHandler(self, handler):
         """Set the callback for GPIO pin changes, handler(address, size,
@@ -991,7 +1102,7 @@ class AliMipsSimulator:
         else:
             print(f"[SPI] {msg}", flush=True)
 
-    def loadFile(self, filename):
+    def loadFile(self, filename, chip=None):
         filename = resolve_dump(filename)
         self.dump_path = filename
         self.log(f"Loading {filename}...")
@@ -1010,10 +1121,13 @@ class AliMipsSimulator:
         # Keep the pristine image (padded with erased flash) and load it into the
         # shared ROM buffer; every mirror sees it.
         self.rom_image = bytearray(code) + bytearray(b'\xFF' * (self.rom_size - len(code)))
+        self._spi_status_injected = False
         self._rom_dirty = []
-        self._rom_write(0, bytes(self.rom_image))
+        self._rom_write(0, self.rom_image)
         # SPI flash controller back to its power-on state (normal read mode)
         self._spi_ins, self._spi_fmt, self._spi_dum, self._spi_cfg = 0x03, 0x0D, 0x00, 0x00
+        self._mmio_view[0x00098:0x0009C] = b'\x03\x0d\x00\x00'
+        self._mmio_view[0x2E098:0x2E09C] = b'\x03\x0d\x00\x00'
         self._spi_status, self._spi_wel = 0x00, False
         self._spi_response, self._spi_resp_idx, self._last_flash_read_page = [], 0, -1
         self._update_flash_read_hooks()
@@ -1024,7 +1138,15 @@ class AliMipsSimulator:
         # The image's chip family: its boot flow, and its devices if it differs
         # from the current one (chips/; the class itself: an M3503 is an M3602
         # and a C3505 an M3821 to isinstance, but their chip IDs and devices differ)
-        family = chips.detect(self.rom_image)
+        if chip is None or (isinstance(chip, str) and chip.lower() in ("", "auto")):
+            family = chips.detect(self.rom_image)
+        elif isinstance(chip, str):
+            by_name = {cls.__name__.upper(): cls for cls in chips.FAMILIES}
+            if chip.upper() not in by_name:
+                raise ValueError(f"unknown chip family {chip!r} (expected one of {[c.__name__ for c in chips.FAMILIES]})")
+            family = by_name[chip.upper()]
+        else:
+            family = chip
         if type(self.chip) is not family:
             self._switch_family(family)
         else:
@@ -1072,6 +1194,10 @@ class AliMipsSimulator:
         CP0 instruction sites again, and install the hooks now -- some test
         scripts drive sim.mu.emu_start() directly instead of run(), and still
         need CP0 emulation."""
+        for h in self._long_block_hooks.values():
+            self.mu.hook_del(h)
+        self._long_block_hooks.clear()
+        self._scanned_ram_chunks.clear()
         self._rescan_due = True
         self._rom_sites_dirty = True
         self._sync_hooks()
@@ -1216,9 +1342,9 @@ class AliMipsSimulator:
         script's) covers the device window too, which is not checked."""
         self._dev_last = None
         if hooked and self._hflags_off is not None:
-            self.mu.context_update(self._ctx)
+            self._ctx_save()
             if self._hflags_view.value & self._HFLAG_BMASK:
-                pc = uc.reg_read(UC_MIPS_REG_PC)
+                pc = self._reg_read(UC_MIPS_REG_PC)
                 if pc not in self._ds_dev_warned and len(self._ds_dev_warned) < 16:
                     self._ds_dev_warned.add(pc)
                     self.log(f"[DSLOT] device access in a branch delay slot at 0x{pc:08X}: stopping "
@@ -1233,7 +1359,7 @@ class AliMipsSimulator:
         """After an emu_start() that stopped for a hooked access in a delay
         slot (_device_access): the branch has completed, clear its flags."""
         self._ds_flags_stale = False
-        self.mu.context_update(self._ctx)
+        self._ctx_save()
         if self._hflags_view.value & self._HFLAG_BMASK:
             self._hflags_view.value &= ~self._HFLAG_BMASK
             self.mu.context_restore(self._ctx)
@@ -1244,9 +1370,12 @@ class AliMipsSimulator:
         Its PC is exact in exact mode and for accesses through a Unicorn memory
         hook (exact=True: the flash window); in an mmio_map callback in fast
         mode it is the start of the translation block."""
+        hooked_exact = exact is True
         if exact is None:
             exact = self._code_hook_h is not None
-        self._dev_last = (kind, address, data, self._gpr_snapshot(), uc.reg_read(UC_MIPS_REG_PC), exact)
+        gprs = self._gpr_snapshot(ctx_saved=hooked_exact and self._hflags_off is not None)
+        pc = self._pc_view.value if self._pc_view is not None and gprs is not None else self._reg_read(UC_MIPS_REG_PC)
+        self._dev_last = (kind, address, data, gprs, pc, exact)
 
     def _same_block(self, start, pc):
         """True if pc can lie in the translation block that starts at `start`:
@@ -1339,7 +1468,7 @@ class AliMipsSimulator:
                     return None
                 base, off = (w >> 21) & 31, w & 0xFFFF
                 off -= (off & 0x8000) << 1
-            return (self.mu.reg_read(self.gpr_map[base]) + off) & 0xFFFFFFFF
+            return (self._reg_read(self.gpr_map[base]) + off) & 0xFFFFFFFF
         except UcError:
             return None
 
@@ -1348,8 +1477,8 @@ class AliMipsSimulator:
         replay, else None (and then recorded as a new access by the caller)."""
         if not self._dev_replays:
             return None
-        pc = uc.reg_read(UC_MIPS_REG_PC)
-        rp = self._dev_replays.pop((pc, uc.reg_read(UC_MIPS_REG_SP)), None)
+        pc = self._reg_read(UC_MIPS_REG_PC)
+        rp = self._dev_replays.pop((pc, self._reg_read(UC_MIPS_REG_SP)), None)
         if rp is None or rp[0] != kind or rp[1] != address or (data is not None and rp[2] != data):
             return None                     # not pending here, or re-executed with other data
         self._dev_note(uc, kind, address, rp[2])    # a stop during the replay is a replay again
@@ -1417,14 +1546,29 @@ class AliMipsSimulator:
 
     def _mmio_read(self, uc, offset, size, user_data):
         self._dev_last = None           # (a new device access: the noted one completed)
+        handlers = self._mmio_rd.get(offset)
+        if handlers is None and not self._mmio_observers:
+            if size == 1:
+                return self._mmio_view[offset]
+            if size == 4 and not (offset & 3) and self._mmio_words is not None:
+                return self._mmio_words[offset >> 2]
+            if size == 2 and not (offset & 1) and self._mmio_halfwords is not None:
+                return self._mmio_halfwords[offset >> 1]
+            return int.from_bytes(self._mmio_view[offset:offset + size], 'little')
         self._dev_cb_depth += 1
         try:
-            handlers = self._mmio_rd.get(offset)
             if handlers:
                 address = 0xB8000000 | offset
                 for h in handlers:
                     h(uc, UC_MEM_READ, address, size, 0, None)
-            value = int.from_bytes(self.mmio_buffer[offset:offset + size], 'little')
+            if size == 1:
+                value = self._mmio_view[offset]
+            elif size == 4 and not (offset & 3) and self._mmio_words is not None:
+                value = self._mmio_words[offset >> 2]
+            elif size == 2 and not (offset & 1) and self._mmio_halfwords is not None:
+                value = self._mmio_halfwords[offset >> 1]
+            else:
+                value = int.from_bytes(self._mmio_view[offset:offset + size], 'little')
             if self._mmio_observers:
                 self._mmio_observe(uc, False, offset, size, value)
             return value
@@ -1432,20 +1576,38 @@ class AliMipsSimulator:
             self._dev_cb_depth -= 1
 
     def _mmio_write(self, uc, offset, size, value, user_data):
-        value &= (1 << (8 * size)) - 1
         self._dev_last = None
+        handlers = self._mmio_wr.get(offset)
+        if handlers is None and not self._mmio_observers:
+            if size == 1:
+                self._mmio_view[offset] = value & 0xFF
+            elif size == 4 and not (offset & 3) and self._mmio_words is not None:
+                self._mmio_words[offset >> 2] = value & 0xFFFFFFFF
+            elif size == 2 and not (offset & 1) and self._mmio_halfwords is not None:
+                self._mmio_halfwords[offset >> 1] = value & 0xFFFF
+            else:
+                mask = (1 << (8 * size)) - 1
+                self._mmio_view[offset:offset + size] = (value & mask).to_bytes(size, 'little')
+            return
+        value &= (1 << (8 * size)) - 1
         self._dev_cb_depth += 1
         try:
             if self._mmio_observers:
                 self._mmio_observe(uc, True, offset, size, value)
-            handlers = self._mmio_wr.get(offset)
             if handlers:
                 address = 0xB8000000 | offset
                 for h in handlers:
                     stored = h(uc, UC_MEM_WRITE, address, size, value, None)
                     if stored is not None:
                         value = stored
-            self.mmio_buffer[offset:offset + size] = value.to_bytes(size, 'little')
+            if size == 1:
+                self._mmio_view[offset] = value & 0xFF
+            elif size == 4 and not (offset & 3) and self._mmio_words is not None:
+                self._mmio_words[offset >> 2] = value & 0xFFFFFFFF
+            elif size == 2 and not (offset & 1) and self._mmio_halfwords is not None:
+                self._mmio_halfwords[offset >> 1] = value & 0xFFFF
+            else:
+                self._mmio_view[offset:offset + size] = (value & ((1 << (8 * size)) - 1)).to_bytes(size, 'little')
         finally:
             self._dev_cb_depth -= 1
 
@@ -1492,31 +1654,32 @@ class AliMipsSimulator:
             # Set LSR bit 5 (0x20 = Transmitter Holding Register Empty)
             # so firmware's uart_write_char doesn't timeout and retry 3x.
             # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
-            lsr_addr = (address & ~0xF) | 5
-            uc.mem_write(lsr_addr, b'\x20')
+            self._mmio_view[(address & 0xFFFFF0) | 5] = 0x20
 
     def _hook_uart_read(self, uc, access, address, size, value, user_data):
         """Handle reads from UART registers for RX simulation.
 
         16550 UART registers at base 0xB8018300:
-          +0 URBR  — Receive Buffer Register (read: get received byte)
-          +2 UIIR  — Interrupt Identification Register
-          +5 ULSR  — Line Status Register (bit0=DataReady, bit5=THRE)
+          +0    URBR  — Receive Buffer Register (read: get received byte)
+          +2    UIIR  — Interrupt Identification Register (0x04=RDA, 0x0C=CTI, 0x01=none)
+          +5    ULSR  — Line Status Register (bit0=DataReady, bit5=THRE)
+          +0x12 URFC  — RX FIFO byte count (read by SDK4.0gc / M3821 ISR)
         """
         self._device_access(uc)
-        reg_offset = (address & 0xF)  # offset within UART block
+        reg_offset = (address & 0x1F)  # offset within 32-byte UART block
+        off = address & 0xFFFFFF
         if reg_offset == 5:  # ULSR — Line Status Register
             lsr = 0x20  # bit5 = THRE always set
             if len(self._uart_rx_queue) > 0:
                 lsr |= 0x01  # bit0 = Data Ready
-            uc.mem_write(address, bytes([lsr]))
+            self._mmio_view[off] = lsr
         elif reg_offset == 0:  # URBR — Receive Buffer Register
             rp = self._dev_replay_of(uc, 'urbr', address)
             if rp is not None:
-                uc.mem_write(address, bytes([rp[2]]))     # the same byte again, nothing popped
+                self._mmio_view[off] = rp[2]     # the same byte again, nothing popped
             elif len(self._uart_rx_queue) > 0:
                 byte_val = self._uart_rx_queue.popleft()
-                uc.mem_write(address, bytes([byte_val]))
+                self._mmio_view[off] = byte_val
                 self._dev_note(uc, 'urbr', address, byte_val)
                 self.log(f"[UART RX] Read byte 0x{byte_val:02X} ('{chr(byte_val)}'), {len(self._uart_rx_queue)} remaining")
                 # Re-trigger interrupt if more data available
@@ -1524,12 +1687,18 @@ class AliMipsSimulator:
                     self._pending_uart_irq = True
                     self._uart_irq_delivered = False
         elif reg_offset == 2:  # UIIR — Interrupt Identification Register
-            if len(self._uart_rx_queue) > 0:
-                # bit0=0 means interrupt pending, bits[3:1]=010 = Received Data Available
-                uc.mem_write(address, bytes([0x04]))
+            n = len(self._uart_rx_queue)
+            if n >= 4:
+                # bit0=0 pending, bits[3:1]=010 = Received Data Available (>= trigger level 4)
+                self._mmio_view[off] = 0x04
+            elif n > 0:
+                # bit0=0 pending, bits[3:1]=110 = Character Timeout Indicator (1..3 bytes)
+                self._mmio_view[off] = 0x0C
             else:
                 # bit0=1 means no interrupt pending
-                uc.mem_write(address, bytes([0x01]))
+                self._mmio_view[off] = 0x01
+        elif reg_offset == 0x12:  # URFC — RX FIFO byte count
+            self._mmio_view[off] = min(len(self._uart_rx_queue), 16)
 
     # The GPIO banks (tm1650_decoder.GPIO_DO_OFFSETS and _EXTRA_ give each bank's DO register; its DI
     # register is DO - 4, its DIR register DO + 4): DO and DIR writes go to the panel decoder as the
@@ -1584,25 +1753,20 @@ class AliMipsSimulator:
         dir_offset = self._GPIO_DI_TO_DIR.get(di_offset)
         if do_offset is not None and dir_offset is not None:
             mmio_base = address & 0xFFFFF000
-            try:
-                do_data = uc.mem_read(mmio_base + do_offset, 4)
-                do_val = int.from_bytes(do_data, 'little')
-                dir_data = uc.mem_read(mmio_base + dir_offset, 4)
-                dir_val = int.from_bytes(dir_data, 'little')
-                # Output bits (DIR=1): return DO value
-                # Input bits (DIR=0): return 0 (simulated slave response),
-                # unless the GPIO handler's object drives a line (the TM1650
-                # decoder answers key reads on SDA: di_override)
-                di_val = do_val & dir_val
-                override = getattr(getattr(self.gpio_callback, '__self__', None), 'di_override', None)
-                if override is not None:
-                    di_val = override(di_offset, di_val)
-                for device in self.gpio_devices:
-                    di_val = device.di_override(di_offset, di_val)
-                di_val = di_val & ~dir_val | (do_val & dir_val)
-                uc.mem_write(address & ~3, di_val.to_bytes(4, 'little'))
-            except:
-                pass
+            do_val = self._mmio_word(mmio_base + do_offset)
+            dir_val = self._mmio_word(mmio_base + dir_offset)
+            # Output bits (DIR=1): return DO value
+            # Input bits (DIR=0): return 0 (simulated slave response),
+            # unless the GPIO handler's object drives a line (the TM1650
+            # decoder answers key reads on SDA: di_override)
+            di_val = do_val & dir_val
+            override = getattr(getattr(self.gpio_callback, '__self__', None), 'di_override', None)
+            if override is not None:
+                di_val = override(di_offset, di_val)
+            for device in self.gpio_devices:
+                di_val = device.di_override(di_offset, di_val)
+            di_val = di_val & ~dir_val | (do_val & dir_val)
+            self._mmio_write_word(address, di_val)
 
     # Status bytes (offset in the MMIO window) of device operations that
     # complete at once: {offset: (start bit, done bits to set, bits to clear)}.
@@ -1627,12 +1791,12 @@ class AliMipsSimulator:
         """Reads of a self-completing status byte see the operation finished
         (idempotent, so a replayed load after an asynchronous stop is harmless)."""
         self._device_access(uc)
+        off = address & 0x00FFFFFF
         for reg, (start, done, clear) in self._SELF_COMPLETING.items():
-            target = (address & ~0x00FFFFFF) | reg
-            if address <= target < address + size:
-                b = uc.mem_read(target, 1)[0]
+            if off <= reg < off + size:
+                b = self._mmio_view[reg]
                 if start is None or b & start:
-                    uc.mem_write(target, bytes([(b | done) & ~clear & 0xFF]))
+                    self._mmio_view[reg] = (b | done) & ~clear & 0xFF
 
     # Video engine (the video decoder's hardware, registers at 0xB8004200).
     # When the application starts playing a channel, the decoder driver resets
@@ -1652,10 +1816,9 @@ class AliMipsSimulator:
         self._device_access(uc)
         if not self.chip.ve_status:
             return
-        word = address & ~3
-        v = int.from_bytes(uc.mem_read(word, 4), 'little')
+        v = self._mmio_word(address)
         if v & self._VE_STATUS_MASK:
-            uc.mem_write(word, (v & ~self._VE_STATUS_MASK).to_bytes(4, 'little'))
+            self._mmio_write_word(address, v & ~self._VE_STATUS_MASK)
 
     @staticmethod
     def _hook_chip_id_store(uc, access, address, size, value, user_data):
@@ -1672,10 +1835,10 @@ class AliMipsSimulator:
         modelled).  Without it the T650i's network driver spun on the bit
         forever and its task starved the UI."""
         self._device_access(uc)
-        a = address & ~3
-        b = uc.mem_read(a, 1)[0]
+        off = address & 0xFFFFFC
+        b = self._mmio_view[off]
         if b & 0x08:
-            uc.mem_write(a, bytes([b & 0xF7]))
+            self._mmio_view[off] = b & 0xF7
 
     def _hook_mac_mdio_read(self, uc, access, address, size, value, user_data):
         """ETHERNET_MAC_0 +0x7C (0xB802C07C): the driver writes PHY address
@@ -1687,12 +1850,11 @@ class AliMipsSimulator:
         driver's timeout path used, so the firmware ends up in the same state,
         without waiting a second for every PHY register it probes."""
         self._device_access(uc)
-        a = 0xB802C07C
-        v = int.from_bytes(uc.mem_read(a, 4), 'little')
+        v = self._mmio_word(0x2C07C)
         if v & 0x80000000:
-            uc.mem_write(a, (v & 0x7FFFFFFF).to_bytes(4, 'little'))
+            self._mmio_write_word(0x2C07C, v & 0x7FFFFFFF)
             if v & 0x08000000:                       # a read: the data a bus without a PHY gives
-                uc.mem_write(0xB802C082, b'\xFF\xFF')
+                self._mmio_view[0x2C082:0x2C084] = b'\xFF\xFF'
 
     # Graphics engine (GE_M36F, registers at 0xB800A000).  A command written to
     # +4 is executed at once by the ge_m36f model (it draws into RAM, see
@@ -1731,7 +1893,7 @@ class AliMipsSimulator:
             import ge_m36f
             ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
             self.ge = ge_m36f.GeM36F(ram, log=self.log)
-        regs = _np.frombuffer(bytes(self.mmio_buffer[0xA000:0xA100]), dtype='<u4').tolist()
+        regs = _np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4').tolist()
         if command == 1:
             self.ge.run_io(regs)
             return
@@ -1749,7 +1911,7 @@ class AliMipsSimulator:
         import gma_capture
         ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
         osd = getattr(self.chip, "osd", None)          # (the M3329's OSD layers: their palettes)
-        rgb, _ = gma_capture.capture(ram, bytes(self.mmio_buffer[0:0x10000]), screen,
+        rgb, _ = gma_capture.capture(ram, self._mmio_view[0:0x10000], screen,
                                      m3327_palettes=osd.palettes if osd is not None else None)
         if path:
             gma_capture.save_png(path, rgb)
@@ -1757,7 +1919,7 @@ class AliMipsSimulator:
 
     def _hook_ge_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
-        uc.mem_write((address & ~0xFFF) | 0x008, self._ge_status.to_bytes(4, 'little'))
+        self._mmio_write_word((address & ~0xFFF) | 0x008, self._ge_status)
 
     # IR receiver (M6303 IRC, registers at 0xB8018100, see ir_remote.py).  A
     # frame from ir_send_nec() is put into the run-length FIFO at once and
@@ -1774,17 +1936,18 @@ class AliMipsSimulator:
     def _hook_irc_read(self, uc, access, address, size, value, user_data):
         self._device_access(uc)
         off = address & 0xFFF                   # (0x1xx at either base, irc_base)
+        abs_off = address & 0xFFFFFF
         if off == 0x101:                                     # FIFO byte count
-            uc.mem_write(address, bytes([min(len(self._irc_fifo), 0x7F)]))
+            self._mmio_view[abs_off] = min(len(self._irc_fifo), 0x7F)
         elif off == 0x107:                                   # interrupt status
-            uc.mem_write(address, bytes([self._irc_status]))
+            self._mmio_view[abs_off] = self._irc_status
         elif off == 0x108:                                   # RLC data: pops the FIFO
             rp = self._dev_replay_of(uc, 'irc', address)
             if rp is not None:
-                uc.mem_write(address, bytes([rp[2]]))
+                self._mmio_view[abs_off] = rp[2]
             elif self._irc_fifo:
                 b = self._irc_fifo.popleft()
-                uc.mem_write(address, bytes([b]))
+                self._mmio_view[abs_off] = b
                 self._dev_note(uc, 'irc', address, b)
 
     def _hook_irc_write(self, uc, access, address, size, value, user_data):
@@ -1793,7 +1956,7 @@ class AliMipsSimulator:
         self._irc_update_line()
 
     def _irc_update_line(self):
-        ier = self.mu.mem_read(0xB8000000 + self.irc_base + 6, 1)[0]
+        ier = self._mmio_view[self.irc_base + 6]
         self._ic_set_line(self.irc_line, bool(self._irc_status & ier & 3))
 
     def _irc_service(self):
@@ -1803,7 +1966,7 @@ class AliMipsSimulator:
             return
         if self._vtime() - self._irc_last_vt < self.IR_FRAME_GAP_S:
             return
-        if not self.mu.mem_read(0xB8000000 + self.irc_base, 1)[0] & 0x80:   # IRCCFG: controller enabled
+        if not self._mmio_view[self.irc_base] & 0x80:   # IRCCFG: controller enabled
             return
         rlc, label = self._irc_frames.popleft()
         self._irc_fifo.extend(rlc)
@@ -1830,15 +1993,16 @@ class AliMipsSimulator:
         then sees a tuner that takes its settings and locks.  Returns the model
         (None when the dump names none)."""
         import tuners
+        sec = None
         if chip is None:
             import dump_catalog
-            info = dump_catalog.load(self.dump_path) if getattr(self, "dump_path", None) else None
-            model = (info or {}).get("device", {}).get("tunerModel")
+            model = dump_catalog.tuner_model(self.dump_path) if getattr(self, "dump_path", None) else None
             if not model:
                 return None
             chip = model["chip"]
             address = model["address"] if address is None else address
             config = {k: model[c] for k, c in (("xtal_hz", "xtalHz"), ("if_hz", "ifHz")) if c in model}
+            sec = model.get("secondary")
         elif address is None:
             raise ValueError("attach_tuner: give the tuner's 7-bit I2C address with its chip")
         else:
@@ -1846,6 +2010,10 @@ class AliMipsSimulator:
         device = tuners.make(chip, **config)
         self.i2c_devices[address] = device
         self.log(f"[I2C] tuner model {chip} at 0x{address:02X}")
+        if sec:
+            sec_cfg = {k: sec[c] for k, c in (("xtal_hz", "xtalHz"), ("if_hz", "ifHz")) if c in sec}
+            self.i2c_devices[sec["address"]] = tuners.make(sec["chip"], **sec_cfg)
+            self.log(f"[I2C] tuner model {sec['chip']} at 0x{sec['address']:02X}")
         return device
 
     def attach_demod(self):
@@ -1894,7 +2062,8 @@ class AliMipsSimulator:
     def tuner(self):
         """The tuner model on the I2C bus (tuners.py), or None."""
         import tuners
-        return next((d for d in self.i2c_devices.values() if tuners.is_tuner(d)), None)
+        ts = [d for d in self.i2c_devices.values() if tuners.is_tuner(d)]
+        return next((d for d in ts if d.frequency() is not None), ts[0] if ts else None)
 
     def tuner_info(self):
         """What the tuner is tuned to, one line (tuners.describe), or None
@@ -1961,7 +2130,7 @@ class AliMipsSimulator:
         dmx = getattr(self.chip, "dmx", None)
         return dmx.describe() if dmx is not None else None
 
-    def press_key(self, key):
+    def press_key(self, key, coding=None):
         """Press a remote-control key: a name of ir_remote.VKEYS ('UP', 'DOWN',
         'OK', 'MENU', 'EXIT', '0'..'9', ...) or a virtual key number.  The NEC
         code is looked up in the UI's own key table, found in RAM the first
@@ -1988,7 +2157,7 @@ class AliMipsSimulator:
             raise KeyError(f"key {key!r} (vkey {vkey}) is not in the firmware's key table")
         # the frame bytes a table code stands for depend on the firmware's SDK
         # generation (ir_remote.IR_CODINGS; set from the dump's name by loadFile)
-        address, command, address_hi = ir_remote.frame_from_ir16(self._ir_key_table[vkey], self.ir_coding)
+        address, command, address_hi = ir_remote.frame_from_ir16(self._ir_key_table[vkey], coding or self.ir_coding)
         if address_hi is None:
             self.ir_send_nec(address, command, label=f"key {key}")
         else:
@@ -2004,8 +2173,7 @@ class AliMipsSimulator:
                 bits = (self._ic_lines >> (32 * word)) & self._M32
                 if bits:
                     a = self._ic + 4 * word
-                    v = int.from_bytes(uc.mem_read(a, 4), 'little')
-                    uc.mem_write(a, (v | bits).to_bytes(4, 'little'))
+                    self._mmio_write_word(a, self._mmio_word(a) | bits)
 
     def _ic_set_line(self, line, on):
         """Drive an interrupt-controller input of a modelled device (a level):
@@ -2016,16 +2184,19 @@ class AliMipsSimulator:
         self._ic_lines = (was | bit) if on else (was & ~bit)
         addr = self._ic + 4 * (line // 32)
         b = 1 << (line % 32)
-        cur = int.from_bytes(self.mu.mem_read(addr, 4), 'little')
-        self.mu.mem_write(addr, ((cur | b) if on else (cur & ~b)).to_bytes(4, 'little'))
+        cur = self._mmio_word(addr)
+        self._mmio_write_word(addr, (cur | b) if on else (cur & ~b))
         if on and not was & bit:
             self._irq_soon()
 
     def _ic_ip3(self):
         """IP3 from the interrupt controller: a modelled line asserted and
         enabled, or the other CPU's doorbell (_doorbell_ip3)."""
-        if self._ic_lines and self._ic_lines & int.from_bytes(self.mu.mem_read(self._ic_en, 8), 'little'):
-            return True
+        lines = self._ic_lines
+        if lines:
+            en = self._mmio_word(self._ic_en) | (self._mmio_word(self._ic_en + 4) << 32)
+            if lines & en:
+                return True
         return self._doorbell_ip3()
 
     def set_ic_layout(self, status, enable):
@@ -2050,7 +2221,7 @@ class AliMipsSimulator:
         if self.doorbell_in is None:
             return False
         offset, shift = self.doorbell_in
-        return bool((self.mmio_buffer[offset][0] << shift) & self.mmio_buffer[self.ic_base + 0xF][0] & 0xC0)
+        return bool((self._mmio_view[offset] << shift) & self._mmio_view[self.ic_base + 0xF] & 0xC0)
 
     def _irq_soon(self):
         """A device raised an interrupt from a memory hook.  Fast mode, inside a
@@ -2078,16 +2249,21 @@ class AliMipsSimulator:
         every byte of the access is dispatched to its own register.
         """
         self._device_access(uc)
-        if self._dev_replay_of(uc, 'spi_reg', address, value) is not None:
-            return      # the same store again after a stop at it (e.g. to install the flash read hook)
-        self._dev_note(uc, 'spi_reg', address, value)
+        if self._spi_dump_enabled:
+            if self._dev_replay_of(uc, 'spi_reg', address, value) is not None:
+                return      # the same store again after a stop at it (e.g. to install the flash read hook)
+            self._dev_note(uc, 'spi_reg', address, value)
+        other_base = 0x00090 if (address & 0xFFFF0) == 0x2E090 else 0x2E090
         for i in range(size):
             reg = (address + i) & 0xF
             byte = (value >> (8 * i)) & 0xFF
+            self._mmio_view[other_base | reg] = byte
             if reg == 0x8:
                 self._spi_write_ins(uc, byte)
             elif reg == 0x9:
-                self._spi_write_fmt(byte)
+                self._spi_fmt = byte
+                if self._spi_dump_enabled:
+                    self._spi_write_fmt(byte)
             elif reg == 0xA:
                 self._spi_dum = byte
             elif reg == 0xB:
@@ -2095,16 +2271,25 @@ class AliMipsSimulator:
 
     def _spi_write_ins(self, uc, cmd):
         """SF_INS written: latch the SPI command and queue its response bytes."""
+        if cmd == 0x05 and self._spi_ins == 0x05 and self._spi_status_injected and not self._rom_dirty and not self._spi_dump_enabled:
+            self._spi_resp_idx = 0
+            return
+        if self._spi_status_injected and cmd != 0x05:
+            self._uninject_spi_status()
         if self._rom_dirty:
             self._rom_restore()          # response bytes must not survive into normal read mode
         self._spi_ins = cmd
         self._last_flash_read_page = -1  # Reset so next passthrough read always logs
+        if cmd == 0x05 and self._spi_can_inline_status():
+            self._rom_view[0:4] = b'\x00\x00\x00\x00'
+            self._spi_status_injected = True
         self._update_flash_read_hooks()
-        cmd_name = self._SPI_CMD_NAMES.get(cmd, "Unknown")
-        pc = uc.reg_read(UC_MIPS_REG_PC)
-        # (fast mode: inside a device access Unicorn's PC is the translation block start)
-        where = f"PC=0x{pc:08X}" if self._code_hook_h is not None else f"block at 0x{pc:08X}"
-        self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [{where}]")
+        if self._spi_dump_enabled:
+            cmd_name = self._SPI_CMD_NAMES.get(cmd, "Unknown")
+            pc = self._reg_read(UC_MIPS_REG_PC)
+            # (fast mode: inside a device access Unicorn's PC is the translation block start)
+            where = f"PC=0x{pc:08X}" if self._code_hook_h is not None else f"block at 0x{pc:08X}"
+            self._spi_log(f"CMD 0x{cmd:02X} ({cmd_name}) [{where}]")
         self._spi_resp_idx = 0
         self._spi_response = self._spi_command_response(cmd)
         if cmd in (0x06, 0x04):     # Write Enable / Disable
@@ -2155,6 +2340,8 @@ class AliMipsSimulator:
 
     def _spi_write_fmt(self, value):
         self._spi_fmt = value
+        if not self._spi_dump_enabled:
+            return
         flags = []
         if value & 0x01: flags.append("DATA")
         if value & 0x02: flags.append("DUMM")
@@ -2171,11 +2358,17 @@ class AliMipsSimulator:
         (e.g. write SF_INS then read SF_INS back). Return the stored values.
         """
         self._device_access(uc)
-        regs = {0x8: self._spi_ins, 0x9: self._spi_fmt, 0xA: self._spi_dum, 0xB: self._spi_cfg}
+        base_off = address & 0xFFFFFF
         for i in range(size):
             reg = (address + i) & 0xF
-            if reg in regs:
-                uc.mem_write(address + i, bytes([regs[reg] & 0xFF]))
+            if reg == 0x8:
+                self._mmio_view[base_off + i] = self._spi_ins & 0xFF
+            elif reg == 0x9:
+                self._mmio_view[base_off + i] = self._spi_fmt & 0xFF
+            elif reg == 0xA:
+                self._mmio_view[base_off + i] = self._spi_dum & 0xFF
+            elif reg == 0xB:
+                self._mmio_view[base_off + i] = self._spi_cfg & 0xFF
 
     def _spi_is_passthrough(self):
         """Check if SPI controller is in normal flash read mode (passthrough).
@@ -2217,15 +2410,21 @@ class AliMipsSimulator:
         return ((seg << 22) | (rel & 0x3FFFFF)) % self.rom_size
 
     def _rom_write(self, off, data):
-        """Write bytes at flash offset off into the shared ROM buffer through the
-        writable KSEG1 view of its segment (wrapping at the end of the flash
-        like the next mirror does); see _flash_offset for the layout."""
-        mv = memoryview(bytes(data))
+        """Write bytes at flash offset off into the shared ROM buffer (wrapping
+        at the end of the flash like the next mirror does); see _flash_offset for
+        the layout."""
+        if not isinstance(data, (bytes, bytearray)):
+            data = bytes(data)
+        n_total = len(data)
+        if 0 <= off and off + n_total <= self.rom_size:
+            self._rom_view[off:off + n_total] = data
+            return
+        mv = memoryview(data)
         pos = 0
-        while pos < len(mv):
+        while pos < n_total:
             o = (off + pos) % self.rom_size
-            n = min(len(mv) - pos, 0x400000 - (o & 0x3FFFFF), self.rom_size - o)
-            self.mu.mem_write(0xAFC00000 - (o & 0xC00000) + (o & 0x3FFFFF), bytes(mv[pos:pos + n]))
+            n = min(n_total - pos, self.rom_size - o)
+            self._rom_view[o:o + n] = mv[pos:pos + n]
             pos += n
 
     def _rom_restore(self):
@@ -2238,6 +2437,8 @@ class AliMipsSimulator:
             else:
                 self._rom_write(off, self.flash_device.read(off, end - off))
         self._rom_dirty.clear()
+        if self._spi_status_injected:
+            self._rom_view[0:4] = b'\x00\x00\x00\x00'
 
     def _flash_program(self, off, byte):
         """Program one byte: flash can only clear bits until the sector is erased."""
@@ -2284,10 +2485,11 @@ class AliMipsSimulator:
         next instruction in exact mode), so they never leak into the flash
         contents the firmware reads later.
         """
-        if self._rom_dirty:
-            self._rom_restore()          # undo the previous transient bytes before this load
-        off = self._flash_offset(address)
+        rel = address & 0x00FFFFFF
+        off = 0 if rel == 0xC00000 else self._flash_offset(address)
         if self._spi_is_passthrough():
+            if self._rom_dirty:
+                self._rom_restore()      # undo the previous transient bytes before this load
             self._dev_last = None        # (a plain flash read: no side effect, nothing to replay)
             # Log flash read offset (throttled: only when 64KB sector changes)
             sector = off >> 16
@@ -2295,19 +2497,35 @@ class AliMipsSimulator:
                 self._last_flash_read_page = sector
                 self._spi_log(f"  FLASH READ @ 0x{off:06X} (sector {sector})")
             return  # Normal read mode — let ROM content pass through
-
-        # Command mode — inject SPI response data
-        self._device_access(uc, hooked=True)
-        rp = self._dev_replay_of(uc, 'spi', address)
-        if rp is not None and len(rp[2]) == size:
-            self._rom_inject(uc, address, off, rp[2])   # replay: the same response bytes again
-            self._rom_dirty.append((off, size))
+        if self._spi_status_injected and off + size <= 4:
+            if self._rom_dirty:
+                self._rom_restore()
+            self._dev_last = None
             return
-        resp = self._spi_response_bytes(size)
-        self._rom_inject(uc, address, off, resp)
-        self._rom_dirty.append((off, size))
+
+        # Command mode — inject SPI response data (skip restoring the exact same slot we overwrite)
+        same_dirty = len(self._rom_dirty) == 1 and self._rom_dirty[0] == (off, size)
+        if self._rom_dirty and not same_dirty:
+            self._rom_restore()
+            same_dirty = False
+        self._device_access(uc, hooked=True)
+        if self._dev_replays:
+            rp = self._dev_replay_of(uc, 'spi', address)
+            if rp is not None and len(rp[2]) == size:
+                self._rom_inject(uc, address, off, rp[2])   # replay: the same response bytes again
+                if not same_dirty:
+                    self._rom_dirty.append((off, size))
+                return
+        stream = self._spi_stream
+        resp = stream.read(size) if (stream is not None and stream.active) else self._spi_response_bytes(size)
+        if off + size <= self.rom_size:
+            self._rom_view[off:off + size] = resp
+        else:
+            self._rom_write(off, resp)
+        if not same_dirty:
+            self._rom_dirty.append((off, size))
         self._dev_note(uc, 'spi', address, resp, exact=True)    # (memory hook: exact PC)
-        if self._spi_response:
+        if self._spi_dump_enabled and self._spi_response:
             self._spi_log(f"  RESP [{size}B]: {' '.join(f'{b:02X}' for b in resp)}")
 
     def _hook_spi_flash_write(self, uc, access, address, size, value, user_data):
@@ -2324,6 +2542,8 @@ class AliMipsSimulator:
         only the emulated program/erase changes rom_image.
         """
         self._device_access(uc, hooked=True)
+        if self._spi_status_injected:
+            self._uninject_spi_status()
         if self._rom_dirty:
             self._rom_restore()
         off = self._flash_offset(address)
@@ -2397,10 +2617,36 @@ class AliMipsSimulator:
     #    EXTEND/JAL/JALX -- the tracked mode disambiguates.
     # ------------------------------------------------------------------
     HFLAG_M16 = 0x400
+    _CACHED_HFLAGS_OFF = None
+    _CACHED_CTX_SIZE = None
+    _CACHED_GPR_OFF = None
+
+    def _bind_ctx_save(self):
+        try:
+            lib = sys.modules[type(self.mu).__module__].uclib
+            uch, ctx_ptr = self.mu._uch, self._ctx.context
+            c_save = lib.uc_context_save
+            self._ctx_save = lambda: c_save(uch, ctx_ptr)
+        except Exception:
+            self._ctx_save = lambda: self.mu.context_update(self._ctx)
 
     def _calibrate_hflags(self):
         """Find CPUMIPSState.hflags inside Unicorn's context blob (see above)."""
         import struct, ctypes
+        if AliMipsSimulator._CACHED_HFLAGS_OFF is not None:
+            try:
+                ctx = self.mu.context_save()
+                if ctx.size == AliMipsSimulator._CACHED_CTX_SIZE:
+                    self._hflags_off = AliMipsSimulator._CACHED_HFLAGS_OFF
+                    self._ctx = ctx
+                    base = ctypes.cast(ctx.context, ctypes.c_void_p).value
+                    self._hflags_view = ctypes.c_uint32.from_address(base + self._hflags_off)
+                    self.mu.context_update(self._ctx)
+                    self._bind_ctx_save()
+                    self.log(f"ISA mode tracking: hflags at context offset {self._hflags_off}")
+                    return
+            except Exception:
+                pass
         cands = []
         ctx = None
         try:
@@ -2430,11 +2676,14 @@ class AliMipsSimulator:
             self._hflags_off = None
             return
         self._hflags_off = cands[0]
+        AliMipsSimulator._CACHED_HFLAGS_OFF = self._hflags_off
+        AliMipsSimulator._CACHED_CTX_SIZE = ctx.size
         self._ctx = ctx
         base = ctypes.cast(ctx.context, ctypes.c_void_p).value
         self._hflags_view = ctypes.c_uint32.from_address(base + self._hflags_off)
         # Make sure context_update works with this binding before relying on it.
         self.mu.context_update(self._ctx)
+        self._bind_ctx_save()
         self.log(f"ISA mode tracking: hflags at context offset {self._hflags_off}")
 
     def _calibrate_gpr_view(self):
@@ -2443,35 +2692,44 @@ class AliMipsSimulator:
         reg_reads).  Called once the GPR map exists."""
         import struct, ctypes
         self._gpr_view = None
+        self._pc_view = None
         if self._ctx is None:
+            return
+        if AliMipsSimulator._CACHED_GPR_OFF is not None:
+            base = ctypes.cast(self._ctx.context, ctypes.c_void_p).value
+            self._gpr_view = (ctypes.c_char * 128).from_address(base + AliMipsSimulator._CACHED_GPR_OFF - 4)
+            self._pc_view = ctypes.c_uint32.from_address(base + AliMipsSimulator._CACHED_GPR_OFF + 124)
             return
         try:
             vals = [0x5A5A0000 | (i << 8) | 0xA5 for i in range(1, 32)]
             for i, v in enumerate(vals, 1):
-                self.mu.reg_write(self.gpr_map[i], v)
+                self._reg_write(self.gpr_map[i], v)
             self.mu.context_update(self._ctx)
             blob = ctypes.string_at(self._ctx.context, self._ctx.size)
             off = blob.find(struct.pack('<31I', *vals))
             for i in range(1, 32):
-                self.mu.reg_write(self.gpr_map[i], 0)
+                self._reg_write(self.gpr_map[i], 0)
             if off >= 4:
+                AliMipsSimulator._CACHED_GPR_OFF = off
                 base = ctypes.cast(self._ctx.context, ctypes.c_void_p).value
                 self._gpr_view = (ctypes.c_char * 128).from_address(base + off - 4)
+                self._pc_view = ctypes.c_uint32.from_address(base + off + 124)
         except Exception as e:
             self.log(f"Warning: GPR fingerprint calibration failed: {e}")
 
-    def _gpr_snapshot(self):
+    def _gpr_snapshot(self, ctx_saved=False):
         """The 32 GPRs as bytes (None if not calibrated)."""
         if self._gpr_view is None:
             return None
-        self.mu.context_update(self._ctx)
+        if not ctx_saved:
+            self._ctx_save()
         return self._gpr_view.raw
 
     def get_hflags(self):
         """Current QEMU hflags word, or None if calibration failed."""
         if self._hflags_off is None:
             return None
-        self.mu.context_update(self._ctx)
+        self._ctx_save()
         return self._hflags_view.value
 
     def is_mips16_mode(self, pc=None):
@@ -2513,7 +2771,7 @@ class AliMipsSimulator:
         """PC value to hand to emu_start(): resets the tracker and encodes the ISA mode in bit 0."""
         hf = self.get_hflags() if self._hflags_off is not None else None
         if hf is not None:
-            m16 = self.is_mips16_mode()
+            m16 = bool(hf & self.HFLAG_M16)
         else:
             m16 = self.is_mips16_addr(pc)
         self._cur_m16 = m16
@@ -2736,24 +2994,22 @@ class AliMipsSimulator:
         the simulated CP0 state.  Returns True if the PC was redirected past the
         instruction (i.e. Unicorn will not execute it)."""
         rs = (w >> 21) & 0x1F
-        rt = (w >> 16) & 0x1F
-        rd = (w >> 11) & 0x1F
-        sel = w & 0x7
-        funct = w & 0x3F
         if rs == 0x00:                      # MFC0 rt, rd
-            val = self._cp0_read(rd, sel)
+            val = self._cp0_read((w >> 11) & 0x1F, w & 0x7)
             if val is None:
                 return False                # other registers: let Unicorn handle
             if in_delay_slot:
                 self._delay_slot_skips += 1
                 return False
-            self._reg_write(self.gpr_map[rt], val & 0xFFFFFFFF)
+            self._reg_write(self.gpr_map[(w >> 16) & 0x1F], val & 0xFFFFFFFF)
             self._reg_write(UC_MIPS_REG_PC, address + 4)
             return True
         if rs == 0x04:                      # MTC0 rt, rd
+            rd = (w >> 11) & 0x1F
+            rt = (w >> 16) & 0x1F
             if rd == 12 and not self.force_erl and not in_delay_slot and self._code_hook_h is None:
                 return self._follow_status_write(uc, address, rt)
-            resched = self._cp0_write(uc, rd, sel, self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF)
+            resched = self._cp0_write(uc, rd, w & 0x7, self._reg_read(self.gpr_map[rt]) & 0xFFFFFFFF)
             if resched is None:
                 return False
             if in_delay_slot:
@@ -2765,7 +3021,7 @@ class AliMipsSimulator:
             if resched:
                 self._reschedule_slice()
             return True
-        if rs == 0x10 and funct == 0x18:    # ERET
+        if rs == 0x10 and (w & 0x3F) == 0x18:    # ERET
             if in_delay_slot:
                 return False
             target = self._eret(uc)
@@ -2802,7 +3058,10 @@ class AliMipsSimulator:
         words = self._ram_words
         i = (address & 0x1FFFFFFF) >> 2
         if self._code_hook_h is not None or words is None or (address >> 29) not in (4, 5) \
-                or not 0 < i < len(words) - 4:
+                or not 0 < i < self._ram_words_len - 4:
+            return 1
+        x1 = words[i + 1]
+        if x1 and x1 != w:
             return 1
         for k in range(1, 5):
             x = words[i + k]
@@ -3246,9 +3505,11 @@ class AliMipsSimulator:
         """Install the hook set for the current mode (called before emu_start)."""
         full = self._want_full_hook()
         if full and self._code_hook_h is None:
-            for h in list(self._cp0_site_hooks.values()) + list(self._bp_hooks.values()) + list(self._virgin_hooks.values()):
+            for h in (list(self._cp0_site_hooks.values()) + list(self._bp_hooks.values()) +
+                      list(self._virgin_hooks.values()) + list(self._long_block_hooks.values())):
                 self.mu.hook_del(h)
-            self._cp0_site_hooks.clear(); self._bp_hooks.clear(); self._virgin_hooks.clear()
+            self._cp0_site_hooks.clear(); self._bp_hooks.clear(); self._virgin_hooks.clear(); self._long_block_hooks.clear()
+            self._scanned_ram_chunks.clear()
             self._rom_sites_hooked, self._vector_page = False, None
             self._rebase_count()            # Count: emulation time -> instruction count
             self._code_hook_h = self.mu.hook_add(UC_HOOK_CODE, self._hook_code)
@@ -3359,32 +3620,33 @@ class AliMipsSimulator:
         interrupt disable (skip_irq_disable): its first, or the same again
         after 1-8 NOPs / EHBs."""
         n = len(data)
-
-        def word(q):
-            return struct.unpack_from("<I", data, q)[0] if 0 <= q <= n - 4 else None
-
-        def skip_nops(q, most):
-            """The offset of the first word before q that is not a NOP / EHB,
-            or None after more than `most` of them."""
-            for _ in range(most):
-                if word(q) not in (0, 0xC0):
-                    return q
-                q -= 4
-            return None if word(q) in (0, 0xC0) else q
-
-        mtc0 = word(p)
-        if mtc0 is None or (mtc0 & 0xFFE0FFFF) != 0x40806000:
+        if p < 28 or p > n - 4:
             return False
-        q = skip_nops(p - 4, 8)
-        if q is not None and q < p - 4 and word(q) == mtc0:
+        unpack = struct.unpack_from
+        mtc0 = unpack("<I", data, p)[0]
+        if (mtc0 & 0xFFE0FFFF) != 0x40806000:
+            return False
+        q = p - 4
+        for _ in range(8):
+            if q < 0 or unpack("<I", data, q)[0] not in (0, 0xC0):
+                break
+            q -= 4
+        if q >= 0 and q < p - 4 and unpack("<I", data, q)[0] == mtc0:
             p = q                                   # (the second write: the first is checked)
-        t, x = (mtc0 >> 16) & 31, ((word(p - 8) or 0) >> 16) & 31
-        if x == t or word(p - 4) != 0x24 | t << 21 | x << 16 | t << 11 or word(p - 8) != 0x2400FFFE | x << 16 \
-                or ((word(p - 12) or 0) & 0xFFFF0000) != 0x14000000 | x << 21 \
-                or word(p - 16) != 0x24 | x << 21 | t << 16 | x << 11 or word(p - 20) != 0x24000006 | x << 16:
+        if p < 28:
             return False
-        q = skip_nops(p - 24, 8)
-        return q is not None and q < p - 24 and word(q) == 0x40006000 | t << 16
+        w_m20, w_m16, w_m12, w_m8, w_m4 = unpack("<5I", data, p - 20)
+        t, x = (mtc0 >> 16) & 31, (w_m8 >> 16) & 31
+        if x == t or w_m4 != 0x24 | t << 21 | x << 16 | t << 11 or w_m8 != 0x2400FFFE | x << 16 \
+                or (w_m12 & 0xFFFF0000) != 0x14000000 | x << 21 \
+                or w_m16 != 0x24 | x << 21 | t << 16 | x << 11 or w_m20 != 0x24000006 | x << 16:
+            return False
+        q = p - 24
+        for _ in range(8):
+            if q < 0 or unpack("<I", data, q)[0] not in (0, 0xC0):
+                break
+            q -= 4
+        return q >= 0 and q < p - 24 and unpack("<I", data, q)[0] == (0x40006000 | t << 16)
 
     def _add_cp0_sites(self, sites):
         for addr in sites:
@@ -3450,11 +3712,26 @@ class AliMipsSimulator:
             self._rom_sites_hooked = True
         full = ranges is None
         if full:
-            ranges = [(0x80000000, min(self.ram_size, self._RAM_CODE_LIMIT))] + self.chip.code_ranges()
+            chunk = self._VIRGIN_CHUNK
+            ram_chunks = set(range(0, min(self.ram_size, self._RAM_CODE_LIMIT), chunk))
+            extra = []
+            for start, length in self.chip.code_ranges():
+                phys = start & 0x1FFFFFFF
+                if (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size:
+                    ram_chunks.update(range(phys & -chunk, phys + length, chunk))
+                else:
+                    extra.append((start, length))
+            ranges = [(0x80000000 + c, min(chunk, self.ram_size - c)) for c in sorted(ram_chunks)] + extra
         for start, length in ranges:
             phys = start & 0x1FFFFFFF
-            if (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size:
+            in_ram = (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size
+            ram_bytes = None
+            if in_ram:
                 ram = self._ram_view[phys:phys + length]            # (the RAM buffer itself, no copy)
+                if length >= self._VIRGIN_CHUNK:
+                    ram_bytes = bytes(ram)
+                    if full and self._scanned_ram_chunks.get((phys, length)) == ram_bytes:
+                        continue
             else:
                 try:
                     ram = self.mu.mem_read(start, length)
@@ -3464,9 +3741,13 @@ class AliMipsSimulator:
             found = self._find_cp0_sites(ram, phys)                 # physical offsets
             for seg in (0x80000000, 0xA0000000):                     # KSEG0 and KSEG1 views
                 sites |= {seg + off for off in found}
+            if (start >> 29) in (0, 4, 5):
+                self._find_long_blocks(ram, phys, (0x80000000, 0xA0000000))
             if not full and (start >> 29) in (4, 5):                # (a chunk's first execution, new code)
                 self._find_lzma_decoders(ram, phys, (0x80000000, 0xA0000000))
                 self._find_delay_routines(ram, phys, (0x80000000, 0xA0000000))
+            if ram_bytes is not None:
+                self._scanned_ram_chunks[(phys, length)] = ram_bytes
         self._add_cp0_sites(sites)
         if full:
             self._update_short_block_hook()
@@ -3520,7 +3801,7 @@ class AliMipsSimulator:
             self._rom_restore()
         words = self._ram_words
         i = (address & 0x1FFFFFFF) >> 2
-        if words is not None and 0 < i < len(words) and (address >> 29) in (0, 4, 5):
+        if words is not None and 0 < i < self._ram_words_len and (address >> 29) in (0, 4, 5):
             prev, w = words[i - 1], words[i]            # RAM (kuseg, KSEG0, KSEG1): its buffer
         else:
             try:
@@ -3530,27 +3811,25 @@ class AliMipsSimulator:
                 prev, w = None, int.from_bytes(uc.mem_read(address, 4), 'little')
         if (w >> 26) != 0x10:
             return                      # code changed since the scan
-        in_ds = False
-        if prev is not None:
-            in_ds = self._delay_slot_words.get(prev)
-            if in_ds is None:
-                in_ds = self._delay_slot_words[prev] = self._insn_has_delay_slot(prev.to_bytes(4, 'little'), 4, False)
+        in_ds = self._delay_slot_words.get(prev)
+        if in_ds is None:
+            in_ds = self._delay_slot_words[prev] = self._insn_has_delay_slot(prev.to_bytes(4, 'little'), 4, False)
         # A breakpoint / stop address on this instruction: its hook may be queued
         # behind this one, and Unicorn skips the remaining hooks of an instruction
         # once a stop is requested (an interrupt made deliverable here does that).
         # So stop before the instruction here, like the breakpoint hook would.
         bp_reason = None
-        if not self.is_stepping:
+        if (self.stop_instr is not None or self.breakpoints) and not self.is_stepping:
             if self.stop_instr is not None and address == self.stop_instr:
                 bp_reason = 'stop_instr'
             elif address in self.breakpoints:
                 bp_reason = 'breakpoint'
-        if bp_reason and not in_ds:
-            self.log(f"\n[{'STOP' if bp_reason == 'stop_instr' else 'BREAKPOINT'}] "
-                     f"{'Reached stop address' if bp_reason == 'stop_instr' else 'Hit at'}: 0x{address:08X}")
-            self._stop_reason = bp_reason
-            uc.emu_stop()
-            return
+            if bp_reason and not in_ds:
+                self.log(f"\n[{'STOP' if bp_reason == 'stop_instr' else 'BREAKPOINT'}] "
+                         f"{'Reached stop address' if bp_reason == 'stop_instr' else 'Hit at'}: 0x{address:08X}")
+                self._stop_reason = bp_reason
+                uc.emu_stop()
+                return
         # One clock reading for this instruction (Count, timer checks), taken
         # when first needed (_vtime): the thread clock costs ~0.5 us per read,
         # and MFC0 Status / EPC need none.
@@ -3635,9 +3914,10 @@ class AliMipsSimulator:
             self._timer_update()
             if not self._irq_deliverable() or self._irq_gap_left() > 0:
                 return cur_pc               # (gap: the next slice is planned to end with it)
-        if not self._at_safe_point():
+        hf = self.get_hflags()
+        if hf & self._HFLAG_BMASK:
             return cur_pc                   # between a branch and its delay slot: next boundary
-        epc = cur_pc | (1 if self.is_mips16_mode() else 0)
+        epc = cur_pc | (1 if (hf & self.HFLAG_M16) else 0)
         if uart:
             if self._code_hook_h is None:
                 self._rescan_cp0_sites()    # fast mode: the ISR code must be hooked before it runs
@@ -3657,9 +3937,10 @@ class AliMipsSimulator:
             page = vector & 0x1FFFF000
             if self._code_hook_h is None and page < min(self.ram_size, self._RAM_CODE_LIMIT):
                 seen = self._vector_page
-                if seen is None or seen[0] != page or self._ram_view[page:page + 0x1000] != seen[1]:
+                page_bytes = bytes(self._ram_view[page:page + 0x1000])
+                if seen is None or seen[0] != page or page_bytes != seen[1]:
                     self._rescan_cp0_sites([(0x80000000 | page, 0x1000)])
-                    self._vector_page = (page, bytes(self._ram_view[page:page + 0x1000]))
+                    self._vector_page = (page, page_bytes)
                     if self._tb_flush_needed:
                         self._flush_tb()
         self.mu.reg_write(UC_MIPS_REG_PC, vector)
@@ -3804,14 +4085,25 @@ class AliMipsSimulator:
         estimated rate (instruction counts stay a measure of emulation time,
         as the loop's spinning would have made them; no CP0 rescan for those).
         Returns whether it moved."""
-        until = self._idle_until(max_vtime)
-        if until is None:
-            return False
-        try:
-            if bytes(self.mu.mem_read(pc, 8)) != self._IDLE_LOOP:
+        if (pc & 3) == 0 and self._ram_words is not None and (pc >> 29) in (0, 4, 5):
+            i = (pc & 0x1FFFFFFF) >> 2
+            if 0 <= i < self._ram_words_len - 1:
+                if self._ram_words[i] != 0x1000FFFF or self._ram_words[i + 1] != 0:
+                    return False
+                until = self._idle_until(max_vtime)
+                if until is None:
+                    return False
+            else:
                 return False
-        except UcError:
-            return False
+        else:
+            until = self._idle_until(max_vtime)
+            if until is None:
+                return False
+            try:
+                if bytes(self.mu.mem_read(pc, 8)) != self._IDLE_LOOP:
+                    return False
+            except UcError:
+                return False
         if pc not in self._idle_loops:
             self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
             self._tb_flush_needed = True
@@ -3845,7 +4137,7 @@ class AliMipsSimulator:
         condition holds, or None."""
         words = self._ram_words
         i = (pc & 0x1FFFFFFF) >> 2
-        if not self.poll_skip or words is None or (pc >> 29) not in (4, 5) or not 0 <= i < len(words) - 3:
+        if not self.poll_skip or words is None or (pc >> 29) not in (4, 5) or not 0 <= i < self._ram_words_len - 3:
             return None
         lw, br = words[i], words[i + 1]
         if (lw >> 26) != 0x23 or words[i + 2] != 0 or (br & 0xFFFF) != 0xFFFE or (br >> 26) not in (4, 5):
@@ -3861,7 +4153,7 @@ class AliMipsSimulator:
         if address & 3 or offset not in self._MAILBOXES or not self._mailbox_peer():
             return None
         other = b if a == rt else a
-        value = int.from_bytes(self.peek(address, 4), 'little')
+        value = self._mmio_word(offset)
         x = self._reg_read(self.gpr_map[other]) if other else 0
         return address if (value == x) == ((br >> 26) == 4) else None
 
@@ -4160,7 +4452,11 @@ class AliMipsSimulator:
                     target = (a & 0xF0000000) | (int.from_bytes(call, 'little') & 0x03FFFFFF) << 2
                     if not self._is_get_count(target):
                         continue
-                    self._delay_routines[a] = (bytes(data[m.start():m.end()]), gp_off, target, kind)
+                    code_bytes = bytes(data[m.start():m.end()])
+                    phys = a & 0x1FFFFFFF
+                    self._delay_code_views[a] = (self._ram_view[phys:phys + len(code_bytes)]
+                                                 if (a >> 29) in (4, 5) and phys + len(code_bytes) <= self.ram_size else None)
+                    self._delay_routines[a] = (code_bytes, gp_off, target, kind)
                     self._delay_loops[a + loop_at] = a
                     if a not in self._delay_hooks:
                         loop = a + loop_at
@@ -4196,9 +4492,9 @@ class AliMipsSimulator:
             if any(s is not None and (entry <= s < entry + len(code) or get_count <= s < get_count + 48)
                    for s in stops):
                 return None
-        phys = entry & 0x1FFFFFFF
-        if (entry >> 29) in (4, 5) and phys + len(code) <= self.ram_size:
-            if self._ram_view[phys:phys + len(code)] != code:      # (in place: no copy)
+        code_view = self._delay_code_views.get(entry)
+        if code_view is not None:
+            if code_view != code:                                   # (in place: no copy, no slice alloc)
                 return None
         elif self._guest_bytes(entry, len(code)) != code:
             return None
@@ -4292,9 +4588,10 @@ class AliMipsSimulator:
         if max_instructions is not None:
             self.max_instructions = max_instructions
 
-        cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
-        note = "" if self._want_full_hook() else " [fast mode: instruction counts are estimates, no per-instruction history]"
-        self.log(f"Starting emulation at {hex(cur_pc)} ({'MIPS16' if self.is_mips16_mode() else 'MIPS32'})...{note}")
+        cur_pc = self._reg_read(UC_MIPS_REG_PC)
+        if (self.cp0_ebase & 0x3FF) == 0:
+            note = "" if self._want_full_hook() else " [fast mode: instruction counts are estimates, no per-instruction history]"
+            self.log(f"Starting emulation at {hex(cur_pc)} ({'MIPS16' if self.is_mips16_mode() else 'MIPS32'})...{note}")
         end_addr = self.base_addr + self.rom_size
 
         self._in_run = True
@@ -4314,7 +4611,7 @@ class AliMipsSimulator:
                 # otherwise emu_start would stop on it immediately.
                 if cur_pc in self.breakpoints or (self.stop_instr is not None and cur_pc == self.stop_instr):
                     self.step()
-                    cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
+                    cur_pc = self._reg_read(UC_MIPS_REG_PC)
                     if self.max_instructions and self.instruction_count >= self.max_instructions:
                         break
                     if (cur_pc & ~1) == 0:
@@ -4398,21 +4695,22 @@ class AliMipsSimulator:
                     self.instruction_count += executed
                 if self._rom_dirty:
                     self._rom_restore()
+                cur_pc = self._reg_read(UC_MIPS_REG_PC)
                 if not full and self.force_erl:
-                    native = self.mu.reg_read(UC_MIPS_REG_CP0_STATUS)
+                    native = self._reg_read(UC_MIPS_REG_CP0_STATUS)
                     if not native & 0x4:
                         # The forced ERL is gone: a CP0 instruction ran natively,
                         # its hook skipped by Unicorn under an asynchronous stop
                         # (stopper or user / GUI emu_stop; see async_stop_margin_us).
                         # Only a native ERET or MTC0 Status is visible this way.
                         self.native_cp0_repairs += 1
-                        pc_now = self.mu.reg_read(UC_MIPS_REG_PC)
-                        if (pc_now & ~1) == 0:
+                        if (cur_pc & ~1) == 0:
                             # An ERET went to ErrorEPC (0) (possibly after a native
                             # 'mtc0 Status' that set EXL): redo it to the shadow EPC.
                             self.cp0_status = (native & ~0x4) | 0x2
                             target = self._eret(self.mu)
-                            self.mu.reg_write(UC_MIPS_REG_PC, target)
+                            self._reg_write(UC_MIPS_REG_PC, target)
+                            cur_pc = target & ~1
                             if self._stop_reason == 'null':
                                 self._stop_reason = None
                             what = f"ERET (redone to 0x{target:08X})"
@@ -4429,19 +4727,19 @@ class AliMipsSimulator:
                     # hook skipped under an asynchronous stop).  An ERET that ran
                     # natively went to the native EPC, 0: redo it to the shadow EPC.
                     native = self._reg_read(UC_MIPS_REG_CP0_STATUS)
-                    if (self.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0 and self.cp0_status & 0x2 \
+                    if (cur_pc & ~1) == 0 and self.cp0_status & 0x2 \
                             and not native & 0x2:
                         self.native_cp0_repairs += 1
                         self.cp0_status = native | 0x2
                         target = self._eret(self.mu)
-                        self.mu.reg_write(UC_MIPS_REG_PC, target)
+                        self._reg_write(UC_MIPS_REG_PC, target)
+                        cur_pc = target & ~1
                         if self._stop_reason == 'null':
                             self._stop_reason = None
                         if self.native_cp0_repairs <= 8:
                             self.log(f"[WARN] native ERET (redone to 0x{target:08X}) after an asynchronous stop")
                     else:
                         self.cp0_status = native
-                cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
 
                 if (cur_pc & ~1) == 0 or self._stop_reason == 'null':
                     self.log("[!] Stopped: Jump to NULL")

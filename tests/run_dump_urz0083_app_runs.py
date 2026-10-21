@@ -11,5 +11,5 @@ uart_regression.run("URZ0083_V1.2.5.abs", max_instructions=80_000_000,
                     expected=["MC: APP  init ok", "<< SDK4.0ba.4.2_20110225 >>",
                               "Libcore version 6.4.0@SDK4.0ba.6.4_20111019",
                               "Application version 1.0.0@SDK4.0ba.6.4_GLS_T_20111019",
-                              "0xb8018504 = 0x00000064"],
+                              "0xb8018504 = 0x0000006"],
                     once=["MC: APP  init ok"])

@@ -8,11 +8,15 @@
     "soc": "ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader \"DVBT---0.1.0\" of 2011-08-03 and HDCPKey \"Demo s3602\")",
     "family": "M3602 (chips/m3602.py)",
     "demod": "ALi M3101, external (the firmware's nim_m3101 driver; NIM_COFDM_0 / NIM_COFDM_1)",
-    "tuner": null,
+    "tuner": "MaxLinear MxL101SF at I2C 0x60",
     "flash": "2 MB SPI",
     "panel": null,
     "irCoding": "ext00",
-    "chipId": "0x3603"
+    "chipId": "0x3603",
+    "tunerModel": {
+      "chip": "mxl101sf",
+      "address": 96
+    }
   },
   "image": {
     "kind": "update",

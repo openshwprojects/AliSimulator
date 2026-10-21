@@ -1,0 +1,59 @@
+{
+  "file": "Software_Conax_X110p_PL_SMART_HD+_1.3.4_RC3_2015-01-23.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD X110p (the Polish Conax \"PL SMART HD+\" build)",
+    "type": "DVB-S2 HD single-tuner satellite receiver with Conax Smart HD+ card reader and CI slot",
+    "board": null,
+    "soc": "ALi M3606 (the main-code chunk's version \"M3606 \", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
+    "tuner": "Airoha AV2011 at I2C 0x63",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 9,
+      "sda": 8
+    },
+    "irCoding": "nec",
+    "gpioPullUps": [
+      99,
+      104
+    ],
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 99
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.3.4 RC3 PL SMART HD+ (main-code chunk 100000002003004 \"M3606 \"; bootloader << SDK4.0ba.4.2_20110225 >>; Libcore 8.33.0@SDK4.0ba.8.33_20150107, Application 1.0.0@SDK4.0ba.8.0_Combo_20120530, HDMI_ALI_E_141022_1; the SEE's uLibcore 1.1.5a@SDK_20111126)",
+    "date": "2015-01-23",
+    "size": 4194304,
+    "sha1": "adedd5174ade93e077469a01719de05b22ea782f",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), maincode 0x020000 (chunk \"100000002003004\" M3606 , LZMA 0x111805 bytes -> 5.5 MB), seecode 0x180000 (M3606 SEE, LZMA 0xBE8AB -> 2.3 MB), Radioback 0x280000 (1.0.0), ca 0x28FF80 (00000001), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0, 0x140070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=software_conax_x110p_pl_smart_hd-_1-3-4_2015_01_23.original.zip&dir=Firmware+for+to+all+receivers/Opticum/Opticum+HD+X110p",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update software_conax_x110p_pl_smart_hd-_1-3-4_2015_01_23.original.zip; fetched 2026-10-18 from the mirror's Opticum / Opticum HD X110p folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "  48"
+    ],
+    "note": "Its bootloader chunk header sets byte 0x43 = 0x80 (the EuP standby-on-AC-power-up flag: on a cold reset with $fp == 0, 0xAFC00694 writes 0xDEAD3BEE to 0xA0000110 and the bootloader enters its flash standby loop at 0x8FC012C4..0x8FC01368 until the front-panel power key KI2/DIG4 sets $fp = 0xDEADBEAD and jumps back to 0xAFC00000).  With $fp = 0xDEADBEAD set by M3602.start() when rom_image[0x43] == 0x80 (chips/m3602.py), it boots straight into the application, starts the SEE program at 0xA6000200, tunes its preloaded channel 48 (panel \" ON \", \"  48\") and draws the channel banner (~330k non-background pixels at 80 M instructions) followed by the \"No Signal!\" box.  Its remote uses standard NEC (\"nec\", MENU 0x37FD)."
+  },
+  "desc": [
+    "The official 1.3.4 RC3 Polish Conax Smart HD+ update (2015-01-23) of the Opticum HD X110p satellite receiver: the single-tuner sister model of the Opticum X110TS on the ALi M3606 SoC (main-code chunk 100000002003004, version \"M3606 \") with the same TM1650-compatible front panel on GPIO 9 (SCL) / 8 (SDA) and the same LNB / tuner fault inputs on GPIO 99 / 104.",
+    "Built on Libcore 8.33.0 (2015-01-07) and the SDK4.0ba.8.0_Combo application line, with a ca chunk at 0x28FF80 for the Conax Smart HD+ card reader and a preloaded Polish Hotbird channel list starting on channel 48."
+  ]
+}

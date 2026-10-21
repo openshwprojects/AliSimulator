@@ -44,6 +44,6 @@ screen_regression.run(
     # panel exit before the countdown starts the channel search (a step's settling waits for the
     # GE to go quiet, which the wizard's per-second countdown never does), panel down, then the
     # remote's right: the main menu's next page
-    navigation=[(("panel", TM1650Decoder.key_code(4, 2, pressed=False)), 100000),
-                (("panel", TM1650Decoder.key_code(4, 1, pressed=False)), 2000), ("RIGHT", 5000)],
+    navigation=[(("panel", TM1650Decoder.key_code(4, 2, pressed=False), 1), 100000),
+                (("panel", TM1650Decoder.key_code(4, 1, pressed=False), 1), 2000), ("RIGHT", 5000)],
 )

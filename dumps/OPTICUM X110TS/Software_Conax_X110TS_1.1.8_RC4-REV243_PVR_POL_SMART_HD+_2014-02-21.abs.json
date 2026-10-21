@@ -1,0 +1,64 @@
+{
+  "file": "Software_Conax_X110TS_1.1.8_RC4-REV243_PVR_POL_SMART_HD+_2014-02-21.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "X110TS (the 1.1.8 RC4-REV243 Polish Smart HD+ Conax PVR build)",
+    "type": "DVB-S2 HD twin-tuner PVR satellite receiver with Conax Smart HD+ card reader and CI+ slot",
+    "board": null,
+    "soc": "ALi M3606 (the main-code chunk's version \"M3606 2Tuner\", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners)",
+    "tuner": "Airoha AV2011 at I2C 0x63 (DVB-S2) + MaxLinear MxL101SF at I2C 0x60 (DVB-T)",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 9,
+      "sda": 8
+    },
+    "irCoding": "nec",
+    "gpioPullUps": [
+      99,
+      104
+    ],
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 99,
+      "secondary": {
+        "chip": "mxl101sf",
+        "address": 96
+      }
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.8 RC4-REV243 PVR POL SMART HD+ (main-code chunk \"M3606 2Tuner\")",
+    "date": "2014-02-21",
+    "size": 4194304,
+    "sha1": "21b84ee5c2f3db90fdbda4e2d4477e2b36b4b9e8",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), 111000000003002 0x020000 (M3606 2Tuner), seecode 0x180000 (M3606 SEE), Radioback 0x280000 (1.0.0), ca 0x28FF80 (00000001), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "https://satedu.cba.pl/index.php?action=downloadfile&filename=Software_Conax_X110TS_1.1.8_RC4-REV243_PVR_POL_SMART_HD%2B_2014-02-21.zip&directory=Globo%20%28Opticum%29/Opticum%20HD%20X110p%20-%20X110TS%20-%20XTS703p&",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": "2014-02-21",
+    "login": false,
+    "note": "Archive Software_Conax_X110TS_1.1.8_RC4-REV243_PVR_POL_SMART_HD+_2014-02-21.zip from satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "Strt",
+      "----",
+      "OOO1"
+    ],
+    "note": "Boots as the M3602 family with chip ID 0x3603, starts the SEE program at 0xA6000200, and renders its OSD screen (~164-212 GE commands, ~164-167 unique colours at 80 M instructions)."
+  },
+  "desc": [
+    "The 1.1.8 RC4-REV243 Polish Conax Smart HD+ PVR release (2014-02-21) for the Opticum HD X110TS twin-tuner satellite receiver on the ALi M3606 SoC."
+  ]
+}

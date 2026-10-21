@@ -47,11 +47,18 @@ import report_artifacts                                # noqa: E402
 DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
          ("URZ0083_V", "Cabletech URZ0083"), ("URZ0083_v", "Cabletech URZ0083"), ("URZ0086", "Cabletech URZ0086"),
+         ("KM00183", "Kruger&Matz KM0183"), ("KM00186", "Kruger&Matz KM0186"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
          ("prima8", "Strong Prima VIII"), ("T650i", "Ferguson Ariva T650i"), ("T760i", "Ferguson Ariva T760i"),
          ("T750i", "Ferguson Ariva T750i"),
+         ("A104", "Ferguson Ariva 104"), ("A154", "Ferguson Ariva 154 Combo"),
+         ("A204", "Ferguson Ariva 204"), ("A254", "Ferguson Ariva 254 Combo"), ("254Combo", "Ferguson Ariva 254 Combo"),
          ("r265lite", "Opticum Blue R265 Lite"), ("T90", "Opticum HD T90"), ("HD-XS2", "Globo HD-XS2"),
-         ("X110TS", "Opticum X110TS"), ("UNI_S60", "Opticum HD S60"), ("ArivaT50", "Ferguson Ariva T50"),
+         ("X110TS", "Opticum X110TS"), ("X110p", "Opticum HD X110p"),
+         ("UNI_S60", "Opticum HD S60"), ("Software_S50", "Opticum HD S50"), ("S16_CHN", "Openbox S16"),
+         ("ALI3606_0A010A00", "Amiko Mini HD"), ("miniplus_highspeed", "Edision Argus Miniplus Highspeed"),
+         ("OPTIMUSS_underline", "Edision Optimuss Underline"),
+         ("ArivaT50", "Ferguson Ariva T50"),
          ("ESR-250", "Echosonic Mini ESR-250"), ("ali3329", "M3329 board s15125"), ("THT501", "Thomson THT501"),
          ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
@@ -63,13 +70,28 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_r265lite_120_capture_screen.py", "run_dump_globo_signal.py",
               "run_dump_r265lite_signal_capture_screen.py", "run_dump_signal_capture_screen.py",
               "run_dump_t90_capture_screen.py", "run_dump_x110ts_capture_screen.py",
+              "run_dump_x110p_capture_screen.py",
               "run_dump_t750i_capture_screen.py", "run_dump_t760i_capture_screen.py",
+              "run_dump_a104_capture_screen.py",
               "run_dump_prima8_update_capture_screen.py", "run_dump_urz0195_2013_capture_screen.py",
               "run_dump_urz0083_capture_screen.py", "run_dump_urz0086_capture_screen.py",
-              "run_dump_s60_capture_screen.py", "run_dump_esr250_capture_screen.py",
+              "run_dump_s60_capture_screen.py", "run_dump_s50_capture_screen.py",
+              "run_dump_s16_capture_screen.py",
+              "run_dump_esr250_capture_screen.py",
               "run_dump_t50_capture_screen.py", "run_dump_hdxs2_capture_screen.py",
               "run_dump_hdxs2_reta_capture_screen.py", "run_dump_m3329_capture_screen.py",
               "run_dump_tht501_capture_screen.py")
+# The per-dump UART console tests (console_regression.ConsoleHarness): every
+# firmware with the ODM's interactive console gets its command table walked
+# through ("startconsole", each command and what it does); 15-60 s each.
+CONSOLE_TESTS = ("run_dump_maciej_console.py", "run_dump_globo_console.py", "run_dump_t90_console.py",
+                 "run_dump_r265lite_console.py", "run_dump_r265lite_120_console.py",
+                 "run_dump_x110p_console.py", "run_dump_x110ts_116_console.py",
+                 "run_dump_x110ts_117_console.py", "run_dump_x110ts_118_rc3_console.py",
+                 "run_dump_x110ts_118_rc4_console.py", "run_dump_x110ts_119_console.py",
+                 "run_dump_x110ts_tiles_console.py", "run_dump_x110ts_140c_console.py",
+                 "run_dump_hdxs2_reta_console.py", "run_dump_hdxs2_smarthd_console.py",
+                 "run_dump_hdxs2_ger_console.py", "run_dump_hdxs2_140_console.py")
 
 
 def discover_test_files(include_slow=False):
@@ -94,6 +116,7 @@ def discover_test_files(include_slow=False):
         # timer ticks (about 20 s each)
         "run_dump_to_main_app.py", "run_dump_Prima_to_main_app.py",
     ]
+    regressions += list(CONSOLE_TESTS)
     if include_slow:
         regressions += list(SLOW_TESTS)       # minutes each
     for name in regressions:
@@ -146,6 +169,8 @@ def _tags(path, result):
         tags.append({"group": "kind", "name": "regression"})
     if name in SLOW_TESTS:
         tags.append({"group": "kind", "name": "slow"})
+    if name in CONSOLE_TESTS or name == "test_uart_console.py":
+        tags.append({"group": "kind", "name": "console"})
     if result["images"] or result["panels"]:
         tags.append({"group": "data", "name": "renders"})
     if result["crashed"]:

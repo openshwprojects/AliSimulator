@@ -1,0 +1,64 @@
+{
+  "file": "Software_Conax_X110TS_1.1.8_RC3-REV243_PVR_ENG_2014-02-21.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "X110TS (the English Conax PVR build)",
+    "type": "DVB-S2 HD twin-tuner PVR satellite receiver with Conax card reader and CI+ slot",
+    "board": null,
+    "soc": "ALi M3606 (the main-code chunk's version \"M3606 2Tuner\", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners)",
+    "tuner": "Airoha AV2011 at I2C 0x63 (DVB-S2) + MaxLinear MxL101SF at I2C 0x60 (DVB-T)",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 9,
+      "sda": 8
+    },
+    "irCoding": "nec",
+    "gpioPullUps": [
+      99,
+      104
+    ],
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 99,
+      "secondary": {
+        "chip": "mxl101sf",
+        "address": 96
+      }
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.8 RC3-REV243 PVR ENG (main-code chunk 111000000003002 \"M3606 2Tuner\"; bootloader << SDK4.0ba.4.2_20110225 >>; Libcore 7.15.0@SDK4.0ba.7.15_20121024, Application 1.0.0@SDK4.0ba.8.0_Combo_20120530, HDMI_ALI_E_120522_1; the SEE's uLibcore 1.1.5a@SDK_20111126)",
+    "date": "2014-02-21",
+    "size": 4194304,
+    "sha1": "657e25d431453a0407dfa34636842825ce066042",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), maincode 0x020000 (chunk \"111000000003002\" M3606 2Tuner, LZMA 0x10F0BC bytes -> 5.4 MB), seecode 0x180000 (M3606 SEE, LZMA 0xC9381 -> 2.4 MB), Radioback 0x280000 (1.0.0), ca 0x28FF80 (00000001), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0, 0x140070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=software_conax_x110ts_1-1-8_rc3-rev243_pvr_eng_2014-02-21.original.zip&dir=Firmware+for+to+all+receivers/Opticum/Opticum+HD+X110+TS",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update software_conax_x110ts_1-1-8_rc3-rev243_pvr_eng_2014-02-21.original.zip; fetched 2026-10-18 from the mirror's Opticum / Opticum HD X110 TS folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "Strt",
+      "noCH"
+    ],
+    "note": "Boots as the M3602 family with chip ID 0x3603 and starts the SEE program at 0xA6000200; because its English defaultdb has no preloaded channels, the panel displays \" ON \", \"Strt\", \"noCH\" and the application opens directly into its main menu (~425k non-background pixels at 80 M instructions, 514 GE commands)."
+  },
+  "desc": [
+    "The official 1.1.8 RC3-REV243 English Conax PVR update (2014-02-21) of the Opticum X110TS twin-tuner satellite PVR (main-code chunk 111000000003002 \"M3606 2Tuner\", Libcore 7.15.0@SDK4.0ba.7.15_20121024).",
+    "Unlike the Polish Smart HD+ builds (1.1.0, 1.1.9), its default database is empty (no preloaded Polish channel list), so on first boot it displays \"noCH\" on the front panel and opens the main menu OSD."
+  ]
+}

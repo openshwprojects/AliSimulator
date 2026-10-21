@@ -1,0 +1,64 @@
+{
+  "file": "Software_Conax_X110TS_1.17_PVR_UNI_ENG_2014-02-05.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "X110TS (the 1.1.7 universal English Conax PVR \"PVR UNI ENG\" build)",
+    "type": "DVB-S2 HD twin-tuner PVR satellite receiver with Conax Smart HD+ card reader and CI+ slot",
+    "board": null,
+    "soc": "ALi M3606 (the main-code chunk's version \"M3606 2Tuner\", the seecode chunk's \"M3606 SEE\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, SDK4.0ba.8.0_Combo)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners)",
+    "tuner": "Airoha AV2011 at I2C 0x63 (DVB-S2) + MaxLinear MxL101SF at I2C 0x60 (DVB-T)",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 9,
+      "sda": 8
+    },
+    "irCoding": "nec",
+    "gpioPullUps": [
+      99,
+      104
+    ],
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 99,
+      "secondary": {
+        "chip": "mxl101sf",
+        "address": 96
+      }
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.7 PVR UNI ENG (main-code chunk 111000000003002 \"M3606 2Tuner\"; bootloader << SDK4.0ba.4.2_20110225 >>; Libcore 7.15.0@SDK4.0ba.7.15_20121024, Application 1.0.0@SDK4.0ba.8.0_Combo_20120530)",
+    "date": "2014-02-05",
+    "size": 4194304,
+    "sha1": "9f7bb7df113ca79e2ad32014a76dbfa789779834",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), HDCPKey 0x01FE00 (1.0.1), maincode 0x020000 (chunk \"111000000003002\" M3606 2Tuner), seecode 0x180000 (M3606 SEE), Radioback 0x280000 (1.0.0), ca 0x28FF80 (00000001), defaultdb 0x2A0000 (1.1.0), userdb 0x2BFF80 (1.0.0, 0x140070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Software_Conax_X110TS_1.1.7_PVR_UNI_ENG_2014-02-05.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "Archive Software_Conax_X110TS_1.1.7_PVR_UNI_ENG_2014-02-05.zip from the Opticum / INNE directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "Strt",
+      "----",
+      "OOO1"
+    ],
+    "note": "Boots as the M3602 family with chip ID 0x3603, starts the SEE program at 0xA6000200, and renders its OSD screen (~164-212 GE commands, ~164-167 unique colours at 80 M instructions)."
+  },
+  "desc": [
+    "The 1.1.7 universal English Conax PVR release (2014-02-05) of the Opticum X110TS twin-tuner satellite PVR on the ALi M3606 SoC."
+  ]
+}

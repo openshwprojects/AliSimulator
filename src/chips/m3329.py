@@ -63,7 +63,12 @@ OSD_PALETTE_PORTS = (0x41AC, 0x41C8)    # OSD layer 0's / 1's palette port
 # remote configuration at 0x8003B640 -- the table's address, the customer
 # code in the upper half of +4, the number of entries at +0xE (the panel's
 # first, then the remote's)
-REMOTE_KEYS = {'LEFT': 0x0A, 'RIGHT': 0x0B, 'UP': 0x0C, 'DOWN': 0x0D, 'MENU': 0x0E, 'OK': 0x0F, 'POWER': 0x12,
+REMOTE_KEYS = {'LEFT': 0x0A, 'RIGHT': 0x0B, 'UP': 0x0C, 'DOWN': 0x0D, 'MENU': 0x0E,
+               'OK': 0x0F, 'ENTER': 0x0F, 'EXIT': 0x10, 'BACK': 0x10, 'MUTE': 0x11,
+               'POWER': 0x12, 'PAUSE': 0x13, 'TVRADIO': 0x14, 'AUDIO': 0x15,
+               'INFO': 0x17, 'TEXT': 0x19, 'PAGE+': 0x1A, 'PAGE-': 0x1B,
+               'VOL-': 0x1F, 'VOL+': 0x20, 'CH-': 0x21, 'CH+': 0x22,
+               'RECALL': 0x23, 'FAV': 0x29,
                **{str(d): 0x30 + d for d in range(10)}}
 KEY_CONFIG = 0x8003B640
 

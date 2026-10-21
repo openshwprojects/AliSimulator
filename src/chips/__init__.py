@@ -19,6 +19,7 @@ from .m3801 import M3801
 from .m3821 import M3821
 
 FAMILIES = (M3821, C3505, M3503, M3602, M3329, M3801)     # M3801 last: it is the default
+FAMILY_CHOICES = ("Auto",) + tuple(cls.__name__ for cls in FAMILIES)
 
 
 def detect(image):

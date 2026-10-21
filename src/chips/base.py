@@ -19,7 +19,11 @@ def chunk_chain(image, limit=40):
         text = lambda o: bytes(image[q + o:q + o + 0x10]).split(b"\0", 1)[0].decode("latin-1")   # noqa: E731
         out.append((q, text(0x10), text(0x20)))
         if nxt == 0:
-            break
+            after = q + length + 0x80
+            if q == 0 and 0 < after <= len(image) - 0x40 and struct.unpack_from(">I", image, after)[0] not in (0, 0xFFFFFFFF):
+                nxt = after
+            else:
+                break
         q += nxt
     return out
 
@@ -37,7 +41,7 @@ def maincode(image):
         return _maincode_cache[1]
     data = b""
     for offset, name, _version in chunk_chain(image):
-        if name == "maincode":
+        if name.lower() == "maincode":
             length = struct.unpack_from(">I", image, offset + 4)[0]
             try:
                 data = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE).decompress(

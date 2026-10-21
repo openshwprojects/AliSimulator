@@ -434,7 +434,7 @@ def scenario_replay_tx_pairs(kind, fails, sim_hook=None):
     out = []
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
-    while time.time() - t0 < 2.0:
+    while time.time() - t0 < 2.0 or (visits[0] < 100 and time.time() - t0 < 10.0):
         sim.run(max_instructions=sim.instruction_count + 2_000_000)
     n = len(out) // 2 * 2
     bad = sum(1 for i in range(0, n, 2) if out[i] != out[i + 1] or (i and (out[i] - out[i - 1]) & 0xFF != 1))

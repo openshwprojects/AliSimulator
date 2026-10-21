@@ -1,21 +1,48 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, filedialog
 from unicorn import *
 from unicorn.mips_const import *
 from capstone import *
 import json
 import os
+import sys
 import threading
-from simulator import AliMipsSimulator
+import time
+import chips
+import dump_catalog
+from simulator import AliMipsSimulator, DUMPS_DIR, flash_size_for, resolve_dump
 from mips16_decoder import MIPS16Decoder
 
+FAMILIES = list(chips.FAMILY_CHOICES)
+SIDECAR_AUTO = dump_catalog.SIDECAR_AUTO
+SIDECAR_NONE = dump_catalog.SIDECAR_NONE
+
+_REG_MAP = {
+    "zero": UC_MIPS_REG_ZERO, "at": UC_MIPS_REG_AT, "v0": UC_MIPS_REG_V0, "v1": UC_MIPS_REG_V1,
+    "a0": UC_MIPS_REG_A0, "a1": UC_MIPS_REG_A1, "a2": UC_MIPS_REG_A2, "a3": UC_MIPS_REG_A3,
+    "t0": UC_MIPS_REG_T0, "t1": UC_MIPS_REG_T1, "t2": UC_MIPS_REG_T2, "t3": UC_MIPS_REG_T3,
+    "t4": UC_MIPS_REG_T4, "t5": UC_MIPS_REG_T5, "t6": UC_MIPS_REG_T6, "t7": UC_MIPS_REG_T7,
+    "s0": UC_MIPS_REG_S0, "s1": UC_MIPS_REG_S1, "s2": UC_MIPS_REG_S2, "s3": UC_MIPS_REG_S3,
+    "s4": UC_MIPS_REG_S4, "s5": UC_MIPS_REG_S5, "s6": UC_MIPS_REG_S6, "s7": UC_MIPS_REG_S7,
+    "t8": UC_MIPS_REG_T8, "t9": UC_MIPS_REG_T9, "k0": UC_MIPS_REG_K0, "k1": UC_MIPS_REG_K1,
+    "gp": UC_MIPS_REG_GP, "sp": UC_MIPS_REG_SP, "fp": UC_MIPS_REG_FP, "ra": UC_MIPS_REG_RA,
+    "PC": UC_MIPS_REG_PC, "HI": UC_MIPS_REG_HI, "LO": UC_MIPS_REG_LO,
+}
+
+
 class MIPSSimulatorGUI:
-    def __init__(self, root):
+    def __init__(self, root, binary_file="dump.bin", family="Auto", json_path=None, fast_mode=False):
         self.root = root
         self.root.title("MIPS Simulator - GUI Debugger (New Engine)")
-        self.root.geometry("1400x900")
+        self.root.geometry("1400x920")
         
-        self.BINARY_FILE = "dump.bin"
+        self._catalog = dump_catalog.catalog_entries()
+        self._label_to_path = {label: path for label, path, _sc in self._catalog}
+        self.BINARY_FILE = dump_catalog.resolve_catalog_dump(binary_file, self._catalog)
+        self._sidecar_presets = dump_catalog.sidecar_presets(self._catalog)
+        self._initial_family = family if family in FAMILIES else "Auto"
+        self._initial_json = json_path if json_path else SIDECAR_AUTO
+        self._initial_fast = bool(fast_mode)
         
         # Simulator instance
         self.sim = None
@@ -28,12 +55,13 @@ class MIPSSimulatorGUI:
         self.watches = []
         self.watch_previous_values = {}
         self.forced_mips16_addresses = set()
+        self._prev_regs = {}
+        self._log_buf = []
+        self._uart_buf = []
+        self._spi_buf = []
         
         # Temp breakpoints for stepping
         self.temp_breakpoints = set()
-        
-        # Address to ignore (for stepping over BPs)
-        self.ignore_bp_addr = None
 
         # Load persistent data
         self.load_breakpoints()
@@ -47,38 +75,51 @@ class MIPSSimulatorGUI:
 
     def _step_over_breakpoint(self):
         """Helper to step exactly one instruction ignoring any breakpoint at current PC"""
-        pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-        self.ignore_bp_addr = pc
-        try:
-            self.sim.runStep()
-        finally:
-            self.ignore_bp_addr = None
+        self.sim.runStep()
         
     def log(self, message):
-        """Add message to log"""
+        """Add message to log (buffered when running on the background execution thread)"""
+        if self.is_running:
+            self._log_buf.append(f"{message}\n")
+            return
         self.log_text.insert(tk.END, f"{message}\n")
         self.log_text.see(tk.END)
-        # Yield to event loop periodically so the window stays responsive
-        if not hasattr(self, '_log_count'):
-            self._log_count = 0
-        self._log_count += 1
-        if self._log_count % 50 == 0:
-            self.root.update_idletasks()
 
     def on_uart_write(self, char):
-        """Handle UART output"""
-        # Only print valid chars
+        """Handle UART output (buffered when running on the background execution thread)"""
         if isinstance(char, int):
             char = chr(char & 0xFF)
-            
         if char.isprintable() or char in ['\n', '\r', '\t']:
-             self.uart_text.insert(tk.END, char)
-             self.uart_text.see(tk.END)
+            if self.is_running:
+                self._uart_buf.append(char)
+            else:
+                self.uart_text.insert(tk.END, char)
+                self.uart_text.see(tk.END)
 
     def on_spi_log(self, message):
-        """Handle SPI log output"""
-        self.spi_text.insert(tk.END, message + "\n")
-        self.spi_text.see(tk.END)
+        """Handle SPI log output (buffered when running on the background execution thread)"""
+        if self.is_running:
+            self._spi_buf.append(message + "\n")
+        else:
+            self.spi_text.insert(tk.END, message + "\n")
+            self.spi_text.see(tk.END)
+
+    def _flush_text_buffers(self):
+        if self._log_buf:
+            chunk = "".join(self._log_buf[-500:])
+            self._log_buf.clear()
+            self.log_text.insert(tk.END, chunk)
+            self.log_text.see(tk.END)
+        if self._uart_buf:
+            chunk = "".join(self._uart_buf)
+            self._uart_buf.clear()
+            self.uart_text.insert(tk.END, chunk)
+            self.uart_text.see(tk.END)
+        if self._spi_buf:
+            chunk = "".join(self._spi_buf[-500:])
+            self._spi_buf.clear()
+            self.spi_text.insert(tk.END, chunk)
+            self.spi_text.see(tk.END)
 
     def _copy_text(self, text_widget):
         """Copy all text from a Text widget to clipboard"""
@@ -86,38 +127,100 @@ class MIPSSimulatorGUI:
         self.root.clipboard_clear()
         self.root.clipboard_append(content)
 
+    def _apply_sidecar_selection(self):
+        dump_catalog.apply_sidecar_selection(self.BINARY_FILE, self.sidecar_var.get(), self._sidecar_presets)
+
+    def _sync_dump_combo_display(self):
+        self.dump_var.set(dump_catalog.catalog_label_for(self.BINARY_FILE, self._catalog))
+
+    def browse_dump(self):
+        initial = DUMPS_DIR if os.path.isdir(DUMPS_DIR) else "."
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Select Firmware Image (.bin / .abs)",
+            initialdir=initial,
+            filetypes=[("Firmware images", "*.bin *.abs *.rom"), ("All files", "*.*")],
+        )
+        if path:
+            self.BINARY_FILE = path
+            self._sync_dump_combo_display()
+            self.reset_emulator()
+
+    def browse_json(self):
+        initial = DUMPS_DIR if os.path.isdir(DUMPS_DIR) else "."
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Select Sidecar JSON (.json)",
+            initialdir=initial,
+            filetypes=[("Sidecar JSON", "*.json"), ("All files", "*.*")],
+        )
+        if path:
+            self.sidecar_var.set(path)
+            self.reset_emulator()
+
+    def _on_dump_selected(self, _event=None):
+        sel = self.dump_var.get().strip()
+        self.BINARY_FILE = dump_catalog.resolve_catalog_dump(sel, self._catalog)
+        self._sync_dump_combo_display()
+        self.reset_emulator()
+
+    def _on_fast_mode_toggled(self):
+        if self.sim is not None:
+            self.sim.hook_every_instruction = not self.fast_mode_var.get()
+            mode = "Fast mode (selective CP0 hooks)" if self.fast_mode_var.get() else "Exact per-instruction mode"
+            self.log(f"Switched execution mode: {mode}")
+
+    def _on_spi_dump_toggled(self):
+        if self.sim is not None:
+            self.sim.setSPIDump(self.spi_dump_var.get())
+
     def init_emulator(self):
         """Initialize the simulator backend"""
         try:
-            # Create simulator instance
-            # We pass our log method as the handler
-            self.sim = AliMipsSimulator(log_handler=self.log)
-            self.sim.hook_every_instruction = True   # exact per-instruction hook for history/loop counts
+            if self.sim is not None and getattr(self.sim, "_stopper", None) is not None:
+                try:
+                    self.sim._stopper.close()
+                except Exception:
+                    pass
+            self._apply_sidecar_selection()
+            fam_sel = self.family_var.get()
+            chip_arg = None if fam_sel == "Auto" else fam_sel
+            # Create simulator instance with matching flash size
+            self.sim = AliMipsSimulator(rom_size=flash_size_for(self.BINARY_FILE), log_handler=self.log)
+            self.sim.hook_every_instruction = not self.fast_mode_var.get()
+            self.sim.setSPIDump(self.spi_dump_var.get())
             self.sim.setUartHandler(self.on_uart_write)
             self.sim.setSpiHandler(self.on_spi_log)
             
-            # Load the binary
-            self.sim.loadFile(self.BINARY_FILE)
-            
-            # Add GUI-specific hooks
-            # Breakpoints (User + Temp)
-            self.sim.mu.hook_add(UC_HOOK_CODE, self.hook_breakpoints)
+            # Load the binary and attach default tuner/demod/GPIO peripherals
+            self.sim.loadFile(self.BINARY_FILE, chip=chip_arg)
+            self.sim.attach_tuner()
             
             # Printf hook (Legacy support from old GUI)
             self.sim.mu.hook_add(UC_HOOK_CODE, self.hook_printf, begin=0xAFC00494, end=0xAFC00494)
             
+            self._prev_regs.clear()
+            chip_id = int.from_bytes(self.sim._mmio_view[2:4], "little")
+            self.root.title(f"MIPS Simulator - {os.path.basename(self.BINARY_FILE)} [{self.sim.chip.name} 0x{chip_id:04X}]")
             # Initialize GUI displays
             self.update_ui_safe()
-            self.log("Simulator initialized successfully using simulator.py backend")
+            self.log(f"Initialized {self.BINARY_FILE} as {self.sim.chip.name} (chip ID 0x{chip_id:04X}, ir:{self.sim.ir_coding})")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to initialize simulator: {e}")
             
     def reset_emulator(self):
         """Reset the emulator"""
+        if self.is_running:
+            self.pause_execution()
         self.is_running = False
         self.paused = False
         self.temp_breakpoints.clear()
+        self._log_buf.clear()
+        self._uart_buf.clear()
+        self._spi_buf.clear()
+        self.uart_text.delete("1.0", tk.END)
+        self.spi_text.delete("1.0", tk.END)
         self.init_emulator()
 
     def show_screen(self):
@@ -145,27 +248,6 @@ class MIPSSimulatorGUI:
     # -------------------------------------------------------------------------
     # Hooks
     # -------------------------------------------------------------------------
-    def hook_breakpoints(self, uc, address, size, user_data):
-        # Check user breakpoints
-        # Check user breakpoints
-        if address in self.breakpoints:
-             if self.ignore_bp_addr is not None and address == self.ignore_bp_addr:
-                 # Skip this breakpoint once
-                 return
-
-             # Standard behavior: Stop.
-             self.log(f"Breakpoint hit at 0x{address:08X}")
-             uc.emu_stop()
-             self.is_running = False
-             self.paused = True 
-             return
-
-        # Check temp breakpoints (stepping)
-        if address in self.temp_breakpoints:
-             uc.emu_stop()
-             self.is_running = False
-             return
-
     def hook_printf(self, uc, address, size, user_data):
         try:
             a0 = uc.reg_read(UC_MIPS_REG_A0)
@@ -186,15 +268,7 @@ class MIPSSimulatorGUI:
         """Execute one instruction using the new stepping API"""
         try:
             pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-            
-            # If on a breakpoint, ignore it for this single step
-            if pc in self.breakpoints:
-                self.ignore_bp_addr = pc
-            try:
-                result = self.sim.step()
-            finally:
-                self.ignore_bp_addr = None
-            
+            self.sim.step()
             self.check_watches()
             # Update UI immediately for single step
             self.update_ui_safe()
@@ -284,12 +358,23 @@ class MIPSSimulatorGUI:
                 # Run in batches for UI responsiveness.
                 # Sync GUI breakpoints to simulator so sim.run()'s internal loop
                 # correctly stops (otherwise it re-enters emu_start after hook's emu_stop).
-                BATCH_SIZE = 50000
+                last_ui = 0.0
                 while self.is_running and not self.paused:
-                    self.sim.breakpoints = set(self.breakpoints.keys()) | self.temp_breakpoints
-                    self.sim.max_instructions = self.sim.instruction_count + BATCH_SIZE
-                    self.sim.run()
+                    fast = bool(self.fast_mode_var.get())
+                    self.sim.hook_every_instruction = not fast
+                    batch = 500_000 if fast else 50_000
+                    bps = set(self.breakpoints.keys()) | self.temp_breakpoints
+                    self.sim.breakpoints = bps
+                    if fast:
+                        self.sim.run(max_instructions=self.sim.instruction_count + batch,
+                                     max_vtime=self.sim._vtime() + 0.25)
+                    else:
+                        self.sim.max_instructions = self.sim.instruction_count + batch
+                        self.sim.run()
                     self.sim.breakpoints = set()  # Clear after run
+                    if self.sim._stop_reason == 'breakpoint':
+                        self.is_running = False
+                        self.paused = True
                     
                     # Check watches between batches
                     if self.check_watches():
@@ -297,11 +382,14 @@ class MIPSSimulatorGUI:
                         self.paused = True
                         break
                     
-                    # Update UI between batches
-                    self.root.after(0, self.update_ui_safe)
+                    # Throttle UI refreshes to at most 10 Hz while running continuously
+                    now = time.perf_counter()
+                    if now - last_ui >= 0.10:
+                        last_ui = now
+                        self.root.after(0, self.update_ui_safe)
                         
             except Exception as e:
-                self.log(f"Execution Error: {e}")
+                self._log_buf.append(f"Execution Error: {e}\n")
                 self.paused = True
             finally:
                 self.is_running = False
@@ -320,6 +408,7 @@ class MIPSSimulatorGUI:
     # UI Updates (Registers, Instructions, Watches)
     # -------------------------------------------------------------------------
     def update_ui_safe(self):
+        self._flush_text_buffers()
         self.update_instruction_display()
         self.update_status()
         self.update_registers()
@@ -329,7 +418,10 @@ class MIPSSimulatorGUI:
         if not self.sim: return
         try:
             pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
-            status = f"PC: 0x{pc:08X} | Instructions: {self.sim.instruction_count}"
+            chip_id = int.from_bytes(self.sim._mmio_view[2:4], "little")
+            mode = "FAST" if self.fast_mode_var.get() else "EXACT"
+            status = (f"PC: 0x{pc:08X} | Insns: {self.sim.instruction_count:,} | "
+                      f"Chip: {self.sim.chip.name} (0x{chip_id:04X}) | GE: {self.sim.ge_ops} | [{mode}]")
             if self.is_running: status += " | [RUNNING]"
             elif self.paused: status += " | [PAUSED]"
             else: status += " | [STOPPED]"
@@ -339,26 +431,16 @@ class MIPSSimulatorGUI:
     def update_registers(self):
         if not self.sim: return
         try:
-            reg_map = {
-                "zero": UC_MIPS_REG_ZERO, "at": UC_MIPS_REG_AT, "v0": UC_MIPS_REG_V0, "v1": UC_MIPS_REG_V1,
-                "a0": UC_MIPS_REG_A0, "a1": UC_MIPS_REG_A1, "a2": UC_MIPS_REG_A2, "a3": UC_MIPS_REG_A3,
-                "t0": UC_MIPS_REG_T0, "t1": UC_MIPS_REG_T1, "t2": UC_MIPS_REG_T2, "t3": UC_MIPS_REG_T3,
-                "t4": UC_MIPS_REG_T4, "t5": UC_MIPS_REG_T5, "t6": UC_MIPS_REG_T6, "t7": UC_MIPS_REG_T7,
-                "s0": UC_MIPS_REG_S0, "s1": UC_MIPS_REG_S1, "s2": UC_MIPS_REG_S2, "s3": UC_MIPS_REG_S3,
-                "s4": UC_MIPS_REG_S4, "s5": UC_MIPS_REG_S5, "s6": UC_MIPS_REG_S6, "s7": UC_MIPS_REG_S7,
-                "t8": UC_MIPS_REG_T8, "t9": UC_MIPS_REG_T9, "k0": UC_MIPS_REG_K0, "k1": UC_MIPS_REG_K1,
-                "gp": UC_MIPS_REG_GP, "sp": UC_MIPS_REG_SP, "fp": UC_MIPS_REG_FP, "ra": UC_MIPS_REG_RA,
-                "PC": UC_MIPS_REG_PC, "HI": UC_MIPS_REG_HI, "LO": UC_MIPS_REG_LO
-            }
-            
-            for name, const in reg_map.items():
+            prev = self._prev_regs
+            for name, const in _REG_MAP.items():
                 val = self.sim.mu.reg_read(const)
+                if prev.get(name) == val:
+                    continue
+                prev[name] = val
                 lbl = self.reg_labels.get(name)
                 if lbl:
-                    if name in ["PC", "sp", "ra"]: lbl.config(fg="blue")
-                    elif val != 0: lbl.config(fg="black")
-                    else: lbl.config(fg="gray")
-                    lbl.config(text=f"{name.upper()}: {val:08X}")
+                    fg = "blue" if name in ("PC", "sp", "ra") else ("black" if val != 0 else "gray")
+                    lbl.config(fg=fg, text=f"{name.upper()}: {val:08X}")
         except: pass
 
     def update_instruction_display(self):
@@ -446,7 +528,46 @@ class MIPSSimulatorGUI:
         main_paned.pack(fill=tk.BOTH, expand=True)
         
         left_frame = tk.Frame(main_paned)
-        main_paned.add(left_frame, width=800)
+        main_paned.add(left_frame, width=820)
+
+        # Target Firmware & Chip Family Bar
+        target_frame = tk.LabelFrame(left_frame, text="Firmware / Target", padx=6, pady=6)
+        target_frame.pack(fill=tk.X, padx=5, pady=(5, 2))
+        row1 = tk.Frame(target_frame)
+        row1.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(row1, text="Dump:").pack(side=tk.LEFT)
+        self.dump_var = tk.StringVar()
+        self.dump_combo = ttk.Combobox(row1, textvariable=self.dump_var, width=48,
+                                       values=[label for label, _p, _sc in self._catalog])
+        self.dump_combo.pack(side=tk.LEFT, padx=4, fill=tk.X, expand=True)
+        self.dump_combo.bind("<<ComboboxSelected>>", self._on_dump_selected)
+        self.dump_combo.bind("<Return>", self._on_dump_selected)
+        tk.Button(row1, text="Browse...", command=self.browse_dump, width=9).pack(side=tk.LEFT, padx=2)
+
+        row2 = tk.Frame(target_frame)
+        row2.pack(fill=tk.X)
+        tk.Label(row2, text="Family:").pack(side=tk.LEFT)
+        self.family_var = tk.StringVar(value=self._initial_family)
+        self.family_combo = ttk.Combobox(row2, textvariable=self.family_var, width=8,
+                                         values=FAMILIES, state="readonly")
+        self.family_combo.pack(side=tk.LEFT, padx=(4, 8))
+        self.family_combo.bind("<<ComboboxSelected>>", lambda _e: self.reset_emulator())
+
+        tk.Label(row2, text="Sidecar:").pack(side=tk.LEFT)
+        self.sidecar_var = tk.StringVar(value=self._initial_json)
+        self.sidecar_combo = ttk.Combobox(row2, textvariable=self.sidecar_var, width=26,
+                                          values=list(self._sidecar_presets.keys()))
+        self.sidecar_combo.pack(side=tk.LEFT, padx=4)
+        self.sidecar_combo.bind("<<ComboboxSelected>>", lambda _e: self.reset_emulator())
+        tk.Button(row2, text="JSON...", command=self.browse_json, width=7).pack(side=tk.LEFT, padx=(0, 8))
+
+        self.fast_mode_var = tk.BooleanVar(value=self._initial_fast)
+        tk.Checkbutton(row2, text="Fast Mode", variable=self.fast_mode_var,
+                       command=self._on_fast_mode_toggled).pack(side=tk.LEFT, padx=4)
+        self.spi_dump_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(row2, text="SPI Trace", variable=self.spi_dump_var,
+                       command=self._on_spi_dump_toggled).pack(side=tk.LEFT, padx=2)
+        self._sync_dump_combo_display()
         
         # Controls
         control_frame = tk.LabelFrame(left_frame, text="Controls", padx=10, pady=10)
@@ -806,8 +927,24 @@ class MIPSSimulatorGUI:
             except Exception as e: messagebox.showerror("Error", str(e))
 
 def main():
+    args = sys.argv[1:]
+    family = "Auto"
+    json_path = None
+    fast = False
+    if "--family" in args:
+        i = args.index("--family")
+        family = args[i + 1]
+        del args[i:i + 2]
+    if "--json" in args:
+        i = args.index("--json")
+        json_path = args[i + 1]
+        del args[i:i + 2]
+    if "--fast" in args:
+        args.remove("--fast")
+        fast = True
+    binary = args[0] if args else "dump.bin"
     root = tk.Tk()
-    app = MIPSSimulatorGUI(root)
+    app = MIPSSimulatorGUI(root, binary_file=binary, family=family, json_path=json_path, fast_mode=fast)
     root.mainloop()
 
 if __name__ == "__main__":

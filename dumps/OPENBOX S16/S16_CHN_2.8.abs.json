@@ -1,0 +1,56 @@
+{
+  "file": "S16_CHN_2.8.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "S16 HD PVR",
+    "type": "DVB-S2 HD satellite receiver with USB PVR and Ethernet",
+    "board": null,
+    "soc": "ALi M3601S (the main-code chunk's version \"M3601S\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0)",
+    "tuner": null,
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 62,
+      "sda": 63
+    },
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "v2.8 CHN (maincode \"M3601S\" 2012-7-20; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree)",
+    "date": "2012-07-20",
+    "size": 4194304,
+    "sha1": "b108b811df44bf987244c39001aea0b53d099643",
+    "layout": "bootloader 0x000000 (DVBS2---1.0.0), HDCPKey 0x01FE00 (S3606), maincode 0x020000 (S3606q), seecode 0x180000 (M3606 SEE), Radioback 0x280000 (1.0.0), Menuback 0x288000 (1.0.0), defaultdb 0x290000 (1.1.0), userdb 0x2AFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Openbox_S16_v2.8.rar&directory=Firmware%20for%20to%20all%20receivers/Inne%20tunerki/Openbox",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Openbox",
+    "date": "2012-07-20",
+    "login": false,
+    "note": "Archive Openbox_S16_v2.8.rar from the Openbox directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " on ",
+      "Strt",
+      "OOO1"
+    ],
+    "note": "Boots as the M3602 family with device.chipId 0x3603 (C3603) and device.demodModel s3501@0x33: the bootloader unpacks the 4.5 MB maincode into RAM and starts it, the application finds the S3501 demodulator on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (\" on \", \"Strt\", \"OOO1\"), and renders its 16-bpp ARGB1555 OSD (12 GE commands, 935 unique colours).  Its remote uses the \"necfirst\" coding (table 0x01xx)."
+  },
+  "desc": [
+    "Openbox S16 HD PVR firmware v2.8 (S16_CHN_2.8.abs, 2012-07-20) for the ALi M3601S / C3603 single-CPU DVB-S2 satellite receiver on a 4 MB SPI flash.",
+    "Shares the M3601S hardware platform and GPIO 62 / 63 front-panel wiring with the Opticum HD S60, while carrying a 4 MB flash layout with HDCPKey and CI+ key chunks and a 50-key remote table at address 0x01xx (necfirst coding)."
+  ]
+}

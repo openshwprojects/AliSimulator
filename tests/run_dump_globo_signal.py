@@ -41,7 +41,8 @@ tuner, demod = sim.set_signal(True)
 print(f"tuner model: {type(tuner).__name__ if tuner else None}, demodulator modelled: {demod}")
 start = time.time()
 banner_seen = False
-while sim.instruction_count < END:
+while (sim.instruction_count < END or
+       (tuner and (tuner.frequency() or {}).get("calibrating") and sim.instruction_count < END + 30_000_000)):
     sim.run(max_instructions=sim.instruction_count + 5_000_000)
     banner_seen |= sim.ge_ops >= BANNER_OPS
 rgb = sim.capture_screen()

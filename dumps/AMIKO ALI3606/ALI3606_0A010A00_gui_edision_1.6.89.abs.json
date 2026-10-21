@@ -1,0 +1,48 @@
+{
+  "file": "ALI3606_0A010A00_gui_edision_1.6.89.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD / SHD-8140 (System ID 0A010A00, Edision GUI 1.6.89 build)",
+    "type": "DVB-S2 Full HD satellite receiver with CA card reader and Ethernet",
+    "board": "0A010A00 (Synaps / GiGaBlue / Edision / Amiko M3606 platform)",
+    "soc": "ALi M3606 / C3603 (the main-code chunk's version \"M3606 \", the seecode chunk's \"M3606 SEE\"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.6.89 (maincode \"M3606 \" 2015-10-20; bootloader << SDK4.0ba.4.0_20101217 >>; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "date": "2015-10-20",
+    "size": 8388608,
+    "sha1": "484d8fb9dbe40d6c25c63b613582e3dc55f62e3c",
+    "layout": "bootloader 0x000000 (M3606A 1.1.3), maincode 0x020000 (0A010A001689), seecode 0x320000 (M3606 SEE), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), cipluskey 0x480000 (1.0.0), logo 0x488000 (1.0.0), Menuback 0x498000 (1.0.0), BootLogo 0x4B8000 (1.0.0), Radioback 0x4D8000 (1.0.0), patch 0x4FFF80 (1.0.0), defaultdb 0x520000 (1.0.1), userdb 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=ALI3606_0A010A00_gui_edision_1.6.89.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20inne",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Amiko / Edision",
+    "date": "2015-10-20",
+    "login": false,
+    "note": "Archive ALI3606_0A010A00_gui_edision_1.6.89.rar from the Amiko / Amiko inne directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as the M3602 family with device.chipId 0x3603 (C3603): the bootloader at 0x000000 (whose chunk header has next = 0, followed at length + 0x80 = 0x020000 by maincode; chips/base.py:chunk_chain) reads the 8 MB flash via SPI quad I/O read 0xEB, unpacks the 9.3 MB maincode into RAM and starts it.  With _find_long_blocks breaking an unrolled crypto routine in maincode so Unicorn 2.1.4's TCG buffer does not overflow, the application starts the SEE co-processor (\"M3606 SEE\"), initialises the S3501 demodulator at I2C 0x33, and renders its 32-bpp ARGB8888 OSD (8 GE commands, 10 unique colours; without the board's encrypted anti-clone security IC at SCB I2C 0x10 it displays \"SW is not designed for this HW, please change back to official SW! -----0a010a00 00000000\").  Its 54-key remote table (0x44xx) uses the \"necfirst\" coding."
+  },
+  "desc": [
+    "Amiko ALI3606 (System ID 0A010A00) firmware 1.6.89 with the Edision HD GUI (2015-10-20) on an 8 MB SPI flash.",
+    "Built on the ALi M3606 / C3603 dual-core SDK (Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) shared across Amiko and Edision receivers; silences UART TX via a dummy printf stub and checks an external anti-clone crypto chip at I2C 0x10 at startup."
+  ]
+}

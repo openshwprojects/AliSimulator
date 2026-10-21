@@ -1,0 +1,46 @@
+{
+  "file": "Opticum_X110p_M3606_MCAS+EMU_VER1.0.11C_20110715.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD X110p (the 1.0.11C MCAS+EMU build)",
+    "type": "DVB-S2 HD single-tuner satellite receiver with Conax card reader and CI slot",
+    "board": null,
+    "soc": "ALi M3606 (the maincode chunk's version \"M3606 \", the seecode chunk's \"M3606 SEE\"; Application 1.0.0@M3606_DVBS2_SABBAT_20110413)",
+    "family": "M3602 (chips/m3602.py), matched by the maincode chunk's version; chip ID 0x3603 (chipId)",
+    "chipId": "0x3603",
+    "demod": "internal (NIM_S3501_0)",
+    "tuner": "Airoha AV2011 (I2C 0x63 on the first hardware I2C master, 0xC6 as the 8-bit write address configured in nim_s3501_attach at 0x80028A48)",
+    "tunerModel": {"chip": "av2011", "address": 99},
+    "flash": "4 MB SPI",
+    "panel": {"chip": "TM1650-compatible", "scl": 9, "sda": 8},
+    "irCoding": "necfirst",
+    "gpioPullUps": [99, 104]
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.11C MCAS+EMU (maincode \"M3606 \"; bootloader << SDK4.0ba.4.2_20110225 >>; Libcore 4.7.0@SDK4.0ba.4.7_20110512, Application 1.0.0@M3606_DVBS2_SABBAT_20110413, HDMI_ALI_E_110511_1; the SEE's uLibcore 1.1.0@SDK_20091216)",
+    "date": "2011-07-15",
+    "size": 4194304,
+    "sha1": "d6f290f8ff5b1ffb7d8096c4bdc7190c9a4bdd00",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), conaxca 0x01FF80 (1.0.0), maincode 0x030000 (M3606 , LZMA 0x11A9DF bytes -> 4.4 MB), seecode 0x150000 (M3606 SEE, LZMA 0x9FB76 -> 1.9 MB), keydb 0x24FF80 (1.0.0), Radioback 0x260000 (1.0.0), M3606defaultdb 0x270000 (1.1.0), userdb 0x2AFF80 (1.0.0, 0x150070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Opticum_X110p_M3606_MCASEMU_VER1.0.11C_20110715.rar&dir=Firmware+for+to+all+receivers/Opticum/Opticum+HD+X110p",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The USB update archive Opticum_X110p_M3606_MCASEMU_VER1.0.11C_20110715.rar; fetched 2026-10-18 from the mirror's Opticum / Opticum HD X110p folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [" ON ", "noCH"],
+    "note": "Like the 1.3.4 X110p image, its bootloader header has byte 0x43 = 0x80 (the EuP standby-on-AC-power-up flag, bypassed by $fp = 0xDEADBEAD in M3602.start()).  During startup (0x8000D658..0x8000D704), the application calls 0x8014583C(0), which writes [0x00, 0x38, 0x00] to the Airoha AV2011 tuner at I2C 0x63 on SCB0; without a tuner at 0x63 it retried 4 times and called 0x80000674(0, 0) to shut down into standby.  With the AV2011 model attached at 0x63 (tuners.py, device.tunerModel), the tuner initializes its 42 registers and acknowledges the check, and the application opens its main menu (panel \" ON \", \"noCH\", ~481k non-background pixels at 80 M instructions).  Unlike the later SDK4.0ba.8.0_Combo builds, this early Libcore 4.7.0 build uses the IR coding \"necfirst\" (scan_code_to_msg_code at 0x8000B594 shifts by 0x18: MENU 0x02FD, OK 0x024F, DOWN 0x028F), while key_get_key at 0x8001C360 checks (code & 0xFFFF0000) == 0x02370000 (extended NEC address bytes 0x40, 0xEC)."
+  },
+  "desc": [
+    "An early 1.0.11C MCAS+EMU update (2011-07-15) for the Opticum HD X110p satellite receiver on the ALi M3606 SoC, built on Libcore 4.7.0 (2011-05-12) and the M3606_DVBS2_SABBAT_20110413 application branch.",
+    "Its NIM attach function (0x80028A00) pairs the internal S3501 DVB-S2 demodulator with an Airoha AV2011 silicon tuner at 8-bit I2C address 0xC6 (7-bit 0x63) on SCB0 (init 0x8014527C, control 0x80145318, status 0x80145800), and its startup verifies that the AV2011 acknowledges a 2-register write at 0x63 before opening the UI."
+  ]
+}

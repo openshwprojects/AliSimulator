@@ -121,21 +121,37 @@ class I2cMaster:
 
     def _read(self, uc, access, address, size, value, user_data):
         self.sim._device_access(uc)
-        off = (address & 0xFFFFFF) - self.base
-        out = bytearray(uc.mem_read(address, size))
-        for i in range(size):
-            o = off + i
-            if o == 0x01:
-                out[i] = self.status
-            elif o == 0x03:
-                out[i] = self.flags
-            elif o == 0x0C:
-                out[i] = 0x80 | min(len(self.rx), 0x1F)
-            elif o == 0x10:
-                out[i] = self.rx.popleft() if self.rx else 0xFF
-            elif o == 0x14:
-                out[i] = 0
-        uc.mem_write(address, bytes(out))
+        base_off = address & 0xFFFFFF
+        off = base_off - self.base
+        view = getattr(self.sim, "_mmio_view", None)
+        if view is not None:
+            for i in range(size):
+                o = off + i
+                if o == 0x01:
+                    view[base_off + i] = self.status
+                elif o == 0x03:
+                    view[base_off + i] = self.flags
+                elif o == 0x0C:
+                    view[base_off + i] = 0x80 | min(len(self.rx), 0x1F)
+                elif o == 0x10:
+                    view[base_off + i] = self.rx.popleft() if self.rx else 0xFF
+                elif o == 0x14:
+                    view[base_off + i] = 0
+        else:
+            buf = bytearray(uc.mem_read(address, size))
+            for i in range(size):
+                o = off + i
+                if o == 0x01:
+                    buf[i] = self.status
+                elif o == 0x03:
+                    buf[i] = self.flags
+                elif o == 0x0C:
+                    buf[i] = 0x80 | min(len(self.rx), 0x1F)
+                elif o == 0x10:
+                    buf[i] = self.rx.popleft() if self.rx else 0xFF
+                elif o == 0x14:
+                    buf[i] = 0
+            uc.mem_write(address, bytes(buf))
 
     def _transfer(self, control):
         sim = self.sim

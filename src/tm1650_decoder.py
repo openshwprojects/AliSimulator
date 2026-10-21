@@ -94,14 +94,19 @@ class PanelDecoder:
         self._prev_reg_values[offset] = value
         if offset not in self._offsets_seen:
             self._offsets_seen.add(offset)
-            self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
-        for bit in range(32):
-            if changed & (1 << bit):
-                key = (offset, bit)
-                self._bit_toggle_counts[key] = self._bit_toggle_counts.get(key, 0) + 1
-                if self._bit_toggle_counts[key] <= 1:
-                    self.log(f"[GPIO] off=0x{offset:03X} bit{bit} (GPIO#{self.gpio_number(offset, bit)}) -> "
-                             f"{(value >> bit) & 1} (toggle #{self._bit_toggle_counts[key]})")
+            if self.dump_enabled:
+                self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
+        c = changed
+        while c:
+            low = c & -c
+            bit = low.bit_length() - 1
+            c ^= low
+            key = (offset, bit)
+            cnt = self._bit_toggle_counts.get(key, 0) + 1
+            self._bit_toggle_counts[key] = cnt
+            if cnt == 1 and self.dump_enabled:
+                self.log(f"[GPIO] off=0x{offset:03X} bit{bit} (GPIO#{self.gpio_number(offset, bit)}) -> "
+                         f"{(value >> bit) & 1} (toggle #{cnt})")
         self.gpio_event_count += 1
         return changed
 
@@ -194,11 +199,12 @@ class TM1650Decoder(PanelDecoder):
             # Log first 200 I2C-level transitions
             if self._i2c_trace_count < 200:
                 self._i2c_trace_count += 1
-                self.log(f"[I2C_TRACE] SCL={scl}{'*' if scl_changed else ' '} SDA={sda}{'*' if sda_changed else ' '} state={self.state}")
+                if self.dump_enabled:
+                    self.log(f"[I2C_TRACE] SCL={scl}{'*' if scl_changed else ' '} SDA={sda}{'*' if sda_changed else ' '} state={self.state}")
             
             if scl_changed and sda_changed:
                 # Both changed simultaneously (same register write).
-                if self._i2c_trace_count < 200:
+                if self._i2c_trace_count < 200 and self.dump_enabled:
                     self.log(f"[I2C_SIMULT] SCL:{self.prev_scl}→{scl} SDA:{self.prev_sda}→{sda} state={self.state}")
                 # Check the final state for START/STOP:
                 #   If SCL ends HIGH and SDA went 1→0: START
@@ -250,7 +256,8 @@ class TM1650Decoder(PanelDecoder):
                 self.bytes_received = []
                 self._ack = False
                 self._tx_serial += 1
-                self.log(f"[I2C] START detected")
+                if self.dump_enabled:
+                    self.log(f"[I2C] START detected")
                 return
         
         elif self.state == 'DATA':
@@ -259,12 +266,13 @@ class TM1650Decoder(PanelDecoder):
                 if self.bit_count < 8:
                     self.current_byte = (self.current_byte << 1) | sda
                     self.bit_count += 1
-                    if self.bit_count == 8:
+                    if self.bit_count == 8 and self.dump_enabled:
                         self.log(f"[I2C] Byte: 0x{self.current_byte:02X}")
                 else:
                     # 9th clock = ACK/NACK
-                    ack = "ACK" if sda == 0 else "NACK"
-                    self.log(f"[I2C] {ack}")
+                    if self.dump_enabled:
+                        ack = "ACK" if sda == 0 else "NACK"
+                        self.log(f"[I2C] {ack}")
                     self.bytes_received.append(self.current_byte)
                     self.bit_count = 0
                     self.current_byte = 0
@@ -274,7 +282,8 @@ class TM1650Decoder(PanelDecoder):
             # STOP: SDA rises while SCL is high (after receiving at least one byte)
             if sda_changed and sda == 1 and scl == 1:
                 if len(self.bytes_received) > 0:
-                    self.log(f"[I2C] STOP detected ({len(self.bytes_received)} bytes)")
+                    if self.dump_enabled:
+                        self.log(f"[I2C] STOP detected ({len(self.bytes_received)} bytes)")
                     self._decode_transaction()
                     self.state = 'IDLE'
                     return
@@ -293,7 +302,8 @@ class TM1650Decoder(PanelDecoder):
                 self.bytes_received = []
                 self._ack = False
                 self._tx_serial += 1
-                self.log(f"[I2C] Repeated START")
+                if self.dump_enabled:
+                    self.log(f"[I2C] Repeated START")
                 return
 
     def _decode_transaction(self):

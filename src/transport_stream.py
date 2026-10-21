@@ -152,6 +152,14 @@ def ts_packets(pid, payload, counter=0):
     return packets, counter
 
 
+try:
+    import numpy as _np
+except ImportError:              # pragma: no cover
+    _np = None
+
+_UTF16_NAME_RE = re.compile(rb"(?:[\x20-\x7e]\x00){2,}[\x20-\x7e]")
+
+
 def channel_records(image):
     """The channel records of an ALi flash image's databases (the "userdb" and
     "defaultdb" chunks; lib_db's P_NODE, db_node_c.h): [(pmt_pid, programme
@@ -171,7 +179,33 @@ def channel_records(image):
             continue
         length = struct.unpack_from(">I", image, offset + 4)[0]
         db = image[offset + 0x80:offset + 0x80 + length]
-        for i in range(0, len(db) - 8):
+        limit = len(db) - 8
+        if limit <= 0:
+            continue
+        if _np is not None:
+            candidates = []
+            for align in range(4):
+                m = (len(db) - align) // 4
+                if m < 2:
+                    continue
+                words = _np.frombuffer(db, dtype="<u4", count=m, offset=align)
+                w1, w2 = words[:-1], words[1:]
+                if align + 4 * (m - 1) >= limit:
+                    w1, w2 = w1[:-1], w2[:-1]
+                if not len(w1):
+                    continue
+                video, pcr = (w1 >> 6) & 0x1FFF, w1 >> 19
+                pmt, prog = (w2 >> 16) & 0x1FFF, w2 & 0xFFFF
+                mask = (((w1 & 0x0F) == 0) & (video != 0) & (video < 0x1FFF) &
+                        (pmt != 0) & (pmt < 0x1FFF) & (prog != 0) &
+                        ((pcr == video) | (pcr == pmt) | (pcr == 0x1FFF)))
+                hits = _np.flatnonzero(mask)
+                if len(hits):
+                    candidates.extend((align + 4 * hits).tolist())
+            candidates.sort()
+        else:
+            candidates = range(0, limit)
+        for i in candidates:
             w1, w2 = struct.unpack_from("<II", db, i)
             pmt, prog = (w2 >> 16) & 0x1FFF, w2 & 0xFFFF
             video, pcr = (w1 >> 6) & 0x1FFF, w1 >> 19
@@ -181,7 +215,7 @@ def channel_records(image):
                 continue
             # the name: UTF-16 pairs stored without the last character's high
             # byte (the database packs each string one byte short)
-            m = re.search(rb"(?:[\x20-\x7e]\x00){2,}[\x20-\x7e]", db[i + 8:i + 256])
+            m = _UTF16_NAME_RE.search(db, i + 8, i + 256)
             if not m:
                 continue
             raw = m.group(0)

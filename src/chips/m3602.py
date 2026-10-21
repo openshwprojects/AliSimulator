@@ -60,8 +60,10 @@ Opticum satellite updates: "M3601S", "M3606 2Tuner").
 import ctypes
 
 from unicorn import UC_PROT_ALL
+from unicorn.mips_const import UC_MIPS_REG_FP
 
 from demods import S3501
+import tuners
 
 from .base import ChipFamily, chunk_chain
 from .see import SeeStart
@@ -87,14 +89,16 @@ class M3602(ChipFamily):
     @classmethod
     def matches(cls, image):
         for _offset, name, version in chunk_chain(image):
-            if name == "HDCPKey" and version.startswith("Demo s3602"):
+            if name == "HDCPKey" and version.startswith(("Demo s3602", "Demo M3612", "S3606")):
                 return True
             if name == "maincode" and version.startswith(("Demo M3602", "Demo M3606", "M3606")):
                 return True
             # the Opticum / Globo satellite updates name their main-code chunk by a number and
             # put the chip in its version ("M3601S", "M3606 2Tuner"; the Globo HD-XS2's M3503,
-            # named in its bootloader's version, is m3503.py)
-            if version.startswith(("M3601", "M3606")):
+            # named in its bootloader's version, is m3503.py); Ferguson / Edision M3602 and M3606
+            # bootloaders ("HS11" / "HS17" / "HS18" / "HS1C" / "HSJ2") start their version with
+            # "350" or "370" ("35003-01047", "37017-01047")
+            if version.startswith(("M3601", "M3606", "M3612", "350", "370")):
                 return True
         return False
 
@@ -142,18 +146,30 @@ class M3602(ChipFamily):
         return C3603_PRODUCT if self.chip_id == C3603 else self.chip_variant
 
     def write_chip_id(self):
-        """The board's chip ID word, and on a C3603 a fresh S3501 on the I2C
-        bus (a board of another chip ID loaded after it has none)."""
+        """The board's chip ID word, and on a C3603 a fresh S3501 (plus the
+        board's tuner model when its sidecar names one) on the I2C bus."""
         super().write_chip_id()
         self._remove_demod()
         if self.chip_id == C3603:
             self.sim.i2c_devices[S3501.ADDRESS] = S3501()
+            self.sim.attach_tuner()
 
     def _remove_demod(self):
         if isinstance(self.sim.i2c_devices.get(S3501.ADDRESS), S3501):
             del self.sim.i2c_devices[S3501.ADDRESS]
+        for addr in [a for a, d in self.sim.i2c_devices.items() if tuners.is_tuner(d)]:
+            del self.sim.i2c_devices[addr]
+
+    def start(self):
+        """Bootloaders whose chunk header sets byte 0x43 = 0x80 (the Opticum
+        X110p's EuP standby-on-AC-power-up flag) enter the flash standby loop
+        unless $fp == 0xDEADBEAD (their wake-from-standby magic)."""
+        super().start()
+        eup_wake = 0xDEADBEAD if len(self.sim.rom_image) > 0x43 and self.sim.rom_image[0x43] == 0x80 else 0
+        self.sim.mu.reg_write(UC_MIPS_REG_FP, eup_wake)
 
     def uninstall(self):
         for address, size in self._ram_mirrors():
             self.sim.mu.mem_unmap(address, size)
         self._remove_demod()
+

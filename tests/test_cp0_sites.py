@@ -145,6 +145,30 @@ sim.mu.reg_write(sim.gpr_map[T2], 0xFFFFFFFF)
 check((sim.mu.reg_read(UC_MIPS_REG_T0), sim._reg_read(UC_MIPS_REG_T1), sim._reg_read(sim.gpr_map[T2])) ==
       (0x89ABCDEF, 0x01234567, 0xFFFFFFFF), "the direct register writes and reads")
 
+print("--- long blocks")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+chunk = bytearray(0x4000)
+insn = struct.pack("<I", addiu(T0, T0, 1))
+jr_ra = struct.pack("<I", 0x03E00008)
+# 1) Block at offset 0..350*4 followed by jr ra
+chunk[0:350 * 4] = insn * 350
+chunk[350 * 4:351 * 4] = jr_ra
+# 2) Interior block at 1000*4..1320*4 bounded by jr ra
+chunk[999 * 4:1000 * 4] = jr_ra
+chunk[1000 * 4:1320 * 4] = insn * 320
+chunk[1320 * 4:1321 * 4] = jr_ra
+# 3) Block at the end of the chunk (last 310 words) preceded by jr ra
+end_w = len(chunk) // 4
+chunk[(end_w - 311) * 4:(end_w - 310) * 4] = jr_ra
+chunk[(end_w - 310) * 4:end_w * 4] = insn * 310
+sim._find_long_blocks(bytes(chunk), 0x400000, (0x80000000,))
+check((0x80400000, 0x80400000 + 350 * 4 - 1) in sim._long_block_hooks,
+      "straight-line block starting at chunk offset 0 is hooked")
+check((0x80400000 + 1000 * 4, 0x80400000 + 1320 * 4 - 1) in sim._long_block_hooks,
+      "interior straight-line block is hooked")
+check((0x80400000 + (end_w - 310) * 4, 0x80400000 + end_w * 4 - 1) in sim._long_block_hooks,
+      "straight-line block ending at chunk boundary is hooked")
+
 print()
 if fails:
     print(f"\033[91m{len(fails)} CP0-site check(s) failed\033[0m")

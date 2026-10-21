@@ -131,17 +131,24 @@ def render_head(ram, h):
     g = ge_m36f.GeM36F(ram)
     pfreg = (fmt << 12) | (pitch_px & 0xFFF)
     raw = g._read_raw(h['bitmap'], pfreg, 0, 0, width, height)
-    if fmt in ge_m36f.CLUT_FORMATS:
-        pal, _ = _palette(ram, h)
-        px = g._decode(raw, fmt, pfreg, pal)
-    else:
-        px = g._decode(raw, fmt, pfreg)
     ga = h['alpha']
     if ga <= 0x0F:                      # 4-bit global alpha (the driver sets 0x0F = opaque)
         ga *= 17
-    if ga != 0xFF:
-        px[..., 0] *= ga / 255.0
-    rgba = np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+    if fmt in ge_m36f.CLUT_FORMATS:
+        pal, _ = _palette(ram, h)
+        if fmt not in (0x0E, 0x0B):
+            if ga != 0xFF:
+                pal[:, 0] *= ga / 255.0
+            pal_rgba = np.clip(pal[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+            if raw.dtype == np.uint8 and pal_rgba.shape[0] >= 256:
+                return pal_rgba[raw], x0, y0
+            return pal_rgba[np.minimum(raw, pal_rgba.shape[0] - 1)], x0, y0
+        px = g._decode(raw, fmt, pfreg, pal)
+        if ga != 0xFF:
+            px[..., 0] *= ga / 255.0
+        rgba = np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+    else:
+        rgba = g.decode_rgba_u8(raw, fmt, pfreg, ga)
     return rgba, x0, y0
 
 
@@ -308,8 +315,7 @@ def render_de_layer(ram, layer):
     g = ge_m36f.GeM36F(ram)
     pfreg = (fmt << 12) | (pitch & 0xFFF)
     raw = g._read_raw(layer['bitmap'], pfreg, 0, 0, width, height)
-    px = g._decode(raw, fmt, pfreg)
-    return np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+    return g.decode_rgba_u8(raw, fmt, pfreg)
 
 
 DE_TIMING_REG = 0x600C              # b16-26 total lines of the output TV mode (625 PAL, 525 NTSC, 750 720p, 1125 1080i)
@@ -340,6 +346,78 @@ def output_scale(dev, screen=(1280, 720)):
     return screen[0] / out[0], screen[1] / out[1]
 
 
+def _place_rgb_u8(rgb, x0, y0, screen, background):
+    W, H = screen
+    hh, ww = rgb.shape[:2]
+    hh, ww = min(hh, H - y0), min(ww, W - x0)
+    if x0 == 0 and y0 == 0 and hh == H and ww == W:
+        return np.ascontiguousarray(rgb[:hh, :ww])
+    out = np.empty((H, W, 3), np.uint8)
+    out[...] = background
+    if hh > 0 and ww > 0:
+        out[y0:y0 + hh, x0:x0 + ww] = rgb[:hh, :ww]
+    return out
+
+
+def _render_head_on_bg(ram, h, screen, background):
+    fmt = h['format']
+    if fmt not in (0x08, 0x09, 0x0A, 0x0C) and fmt not in ge_m36f._PACKED16_FMTS:
+        return None
+    bpp = ge_m36f.BPP.get(fmt, 8)
+    x0, x1, y0, y1 = h['x0'], h['x1'], h['y0'], h['y1']
+    width = max(1, x1 - x0 + 1) if x1 >= x0 else max(1, h['pitch'] * 8 // bpp)
+    height = max(1, y1 - y0 + 1) if y1 >= y0 else 1
+    pitch_px = h['pitch'] * 8 // bpp if h['pitch'] else width
+    width = min(width, pitch_px)
+    W, H = screen
+    hh, ww = min(height, H - y0), min(width, W - x0)
+    if hh <= 0 or ww <= 0:
+        out = np.empty((H, W, 3), np.uint8)
+        out[...] = background
+        return out
+    g = ge_m36f.GeM36F(ram)
+    pfreg = (fmt << 12) | (pitch_px & 0xFFF)
+    raw = g._read_raw(h['bitmap'], pfreg, 0, 0, ww, hh)
+    ga = h['alpha']
+    if ga <= 0x0F:
+        ga *= 17
+    if fmt in (0x08, 0x09, 0x0A, 0x0C):
+        pal, _ = _palette(ram, h)
+        if ga != 0xFF:
+            pal[:, 0] *= ga / 255.0
+        pal_rgba = np.clip(pal[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+        a = pal_rgba[:, 3:4].astype(np.float32) / 255.0
+        bg_f = np.array(background, dtype=np.float32)
+        rgb_f = pal_rgba[:, :3].astype(np.float32) * a + bg_f * (1.0 - a)
+        lut_u8 = np.zeros((pal_rgba.shape[0], 4), np.uint8)
+        lut_u8[:, :3] = np.clip(rgb_f + 0.5, 0, 255).astype(np.uint8)
+        lut_u32 = lut_u8.view(np.uint32).reshape(-1)
+        idx = raw if (raw.dtype == np.uint8 and lut_u32.shape[0] >= 256) else np.minimum(raw, lut_u32.shape[0] - 1)
+        rgb = lut_u32[idx].view(np.uint8).reshape(hh, ww, 4)[..., :3]
+        return _place_rgb_u8(rgb, x0, y0, screen, background)
+    rgb = g.decode_rgb_on_bg_u8(raw, fmt, pfreg, ga, background)
+    return _place_rgb_u8(rgb, x0, y0, screen, background) if rgb is not None else None
+
+
+def _render_de_on_bg(ram, layer, screen, background):
+    fmt, width, height = layer['format'], layer['width'], layer['height']
+    if fmt not in ge_m36f._PACKED16_FMTS:
+        return None
+    x0, y0 = layer['x'], layer['y']
+    W, H = screen
+    hh, ww = min(height, H - y0), min(width, W - x0)
+    if hh <= 0 or ww <= 0:
+        out = np.empty((H, W, 3), np.uint8)
+        out[...] = background
+        return out
+    pitch = layer['pitch'] or width
+    g = ge_m36f.GeM36F(ram)
+    pfreg = (fmt << 12) | (pitch & 0xFFF)
+    raw = g._read_raw(layer['bitmap'], pfreg, 0, 0, ww, hh)
+    rgb = g.decode_rgb_on_bg_u8(raw, fmt, pfreg, 0xFF, background)
+    return _place_rgb_u8(rgb, x0, y0, screen, background) if rgb is not None else None
+
+
 def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None):
     """Composite all enabled regions of GMA layers 0 and 1 over a solid
     background (the video plane).  Returns (rgb uint8 (H, W, 3), info dict).
@@ -350,10 +428,9 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
     (chips/m3329.Osd) -- its regions are drawn too, scaled from its output
     frame to the canvas like the M3602's."""
     W, H = screen
-    canvas = np.empty((H, W, 3), np.float32)
-    canvas[...] = background
     fx, fy = output_scale(dev, screen)
     info = {'layers': [], 'output_scale': (fx, fy)}
+    active_heads = []
     for layer in range(len(LAYER_REGS)):
         enabled, heads = layer_heads(ram, dev, layer)
         info['layers'].append({'enabled': enabled, 'heads': heads})
@@ -377,10 +454,32 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
                     h = dict(h, x0=round(h['x0'] * fx), y0=round(h['y0'] * fy))
                     h['x1'], h['y1'] = h['x0'] + vw - 1, h['y0'] + vh - 1
                     h['scaled_back'] = (fx, fy)
-            rgba, x, y = render_head(ram, h)
-            _blend(canvas, rgba, x, y)
-    # the M3602's layers (the T50), in the output's coordinates: scaled up to the canvas
+            active_heads.append(h)
     info['m3602_layers'] = m3602_layers(ram, dev)
+    if m3327_palettes is not None:
+        info['m3327_regions'] = m3327_regions(ram, dev)
+    info['de_layers'] = de_layers(ram, dev)
+    active_de = [layer for layer in info['de_layers']
+                 if layer['enabled'] and layer['bitmap'] and layer['width'] and layer['height']]
+    if not info['m3602_layers'] and not info.get('m3327_regions'):
+        if not active_heads and not active_de:
+            out = np.empty((H, W, 3), np.uint8)
+            out[...] = background
+            return out, info
+        if len(active_heads) == 1 and not active_de:
+            res = _render_head_on_bg(ram, active_heads[0], screen, background)
+            if res is not None:
+                return res, info
+        elif len(active_de) == 1 and not active_heads:
+            res = _render_de_on_bg(ram, active_de[0], screen, background)
+            if res is not None:
+                return res, info
+    canvas = np.empty((H, W, 3), np.float32)
+    canvas[...] = background
+    for h in active_heads:
+        rgba, x, y = render_head(ram, h)
+        _blend(canvas, rgba, x, y)
+    # the M3602's layers (the T50), in the output's coordinates: scaled up to the canvas
     for layer in info['m3602_layers']:
         rgba = render_m3602(ram, layer)
         if rgba is None:
@@ -394,7 +493,6 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
         lines = (struct.unpack_from('<I', dev, M3327_TIMING_REG)[0] >> 16) & 0x7FF
         out = OUTPUT_SIZE.get(lines, (720, 576))
         gx, gy = W / out[0], H / out[1]
-        info['m3327_regions'] = m3327_regions(ram, dev)
         for layer, region in info['m3327_regions']:
             rgba = render_m3327(ram, region, m3327_palettes[layer])
             if rgba is None:
@@ -404,11 +502,11 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
             cols = np.minimum((np.arange(round(w * gx)) / gx).astype(int), w - 1)
             _blend(canvas, rgba[rows][:, cols], round(region['x0'] * gx), round(region['y0'] * gy))
     # the newer display engine's layers (the T750i), on top
-    info['de_layers'] = de_layers(ram, dev)
-    for layer in info['de_layers']:
-        if layer['enabled'] and layer['bitmap'] and layer['width'] and layer['height']:
-            _blend(canvas, render_de_layer(ram, layer), layer['x'], layer['y'])
-    return np.clip(canvas + 0.5, 0, 255).astype(np.uint8), info
+    for layer in active_de:
+        _blend(canvas, render_de_layer(ram, layer), layer['x'], layer['y'])
+    canvas += 0.5
+    np.clip(canvas, 0, 255, out=canvas)
+    return canvas.astype(np.uint8), info
 
 
 def _blend(canvas, rgba, x, y):
@@ -418,9 +516,19 @@ def _blend(canvas, rgba, x, y):
     hh, ww = min(hh, H - y), min(ww, W - x)
     if hh <= 0 or ww <= 0:
         return
-    src = rgba[:hh, :ww].astype(np.float32)
-    a = src[..., 3:4] / 255.0
-    canvas[y:y + hh, x:x + ww] = src[..., :3] * a + canvas[y:y + hh, x:x + ww] * (1 - a)
+    alpha_u8 = rgba[:hh, :ww, 3]
+    if int(alpha_u8.max()) == 0:
+        return
+    dst = canvas[y:y + hh, x:x + ww]
+    if int(alpha_u8.min()) == 255:
+        dst[:] = rgba[:hh, :ww, :3]
+        return
+    a = alpha_u8[..., None].astype(np.float32)
+    a /= 255.0
+    src_rgb = rgba[:hh, :ww, :3].astype(np.float32)
+    src_rgb *= a
+    dst *= (1.0 - a)
+    dst += src_rgb
 
 
 def save_png(path, rgb):

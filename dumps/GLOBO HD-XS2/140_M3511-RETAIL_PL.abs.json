@@ -1,0 +1,55 @@
+{
+  "file": "140_M3511-RETAIL_PL.abs",
+  "device": {
+    "brand": "Globo / Opticum",
+    "model": "HD-XS2 (Globo) / Blue XS65 (Opticum): Polish retail build",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": null,
+    "soc": "ALi M3503 (the bootloader chunk's version \"M3503---0.1.0\"; the archive names the package M3511; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build with the chip's internal NIM_S3503 demodulator driver)",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503 and the XIP bootloader's cache-as-RAM stack)",
+    "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
+    "tuner": "Airoha AV2011 at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.4.0 \"M3511-RETAIL_PL\" (main-code chunk 112003000202162, version 00000140, \"POL_NETR_PVR\"; Libcore 13.8.0@SDK4.0fa.13.8_20150326, Application 1.0.0@SDK4.0fa.13.8_20150326, HDMI_ALI_E_150303_1; the SEE's uLibcore 1.1.5a@SDK_20111126)",
+    "date": "2015-03-26",
+    "size": 4194304,
+    "sha1": "03fd65e480a62b8e2a92cf95fee28ff7a27c8a68",
+    "layout": "bootloader 0x000000 (M3503---0.1.0), HDCPKey 0x02EE00 (00000001), MemCfg 0x02F000 (00000001), maincode 0x030000 (chunk \"112003000202162\" 00000140, LZMA 0x193FD3 bytes -> 6.7 MB), seecode 0x1D0000 (00000140, LZMA 0xDEED0 -> 2.8 MB), storage_part 0x2B0000 (00000001), Radioback 0x2D0000 (1.0.0), ca 0x2DFF80 (00000001), defaultdb 0x2F0000 (1.1.0), userdb 0x2FFF80 (1.0.0, 0x100070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Opticum%20XS65_140_M3511-RETAIL_PL.zip&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update archive Opticum XS65_140_M3511-RETAIL_PL.zip; fetched 2026-10-18 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on ",
+      "Strt"
+    ],
+    "note": "Boots as the M3503 family (chips/m3503.py), completes the SEE's SHA-256 verification of the application on the crypto engine (crypto_engine.py) and draws its Polish first-install wizard \"Wybierz język\" (Polski, Niemiecki, Angielski) by ~100 M instructions (~241 GE commands), with the front panel showing \" ON \", \" on \", \"Strt\"."
+  },
+  "desc": [
+    "The 1.4.0 Polish retail update (140_M3511-RETAIL_PL.abs) for the Opticum Blue XS65 / Globo HD-XS2 satellite receiver, succeeding the 1.3.5 Reta_pol build on the same SDK4.0fa.13.8_20150326 platform.",
+    "The archive and file name identify the chip package as M3511 (an M3503-family satellite SoC whose bootloader chunk version is \"M3503---0.1.0\" and whose chip ID is 0x3503)."
+  ]
+}

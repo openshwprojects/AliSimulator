@@ -18,10 +18,14 @@ DVB-T2 through an external AltoBeam ATBM7812; nothing of that is modelled.)
 import struct
 
 from .base import ReadyBits, chunk_chain, maincode
+from .m3503 import InternalDemod
 from .m3821 import M3821
 from .see import SeeStart
 
-BOOTROM_SP = struct.pack("<I", 0x3C1D9FE0)     # lui $sp, 0x9FE0: a bootloader that runs in the boot SRAM
+BOOTROM_SP = (
+    struct.pack("<I", 0x3C1D9FE0),  # lui $sp, 0x9FE0: a bootloader that runs in the boot SRAM (KSEG0)
+    struct.pack("<I", 0x3C1DBFE0),  # lui $sp, 0xBFE0: the same boot SRAM in KSEG1 (Ariva 104)
+)
 
 
 class C3505(M3821):
@@ -31,13 +35,19 @@ class C3505(M3821):
 
     @classmethod
     def matches(cls, image):
-        if BOOTROM_SP not in (bytes(image[0x804:0x808]), bytes(image[0x808:0x80C])):
+        if not any(sp in (bytes(image[0x804:0x808]), bytes(image[0x808:0x80C])) for sp in BOOTROM_SP):
             return False                # not a boot-ROM bootloader
         if not any(name == "seecode" for _o, name, _v in chunk_chain(image)):
             return False                # (unpacking the main code is for the dual-CPU images only)
-        return b"ALI_C3505" in maincode(image)
+        mc = maincode(image)
+        return any(tag in mc for tag in (b"ALI_C3505", b"NIM_C3505_0", b"NIM_S3505"))
 
     def install(self):
         super().install()
         self.ready300 = ReadyBits(self.sim, {0x301: 0x01})     # bit 8 of 0xB8000300: polled before the bootloader goes on
+        self.nim = InternalDemod(self.sim)
         self.see = SeeStart(self.sim)
+
+    def uninstall(self):
+        self.nim.remove()
+        super().uninstall()

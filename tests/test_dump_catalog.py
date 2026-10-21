@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
 
+import chips
 import dump_catalog
 import dump_table
 import front_panel
@@ -22,6 +23,7 @@ import tuners
 print("=== Test: every firmware image has a correct sidecar (dump_catalog.py) ===")
 failures = []
 entries = dump_catalog.catalog()
+rows = []
 for path, data in entries:
     failures += dump_catalog.problems(path, data)
     if data is None:
@@ -51,6 +53,36 @@ for path, data in entries:
     if data["device"].get("irCoding") != coding:
         failures.append(f"{rel}: irCoding {data['device'].get('irCoding')!r} in the sidecar, "
                         f"ir_remote.coding_for gives {coding!r}")
+
+    dev, sim_info = data["device"], data["simulator"]
+    with open(path, "rb") as f:
+        fam = chips.detect(f.read()).__name__
+    plat = f"{fam} ({dev['chipId']})" if dev.get("chipId") else fam
+    if sim_info.get("boots") and sim_info.get("application") and sim_info.get("display"):
+        st = "boots+app+OSD"
+    elif sim_info.get("boots") and sim_info.get("application"):
+        st = "boots+app"
+    elif sim_info.get("boots"):
+        st = "boots only"
+    else:
+        st = "no"
+    tmod = dev.get("tunerModel")
+    dmod = dev.get("demodModel")
+    if tmod:
+        rf = f"{tmod['chip']}@0x{tmod['address']:02X}"
+    elif dmod:
+        rf = f"{dmod['chip']}@0x{dmod['address']:02X}"
+    elif dev.get("demod"):
+        rf = dev["demod"].split("(")[0].split(",")[0].strip()[:22]
+    else:
+        rf = "-"
+    disp_parts = ["OSD" if sim_info.get("display") else "-"]
+    if panel:
+        disp_parts.append(panel.get("chip", "?").split()[0])
+    if coding:
+        disp_parts.append(f"ir:{coding}")
+    rows.append((rel.replace("\\", "/"), plat, st, rf, " / ".join(disp_parts)))
+
 readme = os.path.join(dump_catalog.DUMPS_DIR, "README.md")
 try:
     with open(readme, encoding="utf-8") as f:
@@ -60,7 +92,20 @@ except OSError:
 if current != dump_table.render(entries):
     failures.append("dumps/README.md is not what tools/dump_table.py renders from the sidecars (run it)")
 
-print(f"{len(entries)} images, {sum(1 for _p, d in entries if d)} sidecars")
+if rows:
+    w_file = max(len(r[0]) for r in rows + [("file", "", "", "", "")])
+    w_plat = max(len(r[1]) for r in rows + [("", "platform", "", "", "")])
+    w_stat = max(len(r[2]) for r in rows + [("", "", "status", "", "")])
+    w_rf = max(len(r[3]) for r in rows + [("", "", "", "rf", "")])
+    hdr = f"  {'file':<{w_file}} | {'platform':<{w_plat}} | {'status':<{w_stat}} | {'rf':<{w_rf}} | display"
+    print("\n" + hdr)
+    print("  " + "-" * (len(hdr) - 2))
+    for r in rows:
+        print(f"  {r[0]:<{w_file}} | {r[1]:<{w_plat}} | {r[2]:<{w_stat}} | {r[3]:<{w_rf}} | {r[4]}")
+    print()
+
+n_osd = sum(1 for _p, d in entries if d and d["simulator"].get("display"))
+print(f"{len(entries)} images, {sum(1 for _p, d in entries if d)} sidecars ({n_osd} booting to OSD)")
 for f in failures:
     print(f"  [FAIL] {f}")
 if failures:

@@ -1,0 +1,47 @@
+{
+  "file": "Software_S50_1.1.4.1_PVR1_2012-09-26.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD S50 (the main code calls itself HD_S50-1-1-4-1 and accepts /c/S50.abs and /c/UNIWERSAL87436723.abs)",
+    "type": "DVB-S2 HD satellite receiver with USB recording",
+    "board": null,
+    "soc": "ALi M3601S (the main-code chunk's version; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, M36x_DVBS2_GLASS)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "gpioPullUps": [25],
+    "demodModel": {"chip": "s3501", "address": 51}
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.4.1 PVR1 (main-code chunk 102000002003002 \"M3601S\"; bootloader << SDK4.0ba.3.6_patch8_20101227 >>; Libcore 4.0.0@SDK4.0ba.4.0_20110115, Application 1.0.0@M36x_DVBS2_GLASS_20101227, HDMI_ALI_E_110108_1)",
+    "date": "2012-09-26",
+    "size": 2097152,
+    "sha1": "f6fb8dd5a2b08c2fb0448772a4c7c447a5329098",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), maincode 0x010000 (chunk \"102000002003002\" M3601S, LZMA 0x13B940 bytes -> 4.1 MB), Radioback 0x150000 (1.0.0), defaultdb 0x160000 (1.1.0), userdb 0x19FF80 (1.0.0, 0x60070 bytes) -- the whole 2 MB flash; no HDCPKey and no seecode chunk"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/viewer_top.php?file=Software_S50_1.1.4.1_PVR1_2012-09-26.rar&dir=Firmware+for+to+all+receivers/Opticum/INNE",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update Software_S50_1.1.4.1_PVR1_2012-09-26.rar (the .abs alone); fetched 2026-10-18 from the mirror's Opticum / INNE folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots as the M3602 family with its board's chip ID 0x3603 (device.chipId), the S3501 demodulator at I2C 0x33 (device.demodModel) and GPIO 25 pulled up (device.gpioPullUps, the USB power switch's fault line, as on the Opticum S60): the bootloader reads the flash with the quad I/O read 0xEB, starts the application (Libcore 4.0.0@SDK4.0ba.4.0_20110115, Application 1.0.0@M36x_DVBS2_GLASS_20101227) and tunes its first preloaded channel, drawing the channel banner and \"No Signal!\" within 80 M instructions (~309 GE commands).  Its remote uses the IR coding \"necfirst\" (scan_code_to_msg_code at 0x80008FF4 keeps (code >> 24) << 8 | (code & 0xFF), address 0x00: MENU 0x008F, OK 0x00FF, DOWN 0x009F; pressing OK opens the channel list)."
+  },
+  "desc": [
+    "The official 1.1.4.1 PVR1 update (2012-09-26) of the Opticum HD S50 satellite receiver: the displayless sister model of the Opticum HD S60 on the single-CPU ALi M3601S SoC (2 MB SPI flash, internal S3501 DVB-S2 demodulator, no seecode chunk and no 7-segment front panel).",
+    "Its bootloader is the SDK4.0ba.3.6_patch8 build of 2010-12-27 (\"DVBS2---0.1.0\") and its application is built on Libcore 4.0.0 (2011-01-15, M36x_DVBS2_GLASS_20101227), half a year earlier than the S60's Libcore 5.2.0 build; its Menuback and BootLogo are linked into the maincode rather than stored as separate flash chunks.",
+    "The application's USB updater accepts /c/S50.abs and /c/UNIWERSAL87436723.abs."
+  ]
+}

@@ -44,10 +44,11 @@ class InternalDemod:
     menu."""
     BASE = 0x28000
 
-    def __init__(self, sim):
+    def __init__(self, sim, base=BASE):
         self.sim = sim
-        sim.poke(0xB8000000 + self.BASE + 0xA3, bytes(S3501.ID[r] for r in sorted(S3501.ID)))
-        sim._mmio_on('w', self._write, self.BASE + 0xA0, self.BASE + 0xA6)
+        self.base = base
+        sim.poke(0xB8000000 + self.base + 0xA3, bytes(S3501.ID[r] for r in sorted(S3501.ID)))
+        sim._mmio_on('w', self._write, self.base + 0xA0, self.base + 0xA6)
 
     def _write(self, uc, access, address, size, value, user_data):
         reg = address & 0xFF
@@ -55,7 +56,7 @@ class InternalDemod:
 
     def remove(self):
         """The ID registers back to zero (the next family's chip has no such demodulator)."""
-        self.sim.poke(0xB8000000 + self.BASE + 0xA3, bytes(len(S3501.ID)))
+        self.sim.poke(0xB8000000 + self.base + 0xA3, bytes(len(S3501.ID)))
 
 
 class M3503(M3602):

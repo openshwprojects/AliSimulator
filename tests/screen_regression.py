@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import time
 
 import numpy as np
+from unicorn.mips_const import UC_MIPS_REG_PC
 
 import dump_catalog
 import gma_capture
@@ -179,6 +180,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         except Exception as e:
             raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s, "
                                  f"{sim.ge_ops} GE commands") from e
+        if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
+            raise SimulatorCrash(f"jump to NULL at {time.time() - start:.0f} s, {sim.ge_ops} GE commands")
         note_panel()
         if app_t is None and "Application version" in "".join(uart[-400:]):
             app_t = time.time()
@@ -225,6 +228,8 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
             sim.run(max_instructions=sim.instruction_count + 5_000_000, max_vtime=until)
         except Exception as e:
             raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s (after the boot)") from e
+        if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
+            raise SimulatorCrash(f"jump to NULL at {time.time() - start:.0f} s (after the boot)")
         return fw() > before
 
     def run_for(seconds):

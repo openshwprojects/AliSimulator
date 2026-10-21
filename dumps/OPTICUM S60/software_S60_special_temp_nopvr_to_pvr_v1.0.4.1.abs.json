@@ -1,0 +1,58 @@
+{
+  "file": "software_S60_special_temp_nopvr_to_pvr_v1.0.4.1.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "S60 HD (the v1.0.4.1 special NPVR-to-PVR transition build)",
+    "type": "DVB-S2 HD satellite receiver with USB recording",
+    "board": null,
+    "soc": "ALi M3601S (the main-code chunk's version; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, its all-code image M3601SAllCode.abs)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 62,
+      "sda": 63
+    },
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "gpioPullUps": [
+      25
+    ],
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.4.1 special NPVR-to-PVR (main-code chunk \"M3601S\")",
+    "date": "2012-09-14",
+    "size": 2097152,
+    "sha1": "bd1fa041495eabf98732ae50a10a5ec93aedec57",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), 103001002003003 0x014000 (M3601S), Radioback 0x15C000 (1.0.0), Menuback 0x163000 (1.0.0), BootLogo 0x168000 (1.0.0), defaultdb 0x16F000 (1.1.0), userdb 0x19FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "https://satedu.cba.pl/index.php?action=downloadfile&filename=software_S60_special_temp_nopvr_to_pvr_v1.0.4.1.zip&directory=Globo%20%28Opticum%29/Opticum%20S50%20-%20S60%20HD&",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": "2012-09-14",
+    "login": false,
+    "note": "Archive software_S60_special_temp_nopvr_to_pvr_v1.0.4.1.zip from satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "Strt",
+      "OOO1"
+    ],
+    "note": "Its remote (2026-10-14): the key task's scan_code_to_msg_code keeps the frame's first address byte and its last byte ((code >> 24) << 8 | code & 0xFF), as the ESR-250's does -- the IR coding \"necfirst\" (standard NEC address 0x40): with \"nec\" its control task received the keys but found none in the table.  OK opens the channel list \"All Satellites\" (Das Erste HD, ZDF HD, RTL Television, ...) and DOWN moves its highlight (run_dump_s60_capture_screen.py); the key table's code for vkey 15 (MENU elsewhere) puts it into standby here.  Its front panel's keys: its panel code (0x801639F4) reads the key byte every 100 ms and looks it up in a table of the seven DIG4 positions (0x8044375C), of which the UI's key map takes three -- KI1/DIG4 up, KI2/DIG4 power, KI3/DIG4 down; the test's third step is the panel's down.  With its board's chip ID 0x3603 (device.chipId, 2026-10-13) it boots and draws: under 0x3602 its application's USB host attach gave the controller no base and the host's start ran into its assertion (an SDBBP at 0x802F0130, then a jump to 0); as a C3603 its bootloader reads the flash with the quad I/O read 0xEB, the application decodes its boot logo (video_m36.py) and, with no signal, shows \"No Signal!\" while its panel goes \" ON \", \"Strt\", \"OOO1\" (run_dump_s60_capture_screen.py).  GPIO 25 is pulled up (device.gpioPullUps): the USB power switch's fault flag: while it read low, a task (0x80005034) cut the port's power, showed \"USB Short circuit!!\" for 3 s and tried again ~10 s later.  Before: As the M3602 family (chip ID 0x3602, 2026-10-11): the bootloader prints \"MC: APP  init ok\" and the application its banner (Libcore 5.2.0, Application 1.0.0@SDK4.0ba.5.3_GLS_S2_20110701) after about 110 s of wall clock, dumps its clock registers and sets up its front end.  Its NIM driver finds the internal S3501 demodulator at I2C 0x33 on SCB1 (device.demodModel, demods.py: chip ID 0x350100C0) and initialises it; without that model it reset its tuner 11 times and logged \"ERROR: reset nim failed!!!\" (2026-10-13).  The application still draws no more than 5 GE commands by 120 M instructions: every task waits and the idle task (0x8024EBF0, b .) runs.  The chip ID 0x3603 was no better then (before the quad I/O read was served): the bootloader stayed in its RAM copy and printed nothing in 120 M instructions, as the Cabletech URZ0086's did."
+  },
+  "desc": [
+    "Special transition firmware v1.0.4.1 for the Opticum S60 HD satellite receiver on the ALi M3601S SoC, upgrading NPVR builds to PVR."
+  ]
+}

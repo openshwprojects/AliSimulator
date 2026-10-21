@@ -1,0 +1,50 @@
+{
+  "file": "Software_S50_special_temp_NPVR_to_PVR_1.1.4.1.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "S50 HD (the 1.1.4.1 special NPVR-to-PVR transition build)",
+    "type": "DVB-S2 HD satellite receiver with USB recording",
+    "board": null,
+    "soc": "ALi M3601S (the main-code chunk's version; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build, M36x_DVBS2_GLASS)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0 / NIM_S3501_1)",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "gpioPullUps": [
+      25
+    ],
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.4.1 special NPVR-to-PVR (main-code chunk \"M3601S\")",
+    "date": "2012-09-14",
+    "size": 2097152,
+    "sha1": "86e32a93a013a2ae0a9a64493bc32610b12b99f0",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0), 102001002003003 0x010000 (M3601S), Radioback 0x150000 (1.0.0), defaultdb 0x160000 (1.1.0), userdb 0x19FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "https://satedu.cba.pl/index.php?action=downloadfile&filename=Software_S50_special_temp_NPVR_to_PVR_1.1.4.1.zip&directory=Globo%20%28Opticum%29/Opticum%20S50%20-%20S60%20HD&",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": "2012-09-14",
+    "login": false,
+    "note": "Archive Software_S50_special_temp_NPVR_to_PVR_1.1.4.1.zip from satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots as the M3602 family with its board's chip ID 0x3603 (device.chipId), the S3501 demodulator at I2C 0x33 (device.demodModel) and GPIO 25 pulled up (device.gpioPullUps, the USB power switch's fault line, as on the Opticum S60): the bootloader reads the flash with the quad I/O read 0xEB, starts the application (Libcore 4.0.0@SDK4.0ba.4.0_20110115, Application 1.0.0@M36x_DVBS2_GLASS_20101227) and tunes its first preloaded channel, drawing the channel banner and \"No Signal!\" within 80 M instructions (~309 GE commands).  Its remote uses the IR coding \"necfirst\" (scan_code_to_msg_code at 0x80008FF4 keeps (code >> 24) << 8 | (code & 0xFF), address 0x00: MENU 0x008F, OK 0x00FF, DOWN 0x009F; pressing OK opens the channel list)."
+  },
+  "desc": [
+    "Special transition firmware 1.1.4.1 for the Opticum S50 HD satellite receiver on the ALi M3601S SoC, upgrading NPVR builds to PVR."
+  ]
+}

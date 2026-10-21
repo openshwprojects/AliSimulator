@@ -180,25 +180,39 @@ class SpiStream:
     def _reset(self):
         self.tx = bytearray()       # what went out so far
         self.rx = 0                 # how much came in so far
+        self._parsed_hdr = None
 
-    def _parse(self):
-        """(command, flash address, data bytes) of the transaction so far."""
+    def _parse_hdr(self):
+        """(command, flash address, header length) cached for the current tx."""
+        if self._parsed_hdr is not None:
+            return self._parsed_hdr
         if not self.tx:
-            return None, 0, b""
+            return None, 0, 0
         cmd = self.tx[0]
         dummy = self.ADDRESSED.get(cmd)
         if dummy is None:
-            return cmd, 0, bytes(self.tx[1:])
-        return cmd, int.from_bytes(self.tx[1:4], 'big'), bytes(self.tx[4 + dummy:])
+            res = (cmd, 0, 1)
+        else:
+            res = (cmd, int.from_bytes(self.tx[1:4], 'big'), 4 + dummy)
+        self._parsed_hdr = res
+        return res
+
+    def _parse(self):
+        """(command, flash address, data bytes) of the transaction so far."""
+        cmd, addr, hdr_len = self._parse_hdr()
+        if cmd is None:
+            return None, 0, b""
+        return cmd, addr, bytes(self.tx[hdr_len:])
 
     def write(self, data):
         """Bytes the firmware clocks out: a store to the window or a DMA from RAM."""
         self.tx += data
+        self._parsed_hdr = None
 
     def read(self, n):
         """The next n bytes the part clocks in: flash contents from the address
         of a read command, the reply to an ID / status command, else idle."""
-        cmd, addr, _ = self._parse()
+        cmd, addr, _ = self._parse_hdr()
         start, self.rx = self.rx, self.rx + n
         if cmd in self.READS:
             rom, size = self.sim.rom_image, self.sim.rom_size
@@ -210,6 +224,8 @@ class SpiStream:
         return bytes(reply[i] if i < len(reply) else 0x00 for i in range(start, start + n))
 
     def _end(self):
+        if self.sim._rom_dirty:
+            self.sim._rom_restore()
         cmd, addr, data = self._parse()
         if cmd is not None:
             self.sim._spi_log(f"STREAM 0x{cmd:02X} ({self.sim._SPI_CMD_NAMES.get(cmd, 'Unknown')})"

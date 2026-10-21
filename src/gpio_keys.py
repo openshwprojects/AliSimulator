@@ -25,6 +25,10 @@ class GpioKeys:
         self.dump_enabled = False
         self.digits = [0, 0, 0, 0]
         self._held = {}                 # pin -> reads of its bank that still see it pressed
+        self._bank_pins = {}            # di_offset -> [(pin, mask), ...]
+        for pin in self.pins:
+            do_offset, bit = PanelDecoder._gpio_to_offset_bit(pin)
+            self._bank_pins.setdefault(do_offset - 4, []).append((pin, 1 << bit))
 
     @staticmethod
     def key_code(pin):
@@ -48,14 +52,15 @@ class GpioKeys:
     def di_override(self, di_offset, di_value):
         """Called by the simulator for every GPIO DI read: the key pins of that
         bank read high (released) or low (pressed)."""
-        for pin in self.pins:
-            do_offset, bit = PanelDecoder._gpio_to_offset_bit(pin)
-            if di_offset != do_offset - 4:              # DI register = DO register - 4
-                continue
-            left = self._held.get(pin, 0)
+        bank = self._bank_pins.get(di_offset)
+        if not bank:
+            return di_value
+        held = self._held
+        for pin, mask in bank:
+            left = held.get(pin, 0)
             if left > 0:
-                self._held[pin] = left - 1
-                di_value &= ~(1 << bit)
+                held[pin] = left - 1
+                di_value &= ~mask
             else:
-                di_value |= 1 << bit
+                di_value |= mask
         return di_value

@@ -9,8 +9,8 @@ half rewritten).  An image whose sidecar
 says "display": true but that draws nothing within the budget (or the other
 way round) is flagged.  The screen regressions under tests/ check one image
 per family in depth; this checks that every image still gives a screen, in
-about half an hour for all of them with --jobs 3 (2026-10-15: 48 of 50 draw,
-within 35-130 s each; ali_sdk.bin has no display, the R265 Lite's M3822P.bin
+about half an hour for all of them with --jobs 3 (2026-10-19: 98 of 100 draw,
+within 10-130 s each; ali_sdk.bin has no display, the R265 Lite's M3822P.bin
 dump a damaged main code) -- not part of run_all_tests.py.
 
   python tools/screen_survey.py                      every image, one at a time
@@ -41,6 +41,7 @@ PROBE_EVERY = 10_000_000
 def survey_one(path, budget_m, out_dir):
     """Boot one image (in this process) and print its result as one JSON line."""
     import numpy as np
+    from unicorn.mips_const import UC_MIPS_REG_PC
     import gma_capture
     from front_panel import make_panel
     from simulator import AliMipsSimulator, flash_size_for
@@ -62,6 +63,7 @@ def survey_one(path, budget_m, out_dir):
         next_probe = PROBE_EVERY
         previous_text = None
         while sim.instruction_count < budget_m * 1_000_000:
+            before = sim.instruction_count
             sim.run(max_instructions=sim.instruction_count + SLICE)
             text = panel.get_display_text()
             # a text the firmware is still writing digit by digit would show up mixed: keep a text
@@ -69,7 +71,7 @@ def survey_one(path, budget_m, out_dir):
             if text == previous_text and text.strip() and (not result["panel"] or result["panel"][-1] != text):
                 result["panel"].append(text)
             previous_text = text
-            if sim.instruction_count >= next_probe:
+            if sim.instruction_count >= next_probe or sim.instruction_count <= before or (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
                 next_probe = sim.instruction_count + PROBE_EVERY
                 rgb = sim.capture_screen()
                 colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
@@ -78,6 +80,12 @@ def survey_one(path, budget_m, out_dir):
                     if out_dir:
                         name = os.path.splitext(os.path.basename(path))[0] + ".png"
                         gma_capture.save_png(os.path.join(out_dir, name), rgb)
+                    break
+                if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
+                    result["error"] = "jump to NULL"
+                    break
+                if sim.instruction_count <= before:
+                    result["error"] = "CPU stalled"
                     break
     except Exception as e:                          # a crash is a result too
         result["error"] = f"{type(e).__name__}: {e}"[:200]
@@ -106,16 +114,20 @@ def main():
 
     def run_child(entry):
         path, data = entry
+        expected = bool(data and data.get("simulator", {}).get("display"))
         cmd = [sys.executable, os.path.abspath(__file__), "--one", path, "--budget", str(args.budget)]
         if args.out:
             cmd += ["--out", args.out]
-        try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=3600).stdout
-        except subprocess.TimeoutExpired:
-            out = ""
-        line = next((l for l in out.splitlines() if l.startswith("RESULT ")), None)
-        result = json.loads(line[7:]) if line else {"path": path, "drawn_at": None, "error": "no result (crashed?)"}
-        expected = bool(data and data.get("simulator", {}).get("display"))
+        result = None
+        for _attempt in range(2 if expected else 1):
+            try:
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=600).stdout
+            except subprocess.TimeoutExpired:
+                out = ""
+            line = next((l for l in out.splitlines() if l.startswith("RESULT ")), None)
+            result = json.loads(line[7:]) if line else {"path": path, "drawn_at": None, "error": "no result (crashed?)"}
+            if result.get("drawn_at") is not None:
+                break
         drawn = result.get("drawn_at") is not None
         flag = "" if drawn == expected else ("  <-- sidecar says display: " + ("true" if expected else "false"))
         rel = os.path.relpath(path, dump_catalog.DUMPS_DIR)

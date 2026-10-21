@@ -114,14 +114,27 @@ PANELS = [
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     ("T760i", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
                    seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A104_", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A204_", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
+                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A154", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
+                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A254", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
+                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("254Combo", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
+                      seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A54_", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
+                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
-    # Opticum X110TS (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
+    # Opticum X110TS and X110p (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
     # from the bootloader, "Strt" and the channel number ("OOO1") from the application (with its
     # LNB fault line not pulled up -- the sidecar's gpioPullUps -- it showed "LnbP" instead).  Its
     # panel code maps three DIG4 positions (a {code, key byte} table in its main code): KI1/DIG4
     # down, KI2/DIG4 power, KI3/DIG4 up -- held for two reads, a key steps twice
     ("X110TS", dict(chip="tm1650", scl=9, sda=8, labels={(1, 4): "▼", (2, 4): "PWR", (3, 4): "▲"})),
+    ("X110p", dict(chip="tm1650", scl=9, sda=8, labels={(1, 4): "▼", (2, 4): "PWR", (3, 4): "▲"})),
     # Globo HD-XS2 (both builds): on GPIO bank 4, SCL = GPIO 135, SDA = GPIO 134 -- " ON " from the
     # bootloader, " on " from the application; its UI's key map has three panel keys (codes 0xFF04,
     # 0xFF02, 0xFF01): KI1/DIG4 power (standby, "oFF "), KI2/DIG4 up and KI3/DIG4 down -- they move
@@ -139,7 +152,8 @@ PANELS = [
     # writes " ON ".  Its panel code (0x801639F4) reads the key byte every 100 ms and looks it up in
     # a table of seven DIG4 positions (0x8044375C), of which its UI's key map takes three: KI1/DIG4
     # up, KI2/DIG4 power, KI3/DIG4 down (their codes 0xFFFF0010 / 40 / 02)
-    ("UNI_S60", dict(chip="tm1650", scl=62, sda=63, labels={(1, 4): "▲", (2, 4): "PWR", (3, 4): "▼"})),
+    ("_S60_", dict(chip="tm1650", scl=62, sda=63, labels={(1, 4): "▲", (2, 4): "PWR", (3, 4): "▼"})),
+    ("S16_", dict(chip="tm1650", scl=62, sda=63, labels={(1, 4): "▲", (2, 4): "PWR", (3, 4): "▼"})),
     # Strong Prima VIII (MC6501-M3801, the GD25Q32B flash dump): two buttons straight on GPIO 31
     # and 9, polled by its application, which sends them on as the panel keys 0xFFFF0001 / 0002
     # (its CH455 driver, "PAN_CH455_0", sits on a software I2C bus with no pins: GPIO 127)
@@ -173,6 +187,17 @@ SEG_POLYS = {
 
 def panel_spec(dump):
     """The panel spec of a dump (file name or path)."""
+    try:
+        import dump_catalog
+        if dump_catalog.has_override(dump):
+            sc = dump_catalog.load(dump)
+            if sc and sc.get("file"):
+                fname = sc["file"].lower()
+                for pattern, spec in PANELS:
+                    if pattern.lower() in fname:
+                        return spec
+    except Exception:
+        pass
     name = os.path.normpath(dump).lower()
     for pattern, spec in PANELS:
         if pattern.lower() in name:

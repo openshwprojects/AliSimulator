@@ -10,8 +10,16 @@
     "demod": "internal (NIM_S3821)",
     "tuner": "MaxLinear MxL608 (reported for this board; the firmware probes MxL608 / R850 / R836, see T2GEN265_1.1.5-2022-08-01.abs)",
     "flash": "4 MB SPI",
-    "panel": {"chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)", "scl": 57, "sda": 58},
-    "irCoding": "nec"
+    "panel": {
+      "chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)",
+      "scl": 57,
+      "sda": 58
+    },
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "mxl608",
+      "address": 96
+    }
   },
   "image": {
     "kind": "dump",
@@ -33,7 +41,9 @@
     "boots": true,
     "application": false,
     "display": false,
-    "panelText": [" ON "],
+    "panelText": [
+      " ON "
+    ],
     "note": "The maincode chunk is damaged in the dump: stage 2 of the bootloader computes its CRC, takes its recovery path and halts at 0x81009E08 (run_dump_r265lite_boot.py) -- the box this flash came from halts there too.  The intact images of the same box are the two T2GEN265 update files."
   },
   "desc": [

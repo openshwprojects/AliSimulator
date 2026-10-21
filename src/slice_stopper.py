@@ -155,6 +155,15 @@ class NativeStopper:
         self._boost_cb = self._boost_wait_thread()
         self._refire_ms = refire_ms
         self._due = ctypes.c_longlong()
+        self._due_ref = ctypes.byref(self._due)
+        self._uch_ptr = ctypes.cast(self._uch, ctypes.c_void_p)
+        self._wait_handle = wt.HANDLE()
+        self._wait_ref = ctypes.byref(self._wait_handle)
+        self._set_timer = k32.SetWaitableTimer
+        self._cancel_timer = k32.CancelWaitableTimer
+        self._reg_wait = k32.RegisterWaitForSingleObject
+        self._unreg_wait = k32.UnregisterWaitEx
+        self._flags = self.WT_EXECUTEINWAITTHREAD
         self._closed = False
 
     def _boost_wait_thread(self):
@@ -191,22 +200,20 @@ class NativeStopper:
         """Stop the running (or next) emulation `seconds` from now."""
         self._due.value = -max(1, int(seconds * 1e7))          # relative, 100 ns units
         # (SetWaitableTimer also makes the timer non-signalled again)
-        self._k32.SetWaitableTimer(self.timer, ctypes.byref(self._due), self._refire_ms, None, None, False)
+        self._set_timer(self.timer, self._due_ref, self._refire_ms, None, None, False)
         if self.wait is None:
-            w = self._wt.HANDLE()
-            if not self._k32.RegisterWaitForSingleObject(ctypes.byref(w), self.timer, self._stop_fn,
-                                                         ctypes.cast(self._uch, ctypes.c_void_p),
-                                                         self.INFINITE, self.WT_EXECUTEINWAITTHREAD):
+            if not self._reg_wait(self._wait_ref, self.timer, self._stop_fn,
+                                  self._uch_ptr, self.INFINITE, self._flags):
                 raise OSError(ctypes.get_last_error(), "RegisterWaitForSingleObject failed")
-            self.wait = w
+            self.wait = self._wait_handle
 
     def disarm(self):
         """Cancel; returns only after a stop callback already in flight has
         finished, so no stale stop can reach a later emulation."""
-        self._k32.CancelWaitableTimer(self.timer)
+        self._cancel_timer(self.timer)
         if self.wait is not None:
             # INVALID_HANDLE_VALUE: wait until a callback that already started has returned
-            self._k32.UnregisterWaitEx(self.wait, self._INVALID)
+            self._unreg_wait(self.wait, self._INVALID)
             self.wait = None
 
     def close(self):

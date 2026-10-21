@@ -125,10 +125,44 @@ def scenario_no_hook_by_default(fails):
     check(len(sim._flash_read_hooks) > 0, "setSPIDump(True, flash_reads=True) installs it (to log reads)", fails)
 
 
+def scenario_inline_status(fails):
+    """With setSPIDump(False), CMD 0x05 (Read Status Register, polled by
+    sflash_wait_free() 70k-350k times during boot) serves 0x00 directly from
+    the flash window without installing the Unicorn memory hook or flushing
+    translated blocks, survives a CP0 Count read (osal_delay(20) on Winbond
+    JEDEC 0x40EF before reading 0xAFC00000) when rom_image[0] has bit 0 set
+    (0x23, Opticum S60), and restores rom_image[0] on SF_INS = 0x03."""
+    from test_cp0_timer_interrupt import mfc0, COUNT
+    sim = make_sim('fast',
+                   li(T1, 0xB802E098) + li(T3, 0xAFC00000) + [lui(S4, EPC_LOG >> 16)] + li(S1, 500) + [
+                       addiu(T4, ZERO, 0x05), sb(T4, 0, T1),       # SF_INS = 0x05 (RDSR)
+                       mfc0(T2, COUNT),                            # osal_delay(20) CP0 hook (_rom_restore)
+                       lbu(T5, 0, T3), sb(T5, 0, S4),              # status byte (must be 0x00, not 0x23)
+                       addiu(T4, ZERO, 0x03), sb(T4, 0, T1),       # SF_INS = 0x03 (normal read)
+                       lbu(T6, 0, T3), sb(T6, 1, S4),              # flash byte 0 (must be 0x23)
+                       addiu(S4, S4, 2), addiu(S0, S0, 1),
+                       bne(S0, S1, -13), NOP,
+                       beq(ZERO, ZERO, -1), NOP],
+                   [NOP])
+    sim.setSPIDump(False)
+    sim.rom_image[0] = 0x23
+    sim._rom_view[0] = 0x23
+    # Mark _rom_dirty before the loop (e.g. a prior flash patch) so mfc0 Count triggers _rom_restore()
+    sim._rom_write(0x100, b'\xAA')
+    run_until(sim, 'fast', 20_000, lambda s: s.mu.reg_read(UC_MIPS_REG_S0) >= 500, wall=10.0)
+    n = sim.mu.reg_read(UC_MIPS_REG_S0)
+    log = bytes(sim.mu.mem_read(EPC_LOG, 2 * n))
+    check(n == 500 and log == b'\x00\x23' * 500,
+          f"[inline CMD 0x05] all {n} rounds read status 0x00 across mfc0 Count and restored 0x23 on CMD 0x03", fails)
+    check(sim.flash_hook_changes == 0 and sim._flash_read_hooks == [],
+          f"[inline CMD 0x05] no Unicorn memory hook installed ({sim.flash_hook_changes} hook changes)", fails)
+
+
 def main():
     print("=== Test: SPI command-mode flash reads (flash read hook installed between slices) ===")
     fails = []
     scenario_no_hook_by_default(fails)
+    scenario_inline_status(fails)
     for mode in MODES:
         for variant in ('idle0', 'default', 'hold', 'toggle'):
             scenario(mode, variant, fails)

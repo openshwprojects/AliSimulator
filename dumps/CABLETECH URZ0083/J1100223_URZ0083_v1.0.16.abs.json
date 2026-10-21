@@ -12,7 +12,11 @@
     "flash": "2 MB SPI",
     "panel": null,
     "irCoding": "ext00",
-    "chipId": "0x3603"
+    "chipId": "0x3603",
+    "tunerModel": {
+      "chip": "mxl5007t",
+      "address": 96
+    }
   },
   "image": {
     "kind": "update",

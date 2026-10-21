@@ -8,10 +8,18 @@
     "soc": "ALi M3510A",
     "family": "M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503, the XIP bootloader's cache-as-RAM stack and the chip's internal demodulator)",
     "demod": "internal (the firmware's NIM_S3501 driver)",
-    "tuner": null,
+    "tuner": "RDA Microelectronics RDA5815 at I2C 0x60",
     "flash": "GigaDevice GD25Q32B (4 MB SPI)",
-    "panel": {"chip": "TM1650-compatible", "scl": 135, "sda": 134},
-    "irCoding": "necfirst"
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst",
+    "tunerModel": {
+      "chip": "rda5815",
+      "address": 96
+    }
   },
   "image": {
     "kind": "dump",
@@ -33,7 +41,9 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": ["Strt"],
+    "panelText": [
+      "Strt"
+    ],
     "note": "As the M3503 family (2026-10-13; its bootloader, \"3510-r1362\", is the Globo HD-XS2's XIP kind, and its set-up code branches on the chip IDs 0x3503 and 0x3821; 0x3510 appears nowhere in it): the bootloader runs from the flash window with its stack in the cache-as-RAM lines -- as the M3801 default it popped a return address of 0xFFFFFFFF and ended at PC 0 -- and starts the application at ~34 M instructions (single-CPU, no SEE program; a silent build, two 0x01 bytes to the UART).  The application draws its \"Quick Setup\" menu (Menu Language English, First Audio, Second Audio, LNB Power On, Single Search, Multi Satellite Search, Main Menu) through the GE by ~100 M (14 commands; run_dump_esr250_capture_screen.py, which also presses DOWN).  A task of it hid the OSD layer (0xB8006300 bit 0) as long as the NIM device's chip ID was not an S3501's: the chip's internal demodulator, whose registers the CPU reads at 0xB8028000 + the register number, answers it (chips/m3503.py InternalDemod).  Its remote takes standard NEC frames whose key-table code keeps the frame's first address byte (ir_remote coding \"necfirst\": its key conversion at 0x8009C058 keeps (code >> 24) << 8 | (code & 0xFF), the older SDKs code >> 16): DOWN moves the highlight from Menu Language to First Audio.  Its key table also holds the front panel's keys (type 2), whose codes are the panel's raw key bytes (0xFF44 ...): DIG1 of KI1..KI7 up, down, OK, menu, right, left and power (its virtual key 19), and the same seven on DIG2 / DIG3 positions.  The panel (2026-10-14) is a TM1650-compatible chip on the Globo HD-XS2's pins, SCL = GPIO 135, SDA = GPIO 134 -- the two bits of GPIO bank 4 its application toggles -- which reads \"Strt\"; its down and up keys move the Quick Setup highlight."
   },
   "desc": [

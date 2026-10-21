@@ -1,0 +1,56 @@
+{
+  "file": "A104_20190910_V1.3B1.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 104",
+    "type": "DVB-S2 Full HD H.265/HEVC satellite receiver with CA card reader and Ethernet / Wi-Fi",
+    "board": "BOARD_DB_M3521_01V01 (the bootloader chunk \"HASC1\" has version \"39081-01047\")",
+    "soc": "ALi C3505 (the maincode's \"ALI_C3505:0x%x\" chip-id print, seecode \"M3505 SEE\")",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0)",
+    "tuner": "ALi M3031 at I2C 0x20",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "ext00",
+    "tunerModel": {
+      "chip": "m3031",
+      "address": 32
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.3B1 (maincode \"V1.3B1*\" 2019-9-10) (bootloader << SDK4.0ba.4.0_20101217 >>; Libcore 17.15.0@SDK4.0ia.17.15_20171115, Application 1.0.0@SDK4.0ia.17.15_20171123)",
+    "date": "2019-09-10",
+    "size": 8388608,
+    "sha1": "e4c61e3ae4820c84bb179bb600cee22dd6318c43",
+    "layout": "HASC1 0x000000 (39081-01047), HDCPKey 0x02FE00 (00000001), maincode 0x030000 (V1.3B1*, LZMA -> 9.6 MB), seecode 0x488600 (M3505 SEE, LZMA -> 2.8 MB), osd_string 0x5B8600 (1.1.0), A104 0x5E0000 (1.0.0), seeback 0x600000 (1.0.0), data 0x68FF80 (1.0.0), defaultdb 0x6F0000 (1.0.0), userdb 0x72FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A104_20190910_V1.3B1.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20104_Ariva%20204",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Ferguson",
+    "date": "2019-09-10",
+    "login": false,
+    "note": "Archive A104_20190910_V1.3B1.zip from the Ferguson / Ariva 104_Ariva 204 directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " On ",
+      " on ",
+      "Strt",
+      "nenu"
+    ],
+    "note": "Boots as the C3505 family (chips/c3505.py): its boot-ROM bootloader at offset 0x800 sets $sp to the uncached boot-SRAM view 0xBFE04000 (0x3C1DBFE0 at 0x804), waits for bit 8 of 0xB8000300, unpacks the 9.6 MB maincode into RAM and starts it.  The application starts the SEE co-processor program (\"M3505 SEE\") at 0xA6000200 on the second core (see.SeeCore), prints \"ALI_C3505:0x1004f\", drives the FD650K front panel on GPIO 107 / 110, and renders its 1280x720 ARGB8888 \"System Setup\" OSD menu (21 GE commands, 146 unique colours) through the display engine layer at 0xB8006900."
+  },
+  "desc": [
+    "Ferguson Ariva 104 official firmware V1.3B1 (2019-09-10) for the H.265/HEVC DVB-S2 satellite receiver on the ALi C3505 SoC.",
+    "Its boot-ROM bootloader uses KSEG1 (0xBFE04000) for its initial boot-SRAM stack instead of KSEG0 (0x9FE04000 on the T760i), while sharing the same C3505 dual-core architecture (Libcore 17.15.0@SDK4.0ia.17.15_20171115), FD650K front panel on GPIO 107 / 110, and extended-NEC remote coding (ext00)."
+  ]
+}

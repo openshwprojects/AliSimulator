@@ -45,18 +45,68 @@ SCHEMA = {                      # the keys every sidecar has, and those of its s
 }
 
 
+_OVERRIDES = {}                 # resolve_dump(dump) -> dict, JSON path, False (ignore sidecar), or absent
+SIDECAR_AUTO = "Auto (<dump>.json)"
+SIDECAR_NONE = "None (autodetect only)"
+
+
+def _override_key(dump):
+    return os.path.normcase(os.path.abspath(resolve_dump(dump)))
+
+
+def set_override(dump, sidecar=None):
+    """Override the sidecar `load(dump)` returns: `sidecar` may be a dict, a
+    path to a `.json` file, `False` (ignore any sidecar on disk), or `None`
+    (restore normal `<dump>.json` lookup)."""
+    key = _override_key(dump)
+    if sidecar is None:
+        _OVERRIDES.pop(key, None)
+    else:
+        _OVERRIDES[key] = sidecar
+
+
+def has_override(dump):
+    """Whether `dump` currently has an active sidecar override via `set_override`."""
+    return _override_key(dump) in _OVERRIDES
+
+
 def sidecar_path(dump):
     """The sidecar of a dump named the way tests name them (simulator.resolve_dump)."""
     return resolve_dump(dump) + ".json"
 
 
+_FILE_CACHE = {}                # normcase(abspath(json_path)) -> (mtime_ns, parsed_dict)
+
+
+def _load_json_file(path):
+    k = os.path.normcase(os.path.abspath(path))
+    try:
+        mtime = os.stat(path).st_mtime_ns
+    except OSError:
+        _FILE_CACHE.pop(k, None)
+        return None
+    cached = _FILE_CACHE.get(k)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    _FILE_CACHE[k] = (mtime, data)
+    return data
+
+
 def load(dump):
     """The sidecar's contents (a dict), or None when the image has none."""
-    path = sidecar_path(dump)
-    if not os.path.isfile(path):
-        return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    resolved = resolve_dump(dump)
+    key = os.path.normcase(os.path.abspath(resolved))
+    if key in _OVERRIDES:
+        ov = _OVERRIDES[key]
+        if ov is False:
+            return None
+        if isinstance(ov, dict):
+            return ov
+        if isinstance(ov, str):
+            return _load_json_file(ov)
+    return _load_json_file(resolved + ".json")
 
 
 def images():
@@ -72,6 +122,78 @@ def images():
 def catalog():
     """[(image path, sidecar dict or None)] for every image."""
     return [(path, load(path)) for path in images()]
+
+
+def catalog_entries():
+    """Build [(display_label, abs_path, sidecar_dict)] for every image in dumps/."""
+    out = []
+    for path, sc in catalog():
+        rel = os.path.relpath(path, DUMPS_DIR).replace("\\", "/")
+        dev = (sc or {}).get("device") or {}
+        fam = dev.get("family") or "?"
+        cid = dev.get("chipId")
+        tag = f"{fam} ({cid})" if cid else fam
+        out.append((f"{rel}  [{tag}]", path, sc))
+    return out
+
+
+def resolve_catalog_dump(name, entries=None):
+    """Resolve a combobox label, file path, or case-insensitive substring against catalog."""
+    entries = entries if entries is not None else catalog_entries()
+    for label, path, _sc in entries:
+        if name == label:
+            return path
+    resolved = resolve_dump(name)
+    if os.path.exists(resolved):
+        return resolved
+    needle = name.lower()
+    for label, path, _sc in entries:
+        if needle in label.lower() or needle in os.path.basename(path).lower():
+            return path
+    return name
+
+
+def catalog_label_for(dump, entries=None):
+    """Return the catalog display label matching `dump`, or `dump` when outside dumps/."""
+    entries = entries if entries is not None else catalog_entries()
+    try:
+        resolved = _override_key(dump)
+        for label, path, _sc in entries:
+            if os.path.normcase(os.path.abspath(path)) == resolved:
+                return label
+    except Exception:
+        pass
+    return dump
+
+
+def sidecar_presets(entries=None):
+    """Build {display_label: sidecar_arg} for GUI sidecar selector comboboxes."""
+    entries = entries if entries is not None else catalog_entries()
+    presets = {SIDECAR_AUTO: None, SIDECAR_NONE: False}
+    for _label, path, sc in entries:
+        rel = os.path.relpath(path, DUMPS_DIR).replace("\\", "/")
+        jpath = path + ".json"
+        if os.path.isfile(jpath):
+            dev = (sc or {}).get("device") or {}
+            brand_model = f"{dev.get('brand', '')} {dev.get('model', '')}".strip()
+            slabel = f"{brand_model} ({rel})" if brand_model else rel
+            presets[slabel] = jpath
+    return presets
+
+
+def apply_sidecar_selection(dump, selection, presets=None):
+    """Apply a GUI sidecar selector choice ('Auto...', 'None...', preset label, or path)."""
+    sel = (selection or "").strip()
+    if not sel or sel == SIDECAR_AUTO:
+        set_override(dump, None)
+    elif sel == SIDECAR_NONE:
+        set_override(dump, False)
+    elif presets and sel in presets:
+        set_override(dump, presets[sel])
+    elif os.path.isfile(sel):
+        set_override(dump, sel)
+    else:
+        set_override(dump, None)
 
 
 def sha1_of(path):
@@ -147,33 +269,47 @@ def problems(path, data):
     return out
 
 
+def _device(dump):
+    return ((load(dump) or {}).get("device")) or {}
+
+
 def otp(dump):
     """{offset: bytes} of a board's one-time-programmable memory the sidecar
     gives (device.otp), or None."""
-    given = (((load(dump) or {}).get("device")) or {}).get("otp")
+    given = _device(dump).get("otp")
     return {int(k, 16): bytes.fromhex(v) for k, v in given.items()} if given else None
 
 
 def gpio_i2c(dump):
     """(scl, sda) of the I2C bus a board's firmware bit-bangs to its chips
     (device.gpioI2c), or None."""
-    given = (((load(dump) or {}).get("device")) or {}).get("gpioI2c")
+    given = _device(dump).get("gpioI2c")
     return (given["scl"], given["sda"]) if given else None
 
 
 def gpio_pull_ups(dump):
     """The GPIO numbers of the input pins a board pulls up (device.gpioPullUps)."""
-    return list((((load(dump) or {}).get("device")) or {}).get("gpioPullUps") or [])
+    return list(_device(dump).get("gpioPullUps") or [])
 
 
 def demod_model(dump):
     """(chip, 7-bit address) of the demodulator a board's sidecar names
     (device.demodModel), or None."""
-    given = (((load(dump) or {}).get("device")) or {}).get("demodModel")
+    given = _device(dump).get("demodModel")
     return (given["chip"], given["address"]) if given else None
 
 
 def chip_id(dump):
     """The chip ID a board's sidecar gives (device.chipId), or None."""
-    given = (((load(dump) or {}).get("device")) or {}).get("chipId")
+    given = _device(dump).get("chipId")
     return int(given, 16) if given else None
+
+
+def tuner_model(dump):
+    """The tuner model dict a board's sidecar gives (device.tunerModel), or None."""
+    return _device(dump).get("tunerModel")
+
+
+def ir_coding(dump):
+    """The IR coding string a board's sidecar gives (device.irCoding), or None."""
+    return _device(dump).get("irCoding")

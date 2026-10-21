@@ -86,20 +86,36 @@ class MxL603(MaxLinear):
     BW_CODES = {0x20: 6, 0x21: 7, 0x22: 8}          # terrestrial (register 0x0F & 0x3F)
 
 
+class MxL608(MxL603):
+    pass
+
+
 class MxL5007T(MaxLinear):
-    STATUS = {0xD8: 0x0F}               # RF (bits 3..2) and reference (bits 1..0) locked
+    STATUS = {0xD3: 0x14, 0xD8: 0x0F}   # 0xD3: MxL_5007T_V4 chip version; 0xD8: RF (bits 3..2) and reference (bits 1..0) locked
     FREQ_LO, FREQ_HI, BW_REG = 0x0D, 0x0E, 0x0C
+    BW_CODES = {0x15: 6, 0x2A: 7, 0x3F: 8}
+
+
+class MxL101SF(MaxLinear):
+    """MaxLinear MxL101SF single-chip DVB-T tuner+demodulator (URZ0086, KM0186,
+    THT501, X110TS): uses the 0xFB read prefix; chip ID 0x61 in 0xFC, version
+    0x09 in 0xFA, CP lock >= 0x1841 in 0x26:0x25, RS/MPEG/TPS lock in 0x28,
+    TPS cell ID lock in 0x2A, RF in 0x1F:0x1E / 64 MHz, bandwidth in 0x1D."""
+    STATUS = {0x03: 0x01, 0x25: 0x42, 0x26: 0x18, 0x28: 0x0E, 0x2A: 0x08, 0xFA: 0x09, 0xFC: 0x61}
+    FREQ_LO, FREQ_HI, BW_REG = 0x1E, 0x1F, 0x1D
     BW_CODES = {0x15: 6, 0x2A: 7, 0x3F: 8}
 
 
 class R820T:
     CHIP_ID = 0x69
     STATUS_REGS = 5                     # registers 0..4 read status, writes start at 5
+    NUM_REGS = 32
     PLL_N = 0x14
+    REF_DIV_BIT = 0x10
 
     def __init__(self, xtal_hz=16_000_000, if_hz=4_570_000):
         self.xtal_hz, self.if_hz = xtal_hz, if_hz
-        self.regs = bytearray(32)
+        self.regs = bytearray(self.NUM_REGS)
         self.regs[0] = self.CHIP_ID
         self.regs[1] = 0x20             # an image-rejection ADC reading (any value lets the calibration settle)
         self.regs[2] = 0x40             # PLL locked
@@ -128,7 +144,7 @@ class R820T:
         if not self.pll_set:
             return None
         r = self.regs
-        ref = self.xtal_hz // 2 if r[0x10] & 0x10 else self.xtal_hz
+        ref = self.xtal_hz // 2 if r[0x10] & self.REF_DIV_BIT else self.xtal_hz
         nint = 4 * (r[self.PLL_N] & 0x3F) + (r[self.PLL_N] >> 6) + 13
         sdm = 0 if r[0x12] & 0x08 else (r[0x16] << 8) | r[0x15]
         vco = 2 * ref * (nint + sdm / 65536)
@@ -140,12 +156,251 @@ class R820T:
         return bytes(bitrev8(self.regs[i % len(self.regs)]) for i in range(n))
 
 
-MODELS = {"mxl603": MxL603, "mxl5007t": MxL5007T, "r820t": R820T}
+class R836(R820T):
+    """Rafael Micro R836 / R840 / R850 DVB-T2/C silicon tuner (Opticum R265 Lite,
+    Ariva 154/254 Combo): 49 registers, reference divider bit 2 of register 0x10,
+    and supports both bit-reversed reads from register 0 and the A154/A254
+    I2C_Read_Len [0xFB, reg] prefix."""
+    NUM_REGS = 49
+    REF_DIV_BIT = 0x04
+
+    def __init__(self, xtal_hz=16_000_000, if_hz=5_000_000):
+        super().__init__(xtal_hz=xtal_hz, if_hz=if_hz)
+        self._fb_reg = None
+
+    def write(self, data):
+        if len(data) == 2 and data[0] == 0xFB:
+            self._fb_reg = data[1]
+            return True
+        self._fb_reg = None
+        return super().write(data)
+
+    def read(self, n):
+        if self._fb_reg is not None:
+            reg, self._fb_reg = self._fb_reg, None
+            self.reads[n] += 1
+            return bytes(self.regs[(reg + i) % len(self.regs)] for i in range(n))
+        return super().read(n)
+
+
+class R840(R836):
+    pass
+
+
+class R850(R836):
+    pass
+
+
+class AV2011:
+    """Airoha AV2011 DVB-S2 silicon tuner: a write sets the starting register
+    (data[0]) and writes data[1:] sequentially from there; a 1-byte write
+    selects the register to read next.  Register 0x0B bits 1..0 report PLL
+    lock; a 4-register write to 0x00..0x03 programs the fractional-N divider
+    (r[0] = round(rf_mhz / xtal_mhz), frac[16:0] in r[1]:r[2]:r[3][7])."""
+    STATUS = {0x0B: 0x03}
+
+    def __init__(self, xtal_hz=27_000_000):
+        self.xtal_hz = xtal_hz
+        self.regs = bytearray(64)
+        self.read_reg = 0x0B
+        self.reads = collections.Counter()
+        self.writes = 0
+        self.tuned = False
+
+    def write(self, data):
+        if data:
+            self.read_reg = data[0] & 0x3F
+            if data[0] == 0x00 and len(data) > 1:
+                self.tuned = len(data) == 5
+            for i, b in enumerate(data[1:]):
+                reg = (data[0] + i) & 0x3F
+                self.regs[reg] = b
+                self.writes += 1
+        return True
+
+    def read(self, n):
+        self.reads[self.read_reg] += 1
+        out = [self.STATUS.get((self.read_reg + i) & 0x3F, self.regs[(self.read_reg + i) & 0x3F])
+               for i in range(n)]
+        return bytes(out)
+
+    def frequency(self):
+        """{"rf_hz", "bw_mhz"} of the L-band frequency tuned to, or None before
+        the first 4-register PLL write."""
+        if not self.tuned:
+            return None
+        r = self.regs
+        frac = (r[1] << 9) | (r[2] << 1) | ((r[3] >> 7) & 1)
+        nint = r[0] - (frac >> 16)
+        rf_hz = round(self.xtal_hz * (nint + frac / (1 << 17)))
+        bw_mhz = round(r[5] * 21.1 / 127) if r[5] else None
+        return {"rf_hz": rf_hz, "bw_mhz": bw_mhz}
+
+
+class Si2144:
+    """Silicon Labs Si2144 DVB-T2/C silicon tuner (Strong SRT Prima VIII,
+    0x802618A0..0x8026F76C): command/property protocol where every read starts
+    with the status byte (0x80 CTS, 0xFE after RESET_HW, 0x89 CTS|DTVINT|TUNINT
+    after TUNER_TUNE_FREQ)."""
+    PART_INFO = bytes([0x01, 44, 0x32, 0x31, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x62, 0x00])
+    GET_REV = bytes([0x32, 0x31, 0x32, 0x31, 0x01, 0x01, 0x00, 0x00, 0x02])
+
+    def __init__(self):
+        self.status = 0x80
+        self.reply = b""
+        self.last_cmd = 0
+        self.props = {}
+        self.rf_hz = None
+        self.reads = collections.Counter()
+        self.writes = 0
+
+    def write(self, data):
+        if not data:
+            return True
+        cmd = data[0]
+        self.last_cmd = cmd
+        self.writes += 1
+        self.status = 0x80
+        self.reply = b""
+        if cmd == 0xC0 and len(data) >= 2 and data[1] == 0x05:      # RESET_HW -> pollForResetState expects 0xFE
+            self.status = 0xFE
+        elif cmd == 0x02:                                           # PART_INFO (part 44, romid 0x62)
+            self.reply = self.PART_INFO
+        elif cmd == 0x11:                                           # GET_REV
+            self.reply = self.GET_REV
+        elif cmd == 0x14 and len(data) >= 6:                        # SET_PROPERTY
+            prop = int.from_bytes(data[2:4], "little")
+            self.props[prop] = int.from_bytes(data[4:6], "little")
+            self.reply = b"\x00"
+        elif cmd == 0x15 and len(data) >= 4:                        # GET_PROPERTY
+            prop = int.from_bytes(data[2:4], "little")
+            self.reply = b"\x00" + self.props.get(prop, 0).to_bytes(2, "little")
+        elif cmd == 0x41 and len(data) >= 8:                        # TUNER_TUNE_FREQ
+            self.rf_hz = int.from_bytes(data[4:8], "little")
+            self.status = 0x89
+            self.reply = b"\x00"
+        elif cmd == 0x42:                                           # TUNER_STATUS (tc=1, rssi=-50 dBm, dl=1)
+            self.reply = bytes([0x01, 0x01, 0xCE]) + (self.rf_hz or 0).to_bytes(4, "little") + bytes([0x01, 0x00, 0x00, 0x00])
+        return True
+
+    def read(self, n):
+        self.reads[self.last_cmd] += 1
+        return (bytes([self.status]) + self.reply + bytes(n))[:n]
+
+    def frequency(self):
+        if not self.rf_hz:
+            return None
+        bw = (self.props[0x0703] & 0x0F) if 0x0703 in self.props else None
+        return {"rf_hz": self.rf_hz, "bw_mhz": bw if bw in (6, 7, 8) else None}
+
+
+class M3031:
+    """ALi M3031 DVB-S2 silicon tuner at I2C 0x20 (Ferguson Ariva 104 / 204 /
+    154 Combo / 254 Combo, 0x8029D010..0x8029DD68): a write sets the starting
+    register (data[0]) and writes data[1:] sequentially; a 1-byte write selects
+    the register to read next.  Register 0x00 is chip ID 2 (with 0x42 bit 6
+    clear), 0x51 bit 0 is PLL lock, 0x74..0x75 is the 16-bit LE calibration
+    word, and a 6-register write to 0x26..0x2B tunes the L-band synthesizer."""
+    STATUS = {0x00: 0x02, 0x42: 0x00, 0x51: 0x01, 0x74: 0xEA, 0x75: 0x01}
+
+    def __init__(self, xtal_hz=27_000_000):
+        self.xtal_hz = xtal_hz
+        self.regs = bytearray(256)
+        self.read_reg = 0
+        self.reads = collections.Counter()
+        self.writes = 0
+        self.tuned = False
+
+    def write(self, data):
+        if data:
+            self.read_reg = data[0]
+            if data[0] == 0x26 and len(data) >= 7:
+                self.tuned = True
+            for i, b in enumerate(data[1:]):
+                reg = (data[0] + i) & 0xFF
+                self.regs[reg] = b
+                self.writes += 1
+        return True
+
+    def read(self, n):
+        self.reads[self.read_reg] += 1
+        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
+                     for i in range(n))
+
+    def frequency(self):
+        if not self.tuned:
+            return None
+        r = self.regs
+        ref_div = r[0x27] or 4
+        n_val = (r[0x29] << 8) | r[0x2A]
+        out_div = 2 << (r[0x2B] & 3)
+        rf_hz = round(self.xtal_hz * n_val / (ref_div * out_div))
+        bw_mhz = round(r[0x2E] * 0.58) if r[0x2E] else None
+        return {"rf_hz": rf_hz, "bw_mhz": bw_mhz}
+
+
+class RDA5815:
+    """RDA Microelectronics RDA5815 / RDA5815M DVB-S2 silicon tuner at I2C 0x60
+    (Echosonic Mini ESR-250, 0x8027A2B4..0x8027AA00): a write sets the starting
+    register (data[0]) and writes data[1:]; a 1-byte write selects the register
+    to read next.  Register 0x00 is chip ID 0xC3 (bits 7..2 = 0xC0, rev 3),
+    0x05 bit 1 is calibration done, 0x66 bit 7 is PLL lock, and writing
+    registers 0x01..0x04 programs the 24-bit fractional-N word (rf_mhz * 2^17 /
+    27 MHz in r[1]:r[2]:r[3])."""
+    STATUS = {0x00: 0xC3, 0x05: 0x02, 0x66: 0x80}
+
+    def __init__(self, xtal_hz=27_000_000):
+        self.xtal_hz = xtal_hz
+        self.regs = bytearray(256)
+        self.read_reg = 0
+        self.reads = collections.Counter()
+        self.writes = 0
+        self.tuned = False
+
+    def write(self, data):
+        if data:
+            self.read_reg = data[0]
+            for i, b in enumerate(data[1:]):
+                reg = (data[0] + i) & 0xFF
+                self.regs[reg] = b
+                self.writes += 1
+                if reg == 0x04 and (self.regs[1] or self.regs[2] or self.regs[3]):
+                    self.tuned = True
+        return True
+
+    def read(self, n):
+        self.reads[self.read_reg] += 1
+        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
+                     for i in range(n))
+
+    def frequency(self):
+        if not self.tuned:
+            return None
+        r = self.regs
+        n_val = (r[1] << 16) | (r[2] << 8) | r[3]
+        rf_hz = round(self.xtal_hz * n_val / (1 << 17))
+        return {"rf_hz": rf_hz, "bw_mhz": None}
+
+
+MODELS = {
+    "mxl603": MxL603,
+    "mxl608": MxL608,
+    "mxl5007t": MxL5007T,
+    "mxl101sf": MxL101SF,
+    "r820t": R820T,
+    "r836": R836,
+    "r840": R840,
+    "r850": R850,
+    "av2011": AV2011,
+    "si2144": Si2144,
+    "m3031": M3031,
+    "rda5815": RDA5815,
+}
 
 
 def make(chip, **config):
     """A new model of `chip` (a key of MODELS, as in a sidecar's tunerModel);
-    config: the R820T's xtal_hz / if_hz."""
+    config: xtal_hz / if_hz where supported."""
     return MODELS[chip.lower()](**config)
 
 
@@ -169,4 +424,6 @@ def describe(device):
 
 def is_tuner(device):
     """Whether an I2C device is one of these tuner models."""
-    return isinstance(device, (MaxLinear, R820T))
+    return isinstance(device, (MaxLinear, R820T, AV2011, Si2144, M3031, RDA5815))
+
+

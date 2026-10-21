@@ -9,9 +9,16 @@
     "family": "M3821",
     "demod": "internal (NIM_S3821)",
     "tuner": "MaxLinear MxL608 (reported for this board; the firmware probes the same five I2C addresses as 1.1.5)",
-    "tunerModel": {"chip": "mxl603", "address": 96},
+    "tunerModel": {
+      "chip": "mxl608",
+      "address": 96
+    },
     "flash": "4 MB SPI",
-    "panel": {"chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)", "scl": 57, "sda": 58},
+    "panel": {
+      "chip": "HD2015 (TM1650-compatible; no display soldered, 3 buttons)",
+      "scl": 57,
+      "sda": 58
+    },
     "irCoding": "nec"
   },
   "image": {
@@ -34,7 +41,12 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": [" ON ", " on ", "Strt", "noCH"],
+    "panelText": [
+      " ON ",
+      " on ",
+      "Strt",
+      "noCH"
+    ],
     "note": "Boots through its 2023 bootloader into its application (run_dump_r265lite_120_app_banner.py, ~35 s: stage 2 copies the maincode through the flash window word by word) and draws the same home menu as 1.1.5 (run_dump_r265lite_120_capture_screen.py)."
   },
   "desc": [

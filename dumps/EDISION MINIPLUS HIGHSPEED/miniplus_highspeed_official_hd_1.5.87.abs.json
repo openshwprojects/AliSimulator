@@ -1,0 +1,48 @@
+{
+  "file": "miniplus_highspeed_official_hd_1.5.87.abs",
+  "device": {
+    "brand": "Edision",
+    "model": "Argus Miniplus Highspeed",
+    "type": "DVB-S2 Full HD satellite receiver with CI slot, CA card reader and Ethernet",
+    "board": null,
+    "soc": "ALi M3606 / C3603 (the main-code chunk's version \"M3606 \", the seecode chunk's \"M3606 SEE\"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version",
+    "demod": "internal (NIM_S3501_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.87 official HD (maincode \"M3606 \" 2013-11-12; bootloader << SDK4.0ba.4.0_20101217 >>; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "date": "2013-11-12",
+    "size": 8388608,
+    "sha1": "b8ba72efc39db14e7c9379f38b5c79b015f07166",
+    "layout": "bootloader 0x000000 (M3606A 1.1.3), maincode 0x020000 (0A0108001587), seecode 0x320000 (M3606 SEE), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), cipluskey 0x480000 (1.0.0), logo 0x488000 (1.0.0), Menuback 0x498000 (1.0.0), BootLogo 0x4B8000 (1.0.0), Radioback 0x4D8000 (1.0.0), patch 0x4FFF80 (1.0.0), defaultdb 0x520000 (1.0.1), userdb 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=miniplus_highspeed_official_hd_1.5.87.zip&directory=Firmware%20for%20to%20all%20receivers/Edision/Miniplus%20highspeed",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Edision",
+    "date": "2013-11-12",
+    "login": false,
+    "note": "Archive miniplus_highspeed_official_hd_1.5.87.zip from the Edision / Miniplus highspeed directory on satedu.cba.pl; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as the M3602 family with device.chipId 0x3603 (C3603): the bootloader at 0x000000 (whose chunk header has next = 0, followed at length + 0x80 = 0x020000 by maincode; chips/base.py:chunk_chain) reads the 8 MB flash via SPI quad I/O read 0xEB, unpacks the 8.0 MB maincode into RAM and starts it.  The application starts the SEE co-processor (\"M3606 SEE\"), initialises the S3501 demodulator at I2C 0x33, and renders its 32-bpp ARGB8888 OSD (8 GE commands, 10 unique colours; without the board's encrypted anti-clone security IC at SCB I2C 0x10 it displays \"SW is not designed for this HW, please change back to official SW! -----0a010800 00000000\") by 140 M instructions.  Its 39-key remote table (0x99xx) uses the \"necfirst\" coding."
+  },
+  "desc": [
+    "Edision Argus Miniplus Highspeed official HD firmware 1.5.87 (2013-11-12) for the ALi M3606 / C3603 DVB-S2 satellite receiver on an 8 MB SPI flash.",
+    "Sibling of the Edision Optimuss Underline 1.5.87 build on the same SDK4.0ba.7.24_SAB_20130620 codebase and 0x99xx remote coding; silences UART TX via a dummy printf stub and checks an external anti-clone crypto chip at I2C 0x10 at startup."
+  ]
+}

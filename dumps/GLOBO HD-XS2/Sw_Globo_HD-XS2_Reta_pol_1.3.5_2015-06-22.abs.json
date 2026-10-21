@@ -8,10 +8,18 @@
     "soc": "ALi M3503 (the bootloader chunk's version \"M3503---0.1.0\"; the main code is the SDK's \"M3602 HD STB\" / \"S3602 HD STB\" platform build with the chip's internal NIM_S3503 demodulator driver)",
     "family": "M3503 (chips/m3503.py: the M36xx family with the chip ID 0x3503 and the XIP bootloader's cache-as-RAM stack)",
     "demod": "internal (NIM_S3503_0 / NIM_S3503_1; the NIM_S3501 driver is in the build too)",
-    "tuner": null,
+    "tuner": "Airoha AV2011 at I2C 0x60",
     "flash": "4 MB SPI",
-    "panel": {"chip": "TM1650-compatible", "scl": 135, "sda": 134},
-    "irCoding": "nec"
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
   },
   "image": {
     "kind": "update",
@@ -33,7 +41,11 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": [" ON ", " on ", "Strt"],
+    "panelText": [
+      " ON ",
+      " on ",
+      "Strt"
+    ],
     "note": "Draws its first-install wizard \"Wybierz język\" (Polish, German, English) at ~120 M instructions, 241 GE commands; the remote's DOWN picks German and the whole wizard switches to it (run_dump_hdxs2_reta_capture_screen.py, 2026-10-14).  Its front panel's three keys -- the UI's key map has only these: KI1/DIG4 power (standby, \"oFF \"), KI2/DIG4 up, KI3/DIG4 down, each acting when held for several polls -- move the language list too: the test's second step is the panel's down (English).  Its HLD_DSC.16 call -- the SEE hashing the application's code with SHA-256 on the crypto engine (crypto_engine.py), which never answered while nothing raised the engine's done interrupt -- returns now; see the SmartHD image's sidecar.  Before: as the M3503 family (2026-10-12), like the SmartHD image (run_dump_hdxs2_app_starts.py): the bootloader runs from the flash window with its cache-as-RAM stack, starts the SEE through its boot code at 0xA1016804 and the application, which starts the SEE's program at 0x86000200 on the second core (see.SeeCore): 77 calls answered and 34 of the SEE's by ~76 M instructions, no GE command yet; a silent build, one 0x01 byte to the UART.  Where it stops (2026-10-13): its start-up blocks in a remote call to the SEE, HLD_DSC.16 (arguments 0xA0000200, 0xA0410E40, 5, 0x40000000 -- the application's own code from its start, most likely a check of it by the SEE's descrambler / crypto side): the SEE acknowledges the call's doorbell and never answers, and both CPUs then idle.  Its other calls are all answered by then.  The chip's internal demodulator answers its chip ID (chips/m3503.py InternalDemod); a task of the application that keeps the OSD layer off (0x803D3080, an anti-clone check of the chip's product, a named device's 4 bytes and the NIM devices) runs too, but nothing is drawn: no GE command on either core, no picture decoded, no key -- remote (nec, plain, ext00, necfirst) or panel -- changes anything."
   },
   "desc": [

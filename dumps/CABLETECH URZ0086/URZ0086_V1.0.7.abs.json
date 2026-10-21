@@ -8,12 +8,19 @@
     "soc": "ALi M3606",
     "family": "M3602 (chips/m3602.py)",
     "demod": "unknown (under the tuner's shield, Gutek's review); the firmware has NIM_COFDM_0 / NIM_COFDM_1: two tuners",
-    "tuner": null,
+    "tuner": "MaxLinear MxL101SF at I2C 0x60",
     "flash": "4 MB SPI",
     "panel": null,
     "irCoding": "nec",
     "chipId": "0x3603",
-    "gpioI2c": {"scl": 44, "sda": 43}
+    "gpioI2c": {
+      "scl": 44,
+      "sda": 43
+    },
+    "tunerModel": {
+      "chip": "mxl101sf",
+      "address": 96
+    }
   },
   "image": {
     "kind": "update",

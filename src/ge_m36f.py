@@ -64,6 +64,12 @@ _YCBCR = {0x10, 0x13}
 
 PHYS_MASK = 0x07FFFFFF
 
+_COLOUR_CACHE = {}
+_FILL_CACHE = {}
+_PACKED16_LUT = {}
+_PACKED16_RGBA_U8_LUT = {}
+_PACKED16_FMTS = {0x02, 0x03, 0x04, 0x05, 0x06}
+
 
 def _u32(v):
     return v & 0xFFFFFFFF
@@ -288,57 +294,147 @@ class GeM36F:
         out = (c << (8 - bits)) | (c >> max(0, 2 * bits - 8)) if bits >= 4 else c * (255 // ((1 << bits) - 1))
         return out.astype(np.float32)
 
-    def _decode(self, raw, fmt, pfreg, clut=None):
-        """raw values -> float32 (h, w, 4) in A, R, G, B order."""
+    def _decode_colour(self, val, fmt):
+        key = (val, fmt)
+        c = _COLOUR_CACHE.get(key)
+        if c is None:
+            c = self._decode(np.array([[val]], np.uint32), fmt, 0)[0, 0]
+            c.setflags(write=False)
+            _COLOUR_CACHE[key] = c
+        return c
+
+    def _encode_fill(self, val, col_fmt, dst_fmt, dst_pf):
+        key = (val, col_fmt, dst_fmt, dst_pf)
+        enc = _FILL_CACHE.get(key)
+        if enc is None:
+            colour = self._decode(np.array([[val]], np.uint32), col_fmt, 0)
+            enc = np.uint32(self._encode(colour, dst_fmt, dst_pf)[0, 0])
+            _FILL_CACHE[key] = enc
+        return enc
+
+    def _packed16_lut(self, fmt, pfreg):
+        pf_flags = pfreg & 0x030E0000
+        key = (fmt, pf_flags)
+        lut = _PACKED16_LUT.get(key)
+        if lut is None:
+            lut = self._decode_packed(np.arange(65536, dtype=np.uint32).reshape(1, 65536), fmt, pf_flags)[0]
+            lut.setflags(write=False)
+            _PACKED16_LUT[key] = lut
+        return lut
+
+    def decode_rgba_u8(self, raw, fmt, pfreg, ga=0xFF):
+        """Fast path for GMA / DE screen capture: decode packed 16-bit formats via a
+        cached 65536-entry uint8 RGBA lookup table when applicable."""
+        if fmt in _PACKED16_FMTS and raw.size >= 64:
+            pf_flags = pfreg & 0x030E0000
+            key = (fmt, pf_flags, ga)
+            lut_u32 = _PACKED16_RGBA_U8_LUT.get(key)
+            if lut_u32 is None:
+                lut = self._packed16_lut(fmt, pf_flags)
+                if ga != 0xFF:
+                    lut = lut.copy()
+                    lut[:, 0] *= ga / 255.0
+                lut_u8 = np.clip(lut[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+                lut_u32 = np.ascontiguousarray(lut_u8).view(np.uint32).reshape(-1)
+                lut_u32.setflags(write=False)
+                _PACKED16_RGBA_U8_LUT[key] = lut_u32
+            idx = raw if raw.dtype == np.uint16 else (raw & 0xFFFF)
+            return lut_u32[idx].view(np.uint8).reshape(*raw.shape, 4)
+        px = self._decode(raw, fmt, pfreg)
+        if ga != 0xFF:
+            px[..., 0] *= ga / 255.0
+        return np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+
+    def decode_rgb_on_bg_u8(self, raw, fmt, pfreg, ga=0xFF, bg=(0, 0, 0)):
+        """Fast path for single-layer GMA / DE capture over a solid background."""
+        if fmt in _PACKED16_FMTS and raw.size >= 64:
+            pf_flags = pfreg & 0x030E0000
+            bg_key = (int(bg[0]), int(bg[1]), int(bg[2]))
+            key = ('bg', fmt, pf_flags, ga, bg_key)
+            lut_u32 = _PACKED16_RGBA_U8_LUT.get(key)
+            if lut_u32 is None:
+                lut = self._packed16_lut(fmt, pf_flags)
+                if ga != 0xFF:
+                    lut = lut.copy()
+                    lut[:, 0] *= ga / 255.0
+                lut_u8 = np.clip(lut[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+                a = lut_u8[:, 3:4].astype(np.float32) / 255.0
+                bg_f = np.array(bg_key, dtype=np.float32)
+                rgb = lut_u8[:, :3].astype(np.float32) * a + bg_f * (1.0 - a)
+                out = np.zeros((65536, 4), np.uint8)
+                out[:, :3] = np.clip(rgb + 0.5, 0, 255).astype(np.uint8)
+                lut_u32 = out.view(np.uint32).reshape(-1)
+                lut_u32.setflags(write=False)
+                _PACKED16_RGBA_U8_LUT[key] = lut_u32
+            idx = raw if raw.dtype == np.uint16 else (raw & 0xFFFF)
+            return lut_u32[idx].view(np.uint8).reshape(*raw.shape, 4)[..., :3]
+        return None
+
+    def _decode_packed(self, raw, fmt, pfreg):
         h, w = raw.shape
         out = np.empty((h, w, 4), np.float32)
         order = (pfreg >> 17) & 3
+        wa, w1, w2, w3 = _PACKED[fmt]
+        if order in (2, 3):             # RGBA / BGRA: alpha in the low bits
+            widths = (w1, w2, w3, wa)
+        else:
+            widths = (wa, w1, w2, w3)
+        v = raw.astype(np.uint32, copy=False)
+        total = sum(widths)
+        chans = []
+        sh = total
+        for wd in widths:
+            sh -= wd
+            chans.append((v >> sh) & ((1 << wd) - 1) if wd else None)
+        if order in (2, 3):
+            c1, c2, c3, a = chans
+            aw = widths[3]
+        else:
+            a, c1, c2, c3 = chans
+            aw = widths[0]
+        zp = bool((pfreg >> 19) & 1)
+        e1, e2, e3 = self._expand(c1, w1, zp), self._expand(c2, w2, zp), self._expand(c3, w3, zp)
+        if order in (1, 3):             # ABGR / BGRA
+            e1, e3 = e3, e1
+        out[..., 1], out[..., 2], out[..., 3] = e1, e2, e3
+        if a is None:
+            out[..., 0] = 255.0
+        else:
+            av = self._expand(a, aw)
+            if (pfreg >> 24) & 1 and aw == 8:   # alpha range 0..127
+                av = np.minimum(av * 2.0, 255.0)
+            if (pfreg >> 25) & 1:
+                av = 255.0 - av
+            out[..., 0] = av
+        if fmt in _YCBCR:
+            out[..., 1:] = self._ycbcr_to_rgb(out[..., 1:], 0)
+        return out
+
+    def _decode(self, raw, fmt, pfreg, clut=None):
+        """raw values -> float32 (h, w, 4) in A, R, G, B order."""
         if fmt in _PACKED:
-            wa, w1, w2, w3 = _PACKED[fmt]
-            if order in (2, 3):             # RGBA / BGRA: alpha in the low bits
-                widths = (w1, w2, w3, wa)
-            else:
-                widths = (wa, w1, w2, w3)
-            v = raw.astype(np.uint32)
-            total = sum(widths)
-            chans = []
-            sh = total
-            for wd in widths:
-                sh -= wd
-                chans.append((v >> sh) & ((1 << wd) - 1) if wd else None)
-            if order in (2, 3):
-                c1, c2, c3, a = chans
-                aw = widths[3]
-            else:
-                a, c1, c2, c3 = chans
-                aw = widths[0]
-            zp = bool((pfreg >> 19) & 1)
-            e1, e2, e3 = self._expand(c1, w1, zp), self._expand(c2, w2, zp), self._expand(c3, w3, zp)
-            if order in (1, 3):             # ABGR / BGRA
-                e1, e3 = e3, e1
-            out[..., 1], out[..., 2], out[..., 3] = e1, e2, e3
-            if a is None:
-                out[..., 0] = 255.0
-            else:
-                av = self._expand(a, aw)
-                if (pfreg >> 24) & 1 and aw == 8:   # alpha range 0..127
-                    av = np.minimum(av * 2.0, 255.0)
-                if (pfreg >> 25) & 1:
-                    av = 255.0 - av
-                out[..., 0] = av
-            if fmt in _YCBCR:
-                out[..., 1:] = self._ycbcr_to_rgb(out[..., 1:], 0)
-            return out
+            if fmt in _PACKED16_FMTS and raw.size >= 64:
+                lut = self._packed16_lut(fmt, pfreg)
+                return lut[raw if raw.dtype == np.uint16 else (raw & 0xFFFF)]
+            return self._decode_packed(raw, fmt, pfreg)
+        h, w = raw.shape
         if fmt in CLUT_FORMATS:
             if fmt == 0x0E:                 # ACLUT88: alpha high byte, index low byte
-                idx = raw.astype(np.uint32) & 0xFF
-                alpha = (raw.astype(np.uint32) >> 8).astype(np.float32)
+                v = raw.astype(np.uint32, copy=False)
+                idx = v & 0xFF
+                alpha = (v >> 8).astype(np.float32)
             elif fmt == 0x0B:               # ACLUT44
-                idx = raw.astype(np.uint32) & 0xF
-                alpha = ((raw.astype(np.uint32) >> 4) * 17).astype(np.float32)
+                v = raw.astype(np.uint32, copy=False)
+                idx = v & 0xF
+                alpha = ((v >> 4) * 17).astype(np.float32)
             else:
-                idx = raw.astype(np.uint32)
+                if clut is not None:
+                    if raw.dtype == np.uint8 and clut.shape[0] >= 256:
+                        return clut[raw]
+                    return clut[np.minimum(raw, clut.shape[0] - 1)]
+                idx = raw.astype(np.uint32, copy=False)
                 alpha = None
+            out = np.empty((h, w, 4), np.float32)
             if clut is None:
                 g = idx.astype(np.float32)
                 out[..., 0] = 255.0
@@ -348,6 +444,7 @@ class GeM36F:
             if alpha is not None:
                 out[..., 0] = alpha
             return out
+        out = np.empty((h, w, 4), np.float32)
         if fmt == 0x1D:
             out[..., 0] = raw.astype(np.float32)
             out[..., 1:] = 255.0
@@ -540,9 +637,8 @@ class GeM36F:
                 self._write_raw(dst, dst_pf, dx, dy, raw, wmask)
                 return
         if plain and rop == 1 and ptn_type == 0 and prim in (3, 4) and api not in (1, 2) and not index_domain:
-            colour = self._decode(np.array([[r[0x90 >> 2] if prim == 3 else r[0x98 >> 2]]], np.uint32), col_fmt, 0)
-            self._write_raw(dst, dst_pf, dx, dy, np.full((h, w), self._encode(colour, dst_fmt, dst_pf)[0, 0], np.uint32),
-                            wmask)
+            enc = self._encode_fill(r[0x90 >> 2] if prim == 3 else r[0x98 >> 2], col_fmt, dst_fmt, dst_pf)
+            self._write_raw(dst, dst_pf, dx, dy, np.full((h, w), enc, np.uint32), wmask)
             return
 
         # ---------------- PTN (foreground) ----------------
@@ -598,8 +694,8 @@ class GeM36F:
                 ptn = np.where(on, fg, bg).astype(np.uint32)
                 pmask = None if fill_back else on
             else:
-                fgc = self._decode(np.array([[fg]], np.uint32), col_fmt, 0)[0, 0]
-                bgc = self._decode(np.array([[bg]], np.uint32), col_fmt, 0)[0, 0]
+                fgc = self._decode_colour(fg, col_fmt)
+                bgc = self._decode_colour(bg, col_fmt)
                 t = (alpha / 255.0)[..., None]
                 if fill_back:
                     ptn = fgc * t + bgc * (1 - t)
@@ -627,8 +723,8 @@ class GeM36F:
                 else:
                     ptn = np.where(frame, draw, back).astype(np.uint32)
             else:
-                bc = self._decode(np.array([[back]], np.uint32), col_fmt, 0)[0, 0]
-                dc = self._decode(np.array([[draw]], np.uint32), col_fmt, 0)[0, 0]
+                bc = self._decode_colour(back, col_fmt)
+                dc = self._decode_colour(draw, col_fmt)
                 ptn = np.empty((h, w, 4), np.float32)
                 if prim == 3:
                     ptn[...] = bc
@@ -663,7 +759,7 @@ class GeM36F:
                 src = np.full((h, w), back, np.uint32)
             else:
                 src = np.empty((h, w, 4), np.float32)
-                src[...] = self._decode(np.array([[back]], np.uint32), col_fmt, 0)[0, 0]
+                src[...] = self._decode_colour(back, col_fmt)
 
         need_dst = rop in (2, 3, 4) or ckey_en or bmask_en
         if src is None and need_dst:
@@ -760,10 +856,10 @@ class GeM36F:
         bmode = (ac >> 8) & 0xF
         gsel = (ac >> 12) & 1
         out_mode = (ac >> 20) & 3
-        p = ptn.astype(np.float32)
+        p = ptn.astype(np.float32, copy=False)
         if src is None:
             src = np.zeros_like(p)
-        s = src.astype(np.float32)
+        s = src.astype(np.float32, copy=False)
         pa = p[..., 0] / 255.0
         if gsel:                        # global alpha only
             pa = np.full_like(pa, galpha)

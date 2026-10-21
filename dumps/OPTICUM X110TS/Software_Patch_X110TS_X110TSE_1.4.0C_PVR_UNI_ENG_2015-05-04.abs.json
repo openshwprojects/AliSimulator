@@ -9,11 +9,26 @@
     "family": "M3602 (chips/m3602.py), matched by the main-code chunk's version; chip ID 0x3603 (chipId)",
     "chipId": "0x3603",
     "demod": "internal (NIM_S3501_0 / NIM_S3501_1 for the two satellite tuners; the combo SDK's MxL101 terrestrial driver, NIM_MXL101_0 / _1, and NIM_COFDM_0 are in the build as well)",
-    "tuner": null,
+    "tuner": "Airoha AV2011 at I2C 0x63 (DVB-S2) + MaxLinear MxL101SF at I2C 0x60 (DVB-T)",
     "flash": "4 MB SPI",
-    "panel": {"chip": "TM1650-compatible", "scl": 9, "sda": 8},
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 9,
+      "sda": 8
+    },
     "irCoding": "nec",
-    "gpioPullUps": [99, 104]
+    "gpioPullUps": [
+      99,
+      104
+    ],
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 99,
+      "secondary": {
+        "chip": "mxl101sf",
+        "address": 96
+      }
+    }
   },
   "image": {
     "kind": "update",
@@ -35,7 +50,11 @@
     "boots": true,
     "application": true,
     "display": true,
-    "panelText": [" ON ", "Strt", "OOO1"],
+    "panelText": [
+      " ON ",
+      "Strt",
+      "OOO1"
+    ],
     "note": "Its front panel's keys (2026-10-14): the panel code maps three DIG4 positions through a {code, key byte} table in the main code -- KI1/DIG4 down (0xFF10), KI2/DIG4 power (0xFF04), KI3/DIG4 up (0xFF40), the three panel codes its UI's key map has; in the main menu the panel's down moves the highlight (run_dump_x110ts_capture_screen.py's second step).  As the M3602 family with its board's chip ID 0x3603 (2026-10-12, run_dump_x110ts_see_start.py): the bootloader starts the SEE through the SEE's boot code at 0xA1E8F450 (chips/see.py) and the application, which -- given the chip ID it checks for -- starts the SEE's program at 0xA6000200 on the second core (see.SeeCore), prints its banner and attaches its drivers through 80 remote calls the SEE answers (and 36 of the SEE's) by ~56 M instructions; it draws from ~78 M (~510 GE commands and ~250 calls answered by 120 M).  Without the SEE's program its first message went unacknowledged and it stopped at its SDBBP assertion (0x801A9608).  Its OSD shows (2026-10-13, run_dump_x110ts_capture_screen.py): the banner of its first channel (TVP 1, 13.0E Hotbird) at ~100 M, then a red \"No Signal!\" box -- once its chip reads a C3603 product with the DVB-S2 demodulator and that S3501 answers its chip ID at I2C 0x33 (chips/m3602.py).  Before, the application's own hardware check (0x801B994C: the NIM_S3501_0 driver's chip ID 0x3501, the product's feature byte 4) failed, and a task of its own cleared the OSD layer's enable bit (0xB8006300 bit 0) about ten times a second."
   },
   "desc": [

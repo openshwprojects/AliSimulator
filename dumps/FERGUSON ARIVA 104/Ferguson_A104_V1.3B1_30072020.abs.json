@@ -1,0 +1,55 @@
+{
+  "file": "Ferguson_A104_V1.3B1_30072020.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 104",
+    "type": "DVB-S2 Full HD H.265/HEVC satellite receiver with CA card reader and Ethernet / Wi-Fi",
+    "board": "BOARD_DB_M3521_01V01 (the bootloader chunk \"HASC1\" has version \"39081-01047\")",
+    "soc": "ALi C3505 (the maincode's \"ALI_C3505:0x%x\" chip-id print, seecode \"M3505 SEE\")",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0)",
+    "tuner": "ALi M3031 at I2C 0x20",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "ext00",
+    "tunerModel": {
+      "chip": "m3031",
+      "address": 32
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.3B1 (2020-07-30 revision; maincode \"V1.3B1*\" 2020-7-30)",
+    "date": "2020-07-30",
+    "size": 8388608,
+    "sha1": "14a93eca4cf2051295fe3a4eb31dce51197cc6f7",
+    "layout": "HASC1 0x000000 (39081-01047), HDCPKey 0x02FE00 (00000001), maincode 0x030000 (V1.3B1*), seecode 0x489C00 (M3505 SEE), osd_string 0x5B9C00 (1.1.0), A104 0x5E0000 (1.0.0), seeback 0x600000 (1.0.0), data 0x68FF80 (1.0.0), defaultdb 0x6F0000 (1.0.0), userdb 0x72FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_104/firmware/Ferguson_A104_V1.3B1_30072020.zip",
+    "site": "ferguson-digital.eu (official manufacturer download)",
+    "author": "Ferguson",
+    "date": "2020-07-30",
+    "login": false,
+    "note": "Archive Ferguson_A104_V1.3B1_30072020.zip from ferguson-digital.eu; fetched 2026-10-18."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " On ",
+      " on ",
+      "Strt",
+      "nenu"
+    ],
+    "note": "Boots as the C3505 family (chips/c3505.py): its boot-ROM bootloader at offset 0x800 sets $sp to the uncached boot-SRAM view 0xBFE04000 (0x3C1DBFE0 at 0x804), waits for bit 8 of 0xB8000300, unpacks the 9.6 MB maincode into RAM and starts it.  The application starts the SEE co-processor program (\"M3505 SEE\") at 0xA6000200 on the second core (see.SeeCore), prints \"ALI_C3505:0x1004f\", drives the FD650K front panel on GPIO 107 / 110, and renders its 1280x720 ARGB8888 \"System Setup\" OSD menu (21 GE commands, 146 unique colours) through the display engine layer at 0xB8006900."
+  },
+  "desc": [
+    "Ferguson Ariva 104 official firmware V1.3B1 (2020-07-30 revision) from ferguson-digital.eu for the H.265/HEVC DVB-S2 satellite receiver on the ALi C3505 SoC."
+  ]
+}

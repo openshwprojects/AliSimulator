@@ -8,10 +8,14 @@
     "soc": "ALi M3602 (the maincode chunk's version reads \"Demo M3602\": ALi's SDK project)",
     "family": "M3602 (chips/m3602.py)",
     "demod": "ALi M3101, external (the firmware's nim_m3101 driver \"nim_m3101_ver_112a\"; NIM_COFDM_0 / NIM_COFDM_1)",
-    "tuner": null,
+    "tuner": "MaxLinear MxL5007T at I2C 0x63",
     "flash": "4 MB SPI",
     "panel": null,
-    "irCoding": "cmd"
+    "irCoding": "cmd",
+    "tunerModel": {
+      "chip": "mxl5007t",
+      "address": 99
+    }
   },
   "image": {
     "kind": "update",
