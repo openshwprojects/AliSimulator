@@ -1,5 +1,5 @@
 """
-Regression test: runs dump.bin until the simulator crashes or finishes.
+Regression test: runs dump_maciej.bin until its TM1650 front panel displays ' ON '.
 """
 import os
 import sys
@@ -10,7 +10,7 @@ from simulator import AliMipsSimulator
 from tm1650_decoder import TM1650Decoder
 
 def main():
-    print(f"=== Regression Test: run dump to end ===")
+    print(f"=== Regression Test: run dump_maciej to front panel ' ON ' ===")
     
     sim = AliMipsSimulator(log_handler=lambda msg: print(msg) if "INVALID" in msg or "STOPPED" in msg or "Address:" in msg or "Type:" in msg or "Size:" in msg or "PC:" in msg else None)
     sim.setSPIDump(False)
@@ -43,7 +43,7 @@ def main():
     sim.setUartHandler(on_uart)
     
     try:
-        sim.loadFile("SRT_Prima_VIII_V1.0.6_20160114.abs")
+        sim.loadFile("dump_maciej.bin")
     except FileNotFoundError:
         print("dump_maciej.bin not found")
         sys.exit(1)
@@ -51,11 +51,14 @@ def main():
     print("Running simulator...")
     start_time = time.time()
     
-    # Run with a safety limit
-    try:
-        sim.run(max_instructions=500_000_000)
-    except Exception as e:
-        print(f"\nSimulator stopped with exception: {e}")
+    # Run until front panel displays ' ON ' or safety limit
+    max_instructions = 10_000_000
+    while sim.instruction_count < max_instructions and tm1650.get_display_text() != " ON ":
+        try:
+            sim.run(max_instructions=min(max_instructions, sim.instruction_count + 1_000_000))
+        except Exception as e:
+            print(f"\nSimulator stopped with exception: {e}")
+            break
 
     # Check results
     duration = time.time() - start_time
@@ -88,6 +91,12 @@ def main():
         sorted_bits = sorted(tm1650._bit_toggle_counts.items(), key=lambda x: -x[1])
         for (off, bit), count in sorted_bits[:15]:
             print(f"  GPIO#{tm1650.gpio_number(off, bit):3d} (reg 0x{off:03X} bit {bit:2d}): {count:5d} toggles")
+
+    shown = tm1650.get_display_text()
+    ok = shown == " ON "
+    print(f"\n[{'PASS' if ok else 'FAIL'}] dump_maciej front panel display: [{shown}]")
+    if not ok:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

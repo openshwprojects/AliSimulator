@@ -23,6 +23,8 @@ def run():
     h = ConsoleHarness(
         "OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs",
         "Opticum HD T90 (STB_HD_T90_N2-3_1.3.2PVR, M3801)",
+        direct_call=True,
+        mask_timer=True,
     )
 
     h.check(
@@ -32,10 +34,10 @@ def run():
     )
 
     # 1. comtest & startconsole
-    resp = h.send("comtest", max_slices=6, stop_on=("comtest",))
+    resp, _ = h.handshake()
     h.check("comtest echoes 'comtest' in listener mode (console_mode == 2)", resp == "comtest" and h.console_mode == 2, repr(resp))
 
-    resp = h.send("startconsole")
+    resp, _ = h.activate()
     h.check(
         "startconsole activates interactive console (console_mode == 4)",
         "***  CONSOLE ACTIVATED  ***" in resp and resp.endswith(">") and h.console_mode == 4,

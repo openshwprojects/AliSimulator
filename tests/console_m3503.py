@@ -198,18 +198,26 @@ def exercise_m3503_console(h, version_text, control_cmds):
             scr.startswith("SCREEN\r\n\x1b[H\x1b[2J") and len(rows) >= 10
             and all(len(r) == 80 for r in rows[1:10]) and scr.endswith(">"), repr(scr[:200]))
 
-    # Elevate privilege: LOGIN ('ADMIN' / 'PROROK') sets table privilege to 20,
-    # and MAGICKEY / PALANTIR set inner handler privilege (-0x5674($gp)) to 1 / 3
+    # Elevate privilege: LOGIN ('ADMIN' / 'PROROK') sets table privilege to 20
     la1 = h.send("LOGIN\r", stop_on=("\t",))
     la2 = h.send("ADMIN\r", stop_on=("\t",))
     la3 = h.send("PROROK\r")
-    h.send("MAGICKEY\r")
-    h.send("PALANTIR\r")
     sec20 = _help_sections(h.send("HELP\r"))
     h.check("LOGIN ('ADMIN' / 'PROROK') elevates table privilege to 20 and unlocks CAS, Control, and Debug commands in HELP",
             la1.endswith("LOGIN:\t\t") and la2.endswith("PASSWORD:\t") and la3 == "PROROK\r\n>"
             and "COMCASDBG" in sec20.get("CAS", []) and "FLAG" in sec20.get("Control", [])
             and "OTPPRINT" in sec20.get("Debug", []), repr(sec20))
+
+    # At table privilege 20 before MAGICKEY/PALANTIR (inner_priv == 0), OTPPRINT
+    # dumps 0x200 bytes of 0xFF without invoking the SEE OTP RPC
+    otp = h.send("OTPPRINT\r", max_slices=20)
+    h.check("OTPPRINT (at table privilege 20) dumps 0x200-byte OTP ('0000:'..'01F0:')",
+            "OTP:" in otp and "0000:" in otp and "01F0:" in otp and otp.endswith(">"),
+            repr(otp[-120:]))
+
+    # MAGICKEY / PALANTIR set inner handler privilege (-0x5674($gp)) to 1 / 3
+    h.send("MAGICKEY\r")
+    h.send("PALANTIR\r")
 
     # Privileged file-system commands: SAVESYSTEM / LOADSYSTEM
     if "SAVESYSTEM" in sec20.get("Control", []):
@@ -251,6 +259,13 @@ def exercise_m3503_console(h, version_text, control_cmds):
     h.check("COMCASDBG (unlocked) prints 'Actual debug: 0[0000] Enter new val :' and accepts new value",
             "Actual debug: 0[0000] Enter new val :" in cd1 and cd2.endswith(">"), repr((cd1, cd2)))
 
+    if "PAIRFLAG" in sec20.get("CAS", []):
+        pf1 = h.send("PAIRFLAG\r", stop_on=(": ",))
+        pf2 = h.send("n", stop_on=(">",))
+        h.check("PAIRFLAG prompts ('Wpisz wartosc flagi: ') and cancels on 'n' ('Wrong value!')",
+                "Wpisz wartosc flagi:" in pf1 and "Wrong value!" in pf2 and pf2.endswith(">"),
+                repr((pf1, pf2)))
+
     # SENDMSG, HMSG, TIME, SAVETIME, USBDBG, DBGTIMERS
     sm1 = h.send("SENDMSG\r", stop_on=("... ",))
     sm2 = h.send("27\r", stop_on=("... ",))
@@ -271,10 +286,12 @@ def exercise_m3503_console(h, version_text, control_cmds):
             repr((tm1, tm2)))
 
     st_out = h.send("SAVETIME\r")
-    ud_out = h.send("USBDBG\r")
+    ud_out = h.send("USBDBG\r", stop_on=("...", ">"))
+    if not ud_out.endswith(">"):
+        ud_out += h.send("n", stop_on=(">",))
     dt_out = h.send("DBGTIMERS\r")
     h.check("SAVETIME, USBDBG, and DBGTIMERS ('Timer debug', 'common_timer_num: 0') execute and return to prompt",
-            st_out == "SAVETIME\r\n>" and ud_out == "USBDBG\r\n>"
+            st_out == "SAVETIME\r\n>" and ud_out.endswith(">")
             and "Timer debug" in dt_out and "common_timer_num: 0" in dt_out and dt_out.endswith(">"),
             repr((st_out, ud_out, dt_out)))
 
@@ -320,38 +337,36 @@ def exercise_m3503_console(h, version_text, control_cmds):
             and "Add random pvr timers!" in rr1 and "user canceled!" in rr2,
             repr((rc1, rc2, rr1, rr2)))
 
-    # FLASHPRINT, OTPPRINT, CABINPRINT, CABINWRITE
+    # FLASHPRINT, CABINPRINT, CABINWRITE
     fp1 = h.send("FLASHPRINT\r", stop_on=("\t",))
     fp2 = h.send("n", stop_on=(">",))
     cb1 = h.send("CABINPRINT\r", stop_on=("\t",))
     cb2 = h.send("n", stop_on=(">",))
     cw1 = h.send("CABINWRITE\r", stop_on=("\t",))
     cw2 = h.send("n", stop_on=(">",))
-    otp = h.send("OTPPRINT\r", max_slices=20)
-    h.check("FLASHPRINT, CABINPRINT, CABINWRITE prompt/cancel and OTPPRINT dumps 0x200-byte OTP ('0000:'..'01F0:')",
+    h.check("FLASHPRINT, CABINPRINT, and CABINWRITE prompt for segment/offset and cancel on 'n'",
             "Set read debug size(segment):" in fp1 and "Wrong value!" in fp2
             and "Set read debug size(segment):" in cb1 and "Wrong value!" in cb2
-            and "Write directly into CA.bin" in cw1 and "Wrong value!" in cw2
-            and "OTP:" in otp and "01F0:" in otp and otp.endswith(">"),
-            repr((fp1, fp2, cb1, cb2, cw1, cw2, otp[-120:])))
+            and "Write directly into CA.bin" in cw1 and "Wrong value!" in cw2,
+            repr((fp1, fp2, cb1, cb2, cw1, cw2)))
 
     # Wi-Fi, media, EFU, memory, video/subtitle commands
-    ws = h.send("WIFISTORE\r")
-    wl = h.send("WIFILOAD\r")
-    wc = h.send("WIFICONNECT\r")
-    sp1 = h.send("STREAM_PLAY\r", stop_on=("STREAM_PLAY\r\n",))
-    sp2 = h.send("http://test\r", stop_on=(">",))
-    mp1 = h.send("MUSICPLAY\r", stop_on=(":\r\n",))
-    mp2 = h.send("\x1b", stop_on=(">",))
+    if "WIFISTORE" in sec20.get("Control", []):
+        ws = h.send("WIFISTORE\r")
+        wl = h.send("WIFILOAD\r")
+        wc = h.send("WIFICONNECT\r")
+        sp1 = h.send("STREAM_PLAY\r", stop_on=("STREAM_PLAY\r\n",))
+        sp2 = h.send("http://test\r", stop_on=(">",))
+        mp1 = h.send("MUSICPLAY\r", stop_on=(":\r\n",))
+        mp2 = h.send("\x1b", stop_on=(">",))
+        h.check("WIFISTORE, WIFILOAD, WIFICONNECT, STREAM_PLAY, and MUSICPLAY execute and reply",
+                ws == "WIFISTORE\r\n>" and "AP_load_done" in wl and "AP try to connect" in wc
+                and "readed: http://test" in sp2 and "Enter file to play:" in mp1 and "user break!" in mp2,
+                repr((ws, wl, wc, sp1, sp2, mp1, mp2)))
+
     ef1 = h.send("EFUSENDLEV\r", stop_on=(":",))
     ef2 = h.send("50\r", stop_on=(":",))
     ef3 = h.send("1\r", stop_on=(">",))
-    h.check("WIFISTORE, WIFILOAD, WIFICONNECT, STREAM_PLAY, MUSICPLAY, and EFUSENDLEV execute and reply",
-            ws == "WIFISTORE\r\n>" and "AP_load_done" in wl and "AP try to connect" in wc
-            and "readed: http://test" in sp2 and "Enter file to play:" in mp1 and "user break!" in mp2
-            and "level: 50 lock: 1," in ef3,
-            repr((ws, wl, wc, sp1, sp2, mp1, mp2, ef1, ef2, ef3)))
-
     ma1 = h.send("MALLOC\r", stop_on=("\t",))
     ma2 = h.send("1024\r", stop_on=(">",))
     fr1 = h.send("FREE\r")
@@ -360,12 +375,13 @@ def exercise_m3503_console(h, version_text, control_cmds):
     vc2 = h.send("n", stop_on=(">",))
     sc1 = h.send("SUBTITLECONTROL\r", stop_on=("\t",))
     sc2 = h.send("n", stop_on=(">",))
-    h.check("MALLOC, FREE, VIDEOCONTROL, and SUBTITLECONTROL execute and reply",
-            "Set memory size:" in ma1 and ma2 == "1024\r\n>"
+    h.check("EFUSENDLEV, MALLOC, FREE, VIDEOCONTROL, and SUBTITLECONTROL execute and reply",
+            "level: 50 lock: 1," in ef3
+            and "Set memory size:" in ma1 and ma2 == "1024\r\n>"
             and "Memory is ready to be used again!" in fr1 and "Memory is already free!" in fr2
             and "Set video on/off..." in vc1 and "Wrong value!" in vc2
             and "Subtitle data:" in sc1 and "Wrong value!" in sc2,
-            repr((ma1, ma2, fr1, fr2, vc1, vc2, sc1, sc2)))
+            repr((ef1, ef2, ef3, ma1, ma2, fr1, fr2, vc1, vc2, sc1, sc2)))
 
     # Hidden category-5 stream/tuner diagnostics (present on 1.3.5 / 1.4.0 builds with 2FORCENIM)
     if "2FORCENIM" in control_cmds:

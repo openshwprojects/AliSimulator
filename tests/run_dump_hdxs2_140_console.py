@@ -24,7 +24,7 @@ def run():
     h = ConsoleHarness(
         "GLOBO HD-XS2/140_M3511-RETAIL_PL.abs",
         "Globo HD-XS2 retail POL 1.4.0 (M3503)",
-        boot_insns=8_000_000,
+        boot_insns=6_000_000,               # (deaf from its second 0x01 on, ~10.7 M; sooner under load)
         direct_call=True,
         mask_timer=True,
         attach_sci=True,

@@ -92,6 +92,16 @@ _PAT_DISP_ON = re.compile(
     re.escape(bytes.fromhex("ffff42240300401c")) + b"(..)" + re.escape(bytes.fromhex("82af")),
     re.DOTALL,
 )
+# - SEE mailbox RPC sender (`rpc_to_see` on dual-CPU SDK builds): writes a packet to
+#   0xB8000200 and spins until the SEE core writes 0xFFFFFFFF back.  When the harness
+#   stops the SEE core for single-task direct_call mode, stubbing this avoids hanging
+#   on SEE RPC calls (e.g. C3503C otp_init in OTPPRINT).
+_PAT_SEE_RPC = re.compile(
+    re.escape(bytes.fromhex("b8ffbd274400bfaf4000beaf"))
+    + b".{80,140}"
+    + re.escape(bytes.fromhex("00b81e3c0002d637")),
+    re.DOTALL,
+)
 
 
 def discover_sci_attach(ram: bytes):
@@ -190,8 +200,6 @@ class ConsoleHarness:
                 if boot_until("".join(self.uart_out)):
                     break
 
-        self.sim._insn_rate = 1_000_000.0
-        self.sim._counted_slices = self.sim.calibration_slices
         self.gp = self.sim.mu.reg_read(UC_MIPS_REG_GP)
         self.init_sp = self.sim.mu.reg_read(UC_MIPS_REG_SP)
         self.ram = bytes(self.sim._ram_view[:0x01000000])
@@ -202,8 +210,13 @@ class ConsoleHarness:
         self.con_addr = (self.gp + con_off) & 0xFFFFFFFF
 
         if direct_call and mask_timer:
+            self.sim._insn_rate = 1_000_000.0
+            self.sim._counted_slices = self.sim.calibration_slices
             if getattr(self.sim.chip, "see", None) is not None:
                 self.sim.chip.see._stop_core()
+                m_rpc = _PAT_SEE_RPC.search(self.ram)
+                if m_rpc is not None:
+                    self.sim.poke(0x80000000 + m_rpc.start(), bytes.fromhex("0800e00321100000"))
             self.sim._ic_lines = 0
             self.init_sp = 0x80E00000
             self.sim.mu.reg_write(UC_MIPS_REG_SP, self.init_sp)

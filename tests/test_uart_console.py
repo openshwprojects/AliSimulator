@@ -344,61 +344,79 @@ def test_multi_dump_uart_console():
 
     Uses console_regression.ConsoleHarness with the same settings as the
     per-dump run_dump_*_console.py tests."""
-    from console_regression import ConsoleHarness
+    import gc
+    from console_regression import ConsoleHarness, run_with_retry
 
     # 1. ALi M3801 (Globo N3 SPI dump): comtest + startconsole + VERSION
-    h = ConsoleHarness("Ali_3801_Globo_DVBT_dump SPI 4mb.bin", "Globo N3 (M3801)")
-    assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
-    assert h.handshake()[0] == "comtest"
-    act, _ = h.activate()
-    assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"Globo activation: {act!r}"
-    ver = h.send("VERSION\r")
-    assert "V.0127 DVB-T PVR (0002)>" in ver, f"unexpected Globo M3801 VERSION: {ver!r}"
+    def _step1():
+        h = ConsoleHarness("Ali_3801_Globo_DVBT_dump SPI 4mb.bin", "Globo N3 (M3801)",
+                           direct_call=True, mask_timer=True)
+        assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
+        assert h.handshake()[0] == "comtest"
+        act, _ = h.activate()
+        assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"Globo activation: {act!r}"
+        ver = h.send("VERSION\r")
+        assert "V.0127 DVB-T PVR (0002)>" in ver, f"unexpected Globo M3801 VERSION: {ver!r}"
+    run_with_retry(_step1)
+    gc.collect()
 
     # 2. ALi M3801 (Opticum HD T90): comtest + startconsole + VERSION
-    h = ConsoleHarness("OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs", "Opticum HD T90 (M3801)")
-    assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
-    assert h.handshake()[0] == "comtest"
-    act, _ = h.activate()
-    assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"T90 activation: {act!r}"
-    ver = h.send("VERSION\r")
-    assert "V.0132 DVB-T PVR (0002)>" in ver, f"unexpected T90 VERSION: {ver!r}"
+    def _step2():
+        h = ConsoleHarness("OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs", "Opticum HD T90 (M3801)",
+                           direct_call=True, mask_timer=True)
+        assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
+        assert h.handshake()[0] == "comtest"
+        act, _ = h.activate()
+        assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"T90 activation: {act!r}"
+        ver = h.send("VERSION\r")
+        assert "V.0132 DVB-T PVR (0002)>" in ver, f"unexpected T90 VERSION: {ver!r}"
+    run_with_retry(_step2)
+    gc.collect()
 
     # 3. ALi M3821 (Opticum Blue R265 Lite DVB-T2): startconsole + VERSION + M3821 HELP
-    h = ConsoleHarness("Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs", "Opticum Blue R265 Lite 1.1.5 (M3821)",
-                       boot_insns=8_000_000, direct_call=True, mask_timer=True)
-    assert b"startconsole\x00" in h.ram and b"PRINT_MEM_LAYOUT\x00" in h.ram
-    assert h.handshake()[0] == "comtest"
-    act, _ = h.activate()
-    assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"R265 Lite activation: {act!r}"
-    ver = h.send("VERSION\r")
-    assert "V.0115 DVB-T2 PVR (0002)>" in ver, f"unexpected R265 Lite VERSION: {ver!r}"
-    hlp = h.send("HELP\r")
-    assert "PWMGPIO" in hlp and "PRINT_MEM_LAYOUT" in hlp, f"unexpected R265 Lite HELP: {hlp!r}"
+    def _step3():
+        h = ConsoleHarness("Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs", "Opticum Blue R265 Lite 1.1.5 (M3821)",
+                           boot_insns=8_000_000, direct_call=True, mask_timer=True)
+        assert b"startconsole\x00" in h.ram and b"PRINT_MEM_LAYOUT\x00" in h.ram
+        assert h.handshake()[0] == "comtest"
+        act, _ = h.activate()
+        assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"R265 Lite activation: {act!r}"
+        ver = h.send("VERSION\r")
+        assert "V.0115 DVB-T2 PVR (0002)>" in ver, f"unexpected R265 Lite VERSION: {ver!r}"
+        hlp = h.send("HELP\r")
+        assert "PWMGPIO" in hlp and "PRINT_MEM_LAYOUT" in hlp, f"unexpected R265 Lite HELP: {hlp!r}"
+    run_with_retry(_step3)
+    gc.collect()
 
     # 4. ALi M3503 (Globo HD-XS2 DVB-S2 silent build): attach sci_16550 + startconsole + VERSION + HELP
-    h = ConsoleHarness("GLOBO HD-XS2/Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs", "Globo HD-XS2 Reta 1.3.5 (M3503)",
-                       boot_insns=8_000_000, attach_sci=(0x8012ED1C, 0x8012F344), direct_call=True, mask_timer=True)
-    assert b"startconsole\x00" in h.ram and b"Navigation\x00" in h.ram and b"PALANTIR\x00" in h.ram
-    assert h.handshake()[0] == "comtest"
-    act, _ = h.activate()
-    assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"HD-XS2 activation: {act!r}"
-    ver = h.send("VERSION\r")
-    assert "SW: 0135 POL_NETR_PVR (0162)" in ver, f"unexpected HD-XS2 VERSION: {ver!r}"
-    hlp = h.send("HELP\r")
-    assert "* * *Navigation* * *" in hlp and "SCREEN" in hlp and "HRCU" in hlp, (
-        f"unexpected HD-XS2 HELP: {hlp!r}"
-    )
+    def _step4():
+        h = ConsoleHarness("GLOBO HD-XS2/Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs", "Globo HD-XS2 Reta 1.3.5 (M3503)",
+                           boot_insns=6_000_000, attach_sci=(0x8012ED1C, 0x8012F344), direct_call=True, mask_timer=True)
+        assert b"startconsole\x00" in h.ram and b"Navigation\x00" in h.ram and b"PALANTIR\x00" in h.ram
+        assert h.handshake()[0] == "comtest"
+        act, _ = h.activate()
+        assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"HD-XS2 activation: {act!r}"
+        ver = h.send("VERSION\r")
+        assert "SW: 0135 POL_NETR_PVR (0162)" in ver, f"unexpected HD-XS2 VERSION: {ver!r}"
+        hlp = h.send("HELP\r")
+        assert "* * *Navigation* * *" in hlp and "SCREEN" in hlp and "HRCU" in hlp, (
+            f"unexpected HD-XS2 HELP: {hlp!r}"
+        )
+    run_with_retry(_step4)
+    gc.collect()
 
     # 5. ALi M3606 (Opticum HD X110p DVB-S2): startconsole + VERSION
-    h = ConsoleHarness("OPTICUM X110P/Software_Conax_X110p_PL_SMART_HD+_1.3.4_RC3_2015-01-23.abs",
-                       "Opticum HD X110p 1.3.4 (M3606)", boot_insns=10_000_000, direct_call=True, mask_timer=True)
-    assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
-    assert h.handshake()[0] == "comtest"
-    act, _ = h.activate()
-    assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"X110p activation: {act!r}"
-    ver = h.send("VERSION\r")
-    assert "SW: 0134 SMART HD+ (0004)" in ver, f"unexpected X110p VERSION: {ver!r}"
+    def _step5():
+        h = ConsoleHarness("OPTICUM X110P/Software_Conax_X110p_PL_SMART_HD+_1.3.4_RC3_2015-01-23.abs",
+                           "Opticum HD X110p 1.3.4 (M3606)", boot_insns=10_000_000, direct_call=True, mask_timer=True)
+        assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
+        assert h.handshake()[0] == "comtest"
+        act, _ = h.activate()
+        assert "***  CONSOLE ACTIVATED  ***" in act and h.console_mode == 4, f"X110p activation: {act!r}"
+        ver = h.send("VERSION\r")
+        assert "SW: 0134 SMART HD+ (0004)" in ver, f"unexpected X110p VERSION: {ver!r}"
+    run_with_retry(_step5)
+    gc.collect()
 
     # 6. ALi M3801 standard SDK build without startconsole (Cabletech URZ0083): comtest echo
     sim, send, ram, con_addr = _boot_fast_dump("CABLETECH URZ0083/URZ0083_V1.2.5.abs")
@@ -409,3 +427,4 @@ def test_multi_dump_uart_console():
 if __name__ == "__main__":
     from console_regression import run_with_retry
     run_with_retry(main)
+

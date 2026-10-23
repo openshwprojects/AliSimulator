@@ -18,7 +18,12 @@ from console_regression import ConsoleHarness, run_with_retry
 
 
 def run():
-    h = ConsoleHarness("dump_maciej.bin", "Globo HD TS1 / N2 (dump_maciej.bin, M3602)")
+    h = ConsoleHarness(
+        "dump_maciej.bin",
+        "Globo HD TS1 / N2 (dump_maciej.bin, M3602)",
+        direct_call=True,
+        mask_timer=True,
+    )
     priv_addr = (h.gp - 0x6130) & 0xFFFFFFFF
     rcu_addr = (h.gp - 0x60BB) & 0xFFFFFFFF
 
@@ -29,10 +34,10 @@ def run():
     )
 
     # 1. comtest & startconsole
-    resp = h.send("comtest", max_slices=6, stop_on=("comtest",))
+    resp, _ = h.handshake()
     h.check("comtest echoes 'comtest' in listener mode (console_mode == 2)", resp == "comtest" and h.console_mode == 2, repr(resp))
 
-    resp = h.send("startconsole")
+    resp, _ = h.activate()
     h.check(
         "startconsole activates interactive console (console_mode == 4)",
         "***  CONSOLE ACTIVATED  ***" in resp and resp.endswith(">") and h.console_mode == 4,

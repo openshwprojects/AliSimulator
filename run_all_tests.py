@@ -112,6 +112,7 @@ def discover_test_files(include_slow=False):
         "run_dump_maciej_to_I2C_display_ON.py",
         "run_dump_maciej_to_verify_uart_buffer.py", "run_dump_maciej_without_uart_interrupt.py",
         "run_dump_maciej_to_check_uart_overflow.py", "run_dump_no_main_app.py",
+        "run_dump_to_end.py",
         # the firmware boots into its main application, whose RTOS runs on CP0
         # timer ticks (about 20 s each)
         "run_dump_to_main_app.py", "run_dump_Prima_to_main_app.py",
