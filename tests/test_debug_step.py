@@ -19,11 +19,23 @@ def main():
     # This should handle the spin loop differently 
     print("\nRunning with run() for max 50000 instructions...")
     sim.run(max_instructions=50000)
-    pc = sim.mu.reg_read(UC_MIPS_REG_PC)
-    print(f"PC after run: 0x{pc:08X}")
+    pc_after = sim.mu.reg_read(UC_MIPS_REG_PC)
+    print(f"PC after run: 0x{pc_after:08X}")
     print(f"Instructions executed: {sim.instruction_count}")
 
+    # run() stops at its instruction limit, with the bootloader still in the
+    # ROM window (it loops on the flash at this point: the count is exact)
+    rom_end = sim.base_addr + sim.rom_size
+    checks = [(sim.instruction_count == 50000, f"run() stops at its limit of 50000 instructions ({sim.instruction_count})"),
+              (pc_after != pc and sim.base_addr <= pc_after < rom_end,
+               f"the bootloader ran on in the ROM window (0x{pc:08X} -> 0x{pc_after:08X})")]
+    ok = True
+    for good, text in checks:
+        print(f"[{'PASS' if good else 'FAIL'}] {text}")
+        ok &= bool(good)
+
     print("\nDone.")
+    sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     main()

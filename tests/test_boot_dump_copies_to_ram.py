@@ -17,12 +17,14 @@ def main():
     try:
         mem_before = sim.mu.mem_read(check_addr, check_size)
         print(f"Bytes: {mem_before.hex()}")
-        assert mem_before == b'\x00' * check_size, "Memory was not null initially!"
     except UcError as e:
-        print(f"Read failed: {e}")
-        return
+        print(f"[FAIL] RAM at {hex(check_addr)} is readable before the boot ({e})")
+        sys.exit(1)
+    if mem_before != b'\x00' * check_size:
+        print(f"[FAIL] RAM at {hex(check_addr)} is zero before the boot (Memory was not null initially!)")
+        sys.exit(1)
 
-    print("Initial check passed.")
+    print(f"[PASS] RAM at {hex(check_addr)} is zero before the boot")
 
     stop_addr = 0xafc007f4
     print(f"Running until {hex(stop_addr)}...")
@@ -60,19 +62,23 @@ def main():
              break
 
     print(f"Stopped at {hex(cur_pc)}")
+    reached = cur_pc == stop_addr
+    print(f"[{'PASS' if reached else 'FAIL'}] the bootloader reaches {hex(stop_addr)} (stopped at {hex(cur_pc)})")
 
     print(f"Checking memory at {hex(check_addr)}...")
     mem_after = sim.mu.mem_read(check_addr, check_size)
     print(f"Bytes: {mem_after.hex()}")
-    
+
     expected_bytes_hex = "e8ffbd271000bfafea81043cf0838424e981013c502724ac85337a0c00000000"
     expected_bytes = bytes.fromhex(expected_bytes_hex)
 
-    if mem_after == expected_bytes:
+    copied = mem_after == expected_bytes
+    if copied:
         print("\033[92mSUCCESS: Memory was modified and matches expected bytes.\033[0m")
     else:
         print(f"\033[91mFAILURE: Memory does not match expected bytes!\nExpected: {expected_bytes_hex}\nActual:   {mem_after.hex()}\033[0m")
-        # assert mem_after == expected_bytes, "Memory mismatch!"
+    print(f"[{'PASS' if copied else 'FAIL'}] the bootloader copied its code from the ROM to RAM at {hex(check_addr)}")
+    sys.exit(0 if reached and copied else 1)
 
 if __name__ == "__main__":
     main()

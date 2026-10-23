@@ -68,6 +68,7 @@ class RealTimeVerifier:
         sys.stdout.flush()
 
     def finish(self):
+        """True if the whole expected text came, character for character."""
         print(RESET) # Ensure reset
         if self.failed:
             print(f"\n{RED}TEST FAILED (Mismatch occurred){RESET}")
@@ -79,21 +80,26 @@ class RealTimeVerifier:
                 print(f"\n{RED}TEST PARTIAL (Missing end of output){RESET}")
             else:
                 print(f"\n{GREEN}TEST PASSED{RESET}")
+                return True
+        return False
 
 def main():
     verifier = RealTimeVerifier(EXPECTED_OUTPUT)
-    
+
     # Silence internal logs
     # sim = AliMipsSimulator(log_handler=lambda x: None)
     sim = AliMipsSimulator() # Default logs to print
     sim.setUartHandler(verifier.on_uart)
-    
+
     sim.loadFile("ali_sdk.bin")
-    
+
     # 60k is enough, tested for this specific bin
     sim.run(max_instructions=60000)
-    
-    verifier.finish()
+
+    ok = verifier.finish()
+    print(f"[{'PASS' if ok else 'FAIL'}] ali_sdk.bin prints its whole hello-world banner on the UART "
+          f"({verifier.index} of {len(EXPECTED_OUTPUT)} characters matched)")
+    sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     main()
