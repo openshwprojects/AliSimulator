@@ -393,6 +393,7 @@ class SeeStart:
             what = self._boot(address)
             told = f"its boot code {what} (started flag {'set' if self._word(FLAG) & 1 else 'clear'})"
         elif self.run_program and self.core is None:
+            self.cpu = None
             self.core = SeeCore(sim, address, self._wire)
             what, told = "run on the SEE core", "the SEE's program runs on the second core"
         else:
@@ -407,8 +408,7 @@ class SeeStart:
         it reaches the park loop: what happened."""
         sim = self.sim
         if self.cpu is None:
-            cpu = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 + UC_MODE_LITTLE_ENDIAN)
-            cpu.ctl_set_cpu_model(UC_CPU_MIPS32_24KF)
+            cpu = sim._new_mips_uc()
             cpu.mem_map_ptr(0, sim.ram_size, UC_PROT_ALL, ctypes.addressof(sim.ram_buffer))
             cpu.mem_map_ptr(MMIO_PHYS, ctypes.sizeof(sim.mmio_buffer), UC_PROT_ALL, ctypes.addressof(sim.mmio_buffer))
             self.cpu = cpu

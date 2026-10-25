@@ -418,9 +418,10 @@ def _render_de_on_bg(ram, layer, screen, background):
     return _place_rgb_u8(rgb, x0, y0, screen, background) if rgb is not None else None
 
 
-def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None):
+def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None, video_rgb=None):
     """Composite all enabled regions of GMA layers 0 and 1 over a solid
-    background (the video plane).  Returns (rgb uint8 (H, W, 3), info dict).
+    background (or over `video_rgb`, the video plane).  Returns (rgb uint8
+    (H, W, 3), info dict).
     In an SD or 1080i output mode the regions are drawn at the size their
     bitmaps have, at the scaled-back position (the display engine's scaling
     undone, see output_scale), so the picture is what the TV shows, at the
@@ -461,7 +462,7 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
     info['de_layers'] = de_layers(ram, dev)
     active_de = [layer for layer in info['de_layers']
                  if layer['enabled'] and layer['bitmap'] and layer['width'] and layer['height']]
-    if not info['m3602_layers'] and not info.get('m3327_regions'):
+    if video_rgb is None and not info['m3602_layers'] and not info.get('m3327_regions'):
         if not active_heads and not active_de:
             out = np.empty((H, W, 3), np.uint8)
             out[...] = background
@@ -474,8 +475,20 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
             res = _render_de_on_bg(ram, active_de[0], screen, background)
             if res is not None:
                 return res, info
-    canvas = np.empty((H, W, 3), np.float32)
-    canvas[...] = background
+    if video_rgb is not None:
+        vh, vw = video_rgb.shape[:2]
+        if (vw, vh) != (W, H):
+            rows = np.minimum((np.arange(H) * vh // H).astype(int), vh - 1)
+            cols = np.minimum((np.arange(W) * vw // W).astype(int), vw - 1)
+            video_bg = video_rgb[rows][:, cols]
+        else:
+            video_bg = video_rgb
+        if not info['m3602_layers'] and not info.get('m3327_regions') and not active_heads and not active_de:
+            return video_bg.copy(), info
+        canvas = video_bg.astype(np.float32)
+    else:
+        canvas = np.empty((H, W, 3), np.float32)
+        canvas[...] = background
     for h in active_heads:
         rgba, x, y = render_head(ram, h)
         _blend(canvas, rgba, x, y)

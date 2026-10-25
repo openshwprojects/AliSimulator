@@ -92,6 +92,12 @@ _PAT_DISP_ON = re.compile(
     re.escape(bytes.fromhex("ffff42240300401c")) + b"(..)" + re.escape(bytes.fromhex("82af")),
     re.DOTALL,
 )
+# - lsr_dispatcher's interrupt nesting counter increment:
+#     lw $v0, <nest_off>($gp); addiu $v0, $v0, 1; sw $v0, <nest_off>($gp); lui $v0, 0xb800
+_PAT_LSR_NEST = re.compile(
+    b"(..)\\x82\\x8f\\x01\\x00\\x42\\x24\\1\\x82\\xaf\\x00\\xb8\\x02\\x3c",
+    re.DOTALL,
+)
 # - SEE mailbox RPC sender (`rpc_to_see` on dual-CPU SDK builds): writes a packet to
 #   0xB8000200 and spins until the SEE core writes 0xFFFFFFFF back.  When the harness
 #   stops the SEE core for single-task direct_call mode, stubbing this avoids hanging
@@ -102,6 +108,7 @@ _PAT_SEE_RPC = re.compile(
     + re.escape(bytes.fromhex("00b81e3c0002d637")),
     re.DOTALL,
 )
+
 
 
 def discover_sci_attach(ram: bytes):
@@ -208,8 +215,16 @@ class ConsoleHarness:
         sys_off, con_off, self.con_fn, self.idle_addr = discover_console_offsets(self.ram)
         self.sys_addr = (self.gp + sys_off) & 0xFFFFFFFF
         self.con_addr = (self.gp + con_off) & 0xFFFFFFFF
+        self.irq_mask_addr = None
+        self.nest_addr = None
 
         if direct_call and mask_timer:
+            if self.sim.mu.reg_read(UC_MIPS_REG_PC) not in (self.idle_addr, self.idle_addr + 4):
+                self.sim.stop_instr = self.idle_addr
+                try:
+                    self.sim.run(max_instructions=self.sim.instruction_count + 2_000_000)
+                finally:
+                    self.sim.stop_instr = None
             self.sim._insn_rate = 1_000_000.0
             self.sim._counted_slices = self.sim.calibration_slices
             if getattr(self.sim.chip, "see", None) is not None:
@@ -239,8 +254,12 @@ class ConsoleHarness:
                 if m_mask is not None:
                     hi_m = struct.unpack("<H", m_mask.group(1))[0]
                     lo_m = struct.unpack("<h", m_mask.group(2))[0]
-                    irq_mask_addr = ((hi_m << 16) + lo_m) & 0xFFFFFFFF
-                    self.sim.poke(irq_mask_addr, (0).to_bytes(4, "little"))
+                    self.irq_mask_addr = ((hi_m << 16) + lo_m) & 0xFFFFFFFF
+            m_nest = _PAT_LSR_NEST.search(self.ram)
+            if m_nest is not None:
+                nest_off = struct.unpack("<h", m_nest.group(1))[0]
+                self.nest_addr = (self.gp + nest_off) & 0xFFFFFFFF
+            self._reset_isr_state()
             m_disp = _PAT_DISP_ON.search(self.ram)
             if m_disp is not None:
                 self.sim.poke(0x80000000 + m_disp.start() + 4, b"\x00\x00\x00\x00")
@@ -262,6 +281,12 @@ class ConsoleHarness:
 
         self.sim.poke(self.sys_addr, (2).to_bytes(4, "little"))
         self.sim.poke(self.con_addr, b"\x02")
+
+    def _reset_isr_state(self):
+        if self.irq_mask_addr is not None:
+            self.sim.poke(self.irq_mask_addr, (0).to_bytes(4, "little"))
+        if self.nest_addr is not None:
+            self.sim.poke(self.nest_addr, (0).to_bytes(4, "little"))
 
     def attach_uart(self):
         """Silent builds: route libc_printf to UART 0 (sci id 0, all tasks,
@@ -286,6 +311,7 @@ class ConsoleHarness:
             if resp == "comtest":
                 return resp, attempt
             self.sim._uart_rx_queue.clear()
+            self._reset_isr_state()
             if self._attach is not None:
                 self.attach_uart()
             self.sim.poke(self.sys_addr, (2).to_bytes(4, "little"))
@@ -327,6 +353,7 @@ class ConsoleHarness:
             if self.console_mode == 4:
                 return resp, attempt
             self.sim._uart_rx_queue.clear()         # (drop a half-read trigger)
+            self._reset_isr_state()
             if self._attach is not None and not resp:
                 self.attach_uart()
             self.sim.poke(self.sys_addr, (2).to_bytes(4, "little"))
@@ -355,8 +382,6 @@ class ConsoleHarness:
         use_direct = self.direct_call if direct_call is None else direct_call
         self.uart_out.clear()
         clr_mask = 0x8006 if self.mask_timer else 0x06
-        self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~clr_mask
-        self.sim._write_native_status(self.sim.mu, self.sim.cp0_status)
         if int.from_bytes(self.sim.peek(self.sys_addr, 4), "little") != 2:
             self.sim.poke(self.sys_addr, (2).to_bytes(4, "little"))
         # If console_mode is 2 (e.g. right after EXIT\r or comtest) and the
@@ -369,13 +394,19 @@ class ConsoleHarness:
                 self.sim.run(max_instructions=self.sim.instruction_count + slice_insns)
         raw = data if isinstance(data, bytes) else data.encode("latin-1")
         self.sim.setUartReceiveData(raw, delay_instructions=50)
-        if use_direct and (
-            self.console_mode == 2 or self.sim.mu.reg_read(UC_MIPS_REG_PC) in (self.idle_addr, self.idle_addr + 4)
-        ):
+        at_idle = self.sim.mu.reg_read(UC_MIPS_REG_PC) in (self.idle_addr, self.idle_addr + 4)
+        if use_direct and (self.console_mode == 2 or at_idle):
             if self.mask_timer:
                 self.sim.mu.reg_write(UC_MIPS_REG_SP, self.init_sp)
             self.sim.mu.reg_write(UC_MIPS_REG_RA, self.idle_addr)
             self.sim.mu.reg_write(UC_MIPS_REG_PC, self.con_fn)
+            self._reset_isr_state()
+            self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~clr_mask
+        else:
+            # Preserve EXL (0x02) if the CPU stopped mid-ISR so eret can complete
+            # before another interrupt is injected on top of it.
+            self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~(clr_mask & ~0x02)
+        self.sim._write_native_status(self.sim.mu, self.sim.cp0_status)
         # max_slices bounds a quiet wait; while the firmware is making progress
         # -- still printing (a long listing on a loaded host, where a slice
         # holds fewer guest instructions) or still reading `data` -- it is
@@ -384,16 +415,16 @@ class ConsoleHarness:
         n = 0
         prev = None
         while n < max_slices * 8:
-            self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~clr_mask
-            self.sim._write_native_status(self.sim.mu, self.sim.cp0_status)
-            if (
-                use_direct
-                and self.mask_timer
-                and self.sim.mu.reg_read(UC_MIPS_REG_PC) in (self.idle_addr, self.idle_addr + 4)
-            ):
+            at_idle = self.sim.mu.reg_read(UC_MIPS_REG_PC) in (self.idle_addr, self.idle_addr + 4)
+            if use_direct and self.mask_timer and at_idle:
                 self.sim.mu.reg_write(UC_MIPS_REG_SP, self.init_sp)
                 self.sim.mu.reg_write(UC_MIPS_REG_RA, self.idle_addr)
                 self.sim.mu.reg_write(UC_MIPS_REG_PC, self.con_fn)
+                self._reset_isr_state()
+                self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~clr_mask
+            else:
+                self.sim.cp0_status = (self.sim.cp0_status | 0x0801) & ~(clr_mask & ~0x02)
+            self.sim._write_native_status(self.sim.mu, self.sim.cp0_status)
             self.sim.run(max_instructions=self.sim.instruction_count + slice_insns)
             n += 1
             s = "".join(self.uart_out)

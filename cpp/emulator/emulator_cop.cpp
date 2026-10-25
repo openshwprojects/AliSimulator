@@ -9,9 +9,10 @@ void Emulator::exec_cop0(uint32_t insn) {
   uint32_t rs = (insn >> 21) & 0x1F;
   uint32_t rt = (insn >> 16) & 0x1F;
   uint32_t rd = (insn >> 11) & 0x1F;
+  uint32_t sel = insn & 0x07;
 
   switch (rs) {
-  case 0x00: // MFC0: rt = CP0[rd]
+  case 0x00: // MFC0: rt = CP0[rd, sel]
     switch (rd) {
     case 9:
       regs[rt] = cp0_count;
@@ -29,17 +30,17 @@ void Emulator::exec_cop0(uint32_t insn) {
       regs[rt] = cp0_epc;
       break;
     case 15:
-      regs[rt] = 0x00019300;
-      break; // PRId (MIPS 24K)
+      regs[rt] = (sel == 1) ? cp0_ebase : 0x00019300; // EBase or PRId (MIPS 24K)
+      break;
     case 16:
-      regs[rt] = 0x80000000;
-      break; // Config0
+      regs[rt] = (sel == 1) ? 0x1E190C8A : 0x80000000; // Config1 or Config0
+      break;
     default:
       regs[rt] = 0;
       break;
     }
     break;
-  case 0x04: // MTC0: CP0[rd] = rt
+  case 0x04: // MTC0: CP0[rd, sel] = rt
     switch (rd) {
     case 9:
       cp0_count = regs[rt];
@@ -56,19 +57,36 @@ void Emulator::exec_cop0(uint32_t insn) {
     case 14:
       cp0_epc = regs[rt];
       break;
+    case 15:
+      if (sel == 1)
+        cp0_ebase = regs[rt];
+      break;
     default:
       break;
     }
     break;
-  case 0x10: // CO (ERET, TLBWI, etc.)
-    if ((insn & 0x3F) == 0x18) {
-      // ERET
-      pc = cp0_epc;
-      next_pc = pc + 4;
-    } else if ((insn & 0x3F) == 0x20) {
-      // WAIT — just NOP
+  case 0x0B: { // MFMC0: EI / DI (MIPS32r2)
+    uint32_t old_status = cp0_status;
+    if (insn & (1u << 5))
+      cp0_status |= 1u;
+    else
+      cp0_status &= ~1u;
+    regs[rt] = old_status;
+    break;
+  }
+  case 0x10: { // CO (ERET, WAIT, TLBR, TLBWI, TLBWR, TLBP)
+    uint32_t fn = insn & 0x3F;
+    if (fn == 0x18) { // ERET
+      isa_mode = next_isa_mode = (cp0_epc & 1u) != 0;
+      pc = cp0_epc & ~1u;
+      next_pc = pc + (isa_mode ? 2 : 4);
+      cp0_status &= ~(1u << 1); // Clear EXL
+    } else if (fn == 0x20 || fn == 0x01 || fn == 0x02 || fn == 0x06 ||
+               fn == 0x08) {
+      // WAIT, TLBR, TLBWI, TLBWR, TLBP — NOP in emulator
     }
     break;
+  }
   default:
     unimplemented(insn, "COP0 unknown rs");
     break;
@@ -176,6 +194,18 @@ void Emulator::exec_cop1(uint32_t insn) {
       fpr[fd].w = (uint32_t)r;
       break;
     } // FLOOR.W.S
+    case 0x11: // MOVCF.S (MOVF.S / MOVT.S)
+      if (fpu_cc == ((ft & 1) != 0))
+        fpr[fd].f = fs_val;
+      break;
+    case 0x12: // MOVZ.S
+      if (regs[ft] == 0)
+        fpr[fd].f = fs_val;
+      break;
+    case 0x13: // MOVN.S
+      if (regs[ft] != 0)
+        fpr[fd].f = fs_val;
+      break;
     case 0x21:
       write_fpr_double(fd, (double)fs_val);
       break; // CVT.D.S
@@ -274,6 +304,18 @@ void Emulator::exec_cop1(uint32_t insn) {
       fpr[fd].w = (uint32_t)r;
       break;
     } // FLOOR.W.D
+    case 0x11: // MOVCF.D (MOVF.D / MOVT.D)
+      if (fpu_cc == ((ft & 1) != 0))
+        write_fpr_double(fd, fs_dval);
+      break;
+    case 0x12: // MOVZ.D
+      if (regs[ft] == 0)
+        write_fpr_double(fd, fs_dval);
+      break;
+    case 0x13: // MOVN.D
+      if (regs[ft] != 0)
+        write_fpr_double(fd, fs_dval);
+      break;
     case 0x20:
       fpr[fd].f = (float)fs_dval;
       break; // CVT.S.D
@@ -348,6 +390,74 @@ void Emulator::exec_cop1(uint32_t insn) {
 }
 
 // ============================================================================
+// COP1X (opcode 0x13 — Indexed FP Loads/Stores & Fused Multiply-Add)
+// ============================================================================
+
+void Emulator::exec_cop1x(uint32_t insn) {
+  uint32_t base = (insn >> 21) & 0x1F;
+  uint32_t index = (insn >> 16) & 0x1F;
+  uint32_t fs = (insn >> 11) & 0x1F;
+  uint32_t fd = (insn >> 6) & 0x1F;
+  uint32_t func = insn & 0x3F;
+  uint32_t fr = base;
+  uint32_t ft = index;
+
+  switch (func) {
+  case 0x00: // LWXC1 fd, index(base)
+    fpr[fd].w = mem_read32(regs[base] + regs[index]);
+    break;
+  case 0x01: { // LDXC1 fd, index(base)
+    uint32_t addr = regs[base] + regs[index];
+    fpr[fd & ~1].w = mem_read32(addr);
+    fpr[fd | 1].w = mem_read32(addr + 4);
+    break;
+  }
+  case 0x08: // SWXC1 fs, index(base)
+    mem_write32(regs[base] + regs[index], fpr[fs].w);
+    break;
+  case 0x09: { // SDXC1 fs, index(base)
+    uint32_t addr = regs[base] + regs[index];
+    mem_write32(addr, fpr[fs & ~1].w);
+    mem_write32(addr + 4, fpr[fs | 1].w);
+    break;
+  }
+  case 0x0F: // PREFX (NOP)
+    break;
+  case 0x20: // MADD.S fd, fr, fs, ft -> fd = (fs * ft) + fr
+    fpr[fd].f = (fpr[fs].f * fpr[ft].f) + fpr[fr].f;
+    break;
+  case 0x21: // MADD.D
+    write_fpr_double(fd, (read_fpr_double(fs) * read_fpr_double(ft)) +
+                             read_fpr_double(fr));
+    break;
+  case 0x28: // MSUB.S fd, fr, fs, ft -> fd = (fs * ft) - fr
+    fpr[fd].f = (fpr[fs].f * fpr[ft].f) - fpr[fr].f;
+    break;
+  case 0x29: // MSUB.D
+    write_fpr_double(fd, (read_fpr_double(fs) * read_fpr_double(ft)) -
+                             read_fpr_double(fr));
+    break;
+  case 0x30: // NMADD.S
+    fpr[fd].f = -((fpr[fs].f * fpr[ft].f) + fpr[fr].f);
+    break;
+  case 0x31: // NMADD.D
+    write_fpr_double(fd, -((read_fpr_double(fs) * read_fpr_double(ft)) +
+                           read_fpr_double(fr)));
+    break;
+  case 0x38: // NMSUB.S
+    fpr[fd].f = -((fpr[fs].f * fpr[ft].f) - fpr[fr].f);
+    break;
+  case 0x39: // NMSUB.D
+    write_fpr_double(fd, -((read_fpr_double(fs) * read_fpr_double(ft)) -
+                           read_fpr_double(fr)));
+    break;
+  default:
+    unimplemented(insn, "COP1X unknown func");
+    break;
+  }
+}
+
+// ============================================================================
 // SPECIAL2 (opcode 0x1C)
 // ============================================================================
 
@@ -378,6 +488,13 @@ void Emulator::exec_special2(uint32_t insn) {
   case 0x04: { // MSUB
     int64_t hilo = ((int64_t)(int32_t)hi << 32) | (uint32_t)lo;
     hilo -= (int64_t)(int32_t)regs[rs] * (int64_t)(int32_t)regs[rt];
+    lo = (uint32_t)(hilo & 0xFFFFFFFF);
+    hi = (uint32_t)((hilo >> 32) & 0xFFFFFFFF);
+    break;
+  }
+  case 0x05: { // MSUBU
+    uint64_t hilo = ((uint64_t)hi << 32) | (uint32_t)lo;
+    hilo -= (uint64_t)regs[rs] * (uint64_t)regs[rt];
     lo = (uint32_t)(hilo & 0xFFFFFFFF);
     hi = (uint32_t)((hilo >> 32) & 0xFFFFFFFF);
     break;

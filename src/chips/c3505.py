@@ -48,6 +48,12 @@ class C3505(M3821):
         self.nim = InternalDemod(self.sim)
         self.see = SeeStart(self.sim)
 
+    def set_signal(self, on=True):
+        super().set_signal(on)
+        self.nim.set_signal(on)
+        return True
+
     def uninstall(self):
         self.nim.remove()
         super().uninstall()
+

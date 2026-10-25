@@ -28,6 +28,8 @@ public:
 
   // Read PC
   uint32_t getPC() const { return pc; }
+  bool getIsaMode() const { return isa_mode; }
+  void setIsaMode(bool mips16) { isa_mode = next_isa_mode = mips16; }
 
   // Instruction count
   int getInstructionCount() const { return instruction_count; }
@@ -35,6 +37,12 @@ public:
   // Read memory at virtual address (returns 0 for unmapped)
   uint8_t readMem8(uint32_t addr);
   uint32_t readMem32(uint32_t addr);
+  void writeMem32(uint32_t addr, uint32_t val) { mem_write32(addr, val); }
+  void setPC(uint32_t addr) {
+    isa_mode = next_isa_mode = (addr & 1) != 0;
+    pc = addr & ~1u;
+    next_pc = pc + (isa_mode ? 2 : 4);
+  }
   // Read a block of memory into a buffer, returns bytes read
   int readMem(uint32_t addr, uint8_t *buf, int size);
 
@@ -48,6 +56,8 @@ private:
   uint32_t pc;       // Program Counter
   uint32_t next_pc;  // Next PC (for delay slot handling)
   uint32_t hi, lo;   // HI/LO for mult/div
+  bool isa_mode;      // false = MIPS32, true = MIPS16e
+  bool next_isa_mode; // ISA mode for next_pc (after delay slot)
 
   // CP0 registers
   uint32_t cp0_status;  // CP0 reg 12
@@ -55,6 +65,7 @@ private:
   uint32_t cp0_epc;     // CP0 reg 14
   uint32_t cp0_count;   // CP0 reg 9
   uint32_t cp0_compare; // CP0 reg 11
+  uint32_t cp0_ebase;   // CP0 reg 15, sel 1
 
   // FPU state
   union FPR {
@@ -98,7 +109,14 @@ private:
   uint8_t *rom;             // ROM buffer (ROM_SIZE bytes)
   uint8_t *ram;             // RAM buffer (RAM_SIZE bytes)
   uint8_t *mmio;            // MMIO buffer (MMIO_SIZE bytes)
+  uint8_t *fast_page[65536]; // 64KB soft-TLB for direct RAM/ROM access (nullptr for MMIO/unmapped)
   uint32_t rom_loaded_size; // Actual size of loaded binary
+  uint8_t rom_head[4];      // Saved first 4 bytes of ROM during SPI status/ID injection
+  bool spi_injected;        // True if rom[0..3] holds transient SPI response bytes
+  uint8_t spi_ins;          // SF_INS (+0x98)
+  uint8_t spi_fmt;          // SF_FMT (+0x99)
+  uint8_t spi_dum;          // SF_DUM (+0x9A)
+  uint8_t spi_cfg;          // SF_CFG (+0x9B)
 
   // ---- Callbacks ----
   std::function<void(char)> uart_callback;
@@ -107,13 +125,50 @@ private:
   // ---- Internal ----
   void log(const char *fmt, ...);
 
-  // Memory access (returns false on unmapped access)
-  uint8_t mem_read8(uint32_t addr);
-  uint16_t mem_read16(uint32_t addr);
-  uint32_t mem_read32(uint32_t addr);
-  void mem_write8(uint32_t addr, uint8_t val);
-  void mem_write16(uint32_t addr, uint16_t val);
-  void mem_write32(uint32_t addr, uint32_t val);
+  // Memory access (inlined fast_page soft-TLB lookup, slow path for MMIO)
+  __forceinline uint8_t mem_read8(uint32_t addr) {
+    if (uint8_t *page = fast_page[addr >> 16])
+      return page[addr & 0xFFFF];
+    return mem_read8_slow(addr);
+  }
+  __forceinline uint16_t mem_read16(uint32_t addr) {
+    if (uint8_t *page = fast_page[addr >> 16])
+      return *(uint16_t *)(page + (addr & 0xFFFF));
+    return mem_read16_slow(addr);
+  }
+  __forceinline uint32_t mem_read32(uint32_t addr) {
+    if (uint8_t *page = fast_page[addr >> 16])
+      return *(uint32_t *)(page + (addr & 0xFFFF));
+    return mem_read32_slow(addr);
+  }
+  __forceinline void mem_write8(uint32_t addr, uint8_t val) {
+    if (uint8_t *page = fast_page[addr >> 16]) {
+      page[addr & 0xFFFF] = val;
+      return;
+    }
+    mem_write8_slow(addr, val);
+  }
+  __forceinline void mem_write16(uint32_t addr, uint16_t val) {
+    if (uint8_t *page = fast_page[addr >> 16]) {
+      *(uint16_t *)(page + (addr & 0xFFFF)) = val;
+      return;
+    }
+    mem_write16_slow(addr, val);
+  }
+  __forceinline void mem_write32(uint32_t addr, uint32_t val) {
+    if (uint8_t *page = fast_page[addr >> 16]) {
+      *(uint32_t *)(page + (addr & 0xFFFF)) = val;
+      return;
+    }
+    mem_write32_slow(addr, val);
+  }
+
+  uint8_t mem_read8_slow(uint32_t addr);
+  uint16_t mem_read16_slow(uint32_t addr);
+  uint32_t mem_read32_slow(uint32_t addr);
+  void mem_write8_slow(uint32_t addr, uint8_t val);
+  void mem_write16_slow(uint32_t addr, uint16_t val);
+  void mem_write32_slow(uint32_t addr, uint32_t val);
 
   // Address decoder: returns pointer to the byte, or nullptr if unmapped
   uint8_t *resolve_addr(uint32_t addr, bool write = false);
@@ -126,6 +181,7 @@ private:
 
   // Execute one instruction at pc; updates pc/next_pc
   void execute_instruction(uint32_t insn);
+  void execute_mips16(uint16_t insn16, uint32_t insn_pc);
 
   // Instruction class handlers
   void exec_r_type(uint32_t insn);
@@ -133,11 +189,13 @@ private:
   void exec_j_type(uint32_t insn, uint32_t opcode);
   void exec_cop0(uint32_t insn);
   void exec_cop1(uint32_t insn);
+  void exec_cop1x(uint32_t insn);
   void exec_special2(uint32_t insn);
   void exec_special3(uint32_t insn);
 
   // Branch helper: sets next_pc for after the delay slot
   void do_branch(uint32_t target);
+  void do_branch_isa(uint32_t target, bool target_isa);
   void do_branch_likely(uint32_t target, bool condition);
 
   // Unimplemented instruction trap

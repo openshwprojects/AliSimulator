@@ -211,7 +211,7 @@ class Demux:
         found = {}
         for off in hits[:256]:
             tid = int(ram[off + 16])
-            if tid not in (0x02, 0x4E, 0x4F) or any(ram[off + 5:off + 16]):
+            if tid not in (0x02, 0x4E, 0x4F, 0x50) or any(ram[off + 5:off + 16]):
                 continue
             ext = (int(ram[off + 19]) << 8) | int(ram[off + 20])
             if ext:
@@ -220,7 +220,7 @@ class Demux:
             return None
         self.sim.log("[DMX] section filters in RAM: " + ", ".join(
             f"table 0x{t:02X} id 0x{e:04X} x{c}" for (t, e), c in sorted(found.items())))
-        for tid in (0x02, 0x4E, 0x4F):
+        for tid in (0x02, 0x4E, 0x4F, 0x50):
             ids = {e: c for (t, e), c in found.items() if t == tid}
             if ids:
                 return max(ids, key=ids.get)

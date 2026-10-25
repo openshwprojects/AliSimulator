@@ -214,6 +214,7 @@ def main():
     assert "***  CONSOLE ACTIVATED  ***" in resp and sim.peek(CONSOLE_MODE_ADDR, 1)[0] == 4
 
     # 12. Verify UART console and "comtest" across M3801, M3821, M3503, and M3606 dumps
+    sim = send_uart = None
     test_multi_dump_uart_console()
 
     print(

@@ -174,7 +174,7 @@ def disable_program(first, spin, disable=DISABLE, enable=ENABLE):
 
 for (name, cls, exact), (form, disable, enable) in [(m, f) for m in MODES for f in (
         ("", DISABLE, ENABLE), (" (with EHBs)", DISABLE_EHB, ENABLE_EHB), (" (five NOPs)", DISABLE_5, ENABLE_5))]:
-    program, disables, enable_at = disable_program(2_000 if exact else 50_000, 2_000 if exact else 200_000,
+    program, disables, enable_at = disable_program(2_000 if exact else 50_000, 2_000 if exact else 500_000,
                                                    disable, enable)
     sim = cls(log_handler=lambda m: None)
     sim.hook_every_instruction = exact
@@ -198,7 +198,7 @@ for (name, cls, exact), (form, disable, enable) in [(m, f) for m in MODES for f 
               f"({'the lean' if lean else 'the full'} hook)")
 sim = AliMipsSimulator(log_handler=lambda m: None)
 sim.skip_irq_disable = False
-program, disables, enable_at = disable_program(50_000, 200_000)
+program, disables, enable_at = disable_program(100_000, 500_000)
 load(sim, program, handler)
 check(all(a in sim._cp0_site_hooks for a in disables + (enable_at,)), "skip_irq_disable = False: all three hooked")
 

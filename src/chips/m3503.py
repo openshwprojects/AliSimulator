@@ -47,8 +47,37 @@ class InternalDemod:
     def __init__(self, sim, base=BASE):
         self.sim = sim
         self.base = base
+        self.signal = False
         sim.poke(0xB8000000 + self.base + 0xA3, bytes(S3501.ID[r] for r in sorted(S3501.ID)))
         sim._mmio_on('w', self._write, self.base + 0xA0, self.base + 0xA6)
+        for r in S3501.LOCK_REGS:
+            sim._mmio_on('r', self._read_status, self.base + r, self.base + r)
+
+    def locked(self):
+        return self.signal and self.sim.tuned_to_signal()
+
+    def set_signal(self, on=True):
+        self.signal = bool(on)
+        if not self.signal:
+            b = self.sim._mmio_view[self.base + 0x04]
+            self.sim._mmio_view[self.base + 0x04] = b & ~0x3F
+
+    def _read_status(self, uc, access, address, size, value, user_data):
+        self.sim._device_access(uc)
+        locked = self.locked()
+        for i in range(size):
+            off = (address + i) & 0xFFFFFF
+            reg = off & 0xFF
+            b = self.sim._mmio_view[off]
+            if reg == 0x04:
+                self.sim._mmio_view[off] = (b | 0x3F) if locked else (b & ~0x3F)
+            elif locked:
+                if reg == 0x68:
+                    self.sim._mmio_view[off] = (b & 0xFC) | 0x01
+                elif reg == 0x6B:
+                    self.sim._mmio_view[off] = 0x68
+                elif reg in S3501.LOCK_REGS and b == 0:
+                    self.sim._mmio_view[off] = S3501.LOCK_REGS[reg]
 
     def _write(self, uc, access, address, size, value, user_data):
         reg = address & 0xFF
@@ -57,6 +86,8 @@ class InternalDemod:
     def remove(self):
         """The ID registers back to zero (the next family's chip has no such demodulator)."""
         self.sim.poke(0xB8000000 + self.base + 0xA3, bytes(len(S3501.ID)))
+        for r in S3501.LOCK_REGS:
+            self.sim._mmio_view[self.base + r] = 0
 
 
 class M3503(M3602):
@@ -71,7 +102,7 @@ class M3503(M3602):
     def install(self):
         super().install()
         self.car = CacheAsRam(self.sim)
-        self.nim = InternalDemod(self.sim)
+        self.nim = self.demod = InternalDemod(self.sim)
         # the crypto engine's DMA and SHA unit, which the SEE's program hashes the application with
         from crypto_engine import CryptoEngine
         self.ce = CryptoEngine(self.sim)
@@ -81,3 +112,4 @@ class M3503(M3602):
         self.car.remove()
         self.nim.remove()
         super().uninstall()
+

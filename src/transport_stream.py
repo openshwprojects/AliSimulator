@@ -19,7 +19,9 @@ import struct
 
 TS_PACKET = 188
 PID_PAT, PID_CAT, PID_NIT, PID_SDT, PID_EIT, PID_TDT = 0x0000, 0x0001, 0x0010, 0x0011, 0x0012, 0x0014
-TID_PAT, TID_CAT, TID_PMT, TID_NIT, TID_SDT, TID_EIT_PF, TID_TDT, TID_TOT = 0x00, 0x01, 0x02, 0x40, 0x42, 0x4E, 0x70, 0x73
+TID_PAT, TID_CAT, TID_PMT, TID_NIT, TID_SDT, TID_EIT_PF, TID_EIT_SCHED, TID_TDT, TID_TOT = (
+    0x00, 0x01, 0x02, 0x40, 0x42, 0x4E, 0x50, 0x70, 0x73
+)
 STANDARD_PIDS = {PID_PAT, PID_CAT, PID_NIT, PID_SDT, PID_EIT, PID_TDT}
 
 _CRC_TABLE = []
@@ -136,6 +138,98 @@ def eit_present_following(service_id, ts_id, onid, now, next_, version=0):
     return out
 
 
+def eit_schedule(service_id, ts_id, onid, events, table_id=TID_EIT_SCHED, version=0):
+    """Multi-event EPG schedule section (ETSI EN 300 468 table_id 0x50..0x5F).
+    events: [(event_id, start datetime, duration seconds, title, text), ...]."""
+    body = struct.pack(">HHBB", ts_id, onid, 0, table_id)
+    for event_id, start, seconds, title, text in events:
+        name, txt = dvb_string(title), dvb_string(text)
+        sed = descriptor(0x4D, b"pol" + bytes([len(name)]) + name + bytes([len(txt)]) + txt)
+        h, rem = divmod(seconds, 3600)
+        m, s = divmod(rem, 60)
+        body += struct.pack(">H", event_id) + utc_time(start) + bytes([bcd(h), bcd(m), bcd(s)])
+        body += struct.pack(">H", (4 << 13) | len(sed)) + sed
+    return [section(table_id, service_id, body, version, 0, 0)]
+
+
+def _pts_bytes(pts):
+    """5-byte MPEG-2 PES PTS timestamp field for a 33-bit 90 kHz PTS value."""
+    pts &= (1 << 33) - 1
+    return bytes([
+        0x21 | (((pts >> 30) & 0x07) << 1),
+        (pts >> 22) & 0xFF,
+        0x01 | (((pts >> 15) & 0x7F) << 1),
+        (pts >> 7) & 0xFF,
+        0x01 | ((pts & 0x7F) << 1),
+    ])
+
+
+def pes_packet(stream_id, payload, pts=None, data_alignment=True):
+    """ISO 13818-1 PES packet: 00 00 01 <stream_id> <pes_packet_length> <header> <payload>."""
+    flags1 = 0x84 if data_alignment else 0x80
+    if pts is not None:
+        opt = _pts_bytes(pts)
+        flags2 = 0x80
+    else:
+        opt = b""
+        flags2 = 0x00
+    pes_hdr = bytes([flags1, flags2, len(opt)]) + opt
+    total_len = len(pes_hdr) + len(payload)
+    length_field = total_len if total_len <= 0xFFFF else 0
+    return struct.pack(">BBBBH", 0x00, 0x00, 0x01, stream_id & 0xFF, length_field) + pes_hdr + payload
+
+
+def pes_ts_packets(pid, pes, counter=0):
+    """Pack a PES packet into 188-byte TS packets (no pointer_field; adaptation-field
+    stuffing on the last packet when shorter than 184 bytes)."""
+    data = bytes(pes)
+    packets = []
+    first = True
+    while data:
+        pusi = 0x4000 if first else 0
+        first = False
+        if len(data) >= 184:
+            chunk, data = data[:184], data[184:]
+            header = struct.pack(">BHB", 0x47, pusi | (pid & 0x1FFF), 0x10 | (counter & 0x0F))
+            packets.append(header + chunk)
+        else:
+            stuff_total = 184 - len(data)
+            if stuff_total == 1:
+                adapt = b"\x00"
+            else:
+                adapt = bytes([stuff_total - 1, 0x00]) + b"\xFF" * (stuff_total - 2)
+            header = struct.pack(">BHB", 0x47, pusi | (pid & 0x1FFF), 0x30 | (counter & 0x0F))
+            packets.append(header + adapt + data)
+            data = b""
+        counter = (counter + 1) & 0x0F
+    return packets, counter
+
+
+def teletext_pes(text="ALISIMULATOR TELETEXT", magazine=1, row=0, pts=90000):
+    """ETSI EN 300 472 VBI Teletext PES packet (private_stream_1 0xBD, data_identifier 0x10)."""
+    line = text.encode("ascii", "replace")[:40].ljust(40, b" ")
+    # EBU Teletext data unit: id=0x02 (non-subtitle), length=0x2C (44 bytes),
+    # field/line=0x27, framing_code=0xE4, magazine/row address (2 bytes), 40 character bytes
+    unit = bytes([0x02, 0x2C, 0x27, 0xE4, 0x15, 0x15]) + line
+    return pes_packet(0xBD, b"\x10" + unit, pts=pts)
+
+
+def dvb_subtitle_pes(text="AliSimulator", page_id=1, pts=90000):
+    """ETSI EN 300 743 DVB subtitling PES packet (private_stream_1 0xBD, data_identifier 0x20,
+    subtitle_stream_id 0x00, Page Composition Segment 0x10 + End of Display Set 0x80)."""
+    pcs_body = struct.pack(">BB", 5, 0x04)          # page_time_out=5s, version=0, page_state=1 (acquisition point)
+    pcs = struct.pack(">BBHH", 0x0F, 0x10, page_id & 0xFFFF, len(pcs_body)) + pcs_body
+    eds = struct.pack(">BBHH", 0x0F, 0x80, page_id & 0xFFFF, 0)
+    return pes_packet(0xBD, b"\x20\x00" + pcs + eds + b"\xFF", pts=pts)
+
+
+def mpeg_audio_pes(frames=1, pts=90000):
+    """ISO 11172-3 MPEG-1 Layer II audio PES packet (stream_id 0xC0, 48 kHz 192 kbps stereo
+    576-byte frames starting with syncword 0xFFFD)."""
+    frame = b"\xFF\xFD\xA4\x00" + b"\x00" * 572
+    return pes_packet(0xC0, frame * max(1, frames), pts=pts)
+
+
 def ts_packets(pid, payload, counter=0):
     """188-byte TS packets carrying one section (or several back to back):
     payload_unit_start on the first with pointer_field 0, 0xFF padding on the
@@ -150,6 +244,7 @@ def ts_packets(pid, payload, counter=0):
         counter = (counter + 1) & 0x0F
         first = False
     return packets, counter
+
 
 
 try:
@@ -245,10 +340,12 @@ def channel_by_pmt_pid(image, pmt_pid):
 
 
 class Service:
-    def __init__(self, service_id, pmt_pid, name, video_pid, audio_pid, provider="AliSimulator", service_type=1):
+    def __init__(self, service_id, pmt_pid, name, video_pid, audio_pid, provider="AliSimulator", service_type=1,
+                 teletext_pid=None, subtitle_pid=None):
         self.service_id, self.pmt_pid, self.name = service_id, pmt_pid, name
         self.video_pid, self.audio_pid = video_pid, audio_pid
         self.provider, self.service_type = provider, service_type
+        self.teletext_pid, self.subtitle_pid = teletext_pid, subtitle_pid
 
 
 class Mux:
@@ -287,21 +384,44 @@ class Mux:
             start = now.replace(minute=0, second=0, microsecond=0)
             out = []
             for s in self.services:
-                out += eit_present_following(s.service_id, self.ts_id, self.onid,
-                                             (1, start, 3600, f"{s.name} now", "A programme the simulator made up."),
-                                             (2, start + datetime.timedelta(hours=1), 3600, f"{s.name} next", ""))
+                ev1 = (1, start, 3600, f"{s.name} now", "A programme the simulator made up.")
+                ev2 = (2, start + datetime.timedelta(hours=1), 3600, f"{s.name} next", "")
+                ev3 = (3, start + datetime.timedelta(hours=2), 3600, f"{s.name} later", "")
+                out += eit_present_following(s.service_id, self.ts_id, self.onid, ev1, ev2)
+                out += eit_schedule(s.service_id, self.ts_id, self.onid, [ev1, ev2, ev3])
             return out
         s = self.by_pmt_pid(pid)
         if s is not None:
-            return [pmt(s.service_id, s.video_pid, [(0x02, s.video_pid, b""), (0x03, s.audio_pid, descriptor(0x0A, b"pol\x00"))])]
+            streams = [(0x02, s.video_pid, b""), (0x03, s.audio_pid, descriptor(0x0A, b"pol\x00"))]
+            if s.teletext_pid is not None:
+                streams.append((0x06, s.teletext_pid, descriptor(0x56, b"pol\x09\x00")))
+            if s.subtitle_pid is not None:
+                streams.append((0x06, s.subtitle_pid, descriptor(0x59, b"pol\x10\x00\x01\x00\x01")))
+            return [pmt(s.service_id, s.video_pid, streams)]
         return []
 
+    def pes_for(self, pid):
+        """An elementary PES packet for an audio, teletext, or subtitle PID of a service, or None."""
+        for s in self.services:
+            if pid == s.audio_pid:
+                return mpeg_audio_pes()
+            if s.teletext_pid is not None and pid == s.teletext_pid:
+                return teletext_pes(f"{s.name.upper()} TELETEXT P100")
+            if s.subtitle_pid is not None and pid == s.subtitle_pid:
+                return dvb_subtitle_pes(s.name)
+        return None
+
     def packets_for(self, pid):
-        """One repetition of the PID's tables as TS packets ([] for an unknown PID)."""
+        """One repetition of the PID's tables or PES stream as TS packets ([] for an unknown PID)."""
         out = []
         for sec in self.sections_for(pid):
             pk, self.counters[pid] = ts_packets(pid, sec, self.counters.get(pid, 0))
             out += pk
+        if not out:
+            pes = self.pes_for(pid)
+            if pes is not None:
+                pk, self.counters[pid] = pes_ts_packets(pid, pes, self.counters.get(pid, 0))
+                out += pk
         return out
 
     def known_pids(self):
@@ -321,3 +441,4 @@ class Mux:
         if video_pid:
             s.video_pid, s.audio_pid = video_pid, video_pid + 1
         return s
+

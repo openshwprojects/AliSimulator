@@ -151,11 +151,13 @@ class M3602(ChipFamily):
         super().write_chip_id()
         self._remove_demod()
         if self.chip_id == C3603:
-            self.sim.i2c_devices[S3501.ADDRESS] = S3501()
+            self.sim.i2c_devices[S3501.ADDRESS] = self.demod = S3501(tuned=self.sim.tuned_to_signal)
             self.sim.attach_tuner()
 
     def _remove_demod(self):
         if isinstance(self.sim.i2c_devices.get(S3501.ADDRESS), S3501):
+            if self.demod is self.sim.i2c_devices[S3501.ADDRESS]:
+                self.demod = None
             del self.sim.i2c_devices[S3501.ADDRESS]
         for addr in [a for a, d in self.sim.i2c_devices.items() if tuners.is_tuner(d)]:
             del self.sim.i2c_devices[addr]

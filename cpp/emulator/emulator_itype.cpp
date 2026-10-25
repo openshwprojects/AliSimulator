@@ -203,14 +203,19 @@ void Emulator::exec_i_type(uint32_t insn, uint32_t opcode) {
 }
 
 // ============================================================================
-// J-Type
+// J-Type (J = 0x02, JAL = 0x03, JALX = 0x1D)
 // ============================================================================
 
 void Emulator::exec_j_type(uint32_t insn, uint32_t opcode) {
   uint32_t target_raw = insn & 0x03FFFFFF;
   uint32_t target = (pc & 0xF0000000) | (target_raw << 2);
   if (opcode == 0x03) { // JAL
-    regs[31] = pc + 4;
+    regs[31] = (pc + 4) | (isa_mode ? 1u : 0u);
+    do_branch(target);
+  } else if (opcode == 0x1D) { // JALX (toggle ISA mode after delay slot)
+    regs[31] = (pc + 4) | (isa_mode ? 1u : 0u);
+    do_branch_isa(target, !isa_mode);
+  } else { // J
+    do_branch(target);
   }
-  do_branch(target);
 }

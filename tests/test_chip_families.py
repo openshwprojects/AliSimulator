@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import chips
 from chips.base import chunk_chain
+import dump_catalog
 from simulator import resolve_dump
 
 EXPECTED = [
@@ -28,6 +29,9 @@ EXPECTED = [
     ("T2GEN265_1.2.0-2023-03-17.abs", "M3821"),
     ("URZ0083_V1.2.5.abs", "M3602"),             # HDCPKey "Demo s3602", maincode "Demo M3606"
     ("THT501_V1.1.5a_20120925.abs", "M3602"),    # HDCPKey "Demo s3602", maincode "501"
+    ("THT501-V1.0.9.abs", "M3602"),
+    ("KM00183_V1.0.8.abs", "M3602"),             # Kruger&Matz KM0183: HDCPKey "Demo s3602"
+    ("KM00186_V1.1.1.abs", "M3602"),             # Kruger&Matz KM0186: maincode "M3606 2Tuner"
     ("URZ0086_V1.2.1.abs", "M3602"),             # maincode "M3606 2Tuner"
     ("ArivaT50_20111118_V102B214.abs", "M3602"),  # no HDCPKey chunk: maincode "Demo M3602"
     ("Ferguson_T760i_V1.5B4-14092021.abs", "C3505"),  # boot-ROM bootloader, SEE program, main code names ALI_C3505
@@ -88,6 +92,10 @@ EXPECTED = [
     ("A254Combo_01062020_V1.32B2.abs", "C3505"),
     ("A254Combo_27072020_V1.32B3.abs", "C3505"),
     ("STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs", "M3801"),
+    ("srt8115.BIN", "M3801"),
+    ("CABLETECH_urz0194s_v1_0_8.bin", "M3801"),
+    ("EN25Q32B.bin", "M3801"),
+    ("sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin", "M3329"),
 ]
 
 print("=== Test: chips.detect() picks each image's chip family ===")
@@ -98,6 +106,21 @@ for dump, family in EXPECTED:
     ok = got == family
     failures += not ok
     print(f"  [{'PASS' if ok else 'FAIL'}] {dump}: {got}" + ("" if ok else f" (expected {family})"))
+
+catalog_entries = dump_catalog.catalog()
+catalog_mismatches = []
+for path, data in catalog_entries:
+    if data is None:
+        continue
+    with open(path, "rb") as f:
+        got = chips.detect(f.read()).__name__
+    want_fam = data["device"]["family"].split()[0]
+    if got != want_fam:
+        catalog_mismatches.append((os.path.basename(path), got, want_fam))
+ok_all = len(catalog_entries) >= 100 and not catalog_mismatches
+failures += not ok_all
+print(f"  [{'PASS' if ok_all else 'FAIL'}] all {len(catalog_entries)} catalog dumps match their sidecar chip family"
+      + ("" if ok_all else f": {catalog_mismatches}"))
 
 with open(resolve_dump("URZ0083_V1.2.5.abs"), "rb") as f:
     chain = chunk_chain(f.read())

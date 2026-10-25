@@ -172,5 +172,105 @@ for index, pid in ((0, ts.PID_PAT), (1, ts.PID_SDT)):
         h(m21.mu, 0, b21 + 0x62, 1, 2, None)
 check(d21.filter_pid(0) == ts.PID_PAT and d21.filter_pid(1) == ts.PID_SDT,
       "an M3821 filter entry is its PID: filters 0 / 1 on the PAT / SDT")
+
+# Rich DVB broadcast streams: EIT schedule (0x50) and PES streams (audio, teletext, subtitles)
+eit_secs = mux.sections_for(ts.PID_EIT)
+check(len(eit_secs) == 3 and eit_secs[0][0] == ts.TID_EIT_PF and eit_secs[2][0] == ts.TID_EIT_SCHED,
+      "PID 0x0012 carries both EIT present/following (0x4E x2) and EIT schedule (0x50)")
+rich_svc = ts.Service(
+    service_id=0x0101,
+    name="AliSimulator HD",
+    pmt_pid=0x0100,
+    video_pid=0x0101,
+    audio_pid=0x0102,
+    teletext_pid=0x0104,
+    subtitle_pid=0x0105,
+)
+rich_mux = ts.Mux(services=(rich_svc,), clock=datetime.datetime(2026, 10, 10, 12, 34, 56))
+pmt_sec = rich_mux.sections_for(0x0100)[0]
+check(b"\x06\xe1\x04\xf0\x07\x56\x05pol\x09\x00" in pmt_sec and b"\x06\xe1\x05\xf0\x0a\x59\x08pol\x10\x00\x01\x00\x01" in pmt_sec,
+      "PMT with teletext_pid and subtitle_pid carries DVB Teletext (0x56) and Subtitling (0x59) descriptors")
+aud_pes = rich_mux.pes_for(0x0102)
+ttx_pes = rich_mux.pes_for(0x0104)
+sub_pes = rich_mux.pes_for(0x0105)
+check(aud_pes[:4] == b"\x00\x00\x01\xc0" and ttx_pes[:4] == b"\x00\x00\x01\xbd" and sub_pes[:4] == b"\x00\x00\x01\xbd",
+      "PES builders produce MPEG-1 Layer II audio (0xC0), VBI Teletext (0xBD), and DVB Subtitle (0xBD) packets")
+aud_pkts = rich_mux.packets_for(0x0102)
+check(len(aud_pkts) >= 1 and aud_pkts[0][:4] == bytes([0x47, 0x41, 0x02, 0x10]) and aud_pkts[0][4:8] == b"\x00\x00\x01\xc0",
+      "PES TS packetisation starts directly with 00 00 01 stream_id (no section pointer_field)")
+
+# DVB-S2 (S3501 / M3503 InternalDemod) and DVB-T2 (ATBM7812) lock & I2C repeater gate
+import demods
+s3501 = demods.S3501()
+s3501.set_signal(True)
+s3501.write(bytes([0x04]))
+check(s3501.locked() and s3501.read(1)[0] == 0x3F, "S3501 DVB-S2 demodulator reports lock (reg 0x04 == 0x3F)")
+s3501.write(bytes([0x6C]))
+check(int.from_bytes(s3501.read(3), "little") == 27500, "S3501 reports 27500 kSym/s symbol rate at 0x6C..0x6E")
+
+atbm = demods.ATBM7812()
+tuner_sub = tuners.MxL603()
+atbm.tuner = tuner_sub
+atbm.set_signal(True)
+atbm.write(bytes([0x00, 0x00]))
+check(atbm.read(1)[0] == 0xA8, "ATBM7812 chip ID at (0x00, 0x00) is 0xA8")
+atbm.write(bytes([0x88, 0x6C]))
+check(atbm.read(1)[0] == 0x01, "ATBM7812 system mode at (0x88, 0x6C) reports DVB-T2 (1)")
+atbm.write(bytes([0x17, 0xB7]))
+check(atbm.read(1)[0] == 0x05, "ATBM7812 T2 lock FSM at (0x17, 0xB7) reports state 5 (locked)")
+atbm.write(bytes([0x01, 0x03, 0x01]))
+check(atbm.gate_open and atbm.forward_write(bytes([0x0F, 0x22, 0x10, 0x80, 0x11, 0x90])),
+      "ATBM7812 I2C repeater gate (0x01, 0x03)=1 opens and forwards downstream tuner writes")
+atbm.write(bytes([0x01, 0x03, 0x00]))
+check(not atbm.gate_open and not atbm.forward_write(bytes([0x00, 0x00])),
+      "ATBM7812 I2C repeater gate (0x01, 0x03)=0 closes downstream forwarding")
+
+# Smart Card Reader (SMC at 0xB8018800, ISO 7816-3 T=0 Conax 0x0B00 card)
+smc_base = 0xB8018800
+check(guest_read(smc_base + 0x08, 1) & 0x80 == 0, "before attach_smart_card(), SMC ICCSR bit 7 (card inserted) is 0")
+smc = sim.attach_smart_card(True)
+check(guest_read(smc_base + 0x08, 1) & 0x80 == 0x80, "after attach_smart_card(), SMC ICCSR bit 7 (card inserted) is 1")
+guest_write(smc_base + 0x02, bytes([0xE0]))                 # FIFO_CTRL: flush RX/TX
+guest_write(smc_base + 0x01, bytes([0x72]))                 # SCR_CTRL: enable + warm reset -> queues Conax ATR
+atr_len = guest_read(smc_base + 0x14, 1)
+atr_bytes = bytes(guest_read(smc_base + 0x0A, 1) for _ in range(atr_len))
+check(atr_bytes == smc.CONAX_ATR, f"SMC warm reset delivers Conax ATR ({atr_bytes.hex(' ').upper()})")
+for b in b"\xFF\x10\x94\x7B":                               # PPS request
+    guest_write(smc_base + 0x0B, bytes([b]))
+pps_len = guest_read(smc_base + 0x14, 1)
+pps_resp = bytes(guest_read(smc_base + 0x0A, 1) for _ in range(pps_len))
+check(pps_resp == b"\xFF\x10\x94\x7B", "SMC card echoes 4-byte PPS negotiation (FF 10 94 7B)")
+for b in b"\xDD\x26\x00\x00\x03\x10\x01\x01":               # Conax CASS_VER / init APDU
+    guest_write(smc_base + 0x0B, bytes([b]))
+apdu_len = guest_read(smc_base + 0x14, 1)
+apdu_resp = bytes(guest_read(smc_base + 0x0A, 1) for _ in range(apdu_len))
+check(apdu_resp[0] == 0x26 and apdu_resp[-2:] == b"\x98\x08",
+      f"Conax init APDU returns procedure byte 0x26 and SW 98 08 (8 bytes available)")
+
+# MPEG-2 Video Engine slice decoding & video background compositing
+import video_m36
+slices = video_m36.encode_dc_iframe_slices([[80, 200], [160, 40]], cb_mb=96, cr_mb=176)
+decoded = video_m36.decode_mpeg2_slices(slices, 2, 2)
+check(decoded is not None and decoded.shape == (32, 32, 3) and int(decoded[0, 16, 0]) > int(decoded[0, 0, 0]),
+      f"encode_dc_iframe_slices / decode_mpeg2_slices round-trips 2x2 macroblocks to {decoded.shape} RGB")
+m36 = AliMipsSimulator(log_handler=lambda m: None)
+m36.setSPIDump(False)
+m36.setUartHandler(lambda c: None)
+m36.loadFile("URZ0083_v1.1.2.abs")
+ve = m36.chip.video_engine
+buf_phys = 0x00500000
+m36.mu.mem_write(0x80000000 | buf_phys, slices)
+m36.poke(0xB8004208, struct.pack("<I", (2 << 8) | 2))       # VE_SIZE_MB: 2x2 macroblocks (32x32)
+m36.poke(0xB8004224, struct.pack("<I", buf_phys))           # VE_BUFFER
+m36.poke(0xB8004228, struct.pack("<I", 0))                  # VE_VLD_BITS
+m36.poke(0xB800422C, struct.pack("<I", len(slices) * 8))    # VE_VLD_AVAIL
+for h in m36._mmio_wr.get(0x4214, []):
+    h(m36.mu, 0, 0xB8004214, 4, 1, None)
+check(ve.last_picture is not None and ve.last_picture["width"] == 32 and ve.last_picture["slice_count"] == 2,
+      f"VideoEngine records last_picture metadata ({ve.last_picture['width']}x{ve.last_picture['height']}, {ve.last_picture['slice_count']} slices)")
+comp_rgb = m36.capture_screen(screen=(32, 32), include_video=True)
+check(comp_rgb.shape == (32, 32, 3) and int(comp_rgb.max()) > 100,
+      "capture_screen(include_video=True) composites over the decoded MPEG-2 video frame")
+
 print(f"\n[{'PASS' if ok else 'FAIL'}] transport stream and demultiplexer model")
 sys.exit(0 if ok else 1)

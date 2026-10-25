@@ -95,6 +95,12 @@ class PyStopper:
             self._closed = True
             self._cv.notify()
 
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
 
 class NativeStopper:
     kind = "native"
@@ -108,6 +114,7 @@ class NativeStopper:
     _INVALID = ctypes.c_void_p(-1 & 0xFFFFFFFFFFFFFFFF)       # INVALID_HANDLE_VALUE
 
     def __init__(self, mu, refire_ms=1):
+        self._closed = True
         if sys.platform != "win32" or struct.calcsize("P") != 8:
             raise OSError("NativeStopper needs 64-bit Windows")
         import ctypes.wintypes as wt
@@ -164,6 +171,7 @@ class NativeStopper:
         self._reg_wait = k32.RegisterWaitForSingleObject
         self._unreg_wait = k32.UnregisterWaitEx
         self._flags = self.WT_EXECUTEINWAITTHREAD
+        self._due_perf = float('inf')
         self._closed = False
 
     def _boost_wait_thread(self):
@@ -198,7 +206,9 @@ class NativeStopper:
 
     def arm(self, seconds):
         """Stop the running (or next) emulation `seconds` from now."""
-        self._due.value = -max(1, int(seconds * 1e7))          # relative, 100 ns units
+        sec = max(0.0, seconds)
+        self._due_perf = time.perf_counter() + sec - 0.0005
+        self._due.value = -max(1, int(sec * 1e7))              # relative, 100 ns units
         # (SetWaitableTimer also makes the timer non-signalled again)
         self._set_timer(self.timer, self._due_ref, self._refire_ms, None, None, False)
         if self.wait is None:
@@ -207,23 +217,30 @@ class NativeStopper:
                 raise OSError(ctypes.get_last_error(), "RegisterWaitForSingleObject failed")
             self.wait = self._wait_handle
 
-    def disarm(self):
+    def disarm(self, force_unreg=False):
         """Cancel; returns only after a stop callback already in flight has
         finished, so no stale stop can reach a later emulation."""
         self._cancel_timer(self.timer)
-        if self.wait is not None:
+        if self.wait is not None and (force_unreg or time.perf_counter() >= self._due_perf):
             # INVALID_HANDLE_VALUE: wait until a callback that already started has returned
             self._unreg_wait(self.wait, self._INVALID)
             self.wait = None
+        self._due_perf = float('inf')
 
     def close(self):
         if self._closed:
             return
         self._closed = True
-        self.disarm()
+        self.disarm(force_unreg=True)
         self._k32.UnregisterWaitEx(self._keep_wait, self._INVALID)
         self._k32.CloseHandle(self._keep_event)
         self._k32.CloseHandle(self.timer)
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def make_stopper(mu, kind="auto"):

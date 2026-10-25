@@ -292,6 +292,20 @@ for us in (1, 2500):
     else:
         check(sim.delay_jumps >= len(late), f"{sim.delay_jumps} loop jumps (a tick inside each wait or more)")
 
+# 6 back-to-back delay(150) calls (900 us total > 500 us threshold) inside one timed slice
+multi_prog = SETUP + li(S0, 0x11111111) + li(S1, 0x22222222) + [mfc0(S4, COUNT)]
+for _ in range(6):
+    multi_prog += li(A0, 150) + [jal(DELAY), NOP]
+multi_prog += [mfc0(T1, COUNT), subu(T1, T1, S4), b(-1), NOP]
+multi_done = address_of(multi_prog, len(multi_prog) - 2)
+sim = make(multi_prog, batch_timeout_us=10_000)
+pc = run_to(sim, multi_done)
+multi_ticks = sim.mu.reg_read(UC_MIPS_REG_T1)
+check(pc == multi_done and sim.delay_calls == 6 and abs(sim.delay_skipped - 900e-6) < 1e-12
+      and multi_ticks >= 90_000 and sim.mu.reg_read(UC_MIPS_REG_V1) == 100,
+      f"6x delay(150) in a timed slice: {sim.delay_calls} calls skipped ({sim.delay_skipped * 1e6:.0f} us), "
+      f"{multi_ticks} Count ticks, v1={sim.mu.reg_read(UC_MIPS_REG_V1)}")
+
 print("--- counted")
 sim, pc, regs, ticks, done = call(5, exact_count_threshold=10 ** 12)
 check(pc == done and sim.delay_calls == 1 and ticks >= 500 and regs["v1"] == 100,

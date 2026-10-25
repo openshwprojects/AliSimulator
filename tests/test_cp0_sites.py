@@ -144,6 +144,40 @@ sim._reg_write(UC_MIPS_REG_T1, 0x01234567)
 sim.mu.reg_write(sim.gpr_map[T2], 0xFFFFFFFF)
 check((sim.mu.reg_read(UC_MIPS_REG_T0), sim._reg_read(UC_MIPS_REG_T1), sim._reg_read(sim.gpr_map[T2])) ==
       (0x89ABCDEF, 0x01234567, 0xFFFFFFFF), "the direct register writes and reads")
+check(sim._live_env and sim._env_u32 is not None, "CPUMIPSState direct register array (_env_u32) is calibrated")
+for r in range(1, 32):
+    sim._reg_write(sim.gpr_map[r], (0xA5000000 | (r * 0x10101)) & 0xFFFFFFFF)
+snap = struct.unpack("<32I", sim._gpr_snapshot())
+check(all(sim.mu.reg_read(sim.gpr_map[r]) == snap[r] == sim._env_u32[r] == ((0xA5000000 | (r * 0x10101)) & 0xFFFFFFFF)
+          for r in range(1, 32)),
+      "all 31 GPRs ($1..$31) match across _reg_write, mu.reg_read, _env_u32, and _gpr_snapshot")
+sim._reg_write(sim.gpr_map[0], 0xDEADBEEF)
+check(sim._reg_read(sim.gpr_map[0]) == 0 and sim.mu.reg_read(sim.gpr_map[0]) == 0 and sim._env_u32[0] == 0,
+      "$zero ($0) stays 0 after _reg_write")
+sim._write_pc(0x80234568)
+check(sim.mu.reg_read(UC_MIPS_REG_PC) == 0x80234568 and sim._env_u32[32] == 0x80234568,
+      "_write_pc updates Unicorn PC and _env_u32[32]")
+
+# Fast-mode CP0 site round-trips for Compare (11), Cause (13), Status (12), EBase (15,1), and MFC0 $zero, Count
+sim = AliMipsSimulator(log_handler=lambda m: None)
+sim.exact_count_threshold = 0
+sim.calibration_slices = 0
+cp0_prog = (
+    li(T0, 0x12345678) + [mtc0(T0, 11), mfc0(T1, 11)] +
+    li(T0, 0x00000300) + [mtc0(T0, 13), mfc0(T2, 13)] +
+    li(T0, 0x80004000) + [mtc0(T0, 15, 1), mfc0(T3, 15, 1)] +
+    [mfc0(0, COUNT), b(-1), NOP]
+)
+load(sim, cp0_prog)
+done_pc = MAIN + 4 * (len(cp0_prog) - 2)
+sim.stop_instr = done_pc
+sim.run(max_instructions=100_000)
+check(sim.mu.reg_read(UC_MIPS_REG_PC) == done_pc
+      and sim._reg_read(sim.gpr_map[T1]) == 0x12345678
+      and (sim._reg_read(sim.gpr_map[T2]) & 0x300) == 0x300
+      and (sim._reg_read(sim.gpr_map[T3]) & 0xFFFFF000) == 0x80004000
+      and sim._reg_read(sim.gpr_map[0]) == 0,
+      "CP0 site hooks round-trip Compare, Cause IP0/IP1, EBase, and keep $zero == 0 on MFC0 $zero, Count")
 
 print("--- long blocks")
 sim = AliMipsSimulator(log_handler=lambda m: None)
@@ -168,6 +202,27 @@ check((0x80400000 + 1000 * 4, 0x80400000 + 1320 * 4 - 1) in sim._long_block_hook
       "interior straight-line block is hooked")
 check((0x80400000 + (end_w - 310) * 4, 0x80400000 + end_w * 4 - 1) in sim._long_block_hooks,
       "straight-line block ending at chunk boundary is hooked")
+
+# Verify _LONG_BLK_BRK_MASK candidate probing and full scan reject blocks broken at any offset
+breakers = [
+    ("BEQ", bne(T0, T1, 4)),
+    ("JAL", 0x0C100000),
+    ("JR", 0x03E00008),
+    ("ERET", ERET),
+    ("zero word", 0x00000000),
+    ("0xFFFFFFFF", 0xFFFFFFFF),
+]
+probe_offsets = (75, 1, 2, 3, 37, 112, 200)
+rejected_all = True
+for idx, (bname, bword) in enumerate(breakers):
+    off = probe_offsets[idx % len(probe_offsets)]
+    sim_b = AliMipsSimulator(log_handler=lambda m: None)
+    buf = bytearray(insn * 300)
+    struct.pack_into("<I", buf, off * 4, bword)
+    sim_b._find_long_blocks(bytes(buf), 0x500000, (0x80000000,))
+    if sim_b._long_block_hooks:
+        rejected_all = False
+check(rejected_all, "300-word runs broken at probe/interior offsets by branches, jumps, ERET, 0, or 0xFFFFFFFF are not hooked")
 
 print()
 if fails:

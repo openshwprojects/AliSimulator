@@ -1,5 +1,10 @@
 #include "tests/test_ali_sdk_hello_world.h"
 #include "tests/test_boot_dump_copies_to_ram.h"
+#include "tests/test_boot_early_code.h"
+#include "tests/test_boot_first_steps.h"
+#include "tests/test_boot_mips16_ram.h"
+#include "tests/test_instruction_set.h"
+#include "tests/test_mips16e_execution.h"
 #include <cstdio>
 
 #define GREEN "\033[92m"
@@ -15,6 +20,11 @@ int main() {
   TestEntry tests[] = {
       {"TestAliSDKHelloWorld", TestAliSDKHelloWorld},
       {"TestBootDumpCopiesToRam", TestBootDumpCopiesToRam},
+      {"TestBootFirstSteps", TestBootFirstSteps},
+      {"TestBootEarlyCode", TestBootEarlyCode},
+      {"TestInstructionSet", TestInstructionSet},
+      {"TestMips16eExecution", TestMips16eExecution},
+      {"TestBootMips16Ram", TestBootMips16Ram},
   };
 
   int total = sizeof(tests) / sizeof(tests[0]);
