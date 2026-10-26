@@ -21,6 +21,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from console_regression import ConsoleHarness, run_with_retry
 
 
+def _storage_ready(sim):
+    """The chunk initializer publishes its device before opening it and setting bounds."""
+    def word(addr):
+        return int.from_bytes(sim.peek(addr, 4), "little")
+
+    device = word(0x805FE5DC)
+    physical = device & 0x1FFFFFFF
+    if device & 3 or device >> 29 not in (4, 5) or physical + 0x454 > sim.ram_size:
+        return False
+    if not int.from_bytes(sim.peek(device + 0x18, 2), "little") & 1 or not word(device + 0x450):
+        return False
+    base, end, size = (word(addr) for addr in (0x805FE5E0, 0x805FC998, 0x805FC994))
+    return size > 0 and end == base + size
+
+
 def run():
     h = ConsoleHarness(
         "Opticum Blue R265 Lite/T2GEN265_1.2.0-2023-03-17.abs",
@@ -28,6 +43,10 @@ def run():
         boot_insns=45_500_000,
         direct_call=True,
         mask_timer=True,
+        # GCC 4.7.3 omits the usual stack epilogue before OSAL idle. Generic
+        # spin-loop discovery instead finds a flash-range error halt here.
+        idle_addr=0x803879EC,
+        takeover_ready=_storage_ready,
     )
 
     # In T2GEN265 1.2.0 (GCC 4.7.3 build), _console_get_int (0x801385b4) omitted

@@ -23,6 +23,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from unicorn.mips_const import UC_MIPS_REG_PC
 from simulator import AliMipsSimulator
+from engine_check import CPP, not_applicable
+
+if CPP:
+    not_applicable("the repeated-MTC0 skip and the unhooked interrupt disable are optimisations of the "
+                   "Unicorn engine's CP0 hooks; the C++ core executes every MTC0 itself")
 
 MAIN = 0x80100000
 fails = []

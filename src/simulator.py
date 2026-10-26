@@ -72,9 +72,32 @@ def flash_size_for(path):
     return max(0x400000, 1 << (size - 1).bit_length())
 
 
+def default_engine():
+    """The engine a simulator gets when none is asked for: ALISIM_ENGINE from the
+    environment ('unicorn', the default, or 'cpp': the C++ core, simulator_cpp.py)."""
+    return os.environ.get("ALISIM_ENGINE", "unicorn").strip().lower() or "unicorn"
+
+
 class AliMipsSimulator:
+    engine = "unicorn"
+
+    def __new__(cls, *args, engine=None, **kwargs):
+        """AliMipsSimulator(..., engine='cpp') -- or ALISIM_ENGINE=cpp -- is the
+        simulator on the C++ core (simulator_cpp.CppAliMipsSimulator); a second
+        core (share_memory_with) runs on its first core's engine."""
+        if cls is AliMipsSimulator:
+            shared = kwargs.get("share_memory_with")
+            if engine is None:
+                engine = shared.engine if shared is not None else default_engine()
+            if engine == "cpp":
+                from simulator_cpp import CppAliMipsSimulator
+                return super().__new__(CppAliMipsSimulator)
+            if engine != "unicorn":
+                raise ValueError(f"unknown engine {engine!r} (unicorn, cpp)")
+        return super().__new__(cls)
+
     def __init__(self, rom_size=4*1024*1024, ram_size=128*1024*1024, log_handler=None,
-                 share_memory_with=None, cpu_num=0, ic_base=0x30):
+                 share_memory_with=None, cpu_num=0, ic_base=0x30, engine=None):
         """A simulated ALi chip with one MIPS core.  The second core of a
         dual-CPU chip (the SEE, chips/see.py) is another instance made with
         share_memory_with=<the first>: the same RAM, flash and device-register
@@ -1717,6 +1740,16 @@ class AliMipsSimulator:
         for off in range(begin & 0xFFFFFF, (end & 0xFFFFFF) + 1):
             table.setdefault(off, []).append(handler)
 
+    def _mmio_off(self, kind, handler, begin, end):
+        """Undo _mmio_on(kind, handler, begin, end)."""
+        table = self._mmio_rd if kind == 'r' else self._mmio_wr
+        for off in range(begin & 0xFFFFFF, (end & 0xFFFFFF) + 1):
+            handlers = table.get(off)
+            if handlers and handler in handlers:
+                handlers.remove(handler)
+                if not handlers:
+                    del table[off]
+
     @staticmethod
     def _mmio_offset(address):
         """Offset in the 16 MB device window of a physical / kseg0 / kseg1
@@ -2570,7 +2603,7 @@ class AliMipsSimulator:
                 self._spi_resp_idx = 0
                 self._spi_response = []
                 return
-            if cmd == 0x05 and self._spi_status == 0:
+            if cmd == 0x05 and self._spi_can_inline_status():
                 if not self._spi_status_injected:
                     if self._rom_words is not None:
                         self._rom_words[0] = 0

@@ -24,7 +24,11 @@ def run():
     h = ConsoleHarness(
         "Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs",
         "Opticum Blue R265 Lite 1.1.5 (T2GEN265_1.1.5, M3821)",
-        boot_insns=8_000_000,
+        # The engines reach application start at different instruction counts.
+        # Take over only once the application has initialized and prints its banner.
+        boot_insns=60_000_000,
+        boot_until=lambda uart: "Application version 1.0.0" in uart,
+        boot_step=500_000,  # above the 300k exact-count threshold, allowing timed boot slices
         direct_call=True,
         mask_timer=True,
     )

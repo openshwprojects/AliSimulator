@@ -44,8 +44,16 @@ class ForcedErl(AliMipsSimulator):
     native_status = False
 
 
-MODES = (("native Status", AliMipsSimulator, False), ("forced ERL", ForcedErl, False),
-         ("exact mode", AliMipsSimulator, True))
+from engine_check import CPP, unicorn_only
+
+# The forced ERL is a mode of the Unicorn engine only (the C++ core keeps the
+# guest's Status itself).  A subclass is never redirected to the C++ engine, so
+# on it ForcedErl would quietly be a Unicorn simulator -- whose time is host CPU
+# time: on a slow host its tick came due before the program reached the
+# disable.  It is left out there.
+FORCED = unicorn_only("the forced ERL (native_status = False) is a Unicorn-engine mode")
+MODES = (("native Status", AliMipsSimulator, False),) + ((("forced ERL", ForcedErl, False),) if FORCED else ()) + \
+    (("exact mode", AliMipsSimulator, True),)
 
 
 def check(cond, msg):
@@ -76,10 +84,12 @@ def epc_log(sim):
 
 print("--- setup")
 sim = AliMipsSimulator(log_handler=lambda m: None)
-check(sim.force_erl is False and 0x40006000 not in sim._site_words and 0x40806000 in sim._site_words,
-      "native_status: no forced ERL; MTC0 Status is a CP0 site, MFC0 Status is not")
-forced = ForcedErl(log_handler=lambda m: None)
-check(forced.force_erl is True and 0x40006000 in forced._site_words, "native_status = False: the forced ERL")
+check(sim.force_erl is False and (CPP or (0x40006000 not in sim._site_words and 0x40806000 in sim._site_words)),
+      "native_status: no forced ERL; MTC0 Status is a CP0 site, MFC0 Status is not" +
+      (" (no CP0 sites on the C++ engine)" if CPP else ""))
+if FORCED:
+    forced = ForcedErl(log_handler=lambda m: None)
+    check(forced.force_erl is True and 0x40006000 in forced._site_words, "native_status = False: the forced ERL")
 
 print("--- kuseg")
 KUSEG = li(T1, 0x1000FF00) + [mtc0(T1, STATUS)] + \
@@ -101,8 +111,8 @@ print("--- mfc0")
 MFC0 = li(T1, 0x1000FF01) + [mtc0(T1, STATUS), mfc0(T2, STATUS)] + IDLE
 sim = run_program(AliMipsSimulator, False, MFC0)
 mfc0_at, mtc0_at = address_of(MFC0, 3), address_of(MFC0, 2)
-check(sim.mu.reg_read(sim.gpr_map[T2]) == 0x1000FF01 and mfc0_at not in sim._cp0_site_hooks
-      and mtc0_at in sim._cp0_site_hooks,
+check(sim.mu.reg_read(sim.gpr_map[T2]) == 0x1000FF01 and (CPP or (mfc0_at not in sim._cp0_site_hooks
+      and mtc0_at in sim._cp0_site_hooks)),
       f"MFC0 Status read 0x{sim.mu.reg_read(sim.gpr_map[T2]):08X} natively (no hook at 0x{mfc0_at:08X}); "
       f"the MTC0 has its hook")
 
@@ -131,7 +141,7 @@ for name, cls, exact in MODES:
 
 print("--- same")
 check(len(set(results.values())) == 1 and len(set(map(tuple, logs.values()))) == 1,
-      "the kuseg and interrupt programs give the same results in all three modes")
+      f"the kuseg and interrupt programs give the same results in all {len(MODES)} modes")
 
 print("--- disable")
 
@@ -189,7 +199,7 @@ for (name, cls, exact), (form, disable, enable) in [(m, f) for m in MODES for f 
     log = epc_log(sim)[:1]
     check(log == [enable_at + 4], f"{name}{form}: the tick that came due inside the disabled section is taken "
                                   f"after the enable's MTC0 (EPC {[hex(e) for e in log]}, 0x{enable_at + 4:08X} wanted)")
-    if not exact:
+    if not exact and not CPP:       # (which CP0 instructions are hooked: the Unicorn engine's)
         hooked = [a in sim._cp0_site_hooks for a in disables + (enable_at,)]
         want = [False, False, True] if cls is AliMipsSimulator else [True, True, True]
         lean = enable_at in sim._irq_enable_sites
@@ -200,10 +210,13 @@ sim = AliMipsSimulator(log_handler=lambda m: None)
 sim.skip_irq_disable = False
 program, disables, enable_at = disable_program(100_000, 500_000)
 load(sim, program, handler)
-check(all(a in sim._cp0_site_hooks for a in disables + (enable_at,)), "skip_irq_disable = False: all three hooked")
+if not CPP:
+    check(all(a in sim._cp0_site_hooks for a in disables + (enable_at,)), "skip_irq_disable = False: all three hooked")
 
 print("--- eret")
-for name, cls in (("native Status", AliMipsSimulator), ("forced ERL", ForcedErl)):
+if CPP:
+    print("  (an ERET Unicorn ran natively under an asynchronous stop: not applicable on the C++ engine)")
+for name, cls in (("native Status", AliMipsSimulator), ("forced ERL", ForcedErl)) if not CPP else ():
     sim = cls(log_handler=lambda m: None)
     sim.exact_count_threshold = 0
     sim.calibration_slices = 0

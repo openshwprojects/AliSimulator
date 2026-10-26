@@ -96,7 +96,7 @@ class PanelDecoder:
             self._offsets_seen.add(offset)
             if self.dump_enabled:
                 self.log(f"[GPIO] New reg offset 0x{offset:03X} val=0x{value:08X}")
-        c = changed
+        c = changed & 0xFFFFFFFF
         while c:
             low = c & -c
             bit = low.bit_length() - 1

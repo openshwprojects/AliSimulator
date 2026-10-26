@@ -148,25 +148,29 @@ check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x20C) & 1 and word(0x
       f"the end of the main CPU's slice runs the boot code too ({see.starts[n:]})")
 reset_see()
 
-# The handshake again, with an asynchronous stop that leaves the PC on the start store: the
-# simulator runs that store again on resume (a replay, simulator._dev_note), which must land
-# before the SEE runs -- run in the replay's handler, or at the end of the slice that stopped
-# on the store, the boot code's 0xB8000280 was overwritten with the start address by the store
-# landing after it
-handshake(0xA1000000)
-n = len(see.starts)
-key = (sim.mu.reg_read(UC_MIPS_REG_PC), sim.mu.reg_read(UC_MIPS_REG_SP))
-sim._dev_replays[key] = sim._dev_last[0:3]      # what the emu_start wrapper records at such a stop
-slice_end()
-check(len(see.starts) == n, "the slice that stopped on the start store ends: no start yet, the store runs again first")
-write(0x200, 0xA1000000)                        # the replay
-check(len(see.starts) == n and word(0x200) == 0xA1000000,
-      "a replayed start store lands again before the SEE runs (no start yet)")
-look()
-check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x200) == 0xB8000280,
-      f"the next look runs the boot code once, and its 0xB8000280 stays in 0x200 ({see.starts[n:]}, "
-      f"0x{word(0x200):08X})")
-reset_see()
+from engine_check import CPP
+if CPP:
+    print("  (a store replayed after an asynchronous stop: Unicorn behaviour, not applicable on the C++ engine)")
+else:
+    # The handshake again, with an asynchronous stop that leaves the PC on the start store: the
+    # simulator runs that store again on resume (a replay, simulator._dev_note), which must land
+    # before the SEE runs -- run in the replay's handler, or at the end of the slice that stopped
+    # on the store, the boot code's 0xB8000280 was overwritten with the start address by the store
+    # landing after it
+    handshake(0xA1000000)
+    n = len(see.starts)
+    key = (sim.mu.reg_read(UC_MIPS_REG_PC), sim.mu.reg_read(UC_MIPS_REG_SP))
+    sim._dev_replays[key] = sim._dev_last[0:3]      # what the emu_start wrapper records at such a stop
+    slice_end()
+    check(len(see.starts) == n, "the slice that stopped on the start store ends: no start yet, the store runs again first")
+    write(0x200, 0xA1000000)                        # the replay
+    check(len(see.starts) == n and word(0x200) == 0xA1000000,
+          "a replayed start store lands again before the SEE runs (no start yet)")
+    look()
+    check(see.starts[n:] == [(0xA1000000, "parked")] and word(0x200) == 0xB8000280,
+          f"the next look runs the boot code once, and its 0xB8000280 stays in 0x200 ({see.starts[n:]}, "
+          f"0x{word(0x200):08X})")
+    reset_see()
 
 # The doorbells, the M3602's layout: the SEE rings in its +0x36 byte, the main CPU acknowledges
 # with bit 3 / 2 of its own +0x37 byte (stores the simulator delivers like the main CPU's)

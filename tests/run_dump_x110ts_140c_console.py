@@ -180,7 +180,9 @@ def run():
             and "Wrong value!" in ac_abort and ac_abort.endswith(">"),
             repr((ac1, ac_abort)))
 
-    ch = h.send("CHANNELS\r", max_slices=16)
+    # A populated database pauses to scan between its TV, radio and transponder
+    # sections. Keep waiting through those gaps so the next command starts cleanly.
+    ch = h.send("CHANNELS\r", max_slices=64)
     h.check("linked-in CHANNELS prints the TV and Radio channel tables (CSV headers)",
             "TV Channels:\r\nNumber;LCN;Frequency" in ch and "Radio Channels:" in ch and ch.endswith(">"),
             repr(ch[:300]))
@@ -251,5 +253,4 @@ def run():
 
 if __name__ == "__main__":
     run_with_retry(run)
-
 

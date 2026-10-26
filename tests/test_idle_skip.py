@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from unicorn.mips_const import UC_MIPS_REG_S1
 from simulator import AliMipsSimulator
 from mips_asm import (IDLE, K0, address_of, lbu, li, load, tick_handler, timer_prologue)
+from engine_check import CPP
 
 PERIOD = 1_000_000                  # Count ticks: 10 ms at count_hz = 100 MHz
 fails = []
@@ -74,7 +75,10 @@ check(170 <= dn <= 230, f"{dn} ticks in {dv:.2f} s of emulation time (200 wanted
 check(ds / dv > 0.7, f"{ds:.2f} s of it skipped ({100 * ds / dv:.0f}%, more than 70% wanted)")
 check(abs(di - sim._insn_rate * dv) <= 0.15 * sim._insn_rate * dv,
       f"the instruction count moved with it: {di} for {sim._insn_rate * dv:.0f} at the estimated rate")
-check(loop in sim._idle_loops, f"the idle loop at 0x{loop:08X} is hooked ({[hex(a) for a in sim._idle_loops]})")
+if CPP:
+    print("  (the idle loop's code hook: not applicable on the C++ engine, which finds the loop as it runs it)")
+else:
+    check(loop in sim._idle_loops, f"the idle loop at 0x{loop:08X} is hooked ({[hex(a) for a in sim._idle_loops]})")
 
 print("--- off")
 sim, logs, loop = make(idle_skip=False)
@@ -117,7 +121,7 @@ n0, v0 = ticks(sim), sim._vtime()
 sim.busy_pending = 0.055                          # five and a half ticks' time
 during, steps = [], 0
 while sim.busy_pending > 1e-9 and steps < 200:
-    target = sim.instruction_count + 1000         # ~1 ms of it per step
+    target = sim.instruction_count + round(sim._insn_rate / 1000)   # 1 ms of it per step
     sim.run(max_instructions=target)
     during.append((ticks(sim), sim.instruction_count == target))
     steps += 1

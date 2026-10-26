@@ -435,6 +435,14 @@ class VideoOutput(_Device):
         self._line(landed)
         return (landed & mask) >> shift
 
+    def due(self):
+        """The emulation time the service is next needed at (its next field start
+        or half-field): an engine whose slices can outlast a field ends one there
+        (the C++ engine's; the Unicorn engine's end at every timer tick anyway)."""
+        if self._next is None:
+            return None
+        return self._next if self._mid is None else min(self._next, self._mid)
+
     def service(self):
         """Between emulation slices: a field every FIELD_S of emulation time, status bit 0 half-way."""
         now = self.sim._vtime()

@@ -1,24 +1,21 @@
 #pragma once
 
-#include "../emulator/emulator.h"
+#include "test_board.h"
 #include <cstdio>
 #include <cstring>
-
-#define GREEN "\033[92m"
-#define RED "\033[91m"
-#define RESET "\033[0m"
 
 // Comprehensive unit test for the C++ MIPS32 + FPU instruction interpreter:
 // - $zero invariance, R-type arithmetic/logical/shifts
 // - SPECIAL2 (MUL, MADD, MSUB, CLZ, CLO) and SPECIAL3 (EXT, INS, WSBH, SEB, SEH)
 // - Unaligned loads/stores (LWL, LWR, SWL, SWR) and LL/SC across KSEG0/KSEG1/kuseg
 // - Branch delay slots and branch-likely delay-slot nullification (BEQL, BNEL)
-// - COP0 Count / Status / EPC and COP1 single/double FPU operations
+// - COP0 Count / Status and COP1 / COP1X single-precision FPU operations
 inline bool TestInstructionSet() {
-  Emulator emu;
-  emu.setLogHandler([](const char *) {});
-  emu.setUartHandler([](char) {});
+  Board b;
+  if (!b.load("ali_sdk.bin")) return false;
 
+  // COP1 instructions require CU1; the old standalone interpreter omitted this check.
+  b.core.status |= 0x20000000u;
   const uint32_t base = 0x80010000;
   const uint32_t code[] = {
       // 1. $zero invariance: addiu $zero, $zero, 0x1234
@@ -82,7 +79,7 @@ inline bool TestInstructionSet() {
       0x44811000,
       0x46020102,
       (0x11 << 26) | (0x00 << 21) | (22 << 16) | (4 << 11),
-  // 8. CP0 Count read: mfc0 $s7(23), $9 (Count)
+      // 8. CP0 Count read: mfc0 $s7(23), $9 (Count)
       0x40174800,
       // 9. ROTR / ROTRV:
       //    rotr $t8(24), $t0(8), 8 -> 0x881234FF (opcode=0, rs=1, rt=8, rd=24, sa=8, fn=2)
@@ -128,11 +125,12 @@ inline bool TestInstructionSet() {
 
   const int n_insns = (int)(sizeof(code) / sizeof(code[0]));
   for (int i = 0; i < n_insns; i++) {
-    emu.writeMem32(base + 4 * i, code[i]);
+    b.core.store<uint32_t>(base + 4 * i, code[i]);
   }
   const uint32_t stop_addr = base + 4 * (n_insns - 1);
-  emu.setPC(base);
-  int steps = emu.runUntil(stop_addr, 200);
+  b.core.pc = base;
+  int steps = b.run_until(stop_addr, 200);
+  if (steps < 0 || b.core.pc != stop_addr) return false;
 
   struct RegCheck {
     const char *name;
@@ -161,49 +159,49 @@ inline bool TestInstructionSet() {
       {"$k0 MADD/MADDU/MSUB/MSUBU", 26, (uint32_t)(-245)},
       {"$k1 LB signed", 27, 0xFFFFFF88},
       {"$gp LH signed", 28, 0xFFFFFF88},
-      {"$sp EI/DI old status", 29, 0x10400001},
+      {"$sp EI/DI old status", 29, 0x30400001},
       {"$fp COP1X MADD.S+SWXC1+LWXC1 (12.0f)", 30, 0x41400000},
   };
 
   for (const auto &c : checks) {
-    uint32_t got = emu.getReg(c.reg);
+    uint32_t got = b.core.gpr[c.reg];
     if (got != c.expected) {
       printf("  " RED "FAIL: %s (r%d) = 0x%08X (expected 0x%08X)" RESET "\n",
              c.name, c.reg, got, c.expected);
       return false;
     }
   }
-  if (emu.readMem32(0x80100004) != 0x1234FF88) {
+  if (b.core.load<uint32_t>(0x80100004) != 0x1234FF88) {
     printf("  " RED "FAIL: SWL+SWR store at 0x80100004 = 0x%08X" RESET "\n",
-           emu.readMem32(0x80100004));
+           b.core.load<uint32_t>(0x80100004));
     return false;
   }
 
-  // Verify SPI Flash MMIO commands (JEDEC ID 0x9F, Status 0x05, Electronic ID 0xAB, Read 0x03)
-  emu.loadFile("../dumps/ali_sdk.bin");
-  uint32_t orig_rom0 = emu.readMem32(0xAFC00000);
-  if (emu.readMem32(0xBFC00000) != orig_rom0 ||
-      emu.readMem32(0x9FC00000) != orig_rom0 ||
-      emu.readMem32(0x1FC00000) != orig_rom0) {
+  // Verify SPI Flash MMIO commands (JEDEC ID 0x9F, Status 0x05, Read 0x03)
+
+  uint32_t orig_rom0 = b.core.load<uint32_t>(0xAFC00000);
+  if (b.core.load<uint32_t>(0xBFC00000) != orig_rom0 ||
+      b.core.load<uint32_t>(0x9FC00000) != orig_rom0 ||
+      b.core.load<uint32_t>(0x1FC00000) != orig_rom0) {
     printf("  " RED "FAIL: ROM mirror mismatch on 0xBFC00000/0x9FC00000/0x1FC00000" RESET "\n");
     return false;
   }
-  emu.writeMem32(0xB802E098, 0x00000D9F); // SF_INS = 0x9F (JEDEC ID), SF_FMT = 0x0D
-  if (emu.readMem32(0xAFC00000) != 0x001640EF) {
+  b.core.store<uint32_t>(0xB802E098, 0x00000D9F); // SF_INS = 0x9F (JEDEC ID), SF_FMT = 0x0D
+  if (b.core.load<uint32_t>(0xAFC00000) != 0x001640EF) {
     printf("  " RED "FAIL: SPI 0x9F JEDEC ID = 0x%08X" RESET "\n",
-           emu.readMem32(0xAFC00000));
+           b.core.load<uint32_t>(0xAFC00000));
     return false;
   }
-  emu.writeMem32(0xB802E098, 0x00000D05); // SF_INS = 0x05 (Read Status)
-  if (emu.readMem32(0xAFC00000) != 0x00000000) {
+  b.core.store<uint32_t>(0xB802E098, 0x00000D05); // SF_INS = 0x05 (Read Status)
+  if (b.core.load<uint32_t>(0xAFC00000) != 0x00000000) {
     printf("  " RED "FAIL: SPI 0x05 Status = 0x%08X" RESET "\n",
-           emu.readMem32(0xAFC00000));
+           b.core.load<uint32_t>(0xAFC00000));
     return false;
   }
-  emu.writeMem32(0xB802E098, 0x00000D03); // SF_INS = 0x03 (Read passthrough)
-  if (emu.readMem32(0xAFC00000) != orig_rom0) {
+  b.core.store<uint32_t>(0xB802E098, 0x00000D03); // SF_INS = 0x03 (Read passthrough)
+  if (b.core.load<uint32_t>(0xAFC00000) != orig_rom0) {
     printf("  " RED "FAIL: SPI 0x03 restore failed (0x%08X != 0x%08X)" RESET "\n",
-           emu.readMem32(0xAFC00000), orig_rom0);
+           b.core.load<uint32_t>(0xAFC00000), orig_rom0);
     return false;
   }
 

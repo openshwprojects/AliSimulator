@@ -387,6 +387,15 @@ def generate(results, meta, out_path):
         else:
             commit_html = "commit <code>%s</code>" % short
     run_html = ' · <a href="%s">CI run</a>' % html.escape(meta["run_url"]) if meta.get("run_url") else ""
+    # which engine ran the tests: named for the C++ one, and for both when the pages link to each other
+    engine = meta.get("engine")
+    engine_suffix = (" · C++ engine" if engine == "cpp" else
+                     " · Unicorn engine" if engine == "unicorn" and meta.get("links") else "")
+    # the other pages of the same run (run_all_tests.py --link): the other engine's report, the comparison
+    links_html = ""
+    if meta.get("links"):
+        links_html = '<nav class="links">%s</nav>' % "".join(
+            '<a href="%s">%s</a>' % (html.escape(href), html.escape(label)) for label, href in meta["links"])
     generated_ms = ""
     m = re.match(r"(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d) UTC", meta.get("generated_at", "") or "")
     if m:
@@ -399,14 +408,14 @@ def generate(results, meta, out_path):
     sections = (_featured_section(featured, bool(others)) if featured else "") + \
         (_others_section(others, "Other tests" if featured else "Tests") if others else "")
     page = _PAGE.format(
-        title=html.escape(TITLE),
+        title=html.escape(TITLE + engine_suffix),
         passed=passed, failed=failed, total=len(results),
         runtime=_fmt_compact(meta.get("total_time", 0)),
         images=n_img,
         dumps=len(dumps), dumps_list=html.escape(", ".join(dumps)),
         total_time=_fmt_total(meta.get("total_time", 0)),
         generated=html.escape(meta.get("generated_at", "")), generated_ms=generated_ms,
-        commit_html=commit_html, run_html=run_html,
+        commit_html=commit_html, run_html=run_html, links_html=links_html,
         note=html.escape(meta.get("note", "")),
         sections=sections,
         desc_lines=DESC_LINES,
@@ -447,6 +456,10 @@ _PAGE = """<!doctype html>
   .sub a {{ color:var(--accent); text-decoration:none; }}
   .ago {{ font-style:italic; opacity:.8; white-space:nowrap; }}
   .note {{ color:var(--muted); font-size:13px; margin:-10px 0 16px; }}
+  .links {{ display:flex; flex-wrap:wrap; gap:8px; margin:-8px 0 18px; }}
+  .links a {{ color:var(--accent); text-decoration:none; font-size:13px; font-weight:600;
+    border:1px solid var(--line); background:var(--card); border-radius:999px; padding:4px 12px; }}
+  .links a:hover {{ border-color:var(--accent); }}
   .summary {{ display:flex; gap:10px; flex-wrap:wrap; margin:0 0 6px; }}
   .stat {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:96px; }}
   .stat .n {{ font-size:24px; font-weight:700; }}
@@ -585,6 +598,7 @@ _PAGE = """<!doctype html>
   <header>
     <h1>{title}</h1>
     <div class="sub">{generated}<span class="ago" data-ts="{generated_ms}"></span> · total {total_time} · {commit_html}{run_html}</div>
+    {links_html}
   </header>
   <p class="note">{note}</p>
   <div class="summary">

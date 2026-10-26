@@ -41,7 +41,7 @@ def main():
     pixel_hash = hashlib.sha256(img.tobytes()).hexdigest()
     check(pixel_hash == EXPECTED_SHA256, f"raw pixel SHA256 matches baseline ({pixel_hash[:16]}...)")
 
-    colours = len(np.unique(img.reshape(-1, 3), axis=0))
+    colours = screen_regression.count_colours(img)
     check(colours >= 16, f"image contains rich UI elements ({colours} unique colours)")
 
     # Test image comparison logic

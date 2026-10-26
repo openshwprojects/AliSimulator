@@ -1,25 +1,15 @@
 #pragma once
 
-#include "../emulator/emulator.h"
+#include "test_board.h"
 #include <cstdio>
 #include <cstring>
 
-#define GREEN "\033[92m"
-#define RED "\033[91m"
-#define RESET "\033[0m"
-
-// Unit test for the C++ MIPS16e 16-bit & 32-bit instruction interpreter:
-// - MIPS32 JALX -> MIPS16e mode transition
-// - Extended SAVE / RESTORE (with caller aregs and xsregs)
-// - LI (8-bit) and Extended LI (16-bit)
-// - RRR (ADDU, SUBU), RR (AND, OR, XOR, NOT, NEG, SEB, ZEB, ZEH, MULT, MFLO)
-// - Shifts (SLL, SRL, SRA, and Extended SRL)
-// - Comparisons (CMPI, SLTI, SLTIU) & conditional branches (BTEQZ, BTNEZ)
-// - JRC $ra returning cleanly back to MIPS32 mode
+// MIPS32 JALX -> MIPS16e -> MIPS32 JRC, extended SAVE/RESTORE of
+// caller arguments and saved registers, extended LI, ADDU, CMPI, BTEQZ,
+// and ADDIU8. Register and stack assertions verify the complete round trip.
 inline bool TestMips16eExecution() {
-  Emulator emu;
-  emu.setLogHandler([](const char *) {});
-  emu.setUartHandler([](char) {});
+  Board b;
+  if (!b.load("ali_sdk.bin")) return false;
 
   // Set up initial stack pointer and caller registers in MIPS32 at 0x80010000:
   //   0x80010000: lui   $sp, 0x8002          (0x3C1D8002)
@@ -35,7 +25,7 @@ inline bool TestMips16eExecution() {
       0x74004040, 0x00000000, 0x2443000A, 0x00000000,
   };
   for (size_t i = 0; i < sizeof(mips32_code) / 4; i++) {
-    emu.writeMem32(0x80010000 + (uint32_t)(4 * i), mips32_code[i]);
+    b.core.store<uint32_t>(0x80010000 + (uint32_t)(4 * i), mips32_code[i]);
   }
 
   // MIPS16e routine at 0x80010100:
@@ -63,27 +53,27 @@ inline bool TestMips16eExecution() {
     uint32_t w = mips16_code[i];
     if (i + 1 < sizeof(mips16_code) / 2)
       w |= ((uint32_t)mips16_code[i + 1] << 16);
-    emu.writeMem32(0x80010100 + (uint32_t)(2 * i), w);
+    b.core.store<uint32_t>(0x80010100 + (uint32_t)(2 * i), w);
   }
 
-  emu.setPC(0x80010000);
-  int steps = emu.runUntil(0x8001001C, 100);
+  b.core.pc = 0x80010000;
+  int steps = b.run_until(0x8001001C, 100);
 
-  if (emu.getPC() != 0x8001001C || emu.getIsaMode() != false) {
+  if (b.core.pc != 0x8001001C || b.core.m16 != false) {
     printf("  " RED "FAIL: PC=0x%08X (ISA=%d), expected 0x8001001C (ISA=0)" RESET "\n",
-           emu.getPC(), emu.getIsaMode());
+           b.core.pc, b.core.m16);
     return false;
   }
-  if (emu.getReg(2) != 0x1250 || emu.getReg(3) != 0x125A) {
+  if (b.core.gpr[2] != 0x1250 || b.core.gpr[3] != 0x125A) {
     printf("  " RED "FAIL: $v0=0x%08X (exp 0x1250), $v1=0x%08X (exp 0x125A)" RESET "\n",
-           emu.getReg(2), emu.getReg(3));
+           b.core.gpr[2], b.core.gpr[3]);
     return false;
   }
-  if (emu.getReg(16) != 0x1111 || emu.getReg(17) != 0x2222 ||
-      emu.getReg(29) != 0x80020000 || emu.readMem32(0x80020000) != 0x42) {
+  if (b.core.gpr[16] != 0x1111 || b.core.gpr[17] != 0x2222 ||
+      b.core.gpr[29] != 0x80020000 || b.core.load<uint32_t>(0x80020000) != 0x42) {
     printf("  " RED "FAIL: SAVE/RESTORE state mismatch ($s0=0x%X, $s1=0x%X, $sp=0x%X, [sp]=0x%X)" RESET "\n",
-           emu.getReg(16), emu.getReg(17), emu.getReg(29),
-           emu.readMem32(0x80020000));
+           b.core.gpr[16], b.core.gpr[17], b.core.gpr[29],
+           b.core.load<uint32_t>(0x80020000));
     return false;
   }
 

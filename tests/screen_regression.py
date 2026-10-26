@@ -48,6 +48,13 @@ EXPECTED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expecte
 MAX_FRAMES = 6          # distinct intermediate frames attached to the report
 
 
+def count_colours(rgb):
+    """The number of distinct colours in an RGB image: its pixels packed into
+    one word each (np.unique over 3-byte rows sorts ~70x slower)."""
+    px = rgb.reshape(-1, 3).astype(np.uint32)
+    return len(np.unique((px[:, 0] << 16) | (px[:, 1] << 8) | px[:, 2]))
+
+
 def compare(rgb, want):
     """(differing pixels, percent, max channel difference, mask)."""
     if rgb.shape != want.shape:
@@ -194,7 +201,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         if drawn_t is None and (sim.ge_ops >= min_ge_ops or not ge) and fw() - last_probe >= probe_s:
             last_probe = fw()
             rgb = sim.capture_screen()
-            colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+            colours = count_colours(rgb)
             if colours >= min_colours:
                 drawn_t, drawn_fw = time.time(), fw()
                 print(f"[{drawn_t - start:6.1f}s] {sim.ge_ops} GE commands: the OSD is visible "
@@ -216,7 +223,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
 
     out = report_artifacts.path(f"{name}_screen.png")
     rgb = sim.capture_screen(out)
-    colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+    colours = count_colours(rgb)
     # a screen that is blank at this moment (a banner that has just cleared, a
     # channel change in progress) is given up to a minute to come back
     def advance(until):
@@ -243,7 +250,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
             break
         run_for(5)
         rgb = sim.capture_screen(out)
-        colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+        colours = count_colours(rgb)
         if colours >= min_colours:
             print(f"[{time.time() - start:6.1f}s] the screen was blank at the capture: captured again ({colours} colours)")
     unsupported = dict(sim.ge.unsupported) if sim.ge else {}

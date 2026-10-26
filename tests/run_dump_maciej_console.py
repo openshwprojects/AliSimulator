@@ -9,12 +9,106 @@ Exercises all 20 commands in the firmware's command dispatch table at 0x806764A4
   [2] READ       [7] MAINCODE   [12] SENDMSG    [17] HELP
   [3] MAGICKEY   [8] CHANNELS   [13] HMSG       [18] EXIT
   [4] PALANTIR   [9] VERSION    [14] TIME       [19] REBOOT
+
+Also checks the console through the running firmware's own task: its clock
+advances, EXIT stops command handling, and REBOOT reaches the application and
+reactivates the console. These checks leave the RTOS and timer running.
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from console_regression import ConsoleHarness, run_with_retry
+from simulator import AliMipsSimulator
+
+
+def check_runtime_lifecycle(check):
+    """Drive UART through the firmware's scheduler, including a complete reboot."""
+    print("--- console lifecycle through the firmware's own task")
+    sim = AliMipsSimulator(log_handler=lambda m: None)
+    sim.lzma_insns_per_byte = 0
+    sim.setSPIDump(False)
+    sim.setI2CDump(False)
+    out = []
+    sim.setUartHandler(out.append)
+    sim.loadFile("dump_maciej.bin")
+
+    def text(start=0):
+        return "".join(out[start:])
+
+    def advance(predicate, seconds, step=0.02):
+        end = sim._vtime() + seconds
+        while sim._vtime() < end:
+            sim.run(max_instructions=sim.instruction_count + 10_000_000,
+                    max_vtime=min(end, sim._vtime() + step))
+            if predicate():
+                return True
+        return predicate()
+
+    def idle(seconds):
+        advance(lambda: False, seconds, 0.25)
+
+    def send(data):
+        sim.setUartReceiveData(data, delay_instructions=0)
+
+    def activate(seconds):
+        mark = len(out)
+        send(b"startconsole\r")
+        return advance(lambda: "CONSOLE ACTIVATED" in text(mark)
+                       and text().rstrip().endswith(">"), seconds)
+
+    up = advance(lambda: "Application version" in text(), 60, 0.5)
+    check("normal boot reaches the application", up, text()[-300:])
+    if not up:
+        return
+    active = activate(40)
+    check("the firmware task answers startconsole with its timer running", active, text()[-300:])
+    if not active:
+        return
+    idle(0.5)
+
+    def read_time():
+        mark = len(out)
+        send(b"TIME\r")
+        advance(lambda: "If set new time?" in text(mark), 3)
+        idle(0.2)
+        send(b"n")
+        advance(lambda: text(mark).rstrip().endswith(">"), 5)
+        return re.search(r"TIME: (\d\d)-(\d\d)-(\d\d)", text(mark))
+
+    first = read_time()
+    idle(3)
+    second = read_time()
+    def seconds(match):
+        return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + int(match.group(3))
+    elapsed = (seconds(second) - seconds(first)) % 86400 if first and second else None
+    check("TIME advances with three seconds of running firmware", elapsed is not None and 2 <= elapsed <= 6,
+          f"elapsed={elapsed}")
+
+    mark = len(out)
+    send(b"EXIT\r")
+    left = advance(lambda: "CONSOLE DEACTIVATED" in text(mark), 5)
+    check("the firmware task processes EXIT", left, text(mark))
+    idle(1)
+    mark = len(out)
+    send(b"HELP\r")
+    idle(2)
+    check("HELP after EXIT receives no command listing", "DELETE TOUCH" not in text(mark), text(mark))
+    active = activate(5)
+    check("startconsole reactivates the firmware task after EXIT", active, text()[-300:])
+    if not active:
+        return
+    idle(0.5)
+
+    mark = len(out)
+    send(b"REBOOT\r")
+    booted = advance(lambda: "Application version" in text(mark), 60, 0.5)
+    check("REBOOT runs the bootloader and reaches the application again",
+          "Rebooting..." in text(mark) and "bl_verify_sw" in text(mark) and booted,
+          text(mark)[-300:])
+    if booted:
+        check("the console activates again after a complete reboot", activate(40), text()[-300:])
 
 
 def run():
@@ -233,6 +327,7 @@ def run():
     reb = h.send("REBOOT\r", stop_on=("Rebooting...\r\n",))
     h.check("REBOOT prints 'Rebooting...'", "Rebooting..." in reb, repr(reb))
 
+    check_runtime_lifecycle(h.check)
     h.finish()
 
 

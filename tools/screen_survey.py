@@ -74,7 +74,8 @@ def survey_one(path, budget_m, out_dir):
             if sim.instruction_count >= next_probe or sim.instruction_count <= before or (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
                 next_probe = sim.instruction_count + PROBE_EVERY
                 rgb = sim.capture_screen()
-                colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+                px = rgb.reshape(-1, 3).astype(np.uint32)     # (one word per pixel: unique sorts it fast)
+                colours = len(np.unique((px[:, 0] << 16) | (px[:, 1] << 8) | px[:, 2]))
                 if colours >= MIN_COLOURS:
                     result.update(drawn_at=sim.instruction_count, colours=colours)
                     if out_dir:

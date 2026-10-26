@@ -55,6 +55,7 @@ import struct
 import time
 
 from simulator import AliMipsSimulator
+from engine_check import CPP, unicorn_only
 from unicorn.mips_const import (UC_MIPS_REG_PC, UC_MIPS_REG_S0, UC_MIPS_REG_S1, UC_MIPS_REG_S2,
                                 UC_MIPS_REG_S4, UC_MIPS_REG_S6, UC_MIPS_REG_S7, UC_MIPS_REG_V0)
 
@@ -242,7 +243,8 @@ def scenario_mips16(mode, fails):
     e = loop_epcs(sim, mode)
     check(len(e) >= 3, f"interrupts taken in the MIPS16 loop ({len(e)})", fails)
     # an interrupt is never injected before the MIPS16 branch at L+2 in exact mode
-    allowed = (M16_LOOP,) if mode == 'exact' else (M16_LOOP, M16_LOOP + 2)
+    # (on the C++ core there too: it takes an interrupt at any instruction boundary)
+    allowed = (M16_LOOP,) if mode == 'exact' and not CPP else (M16_LOOP, M16_LOOP + 2)
     check(e and all(x & 1 and (x & ~1) in allowed for x in e),
           f"EPC carries the MIPS16 bit ({sorted(set(hex(x) for x in e))})", fails)
     in_loop = lambda: sim.mu.reg_read(UC_MIPS_REG_PC) in (M16_LOOP, M16_LOOP + 2)
@@ -341,7 +343,9 @@ def scenario_step_noirq(mode, fails):
 def scenario_breakpoint(mode, fails):
     # a tick is due at (almost) every resume: 16 Count ticks = 8 instructions
     # (exact), 2000 ticks = 20 us (fast)
-    p = 16 if mode == 'exact' else 2000
+    # (the C++ core's Count follows the instructions only, also between resumes: the
+    # exact mode's period makes ticks due there)
+    p = 16 if mode == 'exact' or CPP else 2000
     main = prologue(p, p, 0x10008001) + idle_loop()
     sim = make_sim(mode, main, handler())
     loop = MAIN + 4 * PROLOGUE_LEN
@@ -380,6 +384,11 @@ def sb(rt, off, base): return 0xA0000000 | base << 21 | rt << 16 | (off & 0xFFFF
 RX_BUF = 0x80300000
 
 
+# (each run() of the replay scenarios: on the C++ core 2 M instruction_count units are 2 s of
+# emulated time, a UART store every few instructions -- hours of Python handler calls)
+REPLAY_STEP = 20_000 if CPP else 2_000_000
+
+
 def replay_sim(kind, body):
     """Timed fast mode with the firmware's tick (337500 Count ticks = 3.4 ms):
     hundreds of asynchronous slice stops per second, many inside device hooks."""
@@ -405,7 +414,7 @@ def scenario_replay_tx(kind, fails, mid_block=False, sim_hook=None):
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
     while time.time() - t0 < 2.0:
-        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+        sim.run(max_instructions=sim.instruction_count + REPLAY_STEP)
     bad = sum(1 for a, b_ in zip(out, out[1:]) if (b_ - a) & 0xFF != 1)
     check(len(out) > 1000 and bad == 0 and ticks(sim) >= 5,
           f"[{kind}{', store mid-block' if mid_block else ''}] UART TX under async stops: {len(out)} chars, "
@@ -435,7 +444,7 @@ def scenario_replay_tx_pairs(kind, fails, sim_hook=None):
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
     while time.time() - t0 < 2.0 or (visits[0] < 100 and time.time() - t0 < 10.0):
-        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+        sim.run(max_instructions=sim.instruction_count + REPLAY_STEP)
     n = len(out) // 2 * 2
     bad = sum(1 for i in range(0, n, 2) if out[i] != out[i + 1] or (i and (out[i] - out[i - 1]) & 0xFF != 1))
     # (throughput depends on the stopper and the host load: 'unicorn' restarts
@@ -461,7 +470,7 @@ def scenario_replay_tx_m16(kind, fails, extended, sim_hook=None):
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
     while time.time() - t0 < 2.0:
-        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+        sim.run(max_instructions=sim.instruction_count + REPLAY_STEP)
     bad = sum(1 for a, b_ in zip(out, out[1:]) if (b_ - a) & 0xFF != 1)
     check(len(out) > 1000 and bad == 0 and ticks(sim) >= 5,
           f"[{kind}, MIPS16{' EXTEND' if extended else ''} store mid-block] UART TX under async stops: "
@@ -479,7 +488,7 @@ def scenario_replay_rx(kind, fails):
     sim.log_callback = lambda m: None
     t0 = time.time()
     while time.time() - t0 < 10.0 and sim.mu.reg_read(UC_MIPS_REG_S6) - RX_BUF < len(data):
-        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+        sim.run(max_instructions=sim.instruction_count + REPLAY_STEP)
     n = sim.mu.reg_read(UC_MIPS_REG_S6) - RX_BUF
     got = bytes(sim.mu.mem_read(RX_BUF, max(0, min(n, len(data)))))
     check(got == data, f"[{kind}] UART RX under async stops: {n}/{len(data)} bytes copied, "
@@ -536,7 +545,7 @@ def scenario_shared_putc(kind, fails):
     sim.setUartHandler(lambda c: out.append(ord(c)))
     t0 = time.time()
     while time.time() - t0 < 2.0:
-        sim.run(max_instructions=sim.instruction_count + 2_000_000)
+        sim.run(max_instructions=sim.instruction_count + REPLAY_STEP)
     main_chars = [c for c in out if c < 0x80]
     bad = sum(1 for a, b_ in zip(main_chars, main_chars[1:]) if (b_ - a) & 0x7F != 1)
     isr_chars = len(out) - len(main_chars)
@@ -585,7 +594,8 @@ def scenario_ds_warning(fails):
         sim.run(max_instructions=200)
         if warned:
             reports = [m for m in logs if 'delay slot' in m and 'DSLOT' in m]
-            check(len(reports) == 1 and sim.mu.reg_read(UC_MIPS_REG_S0) == 1,
+            # (the report is the Unicorn engine's: its workaround for Unicorn's delay-slot bug)
+            check((CPP or len(reports) == 1) and sim.mu.reg_read(UC_MIPS_REG_S0) == 1,
                   f"{what}: a store in a delay slot returns once (return-site instruction ran "
                   f"{sim.mu.reg_read(UC_MIPS_REG_S0)}x) and is reported once ({reports[:1]})", fails)
         else:
@@ -600,6 +610,8 @@ def scenario_native_eret(fails):
     # Fast mode: one ERET whose hook is skipped (as Unicorn does under an
     # asynchronous stop) runs natively and jumps to ErrorEPC = 0; the boundary
     # repair must redo it and the program must go on ticking.
+    if not unicorn_only("an ERET Unicorn runs natively under an asynchronous stop"):
+        return
     p = period('timed')
     main = prologue(p, p, 0x10008001) + idle_loop()
     sim = make_sim('timed', main, handler())
@@ -659,7 +671,7 @@ def main():
     print("\n--- exact: UART RX delay with timer ticks ---")
     scenario_uart_delay(fails)
     print("\n--- timed slices: device accesses replayed after asynchronous stops ---")
-    for kind in ('auto', 'unicorn'):
+    for kind in ('auto', 'unicorn') if not CPP else ('auto',):     # (the slice stoppers: Unicorn's)
         scenario_replay_tx(kind, fails)
         scenario_replay_tx(kind, fails, mid_block=True)
         scenario_replay_tx_m16(kind, fails, extended=False)

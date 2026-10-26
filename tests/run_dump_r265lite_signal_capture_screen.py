@@ -39,6 +39,10 @@ screen_regression.run(
     title="Opticum Blue R265 Lite with a signal",
     signal=True,
     mux=True,
+    # The scan can pause on a static 1% page. Wait for its completion image,
+    # not just quiet GE activity; the M3821's firmware clock runs at one third
+    # of modeled time, so 300 seconds allow about 100 seconds for the search.
+    nav_settle_s=300,
     navigation=[("RIGHT", 1000), ("OK", 100000), ("OK", 10000),
                 ("DOWN", 1000), ("DOWN", 1000), ("DOWN", 1000), ("DOWN", 1000),   # to "Szukaj"
                 ("OK", 50000)],                                                   # the search: one channel

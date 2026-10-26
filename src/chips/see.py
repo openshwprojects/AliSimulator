@@ -283,13 +283,25 @@ class SeeStart:
         # bootloader at ~30 M instructions -- started when the application next
         # read 0x200, at ~50 M, just before its first remote call, which found
         # none of the SEE's server tasks ready yet: SDBBP in its mailbox_hsr.)
-        sim._mmio_on('r', self._access, START, FLAG + 3)
-        sim._mmio_on('r', self._access, CONTROL, CONTROL + 3)
-        sim._mmio_on('w', self._access, FLAG, FLAG + 3)
+        self._looking = False
+        self._watch(True)
         sim.slice_services.append(self._start_at_slice_end)
         self.doorbells = Doorbells()    # (its taken: the messages each CPU took from the other)
         self.trng = Trng()
         self._wire(sim)
+
+    def _watch(self, on):
+        """The main CPU's looks at the SEE's registers (its reads of 0x200..0x20F and
+        0x220, its stores to the flag) start a pending start: watched while the SEE
+        is in reset or parked.  While the SEE runs its program those registers are
+        the mailboxes the main CPU polls, and no start can be pending."""
+        if on == self._looking:
+            return
+        self._looking = on
+        change = self.sim._mmio_on if on else self.sim._mmio_off
+        change('r', self._access, START, FLAG + 3)
+        change('r', self._access, CONTROL, CONTROL + 3)
+        change('w', self._access, FLAG, FLAG + 3)
 
     def _wire(self, core):
         """The device models both cores' stores reach: the doorbells and the
@@ -305,6 +317,7 @@ class SeeStart:
     def reset(self):
         """The SEE back in reset (the simulator loads an image again)."""
         self.state, self.pending = "reset", None
+        self._watch(True)
         self._stop_core()
         for counts in self.doorbells.taken.values():
             counts[:] = [0, 0]
@@ -366,6 +379,7 @@ class SeeStart:
         if not new & RUN_BIT:
             self.state = "reset"
             self._stop_core()
+            self._watch(True)
         elif not old & RUN_BIT:
             target = self._word(START)
             if target == PARK:
@@ -400,6 +414,7 @@ class SeeStart:
             what = "not run (the SEE's own program)"
             told = "not boot code that parks the SEE -- the SEE's program is not run"
         self.state = "parked" if what == "parked" else "running"
+        self._watch(self.state != "running" or self.core is None)
         self.starts.append((address, what))
         sim.log(f"[SEE] started at 0x{address:08X}: {told}")
 
@@ -408,7 +423,11 @@ class SeeStart:
         it reaches the park loop: what happened."""
         sim = self.sim
         if self.cpu is None:
-            cpu = sim._new_mips_uc()
+            if sim.engine == "cpp":             # (the C++ core: its Unicorn-like API)
+                import cpp_core
+                cpu = cpp_core.CppUc()
+            else:
+                cpu = sim._new_mips_uc()
             cpu.mem_map_ptr(0, sim.ram_size, UC_PROT_ALL, ctypes.addressof(sim.ram_buffer))
             cpu.mem_map_ptr(MMIO_PHYS, ctypes.sizeof(sim.mmio_buffer), UC_PROT_ALL, ctypes.addressof(sim.mmio_buffer))
             self.cpu = cpu

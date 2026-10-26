@@ -29,6 +29,7 @@ import simulator
 from simulator import AliMipsSimulator
 from mips_asm import (COUNT, EPC, ERET, IDLE, MAIN, NOP, STATUS, T0, T1, T2, T3, T4, T6, addiu, b, bne, li, load,
                       mfc0, mtc0, tick_handler, timer_prologue)
+from engine_check import CPP, unicorn_only
 
 fails = []
 
@@ -44,6 +45,7 @@ def check(cond, msg):
 
 
 print("--- scan")
+SITES = unicorn_only("no CP0 instruction sites: the C++ core executes CP0 instructions itself")
 rng = random.Random(1015)
 data = bytearray(rng.getrandbits(8) for _ in range(0x10000))
 for i in range(0, len(data), 4):                   # no accidental CP0 words in the noise
@@ -61,7 +63,7 @@ for w in planted + others:
         mis = rng.randrange(0, len(data) // 4 - 2) * 4 + rng.choice((1, 2, 3))
         if not any(a in aligned for a in range(mis - 3, mis + 4)):
             data[mis:mis + 4] = struct.pack("<I", w)               # misaligned: never a site
-for cls in (AliMipsSimulator, ForcedErl):
+for cls in ((AliMipsSimulator, ForcedErl) if SITES else ()):
     sim = cls(log_handler=lambda m: None)
     every = struct.unpack(f"<{len(data) // 4}I", bytes(data))                    # (brute force: every aligned word)
     want = {0x1000 + 4 * i for i, w in enumerate(every) if w == ERET or (w & 0xFFE0FFFF) in sim._site_words}
@@ -80,44 +82,49 @@ for cls in (AliMipsSimulator, ForcedErl):
           f"{name}: numpy {len(with_np)} / regex {len(with_re)} sites, {len(want)} wanted "
           f"(MFC0 Status {'among them' if status_sites else 'not a site'})")
 
+def vector_periodic():
+    sim = AliMipsSimulator(log_handler=lambda m: None)
+    sim.exact_count_threshold = 0
+    sim.calibration_slices = 0
+    sim.rescan_interval = 300_000
+    load(sim, timer_prologue(0x100000, 0x100000, 0x10008001) + IDLE, tick_handler())
+    page_scans = [0]
+    orig = sim._rescan_cp0_sites
+
+
+    def counting(ranges=None):
+        if ranges == [(0x80000000, 0x1000)]:
+            page_scans[0] += 1
+        return orig(ranges)
+
+
+    sim._rescan_cp0_sites = counting
+
+
+    def run_ticks(n):
+        target = sim.mu.reg_read(UC_MIPS_REG_S1) + n
+        for _ in range(200):
+            sim.run(max_instructions=sim.instruction_count + 500_000)
+            if sim.mu.reg_read(UC_MIPS_REG_S1) >= target:
+                return
+
+
+    run_ticks(10)
+    first = page_scans[0]
+    sim.mu.mem_write(0x80000800, struct.pack("<I", 0x00000021))       # (addu zero, zero, zero: not run)
+    run_ticks(3)
+    check(first == 1 and page_scans[0] == 2,
+          f"the vector page is scanned once over 10 ticks ({first}), again after it changed ({page_scans[0]})")
+    late = MAIN + 0x800
+    sim.mu.mem_write(late, struct.pack("<I", mfc0(T6, COUNT)))
+    sim.idle_skip = False                    # (the rescan interval counts the instructions run, not skipped time)
+    run_ticks(40)
+    check(late in sim._cp0_site_hooks, f"an MFC0 Count written later at 0x{late:08X} is hooked by the periodic rescan")
+
+
 print("--- vector / periodic")
-sim = AliMipsSimulator(log_handler=lambda m: None)
-sim.exact_count_threshold = 0
-sim.calibration_slices = 0
-sim.rescan_interval = 300_000
-load(sim, timer_prologue(0x100000, 0x100000, 0x10008001) + IDLE, tick_handler())
-page_scans = [0]
-orig = sim._rescan_cp0_sites
-
-
-def counting(ranges=None):
-    if ranges == [(0x80000000, 0x1000)]:
-        page_scans[0] += 1
-    return orig(ranges)
-
-
-sim._rescan_cp0_sites = counting
-
-
-def run_ticks(n):
-    target = sim.mu.reg_read(UC_MIPS_REG_S1) + n
-    for _ in range(200):
-        sim.run(max_instructions=sim.instruction_count + 500_000)
-        if sim.mu.reg_read(UC_MIPS_REG_S1) >= target:
-            return
-
-
-run_ticks(10)
-first = page_scans[0]
-sim.mu.mem_write(0x80000800, struct.pack("<I", 0x00000021))       # (addu zero, zero, zero: not run)
-run_ticks(3)
-check(first == 1 and page_scans[0] == 2,
-      f"the vector page is scanned once over 10 ticks ({first}), again after it changed ({page_scans[0]})")
-late = MAIN + 0x800
-sim.mu.mem_write(late, struct.pack("<I", mfc0(T6, COUNT)))
-sim.idle_skip = False                    # (the rescan interval counts the instructions run, not skipped time)
-run_ticks(40)
-check(late in sim._cp0_site_hooks, f"an MFC0 Count written later at 0x{late:08X} is hooked by the periodic rescan")
+if SITES:
+    vector_periodic()
 
 print("--- flash")
 sim = AliMipsSimulator(log_handler=lambda m: None)
@@ -134,7 +141,7 @@ for _ in range(20):
     if sim.mu.reg_read(UC_MIPS_REG_PC) == end:
         break
 t0, t1, t4 = (sim.mu.reg_read(sim.gpr_map[r]) for r in (T0, T1, T4))
-check(0xBFC00000 in sim._cp0_site_hooks and t1 > t0 and t4 == 0x80123456,
+check((CPP or 0xBFC00000 in sim._cp0_site_hooks) and t1 > t0 and t4 == 0x80123456,
       f"from the flash window: Count 0x{t0:08X} -> 0x{t1:08X}, EPC round-trips 0x{t4:08X}")
 
 print("--- registers")
@@ -144,19 +151,23 @@ sim._reg_write(UC_MIPS_REG_T1, 0x01234567)
 sim.mu.reg_write(sim.gpr_map[T2], 0xFFFFFFFF)
 check((sim.mu.reg_read(UC_MIPS_REG_T0), sim._reg_read(UC_MIPS_REG_T1), sim._reg_read(sim.gpr_map[T2])) ==
       (0x89ABCDEF, 0x01234567, 0xFFFFFFFF), "the direct register writes and reads")
-check(sim._live_env and sim._env_u32 is not None, "CPUMIPSState direct register array (_env_u32) is calibrated")
 for r in range(1, 32):
     sim._reg_write(sim.gpr_map[r], (0xA5000000 | (r * 0x10101)) & 0xFFFFFFFF)
-snap = struct.unpack("<32I", sim._gpr_snapshot())
-check(all(sim.mu.reg_read(sim.gpr_map[r]) == snap[r] == sim._env_u32[r] == ((0xA5000000 | (r * 0x10101)) & 0xFFFFFFFF)
+check(all(sim.mu.reg_read(sim.gpr_map[r]) == sim._reg_read(sim.gpr_map[r]) ==
+          ((0xA5000000 | (r * 0x10101)) & 0xFFFFFFFF)
           for r in range(1, 32)),
-      "all 31 GPRs ($1..$31) match across _reg_write, mu.reg_read, _env_u32, and _gpr_snapshot")
+      "all 31 GPRs ($1..$31) match across _reg_write, _reg_read, and mu.reg_read")
+if unicorn_only("CPUMIPSState direct register arrays and snapshots are Unicorn internals"):
+    check(sim._live_env and sim._env_u32 is not None, "CPUMIPSState direct register array (_env_u32) is calibrated")
+    snap = struct.unpack("<32I", sim._gpr_snapshot())
+    check(all(sim.mu.reg_read(sim.gpr_map[r]) == snap[r] == sim._env_u32[r] for r in range(1, 32)),
+          "all 31 GPRs ($1..$31) match _env_u32 and _gpr_snapshot")
 sim._reg_write(sim.gpr_map[0], 0xDEADBEEF)
-check(sim._reg_read(sim.gpr_map[0]) == 0 and sim.mu.reg_read(sim.gpr_map[0]) == 0 and sim._env_u32[0] == 0,
+check(sim._reg_read(sim.gpr_map[0]) == 0 and sim.mu.reg_read(sim.gpr_map[0]) == 0 and (CPP or sim._env_u32[0] == 0),
       "$zero ($0) stays 0 after _reg_write")
 sim._write_pc(0x80234568)
-check(sim.mu.reg_read(UC_MIPS_REG_PC) == 0x80234568 and sim._env_u32[32] == 0x80234568,
-      "_write_pc updates Unicorn PC and _env_u32[32]")
+check(sim.mu.reg_read(UC_MIPS_REG_PC) == 0x80234568 and (CPP or sim._env_u32[32] == 0x80234568),
+      "_write_pc updates the PC" + (" and _env_u32[32]" if not CPP else ""))
 
 # Fast-mode CP0 site round-trips for Compare (11), Cause (13), Status (12), EBase (15,1), and MFC0 $zero, Count
 sim = AliMipsSimulator(log_handler=lambda m: None)
@@ -177,52 +188,53 @@ check(sim.mu.reg_read(UC_MIPS_REG_PC) == done_pc
       and (sim._reg_read(sim.gpr_map[T2]) & 0x300) == 0x300
       and (sim._reg_read(sim.gpr_map[T3]) & 0xFFFFF000) == 0x80004000
       and sim._reg_read(sim.gpr_map[0]) == 0,
-      "CP0 site hooks round-trip Compare, Cause IP0/IP1, EBase, and keep $zero == 0 on MFC0 $zero, Count")
+      "CP0 instructions round-trip Compare, Cause IP0/IP1, EBase, and keep $zero == 0 on MFC0 $zero, Count")
 
 print("--- long blocks")
-sim = AliMipsSimulator(log_handler=lambda m: None)
-chunk = bytearray(0x4000)
-insn = struct.pack("<I", addiu(T0, T0, 1))
-jr_ra = struct.pack("<I", 0x03E00008)
-# 1) Block at offset 0..350*4 followed by jr ra
-chunk[0:350 * 4] = insn * 350
-chunk[350 * 4:351 * 4] = jr_ra
-# 2) Interior block at 1000*4..1320*4 bounded by jr ra
-chunk[999 * 4:1000 * 4] = jr_ra
-chunk[1000 * 4:1320 * 4] = insn * 320
-chunk[1320 * 4:1321 * 4] = jr_ra
-# 3) Block at the end of the chunk (last 310 words) preceded by jr ra
-end_w = len(chunk) // 4
-chunk[(end_w - 311) * 4:(end_w - 310) * 4] = jr_ra
-chunk[(end_w - 310) * 4:end_w * 4] = insn * 310
-sim._find_long_blocks(bytes(chunk), 0x400000, (0x80000000,))
-check((0x80400000, 0x80400000 + 350 * 4 - 1) in sim._long_block_hooks,
-      "straight-line block starting at chunk offset 0 is hooked")
-check((0x80400000 + 1000 * 4, 0x80400000 + 1320 * 4 - 1) in sim._long_block_hooks,
-      "interior straight-line block is hooked")
-check((0x80400000 + (end_w - 310) * 4, 0x80400000 + end_w * 4 - 1) in sim._long_block_hooks,
-      "straight-line block ending at chunk boundary is hooked")
+if unicorn_only("long-block hooks bound Unicorn translation blocks during asynchronous stops"):
+    sim = AliMipsSimulator(log_handler=lambda m: None)
+    chunk = bytearray(0x4000)
+    insn = struct.pack("<I", addiu(T0, T0, 1))
+    jr_ra = struct.pack("<I", 0x03E00008)
+    # 1) Block at offset 0..350*4 followed by jr ra
+    chunk[0:350 * 4] = insn * 350
+    chunk[350 * 4:351 * 4] = jr_ra
+    # 2) Interior block at 1000*4..1320*4 bounded by jr ra
+    chunk[999 * 4:1000 * 4] = jr_ra
+    chunk[1000 * 4:1320 * 4] = insn * 320
+    chunk[1320 * 4:1321 * 4] = jr_ra
+    # 3) Block at the end of the chunk (last 310 words) preceded by jr ra
+    end_w = len(chunk) // 4
+    chunk[(end_w - 311) * 4:(end_w - 310) * 4] = jr_ra
+    chunk[(end_w - 310) * 4:end_w * 4] = insn * 310
+    sim._find_long_blocks(bytes(chunk), 0x400000, (0x80000000,))
+    check((0x80400000, 0x80400000 + 350 * 4 - 1) in sim._long_block_hooks,
+          "straight-line block starting at chunk offset 0 is hooked")
+    check((0x80400000 + 1000 * 4, 0x80400000 + 1320 * 4 - 1) in sim._long_block_hooks,
+          "interior straight-line block is hooked")
+    check((0x80400000 + (end_w - 310) * 4, 0x80400000 + end_w * 4 - 1) in sim._long_block_hooks,
+          "straight-line block ending at chunk boundary is hooked")
 
-# Verify _LONG_BLK_BRK_MASK candidate probing and full scan reject blocks broken at any offset
-breakers = [
-    ("BEQ", bne(T0, T1, 4)),
-    ("JAL", 0x0C100000),
-    ("JR", 0x03E00008),
-    ("ERET", ERET),
-    ("zero word", 0x00000000),
-    ("0xFFFFFFFF", 0xFFFFFFFF),
-]
-probe_offsets = (75, 1, 2, 3, 37, 112, 200)
-rejected_all = True
-for idx, (bname, bword) in enumerate(breakers):
-    off = probe_offsets[idx % len(probe_offsets)]
-    sim_b = AliMipsSimulator(log_handler=lambda m: None)
-    buf = bytearray(insn * 300)
-    struct.pack_into("<I", buf, off * 4, bword)
-    sim_b._find_long_blocks(bytes(buf), 0x500000, (0x80000000,))
-    if sim_b._long_block_hooks:
-        rejected_all = False
-check(rejected_all, "300-word runs broken at probe/interior offsets by branches, jumps, ERET, 0, or 0xFFFFFFFF are not hooked")
+    # Verify _LONG_BLK_BRK_MASK candidate probing and full scan reject blocks broken at any offset
+    breakers = [
+        ("BEQ", bne(T0, T1, 4)),
+        ("JAL", 0x0C100000),
+        ("JR", 0x03E00008),
+        ("ERET", ERET),
+        ("zero word", 0x00000000),
+        ("0xFFFFFFFF", 0xFFFFFFFF),
+    ]
+    probe_offsets = (75, 1, 2, 3, 37, 112, 200)
+    rejected_all = True
+    for idx, (bname, bword) in enumerate(breakers):
+        off = probe_offsets[idx % len(probe_offsets)]
+        sim_b = AliMipsSimulator(log_handler=lambda m: None)
+        buf = bytearray(insn * 300)
+        struct.pack_into("<I", buf, off * 4, bword)
+        sim_b._find_long_blocks(bytes(buf), 0x500000, (0x80000000,))
+        if sim_b._long_block_hooks:
+            rejected_all = False
+    check(rejected_all, "300-word runs broken at probe/interior offsets by branches, jumps, ERET, 0, or 0xFFFFFFFF are not hooked")
 
 print()
 if fails:

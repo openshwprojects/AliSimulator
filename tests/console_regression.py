@@ -122,7 +122,7 @@ def discover_sci_attach(ram: bytes):
     return 0x80000000 + fn_a, 0x80000000 + fn_m
 
 
-def discover_console_offsets(ram: bytes):
+def discover_console_offsets(ram: bytes, idle_addr=None):
     """Return (sys_off, con_off, con_fn, idle_addr) from unpacked MIPS32 guest RAM."""
     m_sys = _PAT_SYS_STATE.search(ram)
     assert m_sys is not None, "failed to locate input_task sys_state check in RAM"
@@ -149,13 +149,19 @@ def discover_console_offsets(ram: bytes):
         m_con = m_con_list[-1]
     con_off = struct.unpack("<h", m_con.group(1))[0]
 
-    idle_off = ram.find(bytes.fromhex("1800bd27ffff001000000000"), 0x2000)
-    if idle_off != -1:
-        idle_addr = 0x80000000 + idle_off + 4
+    if idle_addr is not None:
+        idle_off = idle_addr - 0x80000000
+        if (idle_addr & 3 or not 0 <= idle_off <= len(ram) - 8
+                or ram[idle_off:idle_off + 8] != bytes.fromhex("ffff001000000000")):
+            raise ValueError("idle_addr must point to an aligned MIPS32 'b .; nop' loop in RAM")
     else:
-        idle_off = ram.find(bytes.fromhex("ffff001000000000"), 0x10000)
-        assert idle_off != -1, "failed to locate OSAL idle loop (b .) in RAM"
-        idle_addr = (0x80000000 + idle_off) & ~3
+        idle_off = ram.find(bytes.fromhex("1800bd27ffff001000000000"), 0x2000)
+        if idle_off != -1:
+            idle_addr = 0x80000000 + idle_off + 4
+        else:
+            idle_off = ram.find(bytes.fromhex("ffff001000000000"), 0x10000)
+            assert idle_off != -1, "failed to locate OSAL idle loop (b .) in RAM"
+            idle_addr = (0x80000000 + idle_off) & ~3
     return sys_off, con_off, con_fn, idle_addr
 
 
@@ -172,6 +178,8 @@ class ConsoleHarness:
         mask_timer=False,
         boot_until=None,
         boot_step=250_000,
+        idle_addr=None,
+        takeover_ready=None,
     ):
         """boot_insns   -- instructions to boot before taking the console over;
         boot_until   -- optionally, a predicate on the UART output so far: the
@@ -179,7 +187,11 @@ class ConsoleHarness:
                         boot_step at the earliest) as soon as it holds, at
                         boot_insns at the latest.  The firmware's progress per
                         instruction follows host timing, so a milestone it
-                        prints is a steadier take-over point than a count."""
+                        prints is a steadier take-over point than a count.
+        idle_addr    -- optional verified OS idle address for firmware whose
+                        idle loop does not match the automatic signature;
+        takeover_ready -- optional predicate on the simulator, required at idle
+                        before direct_call + mask_timer replaces its context."""
         self.dump_path = dump_path
         self.title = title
         self.direct_call = direct_call
@@ -212,19 +224,39 @@ class ConsoleHarness:
         self.ram = bytes(self.sim._ram_view[:0x01000000])
         self.boot_banner = "".join(self.uart_out)
 
-        sys_off, con_off, self.con_fn, self.idle_addr = discover_console_offsets(self.ram)
+        sys_off, con_off, self.con_fn, self.idle_addr = discover_console_offsets(self.ram, idle_addr)
         self.sys_addr = (self.gp + sys_off) & 0xFFFFFFFF
         self.con_addr = (self.gp + con_off) & 0xFFFFFFFF
         self.irq_mask_addr = None
         self.nest_addr = None
 
         if direct_call and mask_timer:
-            if self.sim.mu.reg_read(UC_MIPS_REG_PC) not in (self.idle_addr, self.idle_addr + 4):
-                self.sim.stop_instr = self.idle_addr
-                try:
-                    self.sim.run(max_instructions=self.sim.instruction_count + 2_000_000)
-                finally:
-                    self.sim.stop_instr = None
+            # Finish initialization and reach idle before replacing a task's
+            # context. Otherwise a storage lock or its initializer can be lost.
+            deadline = self.sim.instruction_count + 30_000_000
+            while True:
+                stopped_pc = self.sim.mu.reg_read(UC_MIPS_REG_PC)
+                ready = takeover_ready is None or takeover_ready(self.sim)
+                if ready and stopped_pc in (self.idle_addr, self.idle_addr + 4):
+                    break
+                if self.sim.instruction_count >= deadline:
+                    raise ConsoleDeaf(
+                        f"firmware did not become ready at idle 0x{self.idle_addr:08X} "
+                        f"before console takeover (stopped at 0x{stopped_pc:08X}, ready={ready})"
+                    )
+                previous_count = self.sim.instruction_count
+                if ready:
+                    self.sim.stop_instr = self.idle_addr
+                    try:
+                        self.sim.run(max_instructions=deadline)
+                    finally:
+                        self.sim.stop_instr = None
+                else:
+                    self.sim.run(max_instructions=min(deadline, previous_count + 500_000))
+                if self.sim.instruction_count <= previous_count:
+                    at_idle = self.sim.mu.reg_read(UC_MIPS_REG_PC) in (self.idle_addr, self.idle_addr + 4)
+                    if not at_idle or (takeover_ready is not None and not takeover_ready(self.sim)):
+                        raise ConsoleDeaf("firmware stopped before console takeover")
             self.sim._insn_rate = 1_000_000.0
             self.sim._counted_slices = self.sim.calibration_slices
             if getattr(self.sim.chip, "see", None) is not None:

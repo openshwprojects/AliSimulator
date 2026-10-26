@@ -52,8 +52,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from simulator import AliMipsSimulator
 
 
-def main():
-    t0 = time.time()
+def _boot_maciej_console():
     sim = AliMipsSimulator(log_handler=lambda m: None)
     sim.setSPIDump(False)
     sim.setI2CDump(False)
@@ -73,11 +72,27 @@ def main():
     # (-16840($gp) = 2, set by 0x8001C220(2) at 0x800120C4 / 0x8003DC88).
     SYS_STATE_ADDR = gp - 26332
     CONSOLE_MODE_ADDR = gp - 16840
-    RCU_MODE_ADDR = gp - 0x60BB
-    PRIV_ADDR = gp - 0x6130
+    # The banner precedes the application's final console initialization.
+    # Wait for its listener-ready state before taking over: otherwise that
+    # later initialization can reset console_mode during a command sequence.
+    listener_deadline = sim._vtime() + 30.0
+    while sim.peek(CONSOLE_MODE_ADDR, 1)[0] != 2 and sim._vtime() < listener_deadline:
+        sim.run(max_instructions=sim.instruction_count + 10_000_000,
+                max_vtime=min(listener_deadline, sim._vtime() + 0.25))
+    assert sim.peek(CONSOLE_MODE_ADDR, 1)[0] == 2, "firmware UART listener did not initialize"
 
     sim.poke(SYS_STATE_ADDR, (2).to_bytes(4, "little"))
     sim.poke(CONSOLE_MODE_ADDR, b"\x02")
+    return sim, uart_out, gp
+
+
+def main():
+    t0 = time.time()
+    sim, uart_out, gp = _boot_maciej_console()
+    SYS_STATE_ADDR = gp - 26332
+    CONSOLE_MODE_ADDR = gp - 16840
+    RCU_MODE_ADDR = gp - 0x60BB
+    PRIV_ADDR = gp - 0x6130
 
     def send_uart(data, max_slices=12, slice_insns=200_000,
                   stop_on=(">", ":", "...\r\n", "***\r\n", "?\r\n")):
@@ -97,6 +112,11 @@ def main():
     resp = send_uart("comtest", max_slices=6, stop_on=("comtest",))
     assert resp == "comtest", f"expected 'comtest' echo, got {resp!r}"
     assert sim.peek(CONSOLE_MODE_ADDR, 1)[0] == 2
+
+    # comtest also queues the factory slave-upgrade command. The firmware
+    # processes it after leaving the console, so use a fresh boot for the
+    # independent interactive-command and EXIT/reactivation checks.
+    sim, uart_out, gp = _boot_maciej_console()
 
     # 2. Activate interactive console with "startconsole"
     resp = send_uart("startconsole")
@@ -377,7 +397,10 @@ def test_multi_dump_uart_console():
     # 3. ALi M3821 (Opticum Blue R265 Lite DVB-T2): startconsole + VERSION + M3821 HELP
     def _step3():
         h = ConsoleHarness("Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs", "Opticum Blue R265 Lite 1.1.5 (M3821)",
-                           boot_insns=8_000_000, direct_call=True, mask_timer=True)
+                           boot_insns=60_000_000,
+                           boot_until=lambda uart: "Application version 1.0.0" in uart,
+                           boot_step=500_000,
+                           direct_call=True, mask_timer=True)
         assert b"startconsole\x00" in h.ram and b"PRINT_MEM_LAYOUT\x00" in h.ram
         assert h.handshake()[0] == "comtest"
         act, _ = h.activate()
@@ -428,4 +451,3 @@ def test_multi_dump_uart_console():
 if __name__ == "__main__":
     from console_regression import run_with_retry
     run_with_retry(main)
-

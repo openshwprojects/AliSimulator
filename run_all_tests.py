@@ -21,6 +21,12 @@ to GitHub Pages after every push.
   python run_all_tests.py --timeout 1800   kill a test after 30 minutes
   python run_all_tests.py --slow --jobs 2  two tests at a time (output per test, not streamed)
   python run_all_tests.py --report-only    the page again from report/results.json, runs nothing
+  python run_all_tests.py --engine cpp     every simulator on the C++ core (simulator_cpp.py;
+                                           build it first: cpp\\build.bat on Windows,
+                                           cpp/build.sh elsewhere); its report goes to report/cpp/
+  python run_all_tests.py --link "C++ engine=cpp/index.html"   a link in the page's header
+                                           (repeatable; the CI links each engine's page to the
+                                           other's and to the engine comparison)
 """
 
 import ast
@@ -38,6 +44,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 TESTS_DIR = ROOT / "tests"
 REPORT_DIR = ROOT / "report"
+ENGINE = "unicorn"         # the simulator's engine in every test (--engine: unicorn or cpp)
+LINKS = []                 # [label, href] pairs shown in the page's header (--link)
+NOT_APPLICABLE = "[NOT APPLICABLE]"
 sys.path[:0] = [str(TESTS_DIR), str(ROOT / "src")]     # the report helpers and the simulator's modules
 
 import report                                          # noqa: E402
@@ -179,10 +188,12 @@ def _tags(path, result):
         tags.append({"group": "data", "name": "crashed"})
     if result["timed_out"]:
         tags.append({"group": "data", "name": "timed out"})
+    if result.get("not_applicable"):
+        tags.append({"group": "data", "name": "not applicable"})
     return tags
 
 
-def _collect_artifact(line, result, img_dir):
+def _collect_artifact(line, result, img_dir):  # noqa: C901
     """A [REPORT_IMAGE] / [REPORT_PANEL] line from the test: record it (the
     image file is copied next to the report).  Returns True if it was one."""
     if line.startswith(report_artifacts.IMAGE_TAG):
@@ -254,7 +265,7 @@ def run_test_file(test_file_path, timeout=None, stream=True):
     # the tests import the simulator's modules from src/ and the helpers from tests/
     pythonpath = [str(ROOT / "src"), str(TESTS_DIR)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
     env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONFAULTHANDLER="1", PYTHONIOENCODING="utf-8",
-               ALISIM_REPORT_DIR=img_dir, PYTHONPATH=os.pathsep.join(pythonpath))
+               ALISIM_REPORT_DIR=img_dir, PYTHONPATH=os.pathsep.join(pythonpath), ALISIM_ENGINE=ENGINE)
     result = {"name": test_name, "script": test_name, "description": _description(test_file_path),
               "featured": _featured(test_file_path), "passed": False, "elapsed": 0.0, "exit_code": None, "crashed": False, "timed_out": False,
               "checks": [], "output": "", "images": [], "panels": []}
@@ -296,6 +307,10 @@ def run_test_file(test_file_path, timeout=None, stream=True):
         if m:
             result["checks"].append({"ok": m.group(1) == "PASS", "text": m.group(2).strip()})
     result["passed"] = exit_code == 0
+    # a test of one engine's own machinery (e.g. Unicorn's CP0 site hooks) says so
+    # on the other engine: "[NOT APPLICABLE] why" (engine_check.py)
+    na = [ln for ln in lines if ln.startswith(NOT_APPLICABLE)]
+    result["not_applicable"] = na[0][len(NOT_APPLICABLE):].strip() if na else None
     result["tags"] = _tags(test_file_path, result)
     if not stream:
         with _print_lock:
@@ -320,6 +335,8 @@ def write_report(results, note=""):
             "repo": os.environ.get("GITHUB_REPOSITORY"),
             "run_url": run_url,
             "note": note,
+            "engine": ENGINE,
+            "links": LINKS,
         }
         path = report.generate(results, meta, str(REPORT_DIR / "index.html"))
         print(f"HTML report written: {path}")
@@ -343,13 +360,32 @@ def report_only():
         script = TESTS_DIR / r["script"]
         if script.exists():
             r["description"], r["featured"] = _description(script), _featured(script)
+    if LINKS:
+        saved["meta"]["links"] = LINKS
     path = report.generate(saved["results"], saved["meta"], str(REPORT_DIR / "index.html"))
     print(f"HTML report written: {path}")
 
 
 def main():
     """Main test runner function."""
+    global ENGINE, REPORT_DIR
     args = sys.argv[1:]
+    if "--engine" in args:
+        ENGINE = args[args.index("--engine") + 1].lower()
+        if ENGINE not in ("unicorn", "cpp"):
+            print(f"unknown engine {ENGINE!r} (unicorn, cpp)")
+            sys.exit(2)
+        if ENGINE == "cpp":
+            REPORT_DIR = ROOT / "report" / "cpp"
+            sys.path.insert(0, str(ROOT / "src"))
+            import cpp_core
+            if not cpp_core.available():
+                print(f"the C++ core is not built ({cpp_core.DLL_PATH}): run {cpp_core.BUILD_HINT}")
+                sys.exit(2)
+    for i, a in enumerate(args[:-1]):
+        if a == "--link" and "=" in args[i + 1]:
+            label, href = args[i + 1].split("=", 1)
+            LINKS.append([label.strip(), href.strip()])
     if "--report-only" in args:
         report_only()
         return
@@ -392,19 +428,26 @@ def main():
     print("=" * 80)
     for r in results:
         status = "\033[92mPASS\033[0m" if r["passed"] else "\033[91mFAIL\033[0m"
+        if r["passed"] and r.get("not_applicable"):
+            status = "\033[93mN/A \033[0m"
         extra = " (crashed)" if r["crashed"] else (" (timed out)" if r["timed_out"] else "")
         print(f"  {status} - {r['name']}{extra}  {r['elapsed']:.0f}s")
     print("\n" + "-" * 80)
 
     note = ("default suite" if not include_slow else "with --slow") + (f", {jobs} jobs" if jobs > 1 else "")
+    note += f", engine {ENGINE}"
     if patterns:
         note += ", filtered: " + ", ".join(patterns)
     write_report(results, note)
 
     total = len(results)
     failed = sum(1 for r in results if not r["passed"])
+    na = sum(1 for r in results if r["passed"] and r.get("not_applicable"))
+    if na:
+        print(f"{na} test(s) check machinery the {ENGINE} engine does not have (not applicable)")
     if failed == 0:
-        print(f"\033[92mAll {total} test(s) passed!\033[0m")
+        print(f"\033[92mAll {total - na} applicable test(s) passed!\033[0m" if na else
+              f"\033[92mAll {total} test(s) passed!\033[0m")
         sys.exit(0)
     print(f"\033[91m{failed} of {total} test(s) failed\033[0m")
     sys.exit(1)

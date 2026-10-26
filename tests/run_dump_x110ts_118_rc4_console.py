@@ -29,7 +29,11 @@ def run():
     h = ConsoleHarness(
         "OPTICUM X110TS/Software_Conax_X110TS_1.1.8_RC4-REV243_PVR_POL_SMART_HD+_2014-02-21.abs",
         "Opticum HD X110TS 1.1.8 RC4 PL Smart HD+ (M3606)",
-        boot_insns=10_000_000,
+        # Keep the original minimum boot, but wait longer when host timing
+        # leaves application startup unfinished at that instruction count.
+        boot_insns=60_000_000,
+        boot_until=lambda uart: "Application version 1.0.0@SDK4.0ba.8.0_Combo_20120530" in uart,
+        boot_step=10_000_000,
         direct_call=True,
         mask_timer=True,
         attach_sci=True,

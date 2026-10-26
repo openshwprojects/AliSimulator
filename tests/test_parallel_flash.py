@@ -26,6 +26,8 @@ from simulator import AliMipsSimulator
 failures = 0
 
 
+from engine_check import CPP
+
 def check(ok, text):
     global failures
     failures += not ok
@@ -137,7 +139,10 @@ def test_probe(exact):
     check(v1 == 1, f"the branch target's first instruction ran once ({v1}; Unicorn alone: 2)")
     check(not flash.autoselect and sim.peek(0xAFC00000, 4) == bytes([0, 1, 2, 3]),
           "the reset in the delay slot ended autoselect: the window shows the array")
-    check(sim.ds_flag_fixes == 1, f"the simulator cleared the stale branch flags once ({sim.ds_flag_fixes})")
+    if CPP:
+        print("  (stale branch flags: a Unicorn bug the C++ engine does not have -- not applicable)")
+    else:
+        check(sim.ds_flag_fixes == 1, f"the simulator cleared the stale branch flags once ({sim.ds_flag_fixes})")
 
 
 def test_spi_delay_slot(exact, taken):

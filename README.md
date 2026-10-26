@@ -211,9 +211,13 @@ M3503).
   until its screen shows something, and reports how soon, the GE command
   count and the front panel's texts, flagging an image whose sidecar says
   otherwise -- the screen regressions check one image per family in depth;
-  `--jobs 2`, `--out DIR` for the screens), and one-off exploration and
-  tracing scripts, kept for reference.
-* `cpp/` -- the C++ port of the emulator core (work in progress).
+  `--jobs 2`, `--out DIR` for the screens), the C++ engine's checks against
+  Unicorn (`cpp_lockstep.py`, `cpp_bisect.py`, `cpp_fuzz.py`) and
+  `engine_compare.py` (two runs' times side by side, see "The C++ engine"),
+  and one-off exploration and tracing scripts, kept for reference.
+* `cpp/` -- the C++ engine's core (`cpp/emulator/alicore*.cpp`, its own tests
+  in `cpp/tests/alicore_tests.cpp`; `cpp\build.bat` builds both on Windows,
+  `cpp/build.sh` on Linux / macOS; see "The C++ engine").
 * `refs/` (not in git) -- the ALi SDK sources and libraries the firmware was
   built from, for reading. `report/` (not in git) is the test report.
 
@@ -357,6 +361,102 @@ M3503).
 
 Single steps always use the exact hook. Both modes read the real ISA mode
 (MIPS32 / MIPS16) from the CPU, so restarts never guess the mode.
+
+## The C++ engine (cpp/, simulator_cpp.py)
+
+A second CPU engine for the same simulator: `AliMipsSimulator(engine='cpp')`,
+or `ALISIM_ENGINE=cpp` for every simulator a process makes (the GUIs and the
+tests included: `python run_all_tests.py --engine cpp`, report in
+`report/cpp/`). The device models, the chip families, the GE, the panels and
+the tests are the same Python code for both engines; only the CPU and what
+sits next to it differ.
+
+* **The core** (`cpp/emulator/alicore*.cpp`, built by `cpp\build.bat` into
+  `cpp/build/alicore.dll` with Visual Studio 2022, or by `cpp/build.sh` into
+  `cpp/build/libalicore.so` with g++ or clang++ (`CXX=clang++`) on Linux /
+  macOS, as the CI does; `cpp\build.bat <folder>` / `cpp/build.sh <folder>`
+  builds a copy elsewhere, loaded with `ALISIM_CPP_DLL=<folder>\alicore.dll`)
+  is an interpreter of MIPS32r2, MIPS16e and the FPU (IEEE flags, rounding
+  and NaN propagation as QEMU, so as Unicorn) behind Unicorn's interface:
+  memory regions mapped by address, code hooks before an instruction (a PC
+  written in a hook redirects, as in Unicorn), memory hooks with physical
+  addresses, the invalid / write-protect hooks (2 returned: handled, the
+  store does not land). `src/cpp_core.py` is its ctypes binding, a `Uc`
+  look-alike (`CppUc`), so the simulator's code runs on it unchanged;
+  `src/simulator_cpp.py` (`CppAliMipsSimulator`) replaces what the Unicorn
+  engine needs Python for: the CP0 timer, Status / Cause / EPC / EBase, ERET
+  and the interrupt delivery are the core's own, at exact instruction
+  boundaries (never in a delay slot), so there are no CP0 instruction sites,
+  no slice stopper, no replayed device accesses, no hflags calibration.
+* **Speed**: decoded blocks (up to 32 micro-ops, ending before a hooked
+  instruction or a CP0 / FPU op, checked against the code bytes on entry, so
+  self-modifying code needs no tracking) run one after the other inside the
+  core; the SPI flash controller is native (except with SPI logging, the
+  M3821's stream mode or a parallel flash); GPIO DO / DIR stores (the
+  bit-banged panels and I2C buses) are logged by the core and handed to the
+  decoders in order before any other call into Python. Four kinds of loops
+  are skipped exactly -- the registers and the time come out as if they had
+  run, `tests/test_cpp_loop_skip.py`: the idle loop (`b .`, WAIT, with
+  interrupts on) and a spin that neither stores nor reaches a device handler
+  and whose registers repeat (a mailbox or tick-counter poll) go on to the
+  next event; a loop that polls Count (`delay()`, a timeout) has one pass
+  recorded, and the largest number of whole passes after which it still goes
+  on is found by replaying that pass at later times (rolled back each time:
+  it stores nothing), registers it sets before it reads them (the `now` it
+  keeps) excepted -- the loop then ends in the very pass it would have ended
+  in; and a loop that only counts (a cache-maintenance loop over a buffer:
+  CACHE is a no-op here) jumps to its last pass. `ALISIM_CPP_PROFILE=<file>`
+  (or `1` for stderr) writes, at exit, where a run spent its instructions
+  (per block) and which instructions' device accesses went to Python.
+* **Time**: deterministic -- the emulation time is the instruction count
+  (`cpp_ips` = 50 M instructions per second, `ALISIM_CPP_IPS`), Count runs at
+  `count_hz` from it (2 per instruction), fast mode's `instruction_count`
+  follows it at 0.75 M/s (`ALISIM_CPP_RATE`, the Unicorn engine's measured
+  rate on the development machine, so the tests' budgets mean the same
+  firmware time), and a device access handled in Python costs 250
+  instructions (5 us: a poll of a modelled register sees time pass, as the
+  Unicorn engine charged the handler's CPU time). A run is the same every
+  time, whatever the host's load. Timer interrupts are taken inside a slice
+  (a slice is up to `batch_timeout_us` of emulation time); a slice service
+  that needs its time -- the video output's fields, `video_m36.py` -- has a
+  `due()`, and the slice ends there.
+* **Checked against Unicorn**: `tools/cpp_lockstep.py` (register by register,
+  instruction by instruction), `tools/cpp_bisect.py` (N instructions from
+  reset, registers and RAM compared, a difference bisected to its
+  instruction: 30 M instructions identical on dump.bin, dump_maciej.bin and
+  the Prima), `tools/cpp_fuzz.py` (random MIPS32 / MIPS16 / FPU instructions;
+  the differences left are Unicorn's: kseg2 loads, an unaligned order, its
+  crashes on some MIPS16 branches). The tests that check the Unicorn
+  engine's own machinery (CP0 sites, the repeated-MTC0 skip, the native ERET
+  repair, replayed stores, flash read hook counts, stale branch flags) say
+  so and are counted "not applicable" on this engine (`tests/engine_check.py`).
+* **Comparison** (2026-10-22, both engines on the same code, the slow suite
+  with `--jobs 2`: `python run_all_tests.py --slow --jobs 2` and
+  `python run_all_tests.py --slow --jobs 2 --engine cpp`, then
+  `python tools/engine_compare.py report/results.json report/cpp/results.json
+  --min 5` for the per-test table). Every applicable test passes on both
+  engines (102 of 103: `test_cpp_loop_skip.py` is not applicable on Unicorn,
+  `test_cp0_repeat.py` not on the C++ engine, and the scenarios that check
+  the Unicorn engine's CP0 sites or its native ERET say so and are skipped
+  there). The suite took
+  5627 s of test time (every test's time, summed) on Unicorn and 1125 s on
+  the C++ engine, 5.0x less;
+  the C++ engine was faster on 45 of the 49 tests of 5 s or more. A screen
+  regression (boot a firmware to its first OSD, compare the frame) is
+  typically 5-12x faster: the THT501 12.4x, the Prima VIII 10.9x, the
+  URZ0086 10.6x, the M3329 10.1x, dump.bin 9.5x, the Cabletech 7.7x, the
+  T650i 6.3x; the least are the R265 Lite's (2.4x and 3.4x: their time is the
+  GE model in Python, the same for both engines). Unicorn is still faster
+  on four tests, all bound by the binding and not by the core:
+  `test_native_status` (12 vs 23 s), `test_device_models` (10 vs 21 s; its GE
+  stress test makes about a million device callbacks), `test_delay_hle` (4 vs
+  17 s: it turns the Python delay HLE on, which the C++ engine normally does
+  without) and `run_dump_maciej_without_uart_interrupt` (2.6 vs 3.3 s) -- each
+  CP0 or timer property read on `CppAliMipsSimulator` is one ctypes call, and
+  these tests make millions. The machine (an i7-6700HQ) was shared with other
+  work during both runs, so the absolute times are noisy; the ratios are not.
+  Deterministic time has one more use: a test that fails is replayed
+  exactly, however loaded the host.
 
 ## Interrupts
 
@@ -866,13 +966,17 @@ then every 1000th.
 
 Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
 `python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
-or all of them with `python run_all_tests.py` (a few minutes). `python run_all_tests.py
---slow` (102 tests, about 45 minutes with `--jobs 2`, 89 minutes of test time;
-4.2 hours before the speed work of 2026-10-15/16: idle skipping, cheaper CP0
+or all of them with `python run_all_tests.py` (a few minutes). The full run,
+`python run_all_tests.py --slow`, includes 128 test scripts and all UART
+console regressions. The
+earlier 104-script suite took about 45 minutes with `--jobs 2` on the Unicorn
+engine (89 minutes of test time), and about 19 minutes of test time on the
+C++ engine (`--engine cpp`), measured on a loaded machine; 4.2 hours on Unicorn before
+the speed work of 2026-10-15/16: idle skipping, cheaper CP0
 hooks, the bootloaders' LZMA decoder in Python, the native Status, waits in
 the firmware's time, the RTOS's delay() and interrupt disable without hooks,
-mailbox polls skipped, the GE model's fast paths) adds
-`run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
+mailbox polls skipped, and the GE model's fast paths.
+The slow suite adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 20 s; the bootloader's
 unoptimised LZMA decompression, which took a minute of that, runs in Python
 now), checks the
@@ -889,6 +993,24 @@ then check that the init got past the PMU handshake and the VCAP busy bit
 (a few reads of each; unmodelled: thousands of PMU polls, then an endless VCAP
 spin), and the slow dump_maciej test also that its UI's graphics-engine
 commands complete through the GE interrupt without timeouts.
+`run_dump_maciej_console.py` (default run; under 10 s on the C++ engine,
+under a minute on Unicorn) drives dump_maciej's UART console -- the box's own
+console task, which starts reading the UART about 18 s after power-on and
+which `tv_gui.py` shows on F5 -- through every command it has: `startconsole`,
+HELP, VERSION, HEAP, MAINCODE, TIME (the clock runs), FLAG (a flag set stays
+set), CHANNELS, ADDDUMMY (CHANNELS then lists the added 'Dummy' channel and
+transponder), TOUCH / READ / DELETE (their error path: no storage device is
+modelled), SENDMSG, HMSG, GPIOCONFIG, CLS, RCU (keys echoed until ESC), EXIT
+(the console stops answering until the next `startconsole`) and REBOOT (the
+box restarts through its bootloader and the console comes back).
+
+Every test runs on either engine: `python run_all_tests.py --engine cpp`
+(`ALISIM_ENGINE=cpp` for one script) runs them on the C++ engine, its report
+in `report/cpp/`. A test, or a scenario in one, that checks one engine's own
+machinery says so and counts as not applicable on the other
+(`tests/engine_check.py`): the Unicorn engine's workarounds there,
+`test_cpp_loop_skip.py` (the C++ core's loop skipping, exact against a run
+without it) on Unicorn.
 
 The UART console tests (`run_dump_*_console.py`, in the default run, 10-40 s
 each; `python run_all_tests.py -k console` runs only them) cover every firmware
@@ -1174,7 +1296,17 @@ scripts' current docstrings and `FEATURED`) without running anything, for a
 change to the page itself.
 
 The GitHub Actions workflow (`.github/workflows/tests.yml`) runs
-`run_all_tests.py --slow` on every push, uploads `report/` as a workflow
+`run_all_tests.py --slow` on every push, once per engine: the Unicorn engine
+and the C++ engine (built first by `cpp/build.sh`, then the core's own tests)
+on two runners at the same time. A third job puts the two reports together
+-- `report/index.html` (Unicorn), `report/cpp/index.html` (C++) and
+`report/comparison.html` (`tools/engine_compare.py --html`: every test's time
+on both engines, the speed-up, when the firmware's application started and its
+OSD became visible, sortable), each linking to the others -- adds the
+comparison table to the run's summary page, uploads the lot as a workflow
 artifact and publishes it to GitHub Pages (the repository's Pages source must
-be set to "GitHub Actions" once, under Settings > Pages); the page is updated
-even when tests fail, and the job's result still reflects the tests.
+be set to "GitHub Actions" once, under Settings > Pages). The pages are
+updated even when tests fail, and each engine's job result still reflects its
+tests. Locally the same pages come from the two runs and
+`python tools/engine_compare.py report/results.json report/cpp/results.json
+--html report/comparison.html`.
