@@ -23,6 +23,13 @@ def run():
     h = ConsoleHarness(
         "OPTICUM HD T90/STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs",
         "Opticum HD T90 (STB_HD_T90_N2-3_1.3.2PVR, M3801)",
+        # 20 M estimated instructions, not the default 6 M: the Unicorn engine's
+        # estimate follows host time, and the GitHub runner took the console over
+        # before the application had initialised its channel database; ADDDUMMY
+        # then hit the firmware's fatal reboot (reproduced on Windows with a 2.6 M
+        # boot, fine from 4.2 M).  The rate is calibrated per host, so the budget
+        # stretches on slow ones.
+        boot_insns=20_000_000,
         direct_call=True,
         mask_timer=True,
     )

@@ -788,6 +788,10 @@ class AliMipsSimulator:
             ref, c_write, c_read = ctypes.byref(val), lib.uc_reg_write, lib.uc_reg_read
 
             def reg_write(reg, value):
+                if reg == UC_MIPS_REG_ZERO:
+                    return          # $zero stays 0: Unicorn lets a write land in QEMU's
+                                    # gpr[0], which nothing resets (the live-env path
+                                    # skips it too; the hooked `mfc0 $zero, Count` hit this)
                 val.value = value
                 err = c_write(uch, reg, ref)
                 if err:
@@ -967,7 +971,8 @@ class AliMipsSimulator:
             mu.hook_add = fast_hook_add
             mu.mmio_map = fast_mmio_map
         except Exception:                    # another binding: its own calls
-            self._reg_write, self._reg_read = mu.reg_write, mu.reg_read
+            self._reg_write = lambda reg, value, _rw=mu.reg_write: None if reg == UC_MIPS_REG_ZERO else _rw(reg, value)
+            self._reg_read = mu.reg_read
             self._write_pc = lambda v, _rw=mu.reg_write: _rw(UC_MIPS_REG_PC, v)
         self._ram_view = memoryview(self.ram_buffer).cast('B')
         self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
@@ -4654,13 +4659,13 @@ class AliMipsSimulator:
             else:
                 raise
         except OSError as e:
-            # Unicorn 2.1.4 dies with an access violation while translating an
-            # unhooked straight-line block of ~375+ instructions (also a jump
-            # into zero-filled RAM); the Uc instance is unusable afterwards.
+            # Native faults can have several causes. cur_pc is the slice-entry
+            # address, not necessarily the instruction that faulted; preserve
+            # the original error rather than diagnosing every fault as a long
+            # straight-line translation failure. The Uc instance is unusable.
             raise RuntimeError(
-                f"Unicorn crashed in fast mode near PC=0x{cur_pc:08X} ({e}): it cannot translate "
-                f"straight-line blocks of ~375+ instructions without code hooks; rerun with "
-                f"hook_every_instruction=True (exact mode)") from e
+                f"Unicorn native failure during a fast slice starting at PC=0x{cur_pc:08X} "
+                f"({type(e).__name__}: {e}); the engine cannot safely resume") from e
         finally:
             self._slice_cap_end = None
             self._slice_deadline = None

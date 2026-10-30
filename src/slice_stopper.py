@@ -207,7 +207,10 @@ class NativeStopper:
     def arm(self, seconds):
         """Stop the running (or next) emulation `seconds` from now."""
         sec = max(0.0, seconds)
-        self._due_perf = time.perf_counter() + sec - 0.0005
+        # Moving the timer later cannot recall a callback already released by
+        # an earlier firing. Keep its drain threshold until disarm(), while
+        # still programming the timer with the newly requested deadline.
+        self._due_perf = min(self._due_perf, time.perf_counter() + sec - 0.0005)
         self._due.value = -max(1, int(sec * 1e7))              # relative, 100 ns units
         # (SetWaitableTimer also makes the timer non-signalled again)
         self._set_timer(self.timer, self._due_ref, self._refire_ms, None, None, False)

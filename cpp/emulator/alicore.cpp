@@ -151,6 +151,7 @@ void Core::rebuild_all_pages() {
   memset(vw_, 0, sizeof(uint8_t *) * NPAGES);
   memset(vx_, 0, sizeof(uint8_t *) * NPAGES);
   rebuild_pages(0, 1ull << 32);
+  refresh_device_aliases();
 }
 
 // After a change to the physical pages lo..hi-1: every region's page entries
@@ -160,6 +161,35 @@ void Core::refresh_pages(uint64_t lo, uint64_t hi) {
   for (auto &r : regions_)
     for (uint64_t a = r.base; a < r.base + r.size; a += 0x1000) pregion_[a >> 12] = &r;
   rebuild_pages(lo, hi);
+  refresh_device_aliases();
+}
+
+// Device-buffer aliases outside its physical window can make a register store
+// change an instruction in the current decoded block. Check when maps change,
+// not on every store. Include protected regions too: a fetch-protection hook
+// may allow their execution. Raw kseg0/1 mappings are not physical aliases;
+// guest accesses there translate to the low 512 MB instead (phys_of).
+void Core::refresh_device_aliases() {
+  dev_store_alias_ = false;
+  if (!dev_buf_) return;
+  uintptr_t db = (uintptr_t)dev_buf_;
+  for (const Region &r : regions_) {
+    if (r.mmio || !r.ptr) continue;
+    uintptr_t rb = (uintptr_t)r.ptr;
+    uint64_t roff = rb < db ? db - rb : 0;
+    uint64_t doff = rb > db ? rb - db : 0;
+    if (roff >= r.size || doff >= dev_size_) continue;
+    uint64_t lo = r.base + roff;
+    uint64_t hi = lo + std::min<uint64_t>(r.size - roff, dev_size_ - doff);
+    auto outside_device = [&](uint64_t first, uint64_t last) {
+      uint64_t a = std::max(lo, first), z = std::min(hi, last);
+      return a < z && (a < dev_phys_ || z > (uint64_t)dev_phys_ + dev_size_);
+    };
+    if (outside_device(0, 0x80000000ull) || outside_device(0xC0000000ull, 1ull << 32)) {
+      dev_store_alias_ = true;
+      return;
+    }
+  }
 }
 
 // The guest's fast page pointers for the physical pages lo..hi-1 (their kuseg,
@@ -247,7 +277,12 @@ int Core::host_read(uint64_t addr, void *buf, uint64_t size) {
       for (uint64_t i = 0; i < n;) {
         uint32_t chunk = (uint32_t)std::min<uint64_t>(n - i, 4);
         while (chunk > 1 && ((addr + i) & (chunk - 1))) chunk >>= 1;
-        uint64_t v = r->rd ? r->rd(r->rd_user, addr + i - r->base, chunk) : 0;
+        uint64_t v = 0;
+        if (r->rd) {
+          note_host_callback();
+          v = r->rd(r->rd_user, addr + i - r->base, chunk);
+          note_host_callback();
+        }
         memcpy(out + i, &v, chunk);
         i += chunk;
       }
@@ -281,7 +316,11 @@ int Core::host_write(uint64_t addr, const void *buf, uint64_t size) {
         while (chunk > 1 && ((addr + i) & (chunk - 1))) chunk >>= 1;
         uint64_t v = 0;
         memcpy(&v, in + i, chunk);
-        if (r->wr) r->wr(r->wr_user, addr + i - r->base, chunk, v);
+        if (r->wr) {
+          note_host_callback();
+          r->wr(r->wr_user, addr + i - r->base, chunk, v);
+          note_host_callback();
+        }
         i += chunk;
       }
     } else if (dev_buf_ && addr >= dev_phys_ && addr < (uint64_t)dev_phys_ + dev_size_) {
@@ -335,9 +374,9 @@ static int call_event_hooks(Core *c, std::vector<Hook> &hooks, int type, int acc
     if (h.dead || !(h.type & type)) continue;
     if (h.begin <= h.end && (addr < h.begin || addr > h.end)) continue;
     c->host_sync();
-    c->in_callback++;
+    c->enter_callback();
     int r = ((EventHookCb)h.cb)(h.user, access, addr, size, value);
-    c->in_callback--;
+    c->leave_callback();
     if (r > handled) handled = r;   // (1: go on / let a store land, 2: handled, the store does not land)
   }
   return handled;
@@ -350,9 +389,9 @@ static void call_mem_hooks(Core *c, std::vector<Hook> &hooks, int type, int acce
     if (h.dead || !(h.type & type)) continue;
     if (h.begin <= h.end && (addr < h.begin || addr > h.end)) continue;
     c->host_sync();
-    c->in_callback++;
+    c->enter_callback();
     ((MemHookCb)h.cb)(h.user, access, addr, size, value);
-    c->in_callback--;
+    c->leave_callback();
   }
 }
 
@@ -382,10 +421,10 @@ uint64_t Core::load_slow(uint32_t va, uint32_t size) {
   if (mem_hook_page_[pa >> 12] & 1) call_mem_hooks(this, hooks_, HOOK_MEM_READ, MEM_READ, pa, size, 0);
   if (dev_buf_ && pa >= dev_phys_ && pa - dev_phys_ < dev_size_) return dev_load(pa - dev_phys_, size);
   if (r->mmio) {
-    in_callback++;
+    enter_callback();
     host_sync();
     uint64_t v = r->rd ? r->rd(r->rd_user, pa - r->base, size) : 0;
-    in_callback--;
+    leave_callback();
     poke_events();
     return v;
   }
@@ -400,10 +439,10 @@ uint64_t Core::load_slow(uint32_t va, uint32_t size) {
   } else if (flash_cmd_ && event_cb) {
     for (uint32_t w : flash_windows_)
       if (pa >= w && pa - w < 0x01000000u) {
-        in_callback++;
+        enter_callback();
         host_sync();
         event_cb(event_user, EVT_FLASH_READ, pa, size);
-        in_callback--;
+        leave_callback();
         r = pregion_[pa >> 12];
         if (!r || r->mmio) return 0;
         break;
@@ -414,7 +453,7 @@ uint64_t Core::load_slow(uint32_t va, uint32_t size) {
   return v;
 }
 
-void Core::store_slow(uint32_t va, uint32_t size, uint64_t value) {
+void Core::store_slow(uint32_t va, uint32_t size, uint64_t value, bool plain_device) {
   if (ALI_UNLIKELY(probe_)) throw Fault{ERR_EXCEPTION};
   slow_++;
   uint32_t pa = phys_of(va);
@@ -422,18 +461,24 @@ void Core::store_slow(uint32_t va, uint32_t size, uint64_t value) {
   if (!r) {
     if (call_event_hooks(this, hooks_, HOOK_MEM_WRITE_UNMAPPED, MEM_WRITE_UNMAPPED, pa, size, (int64_t)value)) {
       r = pregion_[pa >> 12];
-      if (r) { store_slow(va, size, value); return; }
+      if (r) { store_slow(va, size, value, false); return; }
     }
     badvaddr = va;
     fault(ERR_WRITE_UNMAPPED, va, MEM_WRITE_UNMAPPED);
   }
-  if (mem_hook_page_[pa >> 12] & 2) call_mem_hooks(this, hooks_, HOOK_MEM_WRITE, MEM_WRITE, pa, size, (int64_t)value);
-  if (dev_buf_ && pa >= dev_phys_ && pa - dev_phys_ < dev_size_) { dev_store(pa - dev_phys_, size, value); return; }
+  if (mem_hook_page_[pa >> 12] & 2) {
+    plain_device = false;  // remember the callback even if it removes its hook
+    call_mem_hooks(this, hooks_, HOOK_MEM_WRITE, MEM_WRITE, pa, size, (int64_t)value);
+  }
+  if (dev_buf_ && pa >= dev_phys_ && pa - dev_phys_ < dev_size_) {
+    dev_store(pa - dev_phys_, size, value, plain_device);
+    return;
+  }
   if (r->mmio) {
-    in_callback++;
+    enter_callback();
     host_sync();
     if (r->wr) r->wr(r->wr_user, pa - r->base, size, value);
-    in_callback--;
+    leave_callback();
     poke_events();
     return;
   }
@@ -498,9 +543,9 @@ void Core::flush_gpio() {
   uint32_t n = gpio_n_;
   gpio_n_ = 0;
   if (!gpio_cb_ || !n) return;
-  in_callback++;
+  enter_callback();
   gpio_cb_(gpio_user_, gpio_log_, n);
-  in_callback--;
+  leave_callback();
 }
 
 void Core::report_chunk(uint32_t pa) {
@@ -508,9 +553,9 @@ void Core::report_chunk(uint32_t pa) {
   chunk_seen[c] = 1;
   if (event_cb) {
     host_sync();
-    in_callback++;
+    enter_callback();
     event_cb(event_user, EVT_CODE_CHUNK, (uint64_t)c << chunk_shift, 1ull << chunk_shift);
-    in_callback--;
+    leave_callback();
   }
 }
 
@@ -519,9 +564,9 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
   if (devflags_[off] & DF_READ) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
-    in_callback++;
+    enter_callback();
     uint64_t v = dev_cb_(dev_user_, 0, off, size, 0);
-    in_callback--;
+    leave_callback();
     icount += host_access_cost;
     poke_events();
     return v;
@@ -531,7 +576,25 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
   return v;
 }
 
-void Core::dev_store(uint32_t off, uint32_t size, uint64_t value) {
+// Only an unobserved store to ordinary register bytes leaves the scheduled
+// event deadline unchanged. IRQ enables and incoming doorbells are live even
+// without a Python handler. Use the configured layout and the full access
+// width; reserve status words too (including doorbell acknowledgements).
+bool Core::plain_device_store(uint32_t off, uint32_t size) const {
+  if (dev_callback_dirty_ || dev_store_alias_ || off >= dev_size_ || size > dev_size_ - off) return false;
+  uint64_t end = (uint64_t)off + size;
+  auto overlaps = [&](uint64_t first, uint64_t count) {
+    return (uint64_t)off < first + count && first < end;
+  };
+  if (overlaps(ic_status_off_, 8) || overlaps(ic_enable_off_, 8) ||
+      overlaps((uint64_t)ic_base_ + 0xF, 1) ||
+      (doorbell_off_ >= 0 && overlaps((uint32_t)doorbell_off_, 1))) return false;
+  for (uint32_t i = 0; i < size; i++)
+    if (devflags_[off + i]) return false;
+  return true;
+}
+
+void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_device) {
   uint8_t f = devflags_[off];
   if (f & DF_NATIVE) {
     native_dev_store(off, size, value);
@@ -550,12 +613,16 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value) {
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
-    in_callback++;
+    enter_callback();
     dev_cb_(dev_user_, 1, off, size, value);
-    in_callback--;
+    leave_callback();
     icount += host_access_cost;
   } else {
     memcpy(dev_buf_ + off, &value, size);
+    // No time charge or callback occurred. Keep an already pending event (or
+    // stop request) and the timer/UART/limit deadline; only omit this store's
+    // unnecessary invalidation. Every guest instruction and store still runs.
+    if (plain_device && plain_device_store(off, size)) return;
   }
   poke_events();      // (the interrupt controller's enables, a doorbell)
 }
@@ -765,9 +832,9 @@ bool Core::code_hooks(uint32_t address, uint32_t size) {
     if (h.dead || !(h.type & HOOK_CODE)) continue;
     if (h.begin <= h.end && (address < h.begin || address > h.end)) continue;
     host_sync();
-    in_callback++;
+    enter_callback();
     ((CodeHookCb)h.cb)(h.user, address, size, m0 ? 1u : 0u);
-    in_callback--;
+    leave_callback();
     if (stop_request_) return true;
     if (pc_written) {
       pc_written = false;
@@ -896,7 +963,7 @@ void Core::set_count_ratio(uint64_t num, uint64_t den) {
 }
 
 uint32_t Core::count_now() const {
-  return count_base + (uint32_t)((icount - count_icount) * cnum / cden);
+  return count_at(icount);
 }
 
 void Core::timer_update() {
@@ -1068,10 +1135,10 @@ void Core::eret() {
   bool uart_done = uart_ip3;
   uart_ip3 = false;
   if (uart_done && event_cb) {
-    in_callback++;
+    enter_callback();
     host_sync();
     event_cb(event_user, EVT_UART_ERET, icount, 0);
-    in_callback--;
+    leave_callback();
   }
   poke_events();
 }
@@ -1093,6 +1160,9 @@ void Core::schedule() {
 }
 
 bool Core::events() {
+  // A callback below (including one reached through host_sync) can dirty this
+  // again. Callback exit also marks it, so nested runs cannot lose outer writes.
+  dev_callback_dirty_ = false;
   if (stop_request_) {
     stop_request_ = false;
     stop_reason_ = STOP_REQUEST;
@@ -1128,10 +1198,10 @@ bool Core::events() {
       pc = vec; m16 = false;
       invalidate_fetch();
       if (event_cb) {
-        in_callback++;
+        enter_callback();
         host_sync();
         event_cb(event_user, EVT_UART_IRQ, epc_v, vec);
-        in_callback--;
+        leave_callback();
       }
     } else if (irq_deliverable()) {
       uint32_t vec = enter_interrupt(pc | (m16 ? 1 : 0));

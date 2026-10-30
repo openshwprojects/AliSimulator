@@ -192,6 +192,11 @@ class Core {
   uint32_t cause_value() const;
   uint32_t enter_interrupt(uint32_t epc);   // returns the vector
   void poke_events() { next_event_ = 0; }
+  // A callback can change shared device bytes without using a setter. Remember
+  // it until events() observes them, while keeping the existing event boundary.
+  void note_host_callback() { dev_callback_dirty_ = true; }
+  void enter_callback() { in_callback++; note_host_callback(); }
+  void leave_callback() { in_callback--; note_host_callback(); }
 
   // ---- state (public: the C API and the host's properties read them) ----
   uint32_t gpr[32];
@@ -283,7 +288,12 @@ class Core {
   // like `now` the poll keeps): such registers (rec_ign_) are not compared.
   uint64_t rec_ign_ = 0;
   bool loop_poll_tried_ = false;   // this loop's pass was recorded already
-  uint32_t count_at(uint64_t ic) const { return count_base + (uint32_t)((ic - count_icount) * cnum / cden); }
+  uint32_t count_at(uint64_t ic) const {
+    uint64_t ticks = (ic - count_icount) * cnum;
+    // Integer ratios need no divide; retain the uint64_t wrap before division.
+    if (cden != 1) ticks /= cden;
+    return count_base + (uint32_t)ticks;
+  }
   uint64_t spin_dbg[6] = {0, 0, 0, 0, 0, 0};   // checks, loop entries, skips cut by an event, replays, sum of their room, spins found
   // GPIO DO / DIR stores (DF_GPIO_*: the host's handler only passes the bank's pin
   // levels on -- panel and bus decoders): they land here, the levels after each
@@ -395,6 +405,12 @@ class Core {
   uint8_t *devflags_ = nullptr;
   DevCb dev_cb_ = nullptr;
   void *dev_user_ = nullptr;
+  // A pointer mapping outside the device window may expose its bytes as code.
+  // Such stores must leave the block before the following instruction is decoded.
+  bool dev_store_alias_ = true;
+  bool dev_callback_dirty_ = false;
+  void refresh_device_aliases();
+  bool plain_device_store(uint32_t off, uint32_t size) const;
 
   // flash command mode
   bool flash_cmd_ = false;
@@ -459,7 +475,7 @@ class Core {
     uint16_t v; memcpy(&v, fetch_ptr_ + (va & 0xFFF), 2); return v;
   }
   uint64_t load_slow(uint32_t va, uint32_t size);
-  void store_slow(uint32_t va, uint32_t size, uint64_t value);
+  void store_slow(uint32_t va, uint32_t size, uint64_t value, bool plain_device = true);
   void fetch_page(uint32_t va);
   [[noreturn]] void fault_unaligned(uint32_t va, int access);
   [[noreturn]] void fault(int err, uint64_t addr, int access);
@@ -473,7 +489,7 @@ class Core {
 
   // host-memory helpers for the device window
   uint64_t dev_load(uint32_t off, uint32_t size);
-  void dev_store(uint32_t off, uint32_t size, uint64_t value);
+  void dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_device = false);
 
   // execution of one instruction (alicore_exec.cpp)
   void exec32(uint32_t insn);

@@ -178,6 +178,8 @@ class ConsoleHarness:
         mask_timer=False,
         boot_until=None,
         boot_step=250_000,
+        boot_settle_insns=0,
+        quiet_slices=16,
         idle_addr=None,
         takeover_ready=None,
     ):
@@ -188,6 +190,16 @@ class ConsoleHarness:
                         boot_insns at the latest.  The firmware's progress per
                         instruction follows host timing, so a milestone it
                         prints is a steadier take-over point than a count.
+        boot_step    -- the boot_until check interval; above the engine's
+                        exact-count threshold (300 k) the boot keeps its timed
+                        slices (idle skipping, delay shortcuts) like a plain boot;
+        boot_settle_insns -- after boot_until held, boot this much further
+                        before the take-over (the application's initialisation
+                        may go on after the milestone it prints);
+        quiet_slices -- send()'s default max_slices: how many quiet slices (no new
+                        output, 0.2 s of firmware time each) end a command's
+                        answer that shows no prompt; a console whose answers
+                        come late on a loaded host wants more;
         idle_addr    -- optional verified OS idle address for firmware whose
                         idle loop does not match the automatic signature;
         takeover_ready -- optional predicate on the simulator, required at idle
@@ -196,6 +208,7 @@ class ConsoleHarness:
         self.title = title
         self.direct_call = direct_call
         self.mask_timer = mask_timer
+        self.quiet_slices = quiet_slices
         self.t0 = time.time()
         self.checks = []
         self.uart_out = []
@@ -217,6 +230,8 @@ class ConsoleHarness:
             while self.sim.instruction_count < boot_insns:
                 self.sim.run(max_instructions=min(boot_insns, self.sim.instruction_count + boot_step))
                 if boot_until("".join(self.uart_out)):
+                    if boot_settle_insns:
+                        self.sim.run(max_instructions=self.sim.instruction_count + boot_settle_insns)
                     break
 
         self.gp = self.sim.mu.reg_read(UC_MIPS_REG_GP)
@@ -395,7 +410,7 @@ class ConsoleHarness:
     def send(
         self,
         data,
-        max_slices=16,
+        max_slices=None,
         slice_insns=200_000,
         stop_on=(
             ">",
@@ -412,6 +427,8 @@ class ConsoleHarness:
         direct_call=None,
     ) -> str:
         use_direct = self.direct_call if direct_call is None else direct_call
+        if max_slices is None:
+            max_slices = self.quiet_slices
         self.uart_out.clear()
         clr_mask = 0x8006 if self.mask_timer else 0x06
         if int.from_bytes(self.sim.peek(self.sys_addr, 4), "little") != 2:
@@ -491,14 +508,16 @@ class ConsoleDeaf(Exception):
 
 
 def run_with_retry(fn):
-    """Run a console test, booting once more after a simulator crash (UcError)
-    or a listener that stayed deaf (ConsoleDeaf): both depend on where the
-    host-timed start-up was when the harness took over."""
-    for attempt in (1, 2):
+    """Run a console test, booting again (up to two more times) after a
+    simulator crash (UcError: Unicorn's spurious faults, seen about once in
+    several long boots on Linux) or a listener that stayed deaf (ConsoleDeaf):
+    both depend on where the host-timed start-up was when the harness took
+    over."""
+    for attempt in (1, 2, 3):
         try:
             fn()
             return
         except Exception as e:
-            if attempt == 2 or ("UcError" not in type(e).__name__ and not isinstance(e, ConsoleDeaf)):
+            if attempt == 3 or ("UcError" not in type(e).__name__ and not isinstance(e, ConsoleDeaf)):
                 raise
             print(f"[WARN] {'console deaf' if isinstance(e, ConsoleDeaf) else 'simulator stopped'} ({e}); retrying")

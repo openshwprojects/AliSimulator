@@ -30,7 +30,17 @@ def run():
     h = ConsoleHarness(
         "OPTICUM X110TS/Software_X110TS_X110TSE_temp_Tiles_to_Sabbat.abs",
         "Opticum HD X110TS Tiles-to-Sabbat transition build (M3606)",
-        boot_insns=10_000_000,
+        # The take-over must come after the application's initialisation (its
+        # storage, its UART re-attach): the Unicorn engine's instruction estimate
+        # follows host time, so a fixed count (10 M) landed too early on the Linux
+        # CI runner, where the first command that needed the storage (MAINCODE)
+        # ran into the firmware's fatal reboot.  The banner the application
+        # prints is the steady milestone (as in run_dump_x110ts_118_rc4_console);
+        # the boot then goes on 2 M estimated instructions before the take-over.
+        boot_until=lambda uart: 'Libcore version 8.33.0@SDK4.0ba.8.33_20150107' in uart,
+        boot_step=1_000_000,
+        boot_settle_insns=2_000_000,
+        boot_insns=60_000_000,
         direct_call=True,
         mask_timer=True,
         attach_sci=True,

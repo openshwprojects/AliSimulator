@@ -42,7 +42,21 @@ def run():
     h = ConsoleHarness(
         "OPTICUM X110TS/Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs",
         "Opticum HD X110TS 1.4.0C PVR UNI ENG (M3606, console disabled)",
-        boot_insns=10_000_000,
+        # The take-over must come after the application's initialisation (its
+        # storage, its UART re-attach): the Unicorn engine's instruction estimate
+        # follows host time, so a fixed count (10 M) landed too early on the Linux
+        # CI runner, where the first command that needed the storage (MAINCODE)
+        # ran into the firmware's fatal reboot.  The banner the application
+        # prints is the steady milestone (as in run_dump_x110ts_118_rc4_console);
+        # the boot then goes on before the take-over: 10 M estimated instructions
+        # here, where the banner comes early in the start-up (2 M, enough for the
+        # 1.1.x builds, still took this one over too early under WSL).  Its
+        # linked-in console also answers late on a loaded host: 48 quiet slices.
+        boot_until=lambda uart: 'Application version 1.0.0@SDK4.0ba.8.0_Combo' in uart,
+        boot_step=1_000_000,
+        boot_settle_insns=10_000_000,
+        boot_insns=60_000_000,
+        quiet_slices=48,
         direct_call=True,
         mask_timer=True,
         attach_sci=True,
@@ -60,13 +74,16 @@ def run():
             resp == "comtest" and h.console_mode == 2, repr(resp))
 
     # 2. "startconsole" is not a trigger: only the "co" it shares with "comtest" is echoed
-    resp = h.send("startconsole", max_slices=12, stop_on=())
+    # (the quiet budgets of the answers collected without a prompt token are 32
+    # slices here: this linked-in console answers late on a loaded host, and with
+    # 8-12 VERSION's answer spilled into HEAP's under WSL)
+    resp = h.send("startconsole", max_slices=32, stop_on=())
     h.check("startconsole does not activate a console: the listener echoes only 'co' and stays in mode 2",
             resp == "co" and h.console_mode == 2 and "CONSOLE ACTIVATED" not in resp, repr(resp))
 
     # 3. Console commands get no answer
-    hlp = h.send("HELP\r", max_slices=8, stop_on=())
-    ver = h.send("VERSION\r", max_slices=8, stop_on=())
+    hlp = h.send("HELP\r", max_slices=32, stop_on=())
+    ver = h.send("VERSION\r", max_slices=32, stop_on=())
     h.check("console commands (HELP, VERSION) get no answer without a console",
             hlp == "" and ver == "" and h.console_mode == 2, repr((hlp, ver)))
 
@@ -206,7 +223,7 @@ def run():
     h.check("linked-in hidden MAGICKEY and PALANTIR are accepted silently",
             mk == "MAGICKEY\r\n>" and pal == "PALANTIR\r\n>", repr((mk, pal)))
 
-    hmsg = h.send("HMSG\r", max_slices=16)
+    hmsg = h.send("HMSG\r", max_slices=32)
     h.check("linked-in HMSG (now unlocked) dumps the control message table ('Lista MSG:', '000\\tCTRL_MSG_SUBTYPE_KEY = 0')",
             "Lista MSG:" in hmsg and "000\tCTRL_MSG_SUBTYPE_KEY = 0" in hmsg and hmsg.endswith(">"),
             repr(hmsg[:200]))
@@ -230,8 +247,10 @@ def run():
             sm1.endswith("Input MSG code... ") and "Input MSG param... " in sm2 and sm3.endswith(">"),
             repr((sm1, sm2, sm3)))
 
-    # RCU / CLS / EXIT / REBOOT
-    rcu_enter = h.send("RCU\r")
+    # RCU / CLS / EXIT / REBOOT.  This build's RCU returns to the prompt on its
+    # own, but only after a quiet stretch; on a loaded host the default quiet
+    # budget (16 slices) ran out first and the prompt spilled into CLS's answer.
+    rcu_enter = h.send("RCU\r", max_slices=64)
     h.check("linked-in RCU prints 'Enter RCU emulation mode (press 'ESC' to return)...'",
             "Enter RCU emulation mode (press 'ESC' to return)..." in rcu_enter and rcu_enter.endswith(">"),
             repr(rcu_enter))

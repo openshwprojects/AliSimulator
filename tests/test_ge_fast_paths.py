@@ -146,6 +146,36 @@ for fmt in (0x0A, 0x08, 0x09):
     ok, diff, n = run_both(cmds, seed=200 + fmt)
     check(ok, f"{ge_m36f.BPP[fmt]}-bit surfaces: {n} copies with clip masks, {diff} bytes differ")
 
+print("--- clipped and boundary fills")
+for fmt in (0x01, 0x03, 0x04, 0x05, 0x06, 0x13):
+    cmds = []
+    for endian in (0, 1 << 23):
+        for outside in (0, 1 << 31):
+            for clip in ((5, 4, 14, 11), (30, 30, 40, 40), (0, 0, 31, 31)):
+                r = regs(a30=(4 << 8) | (1 << 21) | (1 << 28), a34=0x80001,
+                         a38=pf(fmt, 27, endian), a3c=3 | (2 << 16), a40=19 | (13 << 16),
+                         a98=0xFEDCBA98, a9c=0x01,
+                         a7c=clip[0] | (clip[1] << 16) | outside,
+                         a80=clip[2] | (clip[3] << 16))
+                cmds.append(r)
+        for pitch, dest, width, height in ((17, 0x80001, 1, 1), (7, 0x80001, 19, 13),
+                                           (0, 0x80001, 19, 13),
+                                           (19, RAM - 19 * ge_m36f.BPP[fmt] // 8 * 5, 19, 13)):
+            cmds.append(regs(a30=(3 << 8) | (1 << 21), a34=dest, a38=pf(fmt, pitch, endian),
+                             a40=width | (height << 16), a90=0xFFFFFFFF, a9c=0x01))
+    ok, diff, n = run_both(cmds, seed=400 + fmt)
+    check(ok, f"format 0x{fmt:02X}: {n} masked/unaligned/endian/small/boundary fills, {diff} bytes differ")
+
+# The renderer writes the live RAM buffer, which is also read by the CPU and DMA.
+backing = bytearray(128)
+shared = np.frombuffer(backing, dtype=np.uint8)
+ge = ge_m36f.GeM36F(shared)
+ge.run_io(regs(a30=(4 << 8) | (1 << 21), a34=16, a38=pf(0x01, 4, 1 << 23),
+               a40=2 | (2 << 16), a98=0xFEDCBA98, a9c=0x01))
+check(backing[16:24] == bytes.fromhex("fe dc ba 98 fe dc ba 98") and
+      backing[32:40] == backing[16:24] and not any(backing[:16] + backing[24:32] + backing[40:]) and
+      ge.primitives == 1 and not ge.unsupported, "solid fill updates shared RAM in place with exact byte order")
+
 print("--- edges")
 r1 = copy_cmd(rng, 0x01, 40, 20, 0, 0)
 r1[0x34 >> 2] = RAM - 40 * 4 * 10                                 # the DST runs past the end of the RAM

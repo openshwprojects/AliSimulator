@@ -24,7 +24,15 @@ def run():
     h = ConsoleHarness(
         "OPTICUM X110P/Software_Conax_X110p_PL_SMART_HD+_1.3.4_RC3_2015-01-23.abs",
         "Opticum HD X110p 1.3.4 (M3606)",
-        boot_insns=10_000_000,
+        # Take the console over only after the application's initialisation: on
+        # the Unicorn engine the instruction estimate follows host time, and a
+        # fixed 10 M left the listener deaf on slower hosts (test_uart_console's
+        # X110p step under WSL).  The application's banner is the steady milestone
+        # (as in run_dump_x110ts_118_rc4_console), then 2 M more before the take-over.
+        boot_until=lambda uart: 'Application version 1.0.0@SDK4.0ba.8.0_Combo_20120530' in uart,
+        boot_step=1_000_000,
+        boot_settle_insns=2_000_000,
+        boot_insns=60_000_000,
         direct_call=True,
         mask_timer=True,
     )

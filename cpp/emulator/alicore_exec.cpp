@@ -1494,6 +1494,7 @@ void Core::run_blocks(Block *b) {
         i++;
         icount += i;
         executed += i;
+        if (ALI_UNLIKELY(prof_insns_ != nullptr)) (*prof_insns_)[b->key] += i;
         pc = b->ops[i].pc;
         m16 = m;
         block_runs++;
@@ -1546,6 +1547,8 @@ void Core::run_blocks(Block *b) {
     while (k + 1 < n && b->ops[k].pc != cur_pc_) k++;
     icount += k;
     executed += k;
+    // Only the completed prefix belongs to the profile, not the faulting op.
+    if (ALI_UNLIKELY(prof_insns_ != nullptr) && k) (*prof_insns_)[b->key] += k;
     pc = b->ops[k].pc;
     m16 = m;
     if (k > 0 && k == n - 1 && b->ops[k - 1].op >= U_BEQ && b->ops[k - 1].op <= U16_JALR) {
@@ -1905,7 +1908,8 @@ int Core::run_loop() {
       hooks_done_ = false;
       step_over_bp_once = false;
       slow_++;
-      if (ALI_UNLIKELY(prof_insns_ != nullptr)) (*prof_insns_)[pc | (m16 ? 1u : 0u)]++;
+      // ERET and host callbacks may change pc/m16 while the instruction runs.
+      const uint32_t prof_pc = pc | (m16 ? 1u : 0u);
 
       // ---- one instruction ----
       cur_pc_ = pc;
@@ -1921,6 +1925,7 @@ int Core::run_loop() {
       }
       icount++;
       executed++;
+      if (ALI_UNLIKELY(prof_insns_ != nullptr)) (*prof_insns_)[prof_pc]++;
       if (cur_ds_) {
         pc = ds_target;
         m16 = ds_m16;
@@ -1953,6 +1958,7 @@ int Core::step_one() {
   next_event_ = ~0ull;
   int r = 0;
   try {
+    const uint32_t prof_pc = pc | (m16 ? 1u : 0u);
     cur_pc_ = pc;
     cur_ds_ = ds_active;
     br_taken_ = false;
@@ -1966,6 +1972,7 @@ int Core::step_one() {
     }
     icount++;
     executed++;
+    if (ALI_UNLIKELY(prof_insns_ != nullptr)) (*prof_insns_)[prof_pc]++;
     if (cur_ds_) { pc = ds_target; m16 = ds_m16; ds_active = false; }
     else if (br_taken_) {
       pc = npc_; m16 = nm16_; ds_active = true; ds_target = br_target_; ds_m16 = br_m16_; cur_branch_pc_ = cur_pc_;

@@ -432,7 +432,12 @@ def test_multi_dump_uart_console():
     # 5. ALi M3606 (Opticum HD X110p DVB-S2): startconsole + VERSION
     def _step5():
         h = ConsoleHarness("OPTICUM X110P/Software_Conax_X110p_PL_SMART_HD+_1.3.4_RC3_2015-01-23.abs",
-                           "Opticum HD X110p 1.3.4 (M3606)", boot_insns=10_000_000, direct_call=True, mask_timer=True)
+                           "Opticum HD X110p 1.3.4 (M3606)",
+                           # after the application's banner (+2 M): a fixed 10 M left the
+                           # listener deaf on slower hosts (see run_dump_x110p_console)
+                           boot_until=lambda uart: 'Application version 1.0.0@SDK4.0ba.8.0_Combo_20120530' in uart,
+                           boot_step=1_000_000, boot_settle_insns=2_000_000, boot_insns=60_000_000,
+                           direct_call=True, mask_timer=True)
         assert b"startconsole\x00" in h.ram and b"PALANTIR\x00" in h.ram
         assert h.handshake()[0] == "comtest"
         act, _ = h.activate()

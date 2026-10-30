@@ -967,7 +967,7 @@ then every 1000th.
 Run the scripts individually (`python tests/run_dump_maciej_to_bl_verify_sw.py`,
 `python tests/run_dump_to_end.py`, `python tests/test_boot_decodes_mips16.py`, ...)
 or all of them with `python run_all_tests.py` (a few minutes). The full run,
-`python run_all_tests.py --slow`, includes 128 test scripts and all UART
+`python run_all_tests.py --slow`, includes all discovered test scripts and UART
 console regressions. The
 earlier 104-script suite took about 45 minutes with `--jobs 2` on the Unicorn
 engine (89 minutes of test time), and about 19 minutes of test time on the
@@ -976,6 +976,35 @@ the speed work of 2026-10-15/16: idle skipping, cheaper CP0
 hooks, the bootloaders' LZMA decoder in Python, the native Status, waits in
 the firmware's time, the RTOS's delay() and interrupt disable without hooks,
 mailbox polls skipped, and the GE model's fast paths.
+
+`test_cpp_device_events.py` checks that ordinary device-buffer stores retain
+instruction, timer, interrupt, hook and code-alias semantics when the native
+core avoids an unnecessary event reschedule. `test_cpp_profile_accounting.py`
+checks completed-instruction profiling across partial blocks, faults, stops
+and single-step execution. Profile rows remain attributed to block entry PCs.
+`test_cpp_count_ratio.py` checks native Count arithmetic against an integer
+oracle, including fractional ratios, clock changes and unsigned wraparound.
+The native Count path avoids division for integer ratios without changing
+the clock or instruction count. These three tests report not applicable on
+the Unicorn engine.
+
+`test_ge_fast_paths.py` compares pixels with the general renderer, including
+clipping and RAM boundaries. `test_slice_stopper.py` checks timer rearming
+and callback draining with a controlled clock and real Windows wait callbacks.
+Rearming retains the earliest pending callback drain threshold until disarm;
+the requested timer deadline is unchanged.
+
+To compare C++ builds, preserve the old DLL and run
+`python tools/cpp_benchmark.py --baseline old/alicore.dll --candidate cpp/build/alicore.dll --output report/benchmark.json`.
+It runs fresh processes in randomized baseline/candidate pairs, disables HLE
+and instruction skipping, and requires matching recorded guest-state
+snapshots before reporting CPU and wall times. The workloads cover arithmetic,
+RAM, CP0 Count, plain device stores, Python MMIO callbacks and a fixed early-boot
+instruction budget. The snapshots cover the recorded CPU state, RAM, device
+buffer and UART; they do not cover every hidden device state. Run the benchmark
+without concurrent tests. Its workload ratios do not establish a
+whole-simulator speedup.
+
 The slow suite adds `run_dump_maciej_to_main_app.py`, which boots dump_maciej.bin
 through expand() into the main application (about 20 s; the bootloader's
 unoptimised LZMA decompression, which took a minute of that, runs in Python
@@ -1032,9 +1061,18 @@ with categories, privilege levels, LOGIN and MAGICKEY / PALANTIR left as
 decoys).  The other firmwares have no such console, only the SDK's "comtest"
 serial-upgrade listener (`test_uart_console.py` checks it on the URZ0083).
 The harness drives the console by calling its function from the idle task
-with the RTOS timer masked; the firmware's time follows host CPU time, so on a
-heavily loaded host a run can still miss input, and each test boots again once
-after a simulator crash.
+with the RTOS timer masked.  It must take the console over only after the
+application has finished initialising (its storage, its UART re-attach): a
+command that needs them before that -- MAINCODE, ADDDUMMY -- ends in the
+firmware's fatal reboot.  On the Unicorn engine the instruction count that
+bounds the boot is an estimate from host CPU time, so a fixed count lands at
+a different point of the start-up on each host (the Linux CI runner took the
+X110TS and T90 consoles over too early, 2026-10-24..30); the X110TS tests
+therefore boot until the application prints its banner (`boot_until`, plus a
+margin, `boot_settle_insns`) and the T90 with a budget large enough on slow
+hosts.  The firmware's time follows host CPU time, so on a heavily loaded host
+a run can still miss input, and each test boots again, up to twice, after a
+simulator crash (Unicorn's spurious faults in a long boot).
 
 The screen regressions (`--slow`) boot a dump until its OSD is drawn, capture
 the display layer and compare it pixel for pixel with the expected screen, a PNG

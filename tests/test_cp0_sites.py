@@ -158,16 +158,27 @@ check(all(sim.mu.reg_read(sim.gpr_map[r]) == sim._reg_read(sim.gpr_map[r]) ==
           for r in range(1, 32)),
       "all 31 GPRs ($1..$31) match across _reg_write, _reg_read, and mu.reg_read")
 if unicorn_only("CPUMIPSState direct register arrays and snapshots are Unicorn internals"):
-    check(sim._live_env and sim._env_u32 is not None, "CPUMIPSState direct register array (_env_u32) is calibrated")
+    # The live view of CPUMIPSState is reached through the struct offsets of
+    # Unicorn 2.1.4's Windows wheel (simulator._calibrate_gpr_view); on other
+    # hosts the engine keeps its context-based paths, which the checks above
+    # and below exercise, and the direct views do not apply.
+    if sys.platform == "win32":
+        check(sim._live_env and sim._env_u32 is not None, "CPUMIPSState direct register array (_env_u32) is calibrated")
+    else:
+        print(f"  (not applicable on {sys.platform}: the live CPUMIPSState view is calibrated on the Windows wheel only; "
+              f"live_env={sim._live_env})")
     snap = struct.unpack("<32I", sim._gpr_snapshot())
-    check(all(sim.mu.reg_read(sim.gpr_map[r]) == snap[r] == sim._env_u32[r] for r in range(1, 32)),
-          "all 31 GPRs ($1..$31) match _env_u32 and _gpr_snapshot")
+    env = sim._env_u32
+    check(all(sim.mu.reg_read(sim.gpr_map[r]) == snap[r] == (env[r] if env is not None else snap[r]) for r in range(1, 32)),
+          "all 31 GPRs ($1..$31) match _gpr_snapshot" + (" and _env_u32" if env is not None else ""))
 sim._reg_write(sim.gpr_map[0], 0xDEADBEEF)
-check(sim._reg_read(sim.gpr_map[0]) == 0 and sim.mu.reg_read(sim.gpr_map[0]) == 0 and (CPP or sim._env_u32[0] == 0),
+check(sim._reg_read(sim.gpr_map[0]) == 0 and sim.mu.reg_read(sim.gpr_map[0]) == 0
+      and (CPP or sim._env_u32 is None or sim._env_u32[0] == 0),
       "$zero ($0) stays 0 after _reg_write")
 sim._write_pc(0x80234568)
-check(sim.mu.reg_read(UC_MIPS_REG_PC) == 0x80234568 and (CPP or sim._env_u32[32] == 0x80234568),
-      "_write_pc updates the PC" + (" and _env_u32[32]" if not CPP else ""))
+check(sim.mu.reg_read(UC_MIPS_REG_PC) == 0x80234568
+      and (CPP or sim._env_u32 is None or sim._env_u32[32] == 0x80234568),
+      "_write_pc updates the PC" + (" and _env_u32[32]" if not CPP and sim._env_u32 is not None else ""))
 
 # Fast-mode CP0 site round-trips for Compare (11), Cause (13), Status (12), EBase (15,1), and MFC0 $zero, Count
 sim = AliMipsSimulator(log_handler=lambda m: None)
