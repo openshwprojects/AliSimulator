@@ -25,7 +25,9 @@ follow the firmware's GPIO writes and answer its key reads.
     up and down swapped.  The Cabletech URZ0195 has a
     uPD16312-class chip on the same bus with STB = GPIO 14, its digits in
     grids 4, 2, 3, 1 with their own segment wiring (" ON ", "----", then the
-    channel number "0004"); its firmwares' key maps have no panel keys.
+    channel number "0004"); its firmwares' key maps have no panel keys.  The
+    Ferguson Ariva 52E's PT6964 sits on CLK = GPIO 65, DIO = GPIO 66, STB =
+    GPIO 64 (its segment wiring is not known).
   * Buttons straight on GPIO inputs, no chip and no display (gpio_keys.py):
     the Strong Prima VIII -- GPIO 31 (channel up) and 9 (channel down),
     pulled up, low while pressed.
@@ -36,6 +38,7 @@ one shows a blank display and ignores the keys).
 import os
 
 from gpio_keys import GpioKeys
+from lemontree_decoder import LemontreeDecoder
 from tm1628_decoder import TM1628Decoder
 from tm1650_decoder import TM1650Decoder
 
@@ -97,6 +100,13 @@ PANELS = [
     ("srt8115", dict(chip="tm1628", clk=31, dio=9, stb=11, digit_addrs=(0, 2, 4, 6),
                      seg_map=(4, 2, 0, 6, 7, 3, 1, 5),
                      labels={(9, 1): "▲", (9, 2): "▼", (10, 1): "PWR"})),
+    # Ferguson Ariva 52E (M3606-class, bootloader "HSJ2"): its drivers are named PAN_PT6964_0, a
+    # TM1628-class 3-wire chip, which its bootloader drives on GPIO bank 2 (0xB80000F4) bits 0..2:
+    # STB = GPIO 64, CLK = GPIO 65, DIO = GPIO 66 (found from its pin toggles, 2026-10-31).  The
+    # bootloader writes RAM 2-3 (0x13 0x03) and 6-7 (0x33 0x03); which segments those are is not
+    # known (the application, which has the font, never runs: its main code is decrypted by the
+    # board's security IC, see the sidecar), so the digits come out as "?" in the standard layout.
+    ("A52E_", dict(chip="tm1628", clk=65, dio=66, stb=64, digit_addrs=(0, 2, 4, 6), labels={})),
     # Ferguson Ariva T650i: an FD650K ("PAN_FD650K"), TM1650-compatible, on the usual pins; its
     # digits are registers 0x6C, 0x6E, 0x6A, 0x68 from the left and its segments a..g, DP sit on
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:
@@ -124,8 +134,35 @@ PANELS = [
                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
     ("254Combo", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
                       seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A54_", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
+    ("A255", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    # Ferguson Ariva 54 (the C3503D, chips/c3503.py): the same FD650K and layout on GPIO bank 0
+    # (0xB8000054), SCL = GPIO 24, SDA = GPIO 23 (" On ", " on ", "nenu" on its external IR/LED
+    # eye; the Ariva 53's board_cfg leaves its panel I2C attach pointer NULL -- no display)
+    ("A54_", dict(chip="tm1650", scl=24, sda=23, digit_order=(2, 3, 1, 0),
+                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("PICCO_S2", dict(chip="tm1650", scl=24, sda=23, labels={})),
+    ("underline.3in1", dict(chip="tm1650", scl=31, sda=9, labels={})),
+    # Amiko HD8155 (128 MB C3505) and HD8265+ (256 MB C3505): a CH455 ("---led 455 attach OK--"),
+    # TM1650-compatible in the standard digit and segment layout (" ON " from the bootloader,
+    # " on " from the application), on GPIO bank 3 (0xB8000354) -- SCL = GPIO 107, SDA = GPIO 110
+    # on the HD8155; SCL = GPIO 107, SDA = GPIO 108 on the HD8265+
+    ("AMIKO 8155", dict(chip="tm1650", scl=107, sda=110, labels={})),
+    ("Impluse_H265", dict(chip="tm1650", scl=107, sda=110, labels={})),
+    ("AMIKO 8265", dict(chip="tm1650", scl=107, sda=108, labels={})),
+    # Amiko T58 (4 MB SPI, single-CPU M3821) and Amiko Eco TC-200 (8 MB SPI, dual-CPU M3821A): CH455
+    # (PAN_CH455_0) on GPIO bank 4, SCL = GPIO 128, SDA = GPIO 129 (" ON " -> " on ")
+    ("AMIKO_T58", dict(chip="tm1650", scl=128, sda=129, labels={})),
+    ("AMIKO_ECO_TC-200", dict(chip="tm1650", scl=128, sda=129, labels={})),
+    # Amiko HD8260+ (16 MB SPI, 256 MB M3516A / M3503): a CH455 ("CH455 panel init OK!") on GPIO
+    # bank 4 (0xB8000454), SCL = GPIO 135, SDA = GPIO 134 (" ON " -> " on ")
+    ("8260_Edision", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    # Opticum HD X4 220 (M3602B "Lemontree"): external front-panel and EuP standby MCU at I2C 0x28
+    # on SCL = GPIO 62 (0x0D4 bit 30), SDA = GPIO 171 (legacy third bank 0x0E8 bit 11), speaking
+    # 8-byte CRC-16/XMODEM frames (" ON " -> "    " -> " on " -> "tUnE")
+    ("OPTICUM_HD_X4", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("Opticum_HD_x7", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("Edision.vip3", dict(chip="lemontree", scl=103, sda=102, labels={})),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
     # Opticum X110TS and X110p (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
@@ -140,6 +177,8 @@ PANELS = [
     # 0xFF02, 0xFF01): KI1/DIG4 power (standby, "oFF "), KI2/DIG4 up and KI3/DIG4 down -- they move
     # the Reta image's language list; the SmartHD main menu's row of tiles takes neither
     ("HD-XS2", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
+    ("M3515-COMBO", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
+    ("140_TWIN", dict(chip="tm1650", scl=135, sda=134, labels={(1, 4): "PWR", (2, 4): "▲", (3, 4): "▼"})),
     # Echosonic Mini ESR-250 (M3510A, the M3503 family): the HD-XS2's pins, SCL = GPIO 135, SDA =
     # GPIO 134 (bank 4 bits 7 / 6 toggle) -- "__-_", "___-", "-ON-" while it starts, then "Strt"
     # from the application.  Its UI's key map holds the raw key bytes as panel
@@ -168,6 +207,12 @@ PANELS = [
     ("ali3329", dict(chip="tm1650", scl=15, sda=16,
                      labels={(1, 4): "▼", (2, 4): "▲", (3, 4): "OK", (4, 4): "MENU", (5, 4): "◀",
                              (6, 4): "▶", (7, 4): "PWR"})),
+    # Opticum X80 Premium (M3329C / M3101C, 2 MB SPI): CH455 / TM1650 on SCL = GPIO 30, SDA = GPIO 31
+    # (" on " -> "----" -> "OOO1")
+    ("x80 premium", dict(chip="tm1650", scl=30, sda=31, labels={})),
+    # Opticum 7300 PVR CI2CX (M3329E, 4 MB SPI): PT6312 / uPD16312 8-grid 14-segment VFD
+    # (PAN_pt6312_0) on CLK = GPIO 3, DIO = GPIO 2, STB = GPIO 4 ("  BOOT  " -> "   ON   " -> "1PLUS1  ")
+    ("7300PVR", dict(chip="tm1628", clk=3, dio=2, stb=4, vfd_14seg=True, labels={})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 
@@ -215,10 +260,17 @@ def make_panel(dump, log_handler=None):
         dec = GpioKeys(spec["keys"], log_handler=log_handler)
         keys = [(labels.get(pin, f"GPIO {pin}"), GpioKeys.key_code(pin)) for pin in spec["keys"]]
         desc = "buttons on GPIO " + " / ".join(str(pin) for pin in spec["keys"]) + ", no display"
+    elif spec["chip"] == "lemontree":
+        dec = LemontreeDecoder(scl_gpio=spec["scl"], sda_gpio=spec["sda"], log_handler=log_handler,
+                               digit_order=spec.get("digit_order", (0, 1, 2, 3)),
+                               seg_map=spec.get("seg_map", LemontreeDecoder.LEMONTREE_SEG_MAP))
+        keys = [(label, LemontreeDecoder.key_code(code)) for code, label in sorted(labels.items())]
+        desc = f"Lemontree EuP MCU (I2C 0x28) on SCL {spec['scl']} / SDA {spec['sda']}"
     elif spec["chip"] == "tm1628":
         dec = TM1628Decoder(clk_gpio=spec["clk"], dio_gpio=spec["dio"], stb_gpio=spec["stb"],
                             digit_addrs=spec.get("digit_addrs", (0, 2, 4, 6)),
                             seg_map=spec.get("seg_map", TM1628Decoder.STANDARD_SEG_MAP),
+                            vfd_14seg=spec.get("vfd_14seg", False),
                             log_handler=log_handler)
         keys = [(labels.get((ks, k), f"{ks}-{k}"), TM1628Decoder.key_code(ks, k))
                 for ks in range(1, 11) for k in (1, 2)]

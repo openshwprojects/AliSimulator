@@ -36,13 +36,14 @@ def maincode(image):
     0x80-byte chunk header), b"" when there is none or it does not unpack.
     The last result is kept: several families may ask about one image."""
     global _maincode_cache
-    key = (len(image), hashlib.sha1(bytes(image[:0x40000])).digest())
+    mid = len(image) // 4
+    key = (len(image), hashlib.sha1(bytes(image[:0x40000]) + bytes(image[mid:mid + 0x10000])).digest())
     if _maincode_cache[0] == key:
         return _maincode_cache[1]
     data = b""
     for offset, name, _version in chunk_chain(image):
-        if name.lower() == "maincode":
-            length = struct.unpack_from(">I", image, offset + 4)[0]
+        cid, length = struct.unpack_from(">II", image, offset)
+        if name.lower().startswith("maincode") or (cid >> 16) == 0x01FE:
             try:
                 data = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE).decompress(
                     bytes(image[offset + 0x80:offset + 0x80 + length]))
@@ -136,15 +137,21 @@ class ChipFamily:
         over the flash window or above the RAM, Unicorn hooks, simulator
         attributes.  Nothing here."""
 
+    def default_chip_id(self):
+        """The 16-bit chip ID before any sidecar override (chip_id by default)."""
+        return type(self).chip_id
+
     def write_chip_id(self):
         """The chip ID word at 0xB8000000: the 16-bit ID in its upper half --
         the family's, or the loaded board's own where the family's members read
         different ones (its sidecar's device.chipId) -- the variant bits below."""
-        self.chip_id = type(self).chip_id
+        self.chip_id = self.default_chip_id()
         path = getattr(self.sim, "dump_path", None)
         if path:
             import dump_catalog
-            self.chip_id = dump_catalog.chip_id(path) or self.chip_id
+            cid = dump_catalog.chip_id(path)
+            if cid is not None:
+                self.chip_id = cid
         self.sim.poke(0xB8000000, ((self.chip_id << 16) | self.variant()).to_bytes(4, 'little'))
 
     def variant(self):

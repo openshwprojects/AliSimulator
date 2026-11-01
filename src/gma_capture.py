@@ -11,6 +11,7 @@ gma_m36f_init_head / gma_fill_hw_head) is:
   +04  palette address (256 x 32-bit entries)
   +08  x start | x end << 16  (11 bits each)
   +0C  y start | y end << 16
+  +10  bitmap width | bitmap height << 16  (source size before GMA scaling)
   +14  b0-7 global alpha, b8-11 palette alpha level, b16-29 pitch in bytes
   +18  next head (physical; the chain ends at a head pointing to itself / 0)
   +1C  bitmap address (physical)
@@ -62,8 +63,13 @@ LAYER_REGS = (0x6300, 0x6380)       # (enable, base address) register pairs of G
 PHYS = 0x07FFFFFF
 
 
+def _phys(ram):
+    n = len(ram)
+    return (n - 1) if n and not (n & (n - 1)) else PHYS
+
+
 def _w(ram, a, o=0):
-    a = (a + o) & PHYS
+    a = (a + o) & _phys(ram)
     return int(ram[a:a + 4].view('<u4')[0]) if a + 4 <= ram.size else 0
 
 
@@ -79,6 +85,7 @@ def parse_head(ram, addr):
         'palette': w[1] & 0x0FFFFFFF,
         'x0': w[2] & 0x7FF, 'x1': (w[2] >> 16) & 0x7FF,
         'y0': w[3] & 0x7FF, 'y1': (w[3] >> 16) & 0x7FF,
+        'bitmap_w': w[4] & 0xFFF, 'bitmap_h': (w[4] >> 16) & 0xFFF,
         'alpha': w[5] & 0xFF,
         'pal_alpha_level': (w[5] >> 8) & 0xF,
         'pitch': (w[5] >> 16) & 0x3FFF,
@@ -158,20 +165,21 @@ M3602_HEADS = ((0x61A8, 0x001), (0x61AC, 0x100))        # (head address register
 
 def m3602_layers(ram, dev):
     """The M3602's enabled display layers: dicts with the head's fields."""
+    phys = _phys(ram)
     on = struct.unpack_from('<I', dev, M3602_LAYER_ON)[0]
     layers = []
     for reg, bit in M3602_HEADS:
-        a = struct.unpack_from('<I', dev, reg)[0] & PHYS
+        a = struct.unpack_from('<I', dev, reg)[0] & phys
         if not on & bit or not a:
             continue
         w = [_w(ram, a, 4 * i) for i in range(8)]
         layers.append({
             'head': a, 'words': w,
-            'bitmap': w[1] & PHYS,
+            'bitmap': w[1] & phys,
             'x0': w[2] & 0x7FF, 'x1': (w[2] >> 17) & 0x7FF, 'format': (w[2] >> 13) & 0xF,
             'y0': w[3] & 0x7FF, 'y1': (w[3] >> 12) & 0x7FF, 'alpha': (w[3] >> 23) & 0xFF,
             'pitch': w[5] & 0xFFFF,
-            'palette': w[6] & 0x07FFFFE0,
+            'palette': w[6] & (phys & ~0x1F),
         })
     return layers
 
@@ -203,19 +211,23 @@ M3327_BPP = {0: 2, 1: 4, 2: 8, 3: 4}
 
 
 def m3327_regions(ram, dev):
-    """The M3329's OSD regions (OSD_M3327C): [(layer, region dict)] of the
-    enabled layers, each layer's chain of 16-byte headers in RAM from its
-    register:
+    """The M3329's OSD regions (OSD_M3327C / OSD_S36 on M3329E): [(layer,
+    region dict)] of the enabled layers, each layer's chain of 16-byte
+    headers in RAM from its register:
       +0  b2-3 colour mode (0 2 bpp, 1 4 bpp, 2 8 bpp, 3 4 bpp), b4-22 the
-          next header (0 ends), b24-27 the palette bank of a 2 / 4 bpp region
-      +4  b0-18 the bitmap address >> 4, b22-31 x end
+          next header within the 8 MB segment (0 ends), b24-27 the palette
+          bank of a 2 / 4 bpp region
+      +4  b0-18 the bitmap address >> 4 within the 8 MB segment, b20
+          end-of-chain on M3329E, b22-31 x end
       +8  b0-9 the height, b22-31 x start
       +C  b0-9 y end, b16-25 y start
     a bitmap's rows being the width's bytes rounded up to 16."""
     on = struct.unpack_from('<I', dev, M3327_LAYER_ON)[0]
     regions = []
     for layer, (reg, bit) in enumerate(M3327_HEADS):
-        a = struct.unpack_from('<I', dev, reg)[0] & 0x7FFFF0
+        raw_head = struct.unpack_from('<I', dev, reg)[0]
+        seg_base = raw_head & 0x07800000
+        a = raw_head & 0x07FFFFF0
         seen = set()
         while on & bit and a and a not in seen and len(seen) < 64:
             seen.add(a)
@@ -226,9 +238,10 @@ def m3327_regions(ram, dev):
             regions.append((layer, {
                 'header': a, 'words': (w0, w1, w2, w3), 'bpp': bpp, 'bank': (w0 >> 24) & 0xF,
                 'x0': x0, 'y0': y0, 'width': width, 'height': y1 - y0 + 1,
-                'bitmap': (w1 & 0x7FFFF) << 4, 'pitch': (width * bpp // 8 + 15) & ~15,
+                'bitmap': seg_base | ((w1 & 0x7FFFF) << 4), 'pitch': (width * bpp // 8 + 15) & ~15,
             }))
-            a = w0 & 0x7FFFF0
+            nxt = w0 & 0x7FFFF0
+            a = (seg_base | nxt) if (nxt and not (w1 & 0x100000)) else 0
     return regions
 
 
@@ -265,6 +278,7 @@ DE_FORMATS = {0x00: 0x06, 0x01: 0x00, 0x02: 0x04, 0x03: 0x02, 0x05: 0x01, 0x06: 
 def de_registers(ram, dev):
     """{register offset: value} the display engine's enabled register lists
     set (a later list's value for a register wins)."""
+    phys = _phys(ram)
     regs = {}
     for channel in DE_LIST_CHANNELS:
         head, enabled = struct.unpack_from('<II', dev, channel)
@@ -278,7 +292,7 @@ def de_registers(ram, dev):
                 reg = _w(ram, head, 0x20 + 8 * i)
                 if reg >> 24 & 0x1F == 0x18:                    # (a register of the device window)
                     regs[reg & 0xFFFFFF] = _w(ram, head, 0x24 + 8 * i)
-            head = nxt & PHYS
+            head = nxt & phys
     return regs
 
 
@@ -287,6 +301,7 @@ def de_layers(ram, dev):
     the layer's base, whether it is on, its bitmap (address, HW format,
     width, height, pitch in pixels) and where it starts on the screen
     (the low halves of +10 / +14)."""
+    phys = _phys(ram)
     regs = de_registers(ram, dev)
     layers = []
     for base in DE_LAYERS:
@@ -298,7 +313,7 @@ def de_layers(ram, dev):
             'base': base,
             'enabled': bool(regs.get(base + 0xA4, 0) & 1) and fmt is not None,
             'format': fmt,
-            'bitmap': _w(ram, head, 4) & PHYS,
+            'bitmap': _w(ram, head, 4) & phys,
             'width': regs.get(base + 0x18, 0) >> 16,
             'height': regs.get(base + 0x1C, 0) >> 16,
             'pitch': regs.get(base + 0x34, 0) & 0xFFFF,
@@ -442,12 +457,17 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
                 continue
             if (fx, fy) != (1.0, 1.0) and h['x1'] >= h['x0'] and h['y1'] >= h['y0']:
                 # the window the output shows, scaled back to the bitmap's pixels --
-                # only when the bitmap is wide enough for that (a layer the display
-                # engine shows 1:1 is not scaled)
-                vw = round((h['x1'] - h['x0'] + 1) * fx)
+                # only when the bitmap was scaled to the output; a Full HD 1920 x 1080
+                # bitmap shown 1:1 on a 1080i/1080p output (e.g. Amiko HD8260+) is
+                # resampled onto the canvas instead of cropped to its top-left corner.
+                out_w = h['x1'] - h['x0'] + 1
+                vw = round(out_w * fx)
                 vh = round((h['y1'] - h['y0'] + 1) * fy)
                 pitch_px = h['pitch'] * 8 // ge_m36f.BPP.get(h['format'], 8) if h['pitch'] else 0
-                if vw <= pitch_px + 16:
+                src_w = h.get('bitmap_w') or pitch_px
+                if fx < 1.0 and src_w > vw + 16 and out_w <= pitch_px + 16:
+                    h = dict(h, resample=(fx, fy))
+                elif vw <= pitch_px + 16:
                     # (a window a few pixels wider than the bitmap is the firmware's own
                     # rounding of the scaled size: the SRT 8115's 568-px PAL window
                     # scales back to 1010 for its 1008-px bitmap, the Prima's 567 to 1008)
@@ -467,7 +487,7 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
             out = np.empty((H, W, 3), np.uint8)
             out[...] = background
             return out, info
-        if len(active_heads) == 1 and not active_de:
+        if len(active_heads) == 1 and not active_de and 'resample' not in active_heads[0]:
             res = _render_head_on_bg(ram, active_heads[0], screen, background)
             if res is not None:
                 return res, info
@@ -491,6 +511,14 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
         canvas[...] = background
     for h in active_heads:
         rgba, x, y = render_head(ram, h)
+        if 'resample' in h:
+            rx, ry = h['resample']
+            rh, rw = rgba.shape[:2]
+            th, tw = max(1, round(rh * ry)), max(1, round(rw * rx))
+            rows = np.minimum((np.arange(th) * rh // th).astype(int), rh - 1)
+            cols = np.minimum((np.arange(tw) * rw // tw).astype(int), rw - 1)
+            rgba = rgba[rows][:, cols]
+            x, y = round(x * rx), round(y * ry)
         _blend(canvas, rgba, x, y)
     # the M3602's layers (the T50), in the output's coordinates: scaled up to the canvas
     for layer in info['m3602_layers']:

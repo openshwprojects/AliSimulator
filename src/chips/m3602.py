@@ -89,7 +89,7 @@ class M3602(ChipFamily):
     @classmethod
     def matches(cls, image):
         for _offset, name, version in chunk_chain(image):
-            if name == "HDCPKey" and version.startswith(("Demo s3602", "Demo M3612", "S3606")):
+            if name == "HDCPKey" and version.startswith(("Demo s3602", "S3606")):
                 return True
             if name == "maincode" and version.startswith(("Demo M3602", "Demo M3606", "M3606")):
                 return True
@@ -97,8 +97,9 @@ class M3602(ChipFamily):
             # put the chip in its version ("M3601S", "M3606 2Tuner"; the Globo HD-XS2's M3503,
             # named in its bootloader's version, is m3503.py); Ferguson / Edision M3602 and M3606
             # bootloaders ("HS11" / "HS17" / "HS18" / "HS1C" / "HSJ2") start their version with
-            # "350" or "370" ("35003-01047", "37017-01047")
-            if version.startswith(("M3601", "M3606", "M3612", "350", "370")):
+            # "350" or "370" ("35003-01047", "37017-01047").  ("M3612" / "Demo M3612" is NOT
+            # M3602: its single-CPU silicon reads S3811 chip ID 0x3811 -> m3801.py.)
+            if version.startswith(("M3601", "M3602", "M3606", "350", "370")):
                 return True
         return False
 
@@ -142,6 +143,18 @@ class M3602(ChipFamily):
         from ge_m3602 import GeM3602
         self.ge = GeM3602(sim)
 
+    def default_chip_id(self):
+        # Dual-CPU M3606 / S3606 firmwares (8 MB flash builds such as Edision Argus
+        # VIP3 "M3606c 1.1.3" and Openbox S16 EU "S3606H-1.0.0") compute a 4 MB
+        # flash base (0xAFC00000) under 0x3602 and overflow past 0xB0000000 when
+        # reading chunks above 4 MB; on M3606 / C3603 silicon (0x3603) they use
+        # the 16 MB flash base 0xAF000000.
+        if type(self) is M3602 and self.sim.rom_image:
+            if any(version.startswith(("M3606", "S3606"))
+                   for _o, _n, version in chunk_chain(self.sim.rom_image)):
+                return C3603
+        return super().default_chip_id()
+
     def variant(self):
         return C3603_PRODUCT if self.chip_id == C3603 else self.chip_variant
 
@@ -151,16 +164,20 @@ class M3602(ChipFamily):
         super().write_chip_id()
         self._remove_demod()
         if self.chip_id == C3603:
-            self.sim.i2c_devices[S3501.ADDRESS] = self.demod = S3501(tuned=self.sim.tuned_to_signal)
+            self._c3603_demod = self.demod = S3501(tuned=self.sim.tuned_to_signal)
+            self.sim.i2c_devices[S3501.ADDRESS] = self._c3603_demod
             self.sim.attach_tuner()
 
     def _remove_demod(self):
-        if isinstance(self.sim.i2c_devices.get(S3501.ADDRESS), S3501):
-            if self.demod is self.sim.i2c_devices[S3501.ADDRESS]:
+        own = getattr(self, "_c3603_demod", None)
+        if own is not None:
+            if self.sim.i2c_devices.get(S3501.ADDRESS) is own:
+                del self.sim.i2c_devices[S3501.ADDRESS]
+            if self.demod is own:
                 self.demod = None
-            del self.sim.i2c_devices[S3501.ADDRESS]
-        for addr in [a for a, d in self.sim.i2c_devices.items() if tuners.is_tuner(d)]:
-            del self.sim.i2c_devices[addr]
+            self._c3603_demod = None
+            for addr in [a for a, d in self.sim.i2c_devices.items() if tuners.is_tuner(d)]:
+                del self.sim.i2c_devices[addr]
 
     def start(self):
         """Bootloaders whose chunk header sets byte 0x43 = 0x80 (the Opticum

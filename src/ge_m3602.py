@@ -65,16 +65,17 @@ MAX_COMMANDS = 4096                     # a chain longer than this is taken as a
 
 
 class GeM3602:
-    def __init__(self, sim):
+    def __init__(self, sim, base=BASE):
         self.sim = sim
+        self.base = base
         self.commands = 0
         self.unsupported = {}
         self._ram = None
-        sim._mmio_on('w', self._write_control, BASE, BASE + 3)
-        sim._mmio_on('w', self._write_status, BASE + 8, BASE + 0xB)
+        sim._mmio_on('w', self._write_control, self.base, self.base + 3)
+        sim._mmio_on('w', self._write_status, self.base + 8, self.base + 0xB)
 
     def _rd(self, offset):
-        return int.from_bytes(self.sim.peek(0xB8000000 + BASE + offset, 4), 'little')
+        return int.from_bytes(self.sim.peek(0xB8000000 + self.base + offset, 4), 'little')
 
     def _write_control(self, uc, access, address, size, value, user_data):
         if address & 3 or size != 4 or value != 2:
@@ -88,8 +89,8 @@ class GeM3602:
         self.sim.ge_ops += 1
         if self.sim.ge_render:
             self.run(first, lo >> 24)
-        self.sim.poke(0xB8000000 + BASE + 8, struct.pack("<I", self._rd(8) | 2))
-        self.sim.poke(0xB8000000 + BASE + 4, bytes(4))
+        self.sim.poke(0xB8000000 + self.base + 8, struct.pack("<I", self._rd(8) | 2))
+        self.sim.poke(0xB8000000 + self.base + 4, bytes(4))
         return None
 
     def _write_status(self, uc, access, address, size, value, user_data):

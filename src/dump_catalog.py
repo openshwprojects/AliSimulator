@@ -249,7 +249,7 @@ def problems(path, data):
                 and isinstance(demod.get("address"), int) and 0 < demod["address"] < 0x80):
             out.append(f"{rel}: demodModel {demod!r} is not {{\"chip\": one of {sorted(demods.MODELS)}, "
                        f"\"address\": a 7-bit address}}")
-    pin = lambda p: isinstance(p, int) and not isinstance(p, bool) and 0 <= p < 160    # noqa: E731
+    pin = lambda p: isinstance(p, int) and not isinstance(p, bool) and 0 <= p < 192    # noqa: E731
     bus = device.get("gpioI2c")
     if bus is not None and not (isinstance(bus, dict) and set(bus) == {"scl", "sda"} and all(map(pin, bus.values()))):
         out.append(f"{rel}: gpioI2c {bus!r} is not {{\"scl\": a GPIO number, \"sda\": a GPIO number}}")

@@ -178,6 +178,19 @@ def main():
     check(obus.lines() == (1, 1) and hd.state == 'IDLE', "open-drain: the bus is idle and high again")
     check(hd.key_read_count == 2 and hd.i2c_transaction_count == 7,
           f"open-drain: 7 transactions, 2 key reads ({hd.i2c_transaction_count}, {hd.key_read_count})")
+
+    # Lemontree EuP MCU 38-byte PT6311 8-character 14-segment VFD frames (Opticum HD X7 Combo)
+    from lemontree_decoder import LemontreeDecoder
+    lt = LemontreeDecoder(log_handler=lambda m: None)
+    lt._handle_command(bytes.fromhex(
+        "33220400c000c100c300c400c674c772c911ca78cc11cd78cf44d022d200d300d500d600c121"))
+    check(lt.get_display_text() == "  BOOT  " and lt.digits == [0x7C, 0x3F, 0x3F, 0x78],
+          f"Lemontree PT6311 VFD bootloader frame decodes '  BOOT  ' ({lt.get_display_text()!r}, digits={lt.digits})")
+    lt._handle_command(bytes.fromhex(
+        "33220400c000c100c300c400c600c700c911ca78cc53cd19cf00d000d200d300d500d6004136"))
+    check(lt.get_display_text() == "   ON   " and lt.digits == [0x00, 0x3F, 0x37, 0x00],
+          f"Lemontree PT6311 VFD application frame decodes '   ON   ' ({lt.get_display_text()!r}, digits={lt.digits})")
+
     print("[PASS] TM1650 key scan" if ok else "[FAIL] TM1650 key scan")
     sys.exit(0 if ok else 1)
 

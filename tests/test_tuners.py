@@ -228,6 +228,32 @@ check(i2c_write(0x60, [0x00]) and i2c_read(0x60, 1) == b"\xC3" and i2c_write(0x6
 i2c_write(0x60, [0x01, 0x70, 0x00, 0x00, 0x00])                 # n = 0x700000 -> 27 * 56 = 1512 MHz
 check(tuners.describe(rda) == "RDA5815: 1512.000 MHz", f"RDA5815: 0x01..0x04 PLL write -> {tuners.describe(rda)}")
 
+# RDA5816 at 0x0C (Ariva 255 Combo S): chip ID 0x58 0x11 in 0x00..0x01, lock 0x03 in 0x03, 32-bit PLL in 0x07..0x0A, BW in 0x0B
+rda16 = sim.i2c_devices[0x0C] = tuners.make("rda5816")
+av12 = tuners.make("av2012")
+check(i2c_write(0x0C, [0x00]) and i2c_read(0x0C, 2) == b"\x58\x11"
+      and i2c_write(0x0C, [0x03]) and i2c_read(0x0C, 1) == b"\x03"
+      and isinstance(av12, tuners.AV2011),
+      "RDA5816: chip ID 0x5811 in 0x00..0x01, PLL lock 0x03 in 0x03; AV2012 inherits AV2011")
+i2c_write(0x0C, [0x07, 0x07, 0x00, 0x00, 0x00, 27])              # n = 56 * 2^21 -> 56 * 27 = 1512 MHz, BW 27 MHz
+check(tuners.describe(rda16) == "RDA5816: 1512.000 MHz / 27 MHz",
+      f"RDA5816: 0x07..0x0B PLL write -> {tuners.describe(rda16)}")
+
+# AVL6862 / AVL6862A / AVL6762 at 0x14 (Ariva 255 Combo / Combo S on SCB3; Amiko HD8260+ on GPIO I2C, HD8265+ on SCB3; Edision Optimuss Underline 3in1 on SCB0)
+avl68 = sim.i2c_devices[0x14] = demods.make("avl6862")
+check(i2c_write(0x14, [0x04, 0x00, 0x00]) and i2c_read(0x14, 4) == b"\x68\x62\x49\x55"
+      and i2c_write(0x14, [0x10, 0x80, 0x00]) and i2c_read(0x14, 4) == b"\x00\x00\x00\x02",
+      "AVL6862: FamilyID 0x68624955 at 0x040000 and ChipID 0x00000002 at 0x108000")
+avl68a = sim.i2c_devices[0x14] = demods.make("avl6862a")
+check(i2c_write(0x14, [0x04, 0x00, 0x00]) and i2c_read(0x14, 4) == b"\x68\x62\x49\x55"
+      and i2c_write(0x14, [0x10, 0x80, 0x00]) and i2c_read(0x14, 4) == b"\x00\x00\x00\x0F",
+      "AVL6862A: FamilyID 0x68624955 at 0x040000 and ChipID 0x0000000F at 0x108000")
+avl67 = sim.i2c_devices[0x14] = demods.make("avl6762")
+i2c_write(0x14, [0x00, 0x00, 0xA0])
+by_byte = b"".join(avl67.read(1) for _ in range(4))
+check(by_byte == b"\x5A\xA5\x7F\xF7" and i2c_write(0x14, [0x10, 0x80, 0x00]) and i2c_read(0x14, 4) == b"\x00\x00\x00\x0E",
+      "AVL6762: ChipID 0x0000000E at 0x108000 and read(1) auto-increments across 0x5AA57FF7 for GpioI2cBus")
+
 print(f"\n[{'PASS' if ok else 'FAIL'}] tuner models")
 sys.exit(0 if ok else 1)
 

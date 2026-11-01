@@ -9,23 +9,27 @@ Quick start: `pip install unicorn capstone numpy pillow`, then `python src/tv_gu
 | Chip | Module | Chip ID | Receivers | Boxes in `dumps/` | Images | Second CPU (SEE) |
 |---|---|---|---|---|---|---|
 | ALi M3801 (the silicon reports itself as S3811) | `src/chips/m3801.py` | 0x3811 | DVB-T HD | Comsat TE 1050 HD, Opticum STB HD N2, Globo STB HD N3, Opticum HD T90, Cabletech URZ0083Q / URZ0194S / URZ0195, Strong SRT 8115, Strong Prima VIII, Ferguson Ariva T650i | 12 (+ the SDK test program `ali_sdk.bin`) | no |
-| ALi M3601E / M3601S / M3602 / M3606 (the M36xx family) | `src/chips/m3602.py` | 0x3602 (Ariva T50), 0x3603 (the others, from the sidecar) | DVB-T and DVB-S2 HD | Cabletech URZ0083 / URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501, Ferguson Ariva T50, Opticum HD S50 / HD S60 / HD X110p / X110TS, Openbox S16 HD PVR, Amiko Mini HD, Edision Argus Miniplus Highspeed / Optimuss Underline | 50 | M3606: yes (the `seecode` chunk) |
-| ALi M3503 / M3510A | `src/chips/m3503.py` | 0x3503 | DVB-S2 HD | Globo HD-XS2 / Opticum Blue XS65, Echosonic Mini ESR-250 | 5 | yes |
-| ALi C3505 | `src/chips/c3505.py` | 0x3505 | DVB-S2 HD with HEVC (154 / 254 Combo: + DVB-T2/C) | Ferguson Ariva 104 / 154 Combo / 204 / 254 Combo / T760i | 27 | yes |
+| ALi M3601E / M3601S / M3602 / M3606 (the M36xx family) | `src/chips/m3602.py` | 0x3602 (Ariva T50, Opticum HD X4 220), 0x3603 (the others, from the sidecar) | DVB-T and DVB-S2 HD | Cabletech URZ0083 / URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501, Ferguson Ariva T50 / Ariva 52E, Opticum HD S50 / HD S60 / HD X4 220 / HD X110p / X110TS, Openbox S16 HD PVR, Amiko Mini HD, Edision Argus Miniplus Highspeed / Optimuss Underline | 52 | M3606: yes (the `seecode` chunk) |
+| ALi M3503 / M3510A / M3516A | `src/chips/m3503.py` | 0x3503 (0x35030001 rev B on M3516A) | DVB-S2 HD (HD8260+: + DVB-T2/C, 256 MB DDR3) | Globo HD-XS2 / Opticum Blue XS65, Echosonic Mini ESR-250, Amiko HD8260+ | 6 | yes |
+| ALi C3503C / C3503D | `src/chips/c3503.py` | 0x3503 (0x3503C000 on C3503C, 0x3503D000 on C3503D) | DVB-S2 HD | Ferguson Ariva 53 / Ariva 54 | 2 | no |
+| ALi C3505 | `src/chips/c3505.py` | 0x3505 | DVB-S2 HD with HEVC (154 / 254 / 255 Combo / 255 Combo S / HD8265+: + DVB-T2/C; 255 Combo / 255 Combo S / HD8265+: 256 MB DDR3) | Ferguson Ariva 104 / 154 Combo / 204 / 254 Combo / 255 Combo / 255 Combo S / T760i, Amiko HD8155 / HD8265+ | 31 | yes |
 | ALi M3821 / M3822P | `src/chips/m3821.py` | 0x3821 | DVB-T2 HD with HEVC | Ferguson Ariva T750i, Opticum Blue R265 Lite | 4 | T750i: yes; R265 Lite: no |
 | ALi M3329 (M3327 platform) | `src/chips/m3329.py` | 0x3329 | DVB-S SD (2005) | satellite receiver board s15125 | 1 | no |
 
-Every family boots its bootloader and application, draws its first OSD screen and answers the remote in the test suite; the per-box details are in the last table. The M3329 runs its application in place from a parallel NOR flash and draws its OSD with the CPU; the T750i's firmware drives the newer display engine (register lists in RAM); the Ariva T50 draws with the M3602's own graphics engine (`src/ge_m3602.py`); everything else draws through the GE at 0xB800A000 (`src/ge_m36f.py`) and the GMA display layers (`src/gma_capture.py`).
+Every family boots its bootloader and application, draws its first OSD screen and answers the remote in the test suite; the per-box details are in the last table. The exception is the Ferguson Ariva 52E: its bootloader runs, but its main code is decrypted by a security chip on the board (I2C 0x62), which is not modelled, so its application never starts (`run_dump_a52e_security_ic.py`, its sidecar). The M3329 runs its application in place from a parallel NOR flash and draws its OSD with the CPU; the T750i's firmware drives the newer display engine (register lists in RAM); the Ariva T50 draws with the M3602's own graphics engine (`src/ge_m3602.py`); everything else draws through the GE at 0xB800A000 (`src/ge_m36f.py`) and the GMA display layers (`src/gma_capture.py`).
 
 ## Front-panel display chips
 
 | Chip | Bus | Boxes (GPIO) | Modelled |
 |---|---|---|---|
 | TM1650 | I2C bit-banged on two GPIOs (`src/tm1650_decoder.py`) | Opticum STB HD N2, Globo STB HD N3, Opticum HD T90 (SCL 31 / SDA 9); Opticum HD X110p / X110TS (9 / 8); Globo HD-XS2, Echosonic ESR-250 (135 / 134); Openbox S16, Opticum HD S60 (62 / 63); the M3329 board (15 / 16) | 4 digits in the TV window, brightness and on/off, the key matrix KI1-7 x DIG1-4 answered on SDA when a panel button is pressed |
-| FD650K (TM1650-compatible) | the same | Ferguson Ariva T650i (31 / 9), T750i (128 / 129), Ariva 104 and T760i (107 / 110), Ariva 154 / 204 / 254 (107 / 108) | the same decoder with Ferguson's digit layout and 8-key map |
+| FD650K (TM1650-compatible) | the same | Ferguson Ariva T650i (31 / 9), Ariva 54 (24 / 23), T750i (128 / 129), Ariva 104 and T760i (107 / 110), Ariva 154 / 204 / 254 / 255 / 255 S (107 / 108) | the same decoder with Ferguson's digit layout and 8-key map |
+| CH455 (TM1650-compatible) | the same | Amiko HD8155 (107 / 110), Amiko HD8265+ (107 / 108), Amiko HD8260+ (135 / 134) | the same 4-digit display and key matrix protocol |
 | HD2015 (TM1650-compatible) | the same | Opticum Blue R265 Lite (57 / 58; no display soldered, three buttons) | keys |
+| Lemontree EuP MCU | I2C 0x28 bit-banged on two GPIOs (`src/lemontree_decoder.py`) | Opticum HD X4 220 (SCL 62 / SDA 171) | 8-byte CRC-16/XMODEM command frames, 4 digits and front-panel key polling |
 | TM1628-class | 3-wire: CLK, DIO, STB (`src/tm1628_decoder.py`) | Cabletech URZ0083Q, URZ0194S, Strong SRT 8115 (31 / 9 / 11) | 4 digits, the key matrix KS1-10 x K1-2 |
 | uPD16312 / PT6312-class | 3-wire | Cabletech URZ0195 (31 / 9 / STB 14) | the same command set, its own digit wiring |
+| PT6964 (TM1628-class) | 3-wire | Ferguson Ariva 52E (CLK 65 / DIO 66 / STB 64) | the command set and the display RAM; the digits' segment wiring is not known |
 | none | buttons straight on GPIO inputs (`src/gpio_keys.py`) | Comsat TE 1050 HD, Strong Prima VIII (GPIO 31 / 9) | two buttons, modelled released |
 
 Which chip and which pins a box has is in its sidecar (`device.panel`); `src/front_panel.py` builds the decoder for a dump from it.
@@ -35,26 +39,30 @@ Which chip and which pins a box has is in its sidecar (`device.panel`); `src/fro
 | Chip | What it is | Boxes | Model (`src/tuners.py`, `src/demods.py`) |
 |---|---|---|---|
 | Rafael Micro R820T | DVB-T silicon tuner, I2C 0x1A | Globo STB HD N3 (and the HD T90 update) | register file, filter and image-rejection calibration, PLL lock; bit-reversed status reads |
-| Rafael Micro R836 / R840 / R850 | DVB-T2/C silicon tuner | Ferguson Ariva 154 / 254 Combo (the terrestrial side), Opticum Blue R265 Lite firmware's driver | 49 registers, both read protocols |
-| MaxLinear MxL603 / MxL608 | DVB-T/T2/C silicon tuner, I2C 0x60 / 0x63 | Cabletech URZ0083Q / URZ0194S / URZ0195, Comsat TE 1050 HD, Strong SRT 8115, Ferguson Ariva T650i / T750i, Opticum Blue R265 Lite (MxL608) | register protocol, lock status, tuned frequency and bandwidth decoded |
+| Rafael Micro R836 / R840 / R850 | DVB-T2/C silicon tuner | Ferguson Ariva 154 / 254 / 255 Combo, Ariva 255 Combo S (R840, the terrestrial side), Opticum Blue R265 Lite firmware's driver | 49 registers, both read protocols |
+| MaxLinear MxL603 / MxL608 | DVB-T/T2/C silicon tuner, I2C 0x60 / 0x63 | Cabletech URZ0083Q / URZ0194S / URZ0195, Comsat TE 1050 HD, Strong SRT 8115, Ferguson Ariva T650i / T750i, Opticum Blue R265 Lite, Amiko HD8260+ / HD8265+ (MxL608) | register protocol, lock status, tuned frequency and bandwidth decoded |
 | MaxLinear MxL5007T | DVB-T silicon tuner | Ferguson Ariva T50, Cabletech URZ0195 (2012 firmware) | the same |
 | MaxLinear MxL101SF | DVB-T tuner + demodulator in one chip | Cabletech URZ0086, Kruger&Matz KM0186, Thomson THT501, Opticum X110TS (terrestrial side) | registers, lock |
-| Airoha AV2011 | DVB-S2 silicon tuner, I2C 0x60 / 0x63 | Opticum HD X110p / X110TS, Globo HD-XS2 / Opticum Blue XS65 | PLL lock, the fractional-N divider decoded to a frequency |
+| Airoha AV2011 / AV2012 | DVB-S2 silicon tuner, I2C 0x60 / 0x61 / 0x63 | Opticum HD X4 220 / HD X110p / X110TS, Globo HD-XS2 / Opticum Blue XS65 (AV2011); Amiko HD8260+ / HD8265+ (AV2012 at 0x61) | PLL lock, the fractional-N divider decoded to a frequency |
 | Silicon Labs Si2144 | DVB-T2/C silicon tuner | Strong Prima VIII | command / property protocol with its status bytes |
-| ALi M3031 | DVB-S2 silicon tuner, I2C 0x20 | Ferguson Ariva 104 / 154 Combo / 204 / 254 Combo | chip ID, lock |
-| RDA Microelectronics RDA5815 | DVB-S2 silicon tuner, I2C 0x60 | Echosonic Mini ESR-250 | chip ID, lock |
-| ALi S3501-class DVB-S2 demodulator | the M36xx chips' DVB-S2 demodulator on I2C 0x33 (sidecar `demodModel`); the same core sits inside the M3503 / M3510A at 0xB8028000 | Openbox S16, Opticum HD S50 / S60, Amiko Mini HD, Edision Argus / Optimuss (the X110p / X110TS read its chip ID); on-chip: Globo HD-XS2, Echosonic ESR-250 | chip ID, lock and signal-quality registers |
-| AltoBeam ATBM7812 | DVB-T2 demodulator with an I2C repeater to its tuner | Ferguson Ariva 154 / 254 Combo | chip ID, gateway, lock |
+| ALi M3031 | DVB-S2 silicon tuner, I2C 0x20 | Ferguson Ariva 53 / 54 / 104 / 154 Combo / 204 / 254 Combo / 255 Combo | chip ID, lock |
+| RDA Microelectronics RDA5815 / RDA5816 | DVB-S2 silicon tuner, I2C 0x60 / 0x0C | Echosonic Mini ESR-250 (RDA5815), Ferguson Ariva 255 Combo S (RDA5816 at 0x0C) | chip ID, lock, 24-bit / 32-bit fractional-N PLL decoded |
+| ALi S3501-class DVB-S2 demodulator | the M36xx chips' DVB-S2 demodulator on I2C 0x33 (sidecar `demodModel`); the same core sits inside the M3503 / M3510A / M3516A / C3505 at 0xB8028000 and the C3503 at 0xB804C000 | Openbox S16, Opticum HD S50 / S60 / X4 220, Amiko Mini HD, Edision Argus / Optimuss (the X110p / X110TS read its chip ID); on-chip: Globo HD-XS2, Echosonic ESR-250, Amiko HD8155 / HD8260+ / HD8265+, Ferguson Ariva 53 / 54 / 104 / 154 / 204 / 254 / 255 / 255 S | chip ID, lock and signal-quality registers |
+| AltoBeam ATBM7812 | DVB-T2 demodulator with an I2C repeater to its tuner | Ferguson Ariva 154 / 254 Combo, T760i | chip ID, gateway, lock |
+| Availink AVL6862 / AVL6762 | DVB-T2/C demodulator on SCB3 (0xB8018D00) or bit-banged GPIO I2C, I2C 0x14 | Ferguson Ariva 255 Combo / 255 Combo S (AVL6862 on SCB3), Amiko HD8265+ (AVL6762 on SCB3), Amiko HD8260+ (AVL6762 on GPIO 7 / 8) | 24-bit big-endian registers, FamilyID / ChipID, patch decompression, core ready word & command mailbox |
 | on-chip demodulators | the M3801's DVB-T (NIM_S3811), the M3503's DVB-S2 (NIM_S3503), the M3821's DVB-T2 | Globo N3, Opticum N2, Comsat, the HD-XS2, the T750i and the other boxes without an external demodulator | a lock the firmware sees once "Signal + TS" is on (`src/chips/base.py`) |
 
 With "Signal + TS" on, the tuner reports a lock and the demultiplexer model (`src/dmx_m36.py`) is fed a synthetic DVB transport stream from `src/transport_stream.py`, so channel scans find and store services.
 
 ## Tested devices
 
-One row per box (34 boxes, 99 images; the SDK test program `ali_sdk.bin` is not listed). "Boots", "App runs" and "OSD drawn" are what the sidecar records for the box's images; "Remote", "UART console" and "Signal + TS" mean a test in `tests/` covers it on that box (a `-` there means not tested, not necessarily not working).
+One row per box (43 boxes, 108 images; the SDK test program `ali_sdk.bin` is not listed). "Boots", "App runs" and "OSD drawn" are what the sidecar records for the box's images; "Remote", "UART console" and "Signal + TS" mean a test in `tests/` covers it on that box (a `-` there means not tested, not necessarily not working).
 
 | Box | SoC | Front panel (GPIO) | Tuner | Images | Boots | App runs | OSD drawn | Remote | UART console | Signal + TS |
 |---|---|---|---|---|---|---|---|---|---|---|
+| Amiko HD8155 | C3505 | CH455 (SCL 107, SDA 110) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8260+ | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | AV2012 + MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8265+ | C3505 (256 MB) | CH455 (SCL 107, SDA 108) | AV2012 + MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
 | Amiko Mini HD | M3606 / C3603 | - | - | 1 | yes | yes | yes | - | - | - |
 | Cabletech URZ0083 | M3601E | - | - | 8 | yes | yes | yes | yes | - | - |
 | Cabletech URZ0083Q | M3801 | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | MxL603 | 1 | yes | yes | yes | yes | - | - |
@@ -69,6 +77,11 @@ One row per box (34 boxes, 99 images; the SDK test program `ali_sdk.bin` is not 
 | Ferguson Ariva 154 Combo | C3505 | FD650K (SCL 107, SDA 108) | M3031 + R836 | 7 | yes | yes | yes | - | - | - |
 | Ferguson Ariva 204 | C3505 | FD650K (SCL 107, SDA 108) | M3031 | 4 | yes | yes | yes | - | - | - |
 | Ferguson Ariva 254 Combo | C3505 | FD650K (SCL 107, SDA 108) | M3031 + R836 | 9 | yes | yes | yes | - | - | - |
+| Ferguson Ariva 255 Combo | C3505 (256 MB) | FD650K (SCL 107, SDA 108) | M3031 + R836 (AVL6862) | 1 | yes | yes | yes | yes | - | - |
+| Ferguson Ariva 255 Combo S | C3505 (256 MB) | FD650K (SCL 107, SDA 108) | RDA5816 + R840 (AVL6862) | 1 | yes | yes | yes | yes | - | - |
+| Ferguson Ariva 52E | M3606 class | PT6964 3-wire (CLK 65, DIO 66, STB 64) | - | 1 | yes (bootloader only: the main code needs the board's security IC) | no | no | - | - | - |
+| Ferguson Ariva 53 | C3503C | - | M3031 | 1 | yes | yes | yes | yes | - | - |
+| Ferguson Ariva 54 | C3503D | FD650K (SCL 24, SDA 23) | M3031 | 1 | yes | yes | yes | yes | - | - |
 | Ferguson Ariva T50 | M3602 | - | MxL5007T | 1 | yes | yes | yes | yes | - | - |
 | Ferguson Ariva T650i | M3801 | FD650K (SCL 31, SDA 9) | MxL603 | 1 | yes | yes | yes | yes | - | yes |
 | Ferguson Ariva T750i | M3821 | FD650K (SCL 128, SDA 129) | MxL603 | 1 | yes | yes | yes | yes | - | - |
@@ -82,6 +95,7 @@ One row per box (34 boxes, 99 images; the SDK test program `ali_sdk.bin` is not 
 | Opticum HD S50 | M3601S | - | - | 2 | yes | yes | yes | yes | - | - |
 | Opticum HD S60 | M3601S | TM1650-compatible (SCL 62, SDA 63) | - | 2 | yes | yes | yes | yes | - | - |
 | Opticum HD T90 (update for the T90 / STB HD N2 / N3 boards) | M3801 | TM1650 (SCL 31, SDA 9) | R820T | 1 | yes | yes | yes | yes | yes | - |
+| Opticum HD X4 220 | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
 | Opticum HD X110p | M3606 | TM1650-compatible (SCL 9, SDA 8) | AV2011 | 10 | yes | yes | yes | yes | yes | - |
 | Opticum STB HD N2 | M3801 | TM1650 (SCL 31, SDA 9) | unknown | 1 | yes | yes | yes | yes | yes | - |
 | Opticum X110TS | M3606 | TM1650-compatible (SCL 9, SDA 8) | AV2011 + MxL101SF | 9 | yes | yes | yes | yes | yes | - |

@@ -34,14 +34,19 @@ EXPECTED = [
     ("KM00186_V1.1.1.abs", "M3602"),             # Kruger&Matz KM0186: maincode "M3606 2Tuner"
     ("URZ0086_V1.2.1.abs", "M3602"),             # maincode "M3606 2Tuner"
     ("ArivaT50_20111118_V102B214.abs", "M3602"),  # no HDCPKey chunk: maincode "Demo M3602"
+    ("A52E_20160812_V1.31B2.abs", "M3602"),       # Ferguson bootloader "HSJ2", version "37019-01047"
     ("Ferguson_T760i_V1.5B4-14092021.abs", "C3505"),  # boot-ROM bootloader, SEE program, main code names ALI_C3505
     ("Ferguson_T760i_V1.4B8_28072020.abs", "C3505"),
     ("A104_20190910_V1.3B1.abs", "C3505"),            # boot-ROM bootloader ($sp in KSEG1 0xBFE0), SEE program, ALI_C3505
     ("A104_20190926_V1.3B1_PATCH.abs", "C3505"),
     ("Ferguson_T750i_V1.20B2_18092019.abs", "M3821"),  # XIP bootloader, SEE program, main code drives NIM_S3821
+    ("AMIKO_T58_1.0.60_fta.abs", "M3821"),             # Amiko T58: single-CPU XIP M3821, HDCPKey "M3821", MainCode drives NIM_S3821_0
+    ("AMIKO_ECO_TC-200_2.3.09_emu.abs", "M3821"),      # Amiko Eco TC-200: dual-CPU XIP M3821A ("M3821A 1.1.1" + "M3606 SEE"), NIM_S3821_0
     ("Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "M3503"),  # bootloader "M3503---0.1.0"
     ("Sw_Globo_HD-XS2_Reta_pol_1.3.5_2015-06-22.abs", "M3503"),
     ("140_M3511-RETAIL_PL.abs", "M3503"),                       # M3511 package, bootloader "M3503---0.1.0"
+    ("140_M3515-COMBO-RETAIL-PL.abs", "M3503"),                 # Opticum XS65 Combo: uppercase BOOTLOADER "M3503---0.1.0", 256 MB M3515
+    ("140_TWIN_RETAIL_PL.abs", "M3503"),                        # Opticum XS65 Twin: uppercase BOOTLOADER "M3503---0.1.0", 256 MB twin DVB-S2
     ("Software_GER_RETA_NETWORK_1.2.8_REV.778_RC1_2014-11-28.abs", "M3503"),
     ("Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN", "M3503"),   # bootloader "3510-r1362"
     ("Software_UNI_S60_1.0.4.1_PVR_2012-08-28.abs", "M3602"),   # main-code chunk version "M3601S"
@@ -70,6 +75,7 @@ EXPECTED = [
     ("S16_CHN_2.8.abs", "M3602"),                                # Openbox S16: main-code chunk version "M3601S"
     ("ALI3606_0A010A00_gui_edision_1.6.89.abs", "M3602"),        # Amiko ALI3606: maincode "M3606 "
     ("OPTIMUSS_underline_official_hd_1.5.87.abs", "M3602"),      # Edision Optimuss Underline: maincode "M3606 "
+    ("Edision.vip3.0A050800_emu_1.6.60.abs", "M3602"),           # Edision Argus VIP3: bootloader "M3606c 1.1.3", seecode "M3606 SEE"
     ("miniplus_highspeed_official_hd_1.5.87.abs", "M3602"),      # Edision Miniplus Highspeed: maincode "M3606 "
     ("A204_20190903_V1.3B1.abs", "C3505"),                       # Ferguson Ariva 204: boot-ROM bootloader, SEE program, ALI_C3505
     ("A204_20190925_V1.3B1_PATCH.abs", "C3505"),
@@ -91,11 +97,25 @@ EXPECTED = [
     ("254Combo_20200423_V1.32B3.abs", "C3505"),
     ("A254Combo_01062020_V1.32B2.abs", "C3505"),
     ("A254Combo_27072020_V1.32B3.abs", "C3505"),
+    ("Ferguson_A255_V1.32B4.abs", "C3505"),                       # Ferguson Ariva 255 Combo: 256 MB DDR3 C3505 (SEE at 0xAE000200)
+    ("Ferguson_A255 Slim_V1.30B4_20231103_EU.abs", "C3505"),      # Ferguson Ariva 255 Combo S: 256 MB DDR3 C3505 (HASG4, RDA5816 + R840)
+    ("AMIKO 8155 Edision_v.1453.abs", "C3505"),                   # Amiko HD8155: 128 MB DDR3 C3505, maincode(AV) + seecode "M3606 SEE" at 0xA6000200
+    ("AMIKO_Impluse_H265_T2C_1.3.87_emu.abs", "C3505"),           # Amiko Impulse H.265 T2/C: 128 MB DDR3 M3626A / C3505, seecode "M3606 SEE" at 0xA6000200
+    ("AMIKO 8265+ Edision_v.1529.abs", "C3505"),                  # Amiko HD8265+: 256 MB DDR3 C3505, maincode(AV) + seecode "M3606 SEE" at 0xAE000200
+    ("8260_Edision_Piccollo_ v.2468.abs", "M3503"),               # Amiko HD8260+: 16 MB SPI flash, 256 MB DDR3 M3516A / M3503, bootloader "M3516A 1.2.1"
+    ("OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs", "M3602"),       # Opticum HD X4 220: bootloader "M3602B 1.1.5", Lemontree EuP MCU
+    ("Opticum_HD_x7_galaxy_UPC_synaps_1.5.24.VI.abs", "M3602"),   # Opticum HD X7 Combo: bootloader "M3602A 1.1.6", Lemontree PT6311 VFD MCU
+    ("A53_20190813_V1.33B7.abs", "C3503"),                        # Ferguson Ariva 53: boot-ROM bootloader, no SEE, get_clock_3503D (C3503C)
+    ("A54_20190926_V1.3B1.abs", "C3503"),                         # Ferguson Ariva 54: boot-ROM bootloader, no SEE, get_clock_3503D (C3503D)
+    ("PICCO_S2_v.1248.abs", "C3503"),                             # Edision Picco S2: bootloader "3510DB 1.1.1", no SEE, get_clock_3503D (C3503D)
     ("STB_HD_T90_N2-3_1.3.2PVR_2014-01-05.abs", "M3801"),
+    ("Edision.optimuss.underline.3in1.0E06080emu_1.3.79.abs", "M3801"),  # Edision Optimuss Underline 3in1: ALi M3612 (single-CPU S3811, chip ID 0x3811)
     ("srt8115.BIN", "M3801"),
     ("CABLETECH_urz0194s_v1_0_8.bin", "M3801"),
     ("EN25Q32B.bin", "M3801"),
     ("sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin", "M3329"),
+    ("dump opticum x80 premium.bin", "M3329"),                    # Opticum X80 Premium: 2 MB SPI M3329C / M3101C (0xE3000010, chip ID 0x3101)
+    ("7300PVR.bin", "M3329"),                                     # Opticum 7300 PVR CI2CX: 4 MB SPI M3329E (0xE3000010, chip ID 0x3329)
 ]
 
 print("=== Test: chips.detect() picks each image's chip family ===")

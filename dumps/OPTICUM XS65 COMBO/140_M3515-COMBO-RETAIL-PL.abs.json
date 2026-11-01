@@ -1,0 +1,62 @@
+{
+  "file": "140_M3515-COMBO-RETAIL-PL.abs",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "XS65 Combo (Polish retail build)",
+    "type": "DVB-S2 + DVB-T2/C HD combo receiver",
+    "board": null,
+    "soc": "ALi M3515 (the uppercase BOOTLOADER chunk's version \"M3503---0.1.0\"; 256 MB DDR3 with the SEE partition at 224..256 MB, 0xAE000200, and revision B variant 0x0001)",
+    "family": "M3503 (chips/m3503.py: 256 MB DDR3 M3503 revision B with 0xB8000220 bit 24 upper-DDR remap, XIP cache-as-RAM bootloader and CryptoEngine SHA-256)",
+    "demod": "internal DVB-S2 (NIM_S3503_0) + external DVB-T2/C (NIM_COFDM_0 / NIM_QAM_S3202, probed on bit-banged GPIO I2C SCL 7 / SDA 6)",
+    "tuner": "Airoha AV2011 at I2C 0x60",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "gpioI2c": {
+      "scl": 7,
+      "sda": 6
+    },
+    "gpioPullUps": [
+      67,
+      71
+    ]
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.4.0 \"M3515-COMBO-RETAIL-PL\" (main-code chunk 114003202102162, version 00000140, 2016-04-13; Libcore 13.8.0@SDK4.0fa.13.8_20150326, Application 1.0.0@SDK4.0fa.13.8_20150326, HDMI_ALI_E_150303_1; SEECODE 00000140 + SECSEECODE \"M3606 SEE\")",
+    "date": "2016-04-13",
+    "size": 8388608,
+    "sha1": "3549ab9f8ad3df8517531fcd1675d71318d1d922",
+    "layout": "BOOTLOADER 0x000000 (M3503---0.1.0), HDCP 0x06EE00 (00000001), MEMCFG 0x06F000 (00000001), SECLOADER 0x070000 (00000001), SECLOADERPARAM 0x1AE000 (00000001), SECSEECODE 0x1B0000 (M3606 SEE, LZMA 0x59DB6 -> 1.4 MB), maincode 0x220000 (chunk \"114003202102162\" 00000140, LZMA 0x1D4EA1 -> 7.8 MB), SEECODE 0x4A0000 (00000140, LZMA 0xDEDD2 -> 2.8 MB), MENULOGO 0x5A0000, CAS 0x5AFF80, RADIOLOGO 0x5C0000, NETSTORAGE 0x5CFF80, MEDIALOGO 0x620000, defaultdb 0x630000, userdb 0x68FF80 (0x170070 bytes) -- the whole 8 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20xs65_140_M3515-COMBO-RETAIL-PL.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": null,
+    "date": null,
+    "login": false,
+    "note": "The manufacturer's USB update archive Opticum xs65_140_M3515-COMBO-RETAIL-PL.rar; fetched 2026-10-31 from the mirror's Opticum folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "LOC1"
+    ],
+    "note": "Boots as a 256 MB M3503 revision B chip (chips/m3503.py: uppercase BOOTLOADER / SEECODE chunk names, numeric-named 0x01FE0101 maincode chunk \"114003202102162\", variant 0x0001 so sys_ic_get_rev_id() returns 0x20002 and keeps GMA layer 0 enabled): runs XIP with its stack in cache-as-RAM, unpacks SEECODE (2.8 MB) to 0xAE000200 after setting 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to DDR, unpacks the 7.8 MB main code to 0x80000200, starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001), verifies the application over SHA-256 on CryptoEngine, powers both USB ports (GPIO 72 left, GPIO 70 right; active-low overcurrent fault inputs GPIO 67 and 71 pulled up via device.gpioPullUps, without which the panel shows \"USbP\"), and draws its Polish first-install wizard \"1 Wybierz język\" (panel \"LOC1\") by ~70 M instructions (255 GE commands); remote DOWN and front-panel KI3/DIG4 navigate the language list (run_dump_xs65_combo_capture_screen.py)."
+  },
+  "desc": [
+    "The 1.4.0 Polish retail update (140_M3515-COMBO-RETAIL-PL.abs, 2016-04-13) for the Opticum XS65 Combo DVB-S2 + DVB-T2/C HD receiver on the 256 MB ALi M3515 SoC with 8 MB SPI flash.",
+    "Unlike the 4 MB 128 MB single-tuner Blue XS65 / Globo HD-XS2 build (140_M3511-RETAIL_PL.abs), the 8 MB combo image uses uppercase chunk names (BOOTLOADER, SEECODE), carries a secondary loader pair (SECLOADER + SECSEECODE) ahead of maincode at 0x220000, places its SEE core at 0xAE000200 in 256 MB DDR3, and monitors two USB port power switches (outputs GPIO 72 / 70, active-low fault inputs GPIO 67 / 71)."
+  ]
+}

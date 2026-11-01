@@ -167,10 +167,15 @@ def ir16_to_nec(ir16):
 IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"),
               ("srt8115", "ext00"), ("urz0195", "ext00"), ("PRIMA VIII", "ext00"), ("Prima_VIII", "ext00"),
               ("T650i", "ext00"), ("T750i", "ext00"), ("T760i", "ext00"), ("A104_", "ext00"),
-              ("A204_", "ext00"), ("A154", "ext00"), ("A254", "ext00"), ("254Combo", "ext00"), ("A54_", "ext00"),
+              ("A204_", "ext00"), ("A154", "ext00"), ("A254", "ext00"), ("254Combo", "ext00"),
+              ("A255", "ext00"), ("A53_", "ext00"), ("A54_", "ext00"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
               ("ESR-250", "necfirst"), ("_S60_", "necfirst"), ("S16_", "necfirst"), ("Software_S50", "necfirst"),
-              ("ALI3606_", "necfirst"), ("OPTIMUSS_underline", "necfirst"), ("miniplus_highspeed", "necfirst"),
+              ("ALI3606_", "necfirst"), ("OPTIMUSS_underline", "necfirst"), ("underline.3in1", "necfirst"), ("Edision.vip3", "necfirst"), ("miniplus_highspeed", "necfirst"),
+              ("AMIKO 8155", "necfirst"), ("Impluse_H265", "necfirst"), ("AMIKO 8265", "necfirst"), ("AMIKO_T58", "necfirst"), ("8260_Edision", "necfirst"),
+              ("PICCO_S2", "necfirst"),
+              ("OPTICUM_HD_X4", "necfirst"),
+              ("Opticum_HD_x7", "necfirst"),
               ("X110p_M3606_MCAS", "necfirst"), ("_x110p_1.2", "necfirst"), ("X110p_special", "necfirst"),
               ("URZ0083Q", "necfirst"), ("urz0194", "necfirst"), ("ArivaT50", "cmd")]
 
@@ -212,30 +217,31 @@ def frame_from_ir16(ir16, coding="nec"):
     return address, command, None
 
 
-def find_key_table(ram, min_entries=12):
-    """Find the UI's remote key table (struct ir_key_map_t {IR_KEY_INFO
-    key_info; UINT32 ui_vkey;}) in a RAM image (numpy uint8 array): runs of
-    8-byte entries whose key_info is type REMOTE, state PRESSED, count 0 and
-    whose ir_code shares the NEC address byte -- or, in the T50's table
-    (coding "cmd"), is a command and its complement, rev8(c) << 8 |
-    rev8(~c).  Some M3602 tables (URZ0083/URZ0086 v1.0.x, KM00183/KM00186)
-    interleave a few entries of a second remote address inside the main
-    table, so each contiguous run of valid entries is also filtered by its
-    dominant address byte.  Returns {vkey: ir16} of the longest run (first
-    entry per vkey), or {} if none is found."""
+def _scan_key_table(ram, min_entries, old_layout=False):
+    """Scan `ram` for the longest run of 8-byte `struct ir_key_map_t` entries.
+    Modern Libcore packs `hdr = 0x0011` in bits 0..15 and `ir_code` in 16..31;
+    older M3327/M3329 Libcore (`old_layout=True`) packs `ir_code` in bits 0..15
+    and `hdr = 0x0101` (`PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)`) in 16..31."""
     import numpy as np
     rev = np.array([_rev8(b) for b in range(256)], np.int64)
     n = len(ram) // 8 * 8
     best = {}
+    hdr = (PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)) if old_layout else (PAN_KEY_TYPE_REMOTE | (PAN_KEY_PRESSED << 4))
     for phase in (0, 4):
         w = ram[phase:phase + n - 8].view('<u4')
         k, v = w[0::2].astype(np.int64), w[1::2].astype(np.int64)
         m = min(len(k), len(v))
         k, v = k[:m], v[:m]
-        hdr = PAN_KEY_TYPE_REMOTE | (PAN_KEY_PRESSED << 4)
-        ok = ((k & 0xFFFF) == hdr) & (v < 0x100)
-        pair = ((k >> 16) & 0xFF) == rev[~rev[(k >> 24) & 0xFF] & 0xFF]
-        same = ok[1:] & ok[:-1] & (((k[1:] >> 24) == (k[:-1] >> 24)) | (pair[1:] & pair[:-1]))
+        if old_layout:
+            hdr_ok = ((k >> 16) & 0xFFFF) == hdr
+            ir = k & 0xFFFF
+        else:
+            hdr_ok = (k & 0xFFFF) == hdr
+            ir = (k >> 16) & 0xFFFF
+        ok = hdr_ok & (v < 0x100)
+        ir_hi = (ir >> 8) & 0xFF
+        pair = (ir & 0xFF) == rev[~rev[ir_hi] & 0xFF]
+        same = ok[1:] & ok[:-1] & ((ir_hi[1:] == ir_hi[:-1]) | (pair[1:] & pair[:-1]))
         s = np.concatenate(([0], same.astype(np.int8), [0]))
         d = np.diff(s)
         for st, en in zip(np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]):
@@ -243,7 +249,7 @@ def find_key_table(ram, min_entries=12):
                 continue
             table = {}
             for i in range(st, en + 1):
-                table.setdefault(int(v[i]), int(k[i]) >> 16)
+                table.setdefault(int(v[i]), int(ir[i]))
             if len(table) >= min_entries and len(table) > len(best):
                 best = table
         # Also check contiguous `ok` runs where a few secondary-remote entries
@@ -254,14 +260,33 @@ def find_key_table(ram, min_entries=12):
         for st, en in zip(np.nonzero(d_ok == 1)[0], np.nonzero(d_ok == -1)[0]):
             if en - st < max(min_entries, len(best)):
                 continue
-            hi = (k[st:en] >> 24) & 0xFF
+            hi = ir_hi[st:en]
             dom = int(np.bincount(hi).argmax())
             table = {}
             for i in range(st, en):
-                if ((int(k[i]) >> 24) & 0xFF) == dom:
-                    table.setdefault(int(v[i]), int(k[i]) >> 16)
+                if int(ir_hi[i]) == dom:
+                    table.setdefault(int(v[i]), int(ir[i]))
             if len(table) >= min_entries and len(table) > len(best):
                 best = table
+    return best
+
+
+def find_key_table(ram, min_entries=12):
+    """Find the UI's remote key table (struct ir_key_map_t {IR_KEY_INFO
+    key_info; UINT32 ui_vkey;}) in a RAM image (numpy uint8 array): runs of
+    8-byte entries whose key_info is type REMOTE, state PRESSED, count 0 and
+    whose ir_code shares the NEC address byte -- or, in the T50's table
+    (coding "cmd"), is a command and its complement, rev8(c) << 8 |
+    rev8(~c).  Some M3602 tables (URZ0083/URZ0086 v1.0.x, KM00183/KM00186)
+    interleave a few entries of a second remote address inside the main
+    table, so each contiguous run of valid entries is also filtered by its
+    dominant address byte.  Falls back to older M3327/M3329 Libcore's 0x0101
+    key_info layout when no modern 0x0011 table is present.  Returns
+    {vkey: ir16} of the longest run (first entry per vkey), or {} if none is
+    found."""
+    best = _scan_key_table(ram, min_entries, old_layout=False)
+    if not best:
+        best = _scan_key_table(ram, min_entries, old_layout=True)
     if best:
         # Ferguson firmwares (Ariva 104/204/154/254, T750i, T760i) fill unused
         # key-table slots with a dummy 0x40FF or 0x80FF placeholder at the old

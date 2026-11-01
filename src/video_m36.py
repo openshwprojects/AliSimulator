@@ -305,8 +305,9 @@ def decode_mpeg2_slices(data, mb_width, mb_height):
 
 
 class VideoEngine(_Device):
-    def __init__(self, sim, line=VE_LINE, reset=None):
-        self.line = line                # (the M3329's DECV_M3327 is the same engine on line 9)
+    def __init__(self, sim, line=VE_LINE, reset=None, base=VE):
+        self.base = base
+        self.line = line                # (the M3329's DECV_M3327 is the same engine on line 9; M3329E moves it to 0xB8013200 on line 12)
         self.reset = reset              # (device-reset register offset, the engine's bit) or None
         self.status = 0
         self.pictures = 0
@@ -315,16 +316,17 @@ class VideoEngine(_Device):
         super().__init__(sim)
 
     def wire(self, core):
-        core._mmio_on('w', self._write_start, 0x4214, 0x4217)
-        core._mmio_on('w', self._write_status, 0x4218, 0x421B)
+        off = self.base & 0xFFFFFF
+        core._mmio_on('w', self._write_start, off + VE_START, off + VE_START + 3)
+        core._mmio_on('w', self._write_status, off + VE_STATUS, off + VE_STATUS + 3)
         if self.reset is not None:
             core._mmio_on('w', self._write_reset, self.reset[0], self.reset[0] + 3)
 
     def _rd(self, offset):
-        return int.from_bytes(self.sim.peek(VE + offset, 4), 'little')
+        return int.from_bytes(self.sim.peek(self.base + offset, 4), 'little')
 
     def _wr(self, offset, value):
-        self.sim.poke(VE + offset, struct.pack("<I", value & 0xFFFFFFFF))
+        self.sim.poke(self.base + offset, struct.pack("<I", value & 0xFFFFFFFF))
 
     def _write_start(self, uc, access, address, size, value, user_data):
         base, word, shift, mask = _merge(uc, address, size, value)

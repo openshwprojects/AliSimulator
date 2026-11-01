@@ -89,7 +89,8 @@ class CacheAsRam:
         sim.mu.mem_unmap(self.PHYS, self.SIZE)
         sim.mu.mem_map_ptr(self.PHYS, self.SIZE, UC_PROT_ALL, ctypes.addressof(self.ram))
         self.active = True
-        self._hook = sim.mu.hook_add(UC_HOOK_CODE, self._code_in_ram, begin=0x80000000, end=0x80000000 + sim.ram_size - 1)
+        self._hook = sim.mu.hook_add(UC_HOOK_CODE, self._code_in_ram, begin=0x80000000,
+                                     end=0x80000000 + min(sim.ram_size, 0x0F000000) - 1)
 
     def _code_in_ram(self, uc, address, size, user_data):
         sp = uc.reg_read(UC_MIPS_REG_SP) & 0x1FFFFFFF
@@ -337,7 +338,7 @@ class DmaRings:
                 desc = sim.peek(0x80000000 + ring + 16 * (self.done[ch] % length), 16)
                 src, dst, word = (int.from_bytes(desc[o:o + 4], 'little') for o in (0, 4, 8))
                 src, dst, n = src & 0x0FFFFFFF, dst & 0x0FFFFFFF, (word & 0x1FFFFFFF) + 1
-                ok = max(src, dst) + n <= sim.ram_size
+                ok = max(src, dst) + n <= sim._mapped_ram_size
                 if self.submissions < 16:
                     self.submissions += 1
                     sim.log(f"[DMA] ch{ch} #{self.done[ch]}: 0x{src:08X} -> 0x{dst:08X}, {n} bytes (ring 0x{ring:08X} x{length})"
@@ -475,18 +476,29 @@ class M3821(ChipFamily):
     def matches(cls, image):
         if bytes(image[0x20:0x25]) == b"M3821":         # the bootloader chunk's version string
             return True
-        return (xip_bootloader(image) and any(name == "seecode" for _o, name, _v in chunk_chain(image))
-                and b"NIM_S3821" in maincode(image))
+        if any(name.lower() == "hdcpkey" and ver.startswith("M3821") for _o, name, ver in chunk_chain(image)):
+            return True
+        return xip_bootloader(image) and b"NIM_S3821" in maincode(image)
+
+    def variant(self):
+        # XIP M3821 builds (T750i, Amiko T58) want plain M3821 revision B (low byte
+        # != 0 -> revision 0x20002; 0 leaves GMA to SEE); boot-ROM M3822P builds
+        # (R265 Lite) want 0x0010.
+        return 0x0001 if xip_bootloader(self.sim.rom_image) else self.chip_variant
+
+    def _configure_boot_mode(self):
+        sim = self.sim
+        self.xip = xip_bootloader(sim.rom_image)
+        if self.car is not None:
+            self.car.remove()
+            self.car = None
+        if self.xip:
+            self.car = CacheAsRam(sim)
 
     def install(self):
         sim = self.sim
-        self.xip = xip_bootloader(sim.rom_image)       # (the C3505's is the boot ROM's kind too)
-        if self.xip:
-            # the T750i's plain M3821, revision B: its SDK's revision function reads the
-            # low byte (0: revision A, 0x20001; else 0x20002), and before revision B the
-            # application leaves the GMA (its OSD layers) to the SEE -- whose device its
-            # OSD code then calls directly, jumping into the SEE's code
-            self.chip_variant = 0x0001
+        self.xip = False
+        self.car = None
         super().install()
         # (count_hz stays at the simulator's 100 MHz although the chip's Count runs at
         # 297 MHz: at the real rate the kernel's 1 ms tick is shorter than the host time
@@ -495,10 +507,8 @@ class M3821(ChipFamily):
         # application's time therefore runs at a third of real time.)
         # The boot SRAM, in place of the flash mirror the M3801 shows there
         self.sram = ctypes.create_string_buffer(SRAM_SIZE)
-        ptr = ctypes.addressof(self.sram)
-        for seg in (0x00000000, 0x80000000, 0xA0000000):
-            sim.mu.mem_unmap(seg + SRAM_PHYS, SRAM_SIZE)
-            sim.mu.mem_map_ptr(seg + SRAM_PHYS, SRAM_SIZE, UC_PROT_ALL, ptr)
+        self._sram_mapped = False
+        self._set_sram_mapped(True)
         self.ddr = DdrTraining(sim)
         self.spi = SpiStream(sim)
         self.dma = DmaRings(sim)
@@ -523,20 +533,35 @@ class M3821(ChipFamily):
         # probably a DDC transfer of the TV's EDID (288 more operations at +0x70 / +0x72).
         sim._SELF_COMPLETING = {**sim._SELF_COMPLETING, 0x2A06F: (0x10, 0x00, 0x10)}
         sim._mmio_on('r', sim._hook_selfcomplete_read, 0x2A06C, 0x2A06F)
-        if self.xip:
-            self.car = CacheAsRam(sim)
-            self.see = SeeStart(sim)
+        self.see = SeeStart(sim)
+        self._configure_boot_mode()
+
+    def _set_sram_mapped(self, mapped):
+        """Show the boot SRAM at 0x1FE00000 / 0x9FE00000 / 0xBFE00000 (True, at
+        reset) or the flash mirror there (False, once a 256 MB board moves
+        SYS_FLASH_BASE_ADDR to 0xBFC00000 so 0xBFE00000..0xBFEFFFFF is flash
+        offset 0x200000..0x2FFFFF)."""
+        if mapped == self._sram_mapped:
+            return
+        sim = self.sim
+        ptr = ctypes.addressof(self.sram)
+        for seg in (0x00000000, 0x80000000, 0xA0000000):
+            sim.mu.mem_unmap(seg + SRAM_PHYS, SRAM_SIZE)
+            if mapped:
+                sim.mu.mem_map_ptr(seg + SRAM_PHYS, SRAM_SIZE, UC_PROT_ALL, ptr)
+            else:
+                sim._map_flash_mirror(seg + SRAM_PHYS, SRAM_SIZE)
+        self._sram_mapped = mapped
 
     def uninstall(self):
         """The flash mirror back where the boot SRAM and the cache-as-RAM range
         were, the flash window's normal read mode, the common self-completing
         registers."""
         sim = self.sim
-        if self.xip:
+        if self.car is not None:
             self.car.remove()
-        for seg in (0x00000000, 0x80000000, 0xA0000000):
-            sim.mu.mem_unmap(seg + SRAM_PHYS, SRAM_SIZE)
-            sim._map_flash_mirror(seg + SRAM_PHYS, SRAM_SIZE)
+            self.car = None
+        self._set_sram_mapped(False)
         sim._spi_stream = None
         del sim._SELF_COMPLETING            # (the instance's copy with 0x2A06F: the class's again)
 
@@ -544,9 +569,11 @@ class M3821(ChipFamily):
         """What the boot ROM does: the bootloader area into the SRAM, enter it
         (an XIP bootloader starts at the flash window, like the M3801's)."""
         sim = self.sim
+        self._configure_boot_mode()
         if self.xip:
             sim.mu.reg_write(UC_MIPS_REG_PC, sim.base_addr)
             return
+        self._set_sram_mapped(True)
         ctypes.memmove(ctypes.addressof(self.sram), bytes(sim.rom_image[:BOOT_COPY]), BOOT_COPY)
         sim._rescan_cp0_sites(self.code_ranges())
         sim.mu.reg_write(UC_MIPS_REG_PC, ENTRY)

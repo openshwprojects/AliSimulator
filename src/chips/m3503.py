@@ -23,13 +23,38 @@ set-up code branches on the chip IDs 0x3503 and 0x3821 (0x3510 appears
 nowhere in it), and its application -- single-CPU, no SEE program --
 drives the same internal demodulator.
 
-Recognised by the bootloader chunk's version, "M3503---0.1.0" or "3510-".
+Recognised by the bootloader chunk's version, "M3503---0.1.0", "3510-" or
+"M3516".
 """
-from demods import S3501
+import ctypes
 
-from .base import chunk_chain
+from unicorn import UC_PROT_ALL
+
+from demods import S3501
+import i2c_scb
+
+from .base import chunk_chain, maincode
 from .m3602 import M3602
 from .m3821 import CacheAsRam
+from .see import CONTROL, SeeStart
+
+REMAP_BIT = 0x01000000              # 0xB8000220 bit 24: 0x0F000000..0x0FFFFFFF is DDR (240..256 MB), not flash
+
+
+def _is_256m(image):
+    """A 256 MB dual-CPU M3503 / M3516 build (Amiko HD8260+): has a seecode
+    chunk and places its SEE / GMA partition at 224..256 MB (lui rX, 0x8E00 /
+    0xAE00 / 0xAF00 in maincode) instead of 96..128 MB."""
+    if not any(name.lower() in ("seecode", "secseecode") for _o, name, _v in chunk_chain(image)):
+        return False
+    mc = maincode(image)
+    for hi in (b"\x00\x8E", b"\x00\xAE", b"\x00\xAF"):
+        pos = mc.find(hi)
+        while pos >= 0:
+            if (pos & 3) == 0 and pos + 4 <= len(mc) and (mc[pos + 3] >> 2) == 0x0F:
+                return True
+            pos = mc.find(hi, pos + 1)
+    return False
 
 
 class InternalDemod:
@@ -96,20 +121,100 @@ class M3503(M3602):
 
     @classmethod
     def matches(cls, image):
-        return any(name == "bootloader" and version.startswith(("M3503", "3510-"))
+        return any(name.lower() == "bootloader" and version.startswith(("M3503", "3510-", "M3516"))
                    for _offset, name, version in chunk_chain(image))
 
+    def variant(self):
+        # 256 MB M3503-family SoCs (M3516A on the Amiko HD8260+, M3515 on the
+        # Opticum XS65 Combo, M3511 8 MB on the Opticum XS65 Twin) are M3503
+        # revision B (low byte 1 -> sys_ic_get_rev_id() returns 0x20002 instead
+        # of rev A's 0x20001; under rev A the SDK's capability check disables
+        # GMA layer 0).
+        if getattr(self, "_ram_256m", False) or (
+            self.sim.rom_image and any(name.lower() == "bootloader" and version.startswith("M3516")
+                                       for _o, name, version in chunk_chain(self.sim.rom_image))
+        ):
+            return 0x0001
+        return super().variant()
+
     def install(self):
+        sim = self.sim
+        self._ram_256m = bool(sim.rom_image) and _is_256m(sim.rom_image)
+        sim._mmio_view[CONTROL + 3] &= ~0x01
+        sim.set_upper_ram_mapped(False)
+        sim.set_ram_size(0x10000000 if self._ram_256m else 0x08000000)
         super().install()
-        self.car = CacheAsRam(self.sim)
-        self.nim = self.demod = InternalDemod(self.sim)
+        self.car = CacheAsRam(sim)
+        self._car_mapped = True
+        self.write_chip_id()
+        self.nim = self.demod = InternalDemod(sim)
+        self.scb3 = i2c_scb.I2cMaster(sim, 0x18D00, "SCB3")
+        sim.i2c_masters.append(self.scb3)
+        sim._mmio_on('w', self._write_remap_ctrl, CONTROL, CONTROL + 3)
         # the crypto engine's DMA and SHA unit, which the SEE's program hashes the application with
         from crypto_engine import CryptoEngine
-        self.ce = CryptoEngine(self.sim)
+        self.ce = CryptoEngine(sim)
         self.core_devices = self.core_devices + (self.ce,)
 
+    def _configure_memory(self):
+        sim = self.sim
+        self._ram_256m = bool(sim.rom_image) and _is_256m(sim.rom_image)
+        target = 0x10000000 if self._ram_256m else 0x08000000
+        sim._mmio_view[CONTROL + 3] &= ~0x01
+        if self._car_mapped:
+            self.car.remove()
+            self._car_mapped = False
+        if sim.ram_size != target or sim._upper_ram_mapped:
+            for address, size in self._ram_mirrors():
+                sim.mu.mem_unmap(address, size)
+            sim.set_upper_ram_mapped(False)
+            sim.set_ram_size(target)
+            ptr = ctypes.addressof(sim.ram_buffer)
+            for address, size in self._ram_mirrors():
+                sim.mu.mem_map_ptr(address, size, UC_PROT_ALL, ptr)
+        self.car = CacheAsRam(sim)
+        self._car_mapped = True
+        self.write_chip_id()
+
+    def _write_remap_ctrl(self, uc, access, address, size, value, user_data):
+        if not self._ram_256m:
+            return
+        old = int.from_bytes(self.sim.mmio_buffer[CONTROL:CONTROL + 4], 'little')
+        new = SeeStart._after(old, address, CONTROL, size, value)
+        if (old ^ new) & REMAP_BIT:
+            on = bool(new & REMAP_BIT)
+            self.sim.log(f"[M3503] 0xB8000220 bit 24 -> {int(on)}: 0x0F000000..0x0FFFFFFF is "
+                         f"{'DDR (240..256 MB), flash at 0xBF000000' if on else 'the flash window'}")
+            self.sim.set_upper_ram_mapped(on)
+
+    def on_upper_ram_mapped(self, on):
+        if on and self._car_mapped:
+            if self.car.active:
+                self.sim.mu.hook_del(self.car._hook)
+                self.car.active = False
+            self._car_mapped = False
+
+    def start(self):
+        self._configure_memory()
+        super().start()
+
+    def set_signal(self, on=True):
+        super().set_signal(on)
+        self.nim.set_signal(on)
+        return True
+
     def uninstall(self):
-        self.car.remove()
+        self._ram_256m = False
+        self.sim._mmio_off('w', self._write_remap_ctrl, CONTROL, CONTROL + 3)
+        if self.scb3 in self.sim.i2c_masters:
+            self.sim.i2c_masters.remove(self.scb3)
+        self.scb3.remove()
+        if self._car_mapped:
+            self.car.remove()
+            self._car_mapped = False
         self.nim.remove()
         super().uninstall()
+        self.sim.set_upper_ram_mapped(False)
+        if self.sim.ram_size != 0x08000000:
+            self.sim.set_ram_size(0x08000000)
 

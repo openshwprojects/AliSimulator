@@ -38,17 +38,39 @@ from tm1650_decoder import PanelDecoder
 
 class TM1628Decoder(PanelDecoder):
     TAG = '[TM1628]'
-    RAM_SIZE = 14
+    RAM_SIZE = 48
     KEY_BYTES = 5
+    # PT6312 / uPD16312 14-segment 8-grid VFD glyph words (low | high << 8 at
+    # RAM[2*g, 2*g+1]), read directly from the PAN_pt6312_0 font table in
+    # Opticum 7300 PVR CI2CX firmware (0x803B38A8).
+    PT6312_VFD_FONT = {
+        0x0000: ' ', 0x243C: 'O', 0x0420: '1', 0x183C: '2', 0x1C38: '3',
+        0x3881: '4', 0x3C18: 'S', 0x3C1C: '6', 0x0430: '7', 0x3C3C: '8',
+        0x3C38: '9', 0x3C34: 'A', 0x0CB9: 'B', 0x201C: 'C', 0x04B9: 'D',
+        0x381C: 'E', 0x3814: 'F', 0x2C1C: 'G', 0x3C24: 'H', 0x0099: 'I',
+        0x0428: 'J', 0x3244: 'K', 0x200C: 'L', 0x2564: 'M', 0x2724: 'N',
+        0x3834: 'P', 0x263C: 'Q', 0x3A34: 'R', 0x0091: 'T', 0x242C: 'U',
+        0x2046: 'V', 0x2626: 'W', 0x0342: 'X', 0x0141: 'Y', 0x005A: 'Z',
+        0x1881: '+', 0x1800: '-', 0x0600: ':', 0x0200: '.', 0x0008: '_',
+        0x0800: ',',
+    }
+    _CHAR_TO_7SEG = {
+        **{ch.upper(): seg for seg, ch in PanelDecoder.SEG_TO_CHAR.items() if len(ch) == 1},
+        ' ': 0x00, '0': 0x3F, 'O': 0x3F, 'B': 0x7C, 'D': 0x5E, 'G': 0x3D,
+        'K': 0x76, 'M': 0x37, 'N': 0x37, 'Q': 0x67, 'R': 0x50, '5': 0x6D,
+        'S': 0x6D, 'T': 0x78, 'V': 0x3E, 'W': 0x3E, 'Z': 0x5B,
+    }
 
     def __init__(self, clk_gpio=31, dio_gpio=9, stb_gpio=11, digit_addrs=(0, 2, 4, 6),
-                 seg_map=PanelDecoder.STANDARD_SEG_MAP, log_handler=None, on_frame=None):
+                 seg_map=PanelDecoder.STANDARD_SEG_MAP, vfd_14seg=False,
+                 log_handler=None, on_frame=None):
         super().__init__(log_handler)
         self.clk_offset, self.clk_bit = self._gpio_to_offset_bit(clk_gpio)
         self.dio_offset, self.dio_bit = self._gpio_to_offset_bit(dio_gpio)
         self.stb_offset, self.stb_bit = self._gpio_to_offset_bit(stb_gpio)
         self.digit_addrs = tuple(digit_addrs)
         self.seg_map = tuple(seg_map)
+        self.vfd_14seg = bool(vfd_14seg)
         self.on_frame = on_frame            # on_frame(list of bytes) for every completed frame
 
         # Bus state
@@ -139,7 +161,7 @@ class TM1628Decoder(PanelDecoder):
                 self.log(f"[TM1628] Data command 0x{cmd:02X}: write display, "
                          f"{'auto-increment' if self.auto_increment else 'fixed'} address")
         elif kind == 0xC0:
-            self.address = cmd & 0x0F
+            self.address = cmd & 0x3F
             for i, byte in enumerate(frame[1:]):
                 addr = self.address + (i if self.auto_increment else 0)
                 if addr < self.RAM_SIZE:
@@ -199,4 +221,16 @@ class TM1628Decoder(PanelDecoder):
     @property
     def digits(self):
         """Segment bytes of the 4 digits (RAM bytes digit_addrs), standard layout."""
+        if self.vfd_14seg:
+            t = self.get_display_text()
+            s = t[2:6] if (t[:2] == "  " and t[6:] == "  ") else t.strip()[:4].ljust(4)
+            return [self._CHAR_TO_7SEG.get(ch.upper(), 0x00) for ch in s]
         return [self._segments(self.ram[a]) if a < self.RAM_SIZE else 0 for a in self.digit_addrs]
+
+    def get_display_text(self):
+        if self.vfd_14seg:
+            return "".join(
+                self.PT6312_VFD_FONT.get(self.ram[2 * g] | (self.ram[2 * g + 1] << 8), '?')
+                for g in range(8)
+            )
+        return super().get_display_text()

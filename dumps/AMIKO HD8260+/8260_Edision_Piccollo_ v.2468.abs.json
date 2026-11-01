@@ -1,0 +1,66 @@
+{
+  "file": "8260_Edision_Piccollo_ v.2468.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8260+ (System ID 14000A00 / 14000A88, Edision Piccollo GUI v.2468 build)",
+    "type": "DVB-S2 + DVB-T2/C Full HD combo receiver with CI slot, CA card reader, Ethernet and USB Wi-Fi",
+    "board": "14000A00 (bootloader version \"M3516A 1.2.1\", 16 MB SPI flash, 256 MB DDR3 M3503/M3516 combo platform)",
+    "soc": "ALi M3516A / M3503 with 256 MB DDR3 (bootloader \"M3516A 1.2.1\", seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal DVB-S2 + external Availink AVL6762 DVB-T2/C on bit-banged GPIO I2C (SCL = GPIO 7, SDA = GPIO 8) at 0x14",
+    "demodModel": {
+      "chip": "avl6762",
+      "address": 20
+    },
+    "gpioI2c": {
+      "scl": 7,
+      "sda": 8
+    },
+    "tuner": "Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "mxl608",
+        "address": 96
+      }
+    },
+    "flash": "16 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "2.4.68 (maincode(AV) \"14000A882468\"; bootloader \"M3516A 1.2.1\", 2012-12-20; seecode \"M3606 SEE\", 2019-01-25)",
+    "date": "2019-01-25",
+    "size": 16777216,
+    "sha1": "72f0600c7a3fb275a1fa428c3f94ead290ccb9ac",
+    "layout": "bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2019-1-25), maincode(AV) 0x030000 (14000A882468, 2010-08-12), seecode 0x430000 (M3606 SEE, 2019-1-25), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=8260_Edision_Piccollo_%20v.2468.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)",
+    "author": "Amiko / Edision",
+    "date": "2019-01-25",
+    "login": false,
+    "note": "Archive 8260_Edision_Piccollo_ v.2468.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 256 MB DDR3 M3503 / M3516A board on a 16 MB SPI flash (chips/m3503.py, chip word 0x35030001 for M3503 revision B, run_dump_hd8260_app_starts.py, run_dump_hd8260_capture_screen.py): the XIP bootloader starts with its stack in the cache-as-RAM window at 0x8FFF8000..0x8FFFFFFF, copies itself to 0x81400000, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, parks the SEE boot stub, unpacks seecode (\"M3606 SEE\") to 0xAE000200 (224 MB physical DDR) and maincode(AV) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application initialises its external Availink AVL6762 DVB-T2/C demodulator at I2C 0x14 over bit-banged GPIO I2C on SCL = GPIO 7 / SDA = GPIO 8 (\"Demod is 6762!!!\", demods.py:AVL6762) and Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB0, drives the CH455 front panel on GPIO 135 / 134 (\" ON \", \" on \"), populates userdb(64+64) at 0xF3FF80, and renders its 1920x1080 CLUT8 OSD through GeM36F / GMA layer 0 (without the board's anti-clone security IC it displays the hardware-ID warning dialog)."
+  },
+  "desc": [
+    "Amiko HD8260+ (System ID 14000A00 / 14000A88) firmware v.2468 with the Edision Piccollo GUI (2019-01-25) for the Full HD DVB-S2 + DVB-T2/C combo receiver on the ALi M3516A / M3503 SoC with 256 MB DDR3 and a 16 MB SPI flash.",
+    "Pairs the M3516A's internal DVB-S2 front-end + Airoha AV2012 tuner (0x61 on SCB0) with an external Availink AVL6762 DVB-T2/C demodulator at 0x14 on bit-banged GPIO 7 / 8 + MaxLinear MxL608 tuner (0x60), and drives a CH455 4-digit LED panel on GPIO 135 / 134."
+  ]
+}

@@ -17,15 +17,31 @@ DVB-T2 through an external AltoBeam ATBM7812; nothing of that is modelled.)
 """
 import struct
 
+import i2c_scb
 from .base import ReadyBits, chunk_chain, maincode
 from .m3503 import InternalDemod
 from .m3821 import M3821
-from .see import SeeStart
+from .see import CONTROL, SeeStart
 
 BOOTROM_SP = (
     struct.pack("<I", 0x3C1D9FE0),  # lui $sp, 0x9FE0: a bootloader that runs in the boot SRAM (KSEG0)
     struct.pack("<I", 0x3C1DBFE0),  # lui $sp, 0xBFE0: the same boot SRAM in KSEG1 (Ariva 104)
 )
+REMAP_BIT = 0x01000000              # 0xB8000220 bit 24 (0xB8000223 bit 0): 0x0F000000..0x0FFFFFFF is DDR, not flash
+
+
+def _is_256m(image):
+    """A 256 MB C3505 build (Ariva 255 Combo): its maincode sets
+    SYS_FLASH_BASE_ADDR to 0xBFC00000 (lui rX, 0xBFC0) and uses
+    0xAF000000..0xB0000000 as the top 16 MB of DDR once the bootloader sets
+    0xB8000220 bit 24."""
+    mc = maincode(image)
+    pos = mc.find(b"\xC0\xBF")
+    while pos >= 0:
+        if (pos & 3) == 0 and pos + 4 <= len(mc) and (mc[pos + 3] >> 2) == 0x0F:
+            return True
+        pos = mc.find(b"\xC0\xBF", pos + 1)
+    return False
 
 
 class C3505(M3821):
@@ -43,10 +59,39 @@ class C3505(M3821):
         return any(tag in mc for tag in (b"ALI_C3505", b"NIM_C3505_0", b"NIM_S3505"))
 
     def install(self):
+        self._ram_256m = False
         super().install()
         self.ready300 = ReadyBits(self.sim, {0x301: 0x01})     # bit 8 of 0xB8000300: polled before the bootloader goes on
         self.nim = InternalDemod(self.sim)
-        self.see = SeeStart(self.sim)
+        self.scb3 = i2c_scb.I2cMaster(self.sim, 0x18D00, "SCB3")
+        self.sim.i2c_masters.append(self.scb3)
+        self.sim._mmio_on('w', self._write_remap_ctrl, CONTROL, CONTROL + 3)
+        self._configure_memory()
+
+    def _configure_memory(self):
+        sim = self.sim
+        self._ram_256m = bool(sim.rom_image) and _is_256m(sim.rom_image)
+        sim._mmio_view[CONTROL + 3] &= ~0x01
+        sim.set_upper_ram_mapped(False)
+        sim.set_ram_size(0x10000000 if self._ram_256m else 0x08000000)
+
+    def _write_remap_ctrl(self, uc, access, address, size, value, user_data):
+        if not self._ram_256m:
+            return
+        old = int.from_bytes(self.sim.mmio_buffer[CONTROL:CONTROL + 4], 'little')
+        new = SeeStart._after(old, address, CONTROL, size, value)
+        if (old ^ new) & REMAP_BIT:
+            on = bool(new & REMAP_BIT)
+            self.sim.log(f"[C3505] 0xB8000220 bit 24 -> {int(on)}: 0x0F000000..0x0FFFFFFF is "
+                         f"{'DDR (240..256 MB), flash at 0xBF800000' if on else 'the flash window'}")
+            self.sim.set_upper_ram_mapped(on)
+
+    def on_upper_ram_mapped(self, on):
+        self._set_sram_mapped(not on)
+
+    def start(self):
+        self._configure_memory()
+        super().start()
 
     def set_signal(self, on=True):
         super().set_signal(on)
@@ -54,6 +99,14 @@ class C3505(M3821):
         return True
 
     def uninstall(self):
+        self._ram_256m = False
+        self.sim._mmio_off('w', self._write_remap_ctrl, CONTROL, CONTROL + 3)
+        if self.scb3 in self.sim.i2c_masters:
+            self.sim.i2c_masters.remove(self.scb3)
+        self.scb3.remove()
+        self.sim.set_upper_ram_mapped(False)
+        if self.sim.ram_size != 0x08000000:
+            self.sim.set_ram_size(0x08000000)
         self.nim.remove()
         super().uninstall()
 

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from unicorn.mips_const import UC_MIPS_REG_A1, UC_MIPS_REG_PC, UC_MIPS_REG_V0, UC_MIPS_REG_V1
 
-from parallel_flash import MX29LV400B, ParallelNorFlash
+from parallel_flash import MX29LV400B, MX29LV800B, MX29LV160B, MX29LV320B, ParallelNorFlash, part_for_size
 from simulator import AliMipsSimulator
 
 failures = 0
@@ -88,6 +88,10 @@ def test_state_machine():
     check(sim.rom_image == b"\xFF" * len(sim.rom_image), "chip erase")
     check(flash.commands == {'autoselect': 1, 'reset': 1, 'program': 3, 'erase sector': 1, 'bypass': 1,
                              'erase chip': 1}, f"command counts {flash.commands}")
+    check(sum(MX29LV400B["sectors"]) == 0x80000 and part_for_size(0x80000) is MX29LV400B, "MX29LV400B = 512 KB")
+    check(sum(MX29LV800B["sectors"]) == 0x100000 and part_for_size(0x100000) is MX29LV800B, "MX29LV800B = 1 MB")
+    check(sum(MX29LV160B["sectors"]) == 0x200000 and part_for_size(0x200000) is MX29LV160B, "MX29LV160B = 2 MB")
+    check(sum(MX29LV320B["sectors"]) == 0x400000 and part_for_size(0x400000) is MX29LV320B, "MX29LV320B = 4 MB")
 
 
 # The M3329 driver's probe (0xA002E0D4), reduced: a1 = the array word, v0 = the word in autoselect mode;

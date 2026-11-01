@@ -1,0 +1,65 @@
+{
+  "file": "Ferguson_A255 Slim_V1.30B4_20231103_EU.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 255 Combo S",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC 10-bit slim combo receiver with CI+ slot, CA card reader and Ethernet / Wi-Fi",
+    "board": "HASG4 bootloader version \"39094-01047\" (256 MB DDR3 C3505 slim combo board)",
+    "soc": "ALi C3505 with 256 MB DDR3 (maincode \"ALI_C3505:0x%x\", seecode \"M3505 SEE\" at 0xAE000200)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0) + external Availink AVL6862 / AVL6762 DVB-T2/C on SCB3 at I2C 0x14",
+    "demodModel": {
+      "chip": "avl6862",
+      "address": 20
+    },
+    "tuner": "RDA Microelectronics RDA5816 at I2C 0x0C (DVB-S2) + Rafael Micro R840 at I2C 0x1A (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "rda5816",
+      "address": 12,
+      "secondary": {
+        "chip": "r840",
+        "address": 26
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "ext00"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.30B4 (bootloader << SDK4.0ba.4.0_20101217 >>; Libcore 17.19.0@SDK4.0ia.17.19_20181226)",
+    "date": "2023-11-03",
+    "size": 8388608,
+    "sha1": "2849fb2a576d7dd6a8dddf43d01903dfb916e322",
+    "layout": "HASG4 0x000000 (39094-01047, 2023-11-3), HDCPKey 0x02FE00 (00000001, 2018-10-31), maincode 0x030000 (V1.30B4*, 2023-11-3), seecode 0x43F400 (M3505 SEE, 2023-11-3), osd_string 0x5BF400 (1.1.0, 2023-11-3), ARIVA255Slim 0x5F0000 (1.0.0, 2017-11-1), seeback 0x61FF80 (1.0.0, 2023-11-3), data 0x68FF80 (1.0.0, 2023-11-3), cipluskey 0x6F0000 (1.0.0, 2017-11-1), defaultdb 0x700000 (1.0.0, 2017-11-1), userdb 0x72FF80 (1.0.0, 2023-11-3)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo_s/software/Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip",
+    "site": "ferguson-digital.eu",
+    "author": "Ferguson",
+    "date": "2023-11-03",
+    "login": false,
+    "note": "Official firmware archive Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip from Ferguson's download server; fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " O  ",
+      " On ",
+      " on ",
+      "StAr",
+      "nenu"
+    ],
+    "note": "Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_a255s_app_starts.py, run_dump_a255s_capture_screen.py): its boot-ROM bootloader runs in boot SRAM at 0x9FE00800 while reading the chunk table through the 0xAFC00000 flash window, unpacks maincode to 0x80000200 and seecode to 0xAE000200 (224 MB physical DDR), then sets 0xB8000220 bit 24 before jumping to maincode -- switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, used for video/GMA buffers) and restoring 0xBFE00000..0xBFEFFFFF to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror.  The application moves EBase to 0x80002000, starts the SEE co-processor at 0xAE000200 (EBase 0x8E002001), initialises the internal S3505 DVB-S2 demodulator + RDA Microelectronics RDA5816 tuner (0x0C on SCB1) and the external Availink AVL6862 DVB-T2/C demodulator (0x14 on SCB3 at 0xB8018D00) + Rafael Micro R840 tuner (0x1A on SCB3), drives the FD650K front panel on GPIO 107 / 108 (\" O  \", \" On \", \" on \", \"StAr\", \"nenu\"), and renders its 1280x720 ARGB8888 \"System Setup\" OSD menu through the display engine at 0xB8006900."
+  },
+  "desc": [
+    "Ferguson Ariva 255 Combo S (Slim) official EU firmware V1.30B4 (2023-11-03) for the Full HD H.265/HEVC 10-bit DVB-S2 + DVB-T2/C CI+ combo receiver on the ALi C3505 SoC with 256 MB DDR3.",
+    "Compared with the 2020 HASG1 Ariva 255 Combo board (ALi M3031 at 0x20 + Rafael Micro R836 at 0x3A), the 2023 HASG4 Ariva 255 Combo S board replaces the RF front-ends with an RDA Microelectronics RDA5816 DVB-S2 silicon tuner at I2C 0x0C on SCB1 and a Rafael Micro R840 DVB-T2/C silicon tuner at I2C 0x1A on SCB3 alongside the Availink AVL6862 demodulator at 0x14."
+  ]
+}

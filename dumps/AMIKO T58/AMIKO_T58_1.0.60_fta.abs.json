@@ -1,0 +1,55 @@
+{
+  "file": "AMIKO_T58_1.0.60_fta.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "T58",
+    "type": "DVB-T2/C Full HD FTA terrestrial / cable receiver",
+    "board": "Demo M3821",
+    "soc": "ALi M3821 (single-CPU DVB-T2 SoC reading chip ID 0x3821 revision B, variant 0x0001; XIP Cache-as-RAM bootloader 1.0.0; Libcore 13.10.0@SDK4.0ga.13.10_20150713)",
+    "family": "M3821 (chips/m3821.py)",
+    "demod": "internal ALi NIM_S3821_0 DVB-T/T2 demodulator at 0xB804C000 (plus NIM_QAM_S3202 DVB-C)",
+    "tuner": "Rafael Micro R836 at I2C 0x3A on SCB2 (auto-probed alongside R850 at 0x7C and MxL603 at 0x60)",
+    "tunerModel": {
+      "chip": "r836",
+      "address": 58
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible, PAN_CH455_0)",
+      "scl": 128,
+      "sda": 129
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.60 fta (Application 1.0.0@SDK4.0ga.13.10_20150713byD17CRB; Libcore 13.10.0@SDK4.0ga.13.10_20150713)",
+    "date": "2017-03-16",
+    "size": 4194304,
+    "sha1": "0b223cfdb5d0cb144db377d0dc33ac52198ae4cd",
+    "layout": "BootLoader 0x000000 (1.0.0, 2016-01-13, XIP Cache-as-RAM), HDCPKey 0x06EE00 (M3821, 2015-09-10), MemCfg 0x06F000 (00000001, 2017-03-16), MainCode 0x070000 (DVB-T2, 2017-03-16, 0x1F0B7E bytes LZMA -> 8.10 MB in RAM), Radioback 0x270000 (1.0.0), DefaultDB 0x290000 (1.1.0), UserDB 0x30FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_T58_1.0.60_fta.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2017-03-16",
+    "login": false,
+    "note": "Archive AMIKO_T58_1.0.60_fta.rar from the Amiko HD directory on satedu.cba.pl; fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on ",
+      "Strt"
+    ],
+    "note": "Boots as the M3821 family (chips/m3821.py, chip ID 0x3821 variant 0x0001): matched by its HDCPKey chunk version \"M3821\" and single-CPU XIP bootloader driving NIM_S3821_0.  The bootloader starts XIP from flash with its early stack in CacheAsRam (0x8FFF8000..0x8FFFFFFF), trains DDR at 0xB803E000, copies itself to 0x81000000, writes \" ON \" to the CH455 panel on GPIO 128 (SCL) / 129 (SDA), unpacks the 8.1 MB MainCode to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes its Rafael Micro R836 tuner on SCB2 at I2C 0x3A (\"test r836 tuner i2c --> 1\", \"--->> tuner type : 836\"), initialises UserDB from DefaultDB (\"DB_init() success!\", \"ali play 1.0 $$$\"), updates the front panel through \" on \" to \"Strt\", draws its 152-colour \"Welcome\" installation wizard via GeM36F (17 GE commands), and responds to remote navigation (necfirst, customer prefix 0x33: DOWN moves from Region to Language, RIGHT changes the selected language)."
+  },
+  "desc": [
+    "Official FTA firmware 1.0.60 (2017-03-16) for the Amiko T58 Full HD DVB-T2/C terrestrial and cable receiver on a 4 MB SPI flash.",
+    "Uses a single-CPU ALi M3821 configuration (no SEE co-processor chunk; XIP Cache-as-RAM bootloader 1.0.0 and Libcore 13.10.0) with the on-die NIM_S3821_0 DVB-T2 demodulator, auto-detected Rafael Micro R836 / R850 or MaxLinear MxL603 tuner on SCB2, and a CH455 4-digit panel on GPIO 128 / 129."
+  ]
+}

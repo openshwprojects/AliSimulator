@@ -273,14 +273,20 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._rom_view = memoryview(self.rom_buffer).cast('B')
         self._spi_status_injected = False
         slot = min(self.rom_size, 0x400000)
+        flash_phys = (0x1F000000,) if self._upper_ram_mapped else (0x0F000000, 0x1F000000)
         for offset in range(0, 0x01000000, slot):
-            for phys in (0x0F000000, 0x1F000000):
+            for phys in flash_phys:
                 for seg in (0x00000000, 0x80000000, 0xA0000000):
                     self._map_flash_mirror(seg + phys + offset, slot)
         self.ram_buffer = self._buffer('ram_buffer', self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
+        low_ram = min(self.ram_size, 0x0F000000)
         for base in (0x80000000, 0xA0000000, 0x00000000):
-            core.mem_map_ptr(base, self.ram_size, UC_PROT_ALL, ram_ptr)
+            core.mem_map_ptr(base, low_ram, UC_PROT_ALL, ram_ptr)
+        if self._upper_ram_mapped and self.ram_size > 0x0F000000:
+            upper_sz = min(self.ram_size, 0x10000000) - 0x0F000000
+            for seg in (0x80000000, 0xA0000000, 0x00000000):
+                core.mem_map_ptr(seg + 0x0F000000, upper_sz, UC_PROT_ALL, ram_ptr + 0x0F000000)
         self._init_fast_access()
         self.force_erl = False
         self._site_words = set()
@@ -344,7 +350,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._demod_address = None
         self.i2c_masters = [i2c_scb.I2cMaster(self, base, f"SCB{i}") for i, base in enumerate(self.I2C_SCB_BASES)]
         self.smc = smc_m36.SmartCard(self)
-        self._flash_windows = [0x0F000000, 0x1F000000]
+        self._flash_windows = [0x1F000000] if self._upper_ram_mapped else [0x0F000000, 0x1F000000]
         self.flash_device = None
         self._flash_read_hooks = []
         self._flash_hooks_pending = False
@@ -352,17 +358,18 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._spi_dump_flash_reads = False
         self.flash_hook_changes = 0
         self._mmio_observers = []
-        wins = (ctypes.c_uint32 * 2)(*self._flash_windows)       # (where the core finds the flash windows)
-        L.ali_set_flash_cmd(core.handle, 0, wins, 2)
+        wins = (ctypes.c_uint32 * len(self._flash_windows))(*self._flash_windows)
+        L.ali_set_flash_cmd(core.handle, 0, wins, len(self._flash_windows))
         self._update_flash_read_hooks()
         core.hook_add(UC_HOOK_CODE, self._hook_null_jump, begin=0, end=3)
         self._short_block_hook = None
+        self._short_block_hooks = {}
         self._long_block_hooks = {}
         self._orig_emu_stop = cpp_core.CppUc.emu_stop.__get__(core)
         # the core's interrupt controller (EBase and Status: the shadow attributes, set before)
         L.ali_set_ic(core.handle, self.ic_base, self.ic_base + 8, self.ic_base)
         # first-execution reports of the RAM's 1 MB chunks (LzmaDecode found in new code)
-        L.ali_set_chunks(core.handle, 20, min(self.ram_size, 0x08000000) >> 20)
+        L.ali_set_chunks(core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
 
     def _calibrate_hflags(self):
         pass
@@ -544,6 +551,15 @@ class CppAliMipsSimulator(AliMipsSimulator):
 
     def _apply_flash_hooks(self, force=False):
         self._update_flash_read_hooks()
+
+    def _sync_flash_windows(self):
+        if '_core' in self.__dict__:
+            wins = (ctypes.c_uint32 * len(self._flash_windows))(*self._flash_windows)
+            cpp_core.lib().ali_set_flash_cmd(self._core.handle, int(self._flash_cmd_on), wins, len(self._flash_windows))
+
+    def _on_ram_size_changed(self):
+        if '_core' in self.__dict__:
+            cpp_core.lib().ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
 
     def _update_short_block_hook(self):
         pass
@@ -873,7 +889,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
         reported again."""
         self._rom_sites_dirty = True
         self._rescan_cp0_sites(None)
-        cpp_core.lib().ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x08000000) >> 20)
+        cpp_core.lib().ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
 
     def _rescan_cp0_sites(self, ranges=None):
         """No CP0 sites on this core: only LzmaDecode() (and the RTOS's delay(), when
@@ -885,7 +901,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
             ranges = self.chip.code_ranges()
         for start, length in ranges:
             phys = start & 0x1FFFFFFF
-            if (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size:
+            if (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size:
                 data = self._ram_view[phys:phys + length]
             else:
                 try:

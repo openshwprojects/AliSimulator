@@ -116,6 +116,9 @@ class AliMipsSimulator:
         self.rom_size = rom_size
         self.ram_size = ram_size
         self._shared = share_memory_with
+        self._upper_ram_mapped = bool(share_memory_with._upper_ram_mapped) if share_memory_with is not None else False
+        self._upper_ram_pending = None
+        self._mapped_ram_size = self.ram_size if self._upper_ram_mapped else min(self.ram_size, 0x0F000000)
         self.ic_base = ic_base
         self._ic = 0xB8000000 + ic_base     # its status words (+0 / +4) and enables (+8 / +0xC), no side effects
         self._ic_en = self._ic + 8          # (the enables: elsewhere on older chips, set_ic_layout)
@@ -476,8 +479,9 @@ class AliMipsSimulator:
         # A flash larger than 4 MB shows its 4 MB segments below the
         # 0x..C00000 slot (see _flash_offset), so each slot maps its segment.
         slot = min(self.rom_size, 0x400000)
+        flash_phys = (0x1F000000,) if self._upper_ram_mapped else (0x0F000000, 0x1F000000)
         for offset in range(0, 0x01000000, slot):
-            for phys in (0x0F000000, 0x1F000000):
+            for phys in flash_phys:
                 for seg in (0x00000000, 0x80000000, 0xA0000000):
                     base = seg + phys + offset
                     try:
@@ -485,15 +489,20 @@ class AliMipsSimulator:
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
         
-        # Shared RAM Buffer (128MB as per device spec)
+        # Shared RAM Buffer (128MB default, up to 256MB on C3505 boards)
         self.ram_buffer = self._buffer('ram_buffer', self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
+        low_ram = min(self.ram_size, 0x0F000000)
         
         # Map RAM aliases to same buffer
         self.log(f"Mapping Shared RAM at 0x80000000, 0xA0000000, 0x00000000")
-        self.mu.mem_map_ptr(0x80000000, self.ram_size, UC_PROT_ALL, ram_ptr)
-        self.mu.mem_map_ptr(0xA0000000, self.ram_size, UC_PROT_ALL, ram_ptr)
-        self.mu.mem_map_ptr(0x00000000, self.ram_size, UC_PROT_ALL, ram_ptr)
+        self.mu.mem_map_ptr(0x80000000, low_ram, UC_PROT_ALL, ram_ptr)
+        self.mu.mem_map_ptr(0xA0000000, low_ram, UC_PROT_ALL, ram_ptr)
+        self.mu.mem_map_ptr(0x00000000, low_ram, UC_PROT_ALL, ram_ptr)
+        if self._upper_ram_mapped and self.ram_size > 0x0F000000:
+            upper_sz = min(self.ram_size, 0x10000000) - 0x0F000000
+            for seg in (0x80000000, 0xA0000000, 0x00000000):
+                self.mu.mem_map_ptr(seg + 0x0F000000, upper_sz, UC_PROT_ALL, ram_ptr + 0x0F000000)
         self._init_fast_access()
         # kuseg 1:1 through a wired TLB entry and the guest's own native Status,
         # or (without it) the forced ERL (see native_status)
@@ -581,6 +590,7 @@ class AliMipsSimulator:
         self.i2c_devices = self._shared.i2c_devices if self._shared else {}
         self.i2c_ack_all = False
         self._demod_address = None          # where attach_demod put the loaded board's demodulator
+        self._demod_device = None
         self.i2c_masters = [i2c_scb.I2cMaster(self, base, f"SCB{i}") for i, base in enumerate(self.I2C_SCB_BASES)]
         self.smc = smc_m36.SmartCard(self)
 
@@ -589,7 +599,7 @@ class AliMipsSimulator:
         # and 0x0FC00000).  Stores fault into _hook_flash_write_prot; the read
         # hook is only installed around SPI command mode (or with
         # setSPIDump(True, flash_reads=True)), see _update_flash_read_hooks.
-        self._flash_windows = [0x0F000000, 0x1F000000]
+        self._flash_windows = [0x1F000000] if self._upper_ram_mapped else [0x0F000000, 0x1F000000]
         # A chip family's own flash device takes the stores to them instead (a
         # parallel flash: parallel_flash.py)
         self.flash_device = None
@@ -607,6 +617,7 @@ class AliMipsSimulator:
         # padding (_update_short_block_hook), plus any 350+ instruction
         # branchless code blocks in RAM (_find_long_blocks)
         self._short_block_hook = None
+        self._short_block_hooks = {}
         self._long_block_hooks = {}
 
         # The per-instruction hook (_hook_code) and the fast-mode hooks are
@@ -640,7 +651,9 @@ class AliMipsSimulator:
         # and test scripts that call it directly) as emulation time for Count.
         self._orig_emu_start = self.mu.emu_start
         def _emu_start_wrapper(*args, **kwargs):
-            # Flash read hook changes happen here, never while the CPU runs
+            # Memory remaps and flash read hook changes happen here, never while the CPU runs
+            if self._upper_ram_pending is not None:
+                self._apply_upper_ram_map(self._upper_ram_pending)
             if self._flash_hooks_pending or (self._flash_read_hooks and not self._flash_hooks_wanted()):
                 self._apply_flash_hooks()
             self._setup_clock()
@@ -691,6 +704,8 @@ class AliMipsSimulator:
                             self._dev_replays[key] = last[0:3]
                     except UcError:
                         pass
+                if self._upper_ram_pending is not None:
+                    self._apply_upper_ram_map(self._upper_ram_pending)
         self.mu.emu_start = _emu_start_wrapper
 
         # CP0 Status configuration
@@ -725,9 +740,8 @@ class AliMipsSimulator:
         a scratch page) and check it: a kuseg load with ERL clear reads RAM.
         False if that cannot be done (the forced ERL stays)."""
         import struct
-        page = 0x0EFFF000                   # (physical; above the RAM, below the flash window)
-        if self.ram_size > page:
-            return False
+        page = 0x0EFFF000                   # (physical; below the 0x0F000000 flash window)
+        in_ram = self._mapped_ram_size > page
         mu = self.mu
 
         def li(v):
@@ -744,9 +758,11 @@ class AliMipsSimulator:
                    [0x42000002, 0])                                          # tlbwi
         check = [0x3C090000, 0x8D2A0000, 0]                                  # lui t1, 0; lw t2, 0(t1)
         saved = [mu.reg_read(r) for r in (UC_MIPS_REG_T0, UC_MIPS_REG_T1, UC_MIPS_REG_T2, UC_MIPS_REG_PC)]
+        saved_ram = bytes(self._ram_view[page:page + 64]) if in_ram else None
         ok = False
         try:
-            mu.mem_map(page, 0x1000)
+            if not in_ram:
+                mu.mem_map(page, 0x1000)
             for code, status in ((install, 0x10400004), (check, 0x10400000)):
                 mu.mem_write(page, struct.pack(f"<{len(code)}I", *code))
                 mu.ctl_flush_tb()
@@ -756,10 +772,13 @@ class AliMipsSimulator:
         except UcError as e:
             self.log(f"Warning: the kuseg TLB entry could not be set up ({e}); forcing Status.ERL")
         finally:
-            try:
-                mu.mem_unmap(page, 0x1000)
-            except UcError:
-                pass
+            if in_ram:
+                self._ram_view[page:page + 64] = saved_ram
+            else:
+                try:
+                    mu.mem_unmap(page, 0x1000)
+                except UcError:
+                    pass
             mu.ctl_flush_tb()
             for r, v in zip((UC_MIPS_REG_T0, UC_MIPS_REG_T1, UC_MIPS_REG_T2, UC_MIPS_REG_PC), saved):
                 mu.reg_write(r, v)
@@ -977,7 +996,7 @@ class AliMipsSimulator:
         self._ram_view = memoryview(self.ram_buffer).cast('B')
         self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
         self._ram_halfwords = self._ram_view.cast('H') if sys.byteorder == 'little' else None
-        self._ram_words_len = len(self._ram_words) if self._ram_words is not None else 0
+        self._ram_words_len = (self._mapped_ram_size >> 2) if self._ram_words is not None else 0
         self._rom_words = self._rom_view.cast('I') if sys.byteorder == 'little' else None
         self._rom_halfwords = self._rom_view.cast('H') if sys.byteorder == 'little' else None
         self._m32_traits = {}
@@ -1161,15 +1180,32 @@ class AliMipsSimulator:
     def _update_short_block_hook(self):
         """At a full CP0 site scan: hook the padding range while it holds a long
         run of zero words, unhook it otherwise."""
-        lo, hi = self._PADDING
-        padded = bytes(4 * self._PADDING_WORDS) in self.mu.mem_read(lo, hi + 1 - lo)
-        if padded and self._short_block_hook is None:
-            self._short_block_hook = self.mu.hook_add(UC_HOOK_CODE, self._hook_short_blocks, begin=lo, end=hi)
-            self._tb_flush_needed = True
-        elif not padded and self._short_block_hook is not None:
-            self.mu.hook_del(self._short_block_hook)
-            self._short_block_hook = None
-            self._tb_flush_needed = True
+        zeros = bytes(4 * self._PADDING_WORDS)
+        bases = {0x00000000}
+        for start, length in self.chip.code_ranges():
+            phys = start & 0x1FFFFFFF
+            if (start >> 29) in (0, 4, 5) and length >= 0x1000 and phys + 0x1000 <= self._mapped_ram_size:
+                bases.add(phys)
+        wanted = set()
+        for phys in bases:
+            if phys + 0x1000 <= self._mapped_ram_size:
+                padded = zeros in bytes(self._ram_view[phys + 0x200:phys + 0x1000])
+            else:
+                padded = zeros in self.mu.mem_read(0x80000000 + phys + 0x200, 0xE00)
+            if padded:
+                wanted.add((0x80000000 + phys + 0x200, 0x80000000 + phys + 0xFFF))
+                if phys:
+                    wanted.add((0xA0000000 + phys + 0x200, 0xA0000000 + phys + 0xFFF))
+        for rng in list(self._short_block_hooks):
+            if rng not in wanted:
+                self.mu.hook_del(self._short_block_hooks.pop(rng))
+                self._tb_flush_needed = True
+        for lo, hi in sorted(wanted):
+            if (lo, hi) not in self._short_block_hooks:
+                self._short_block_hooks[(lo, hi)] = self.mu.hook_add(
+                    UC_HOOK_CODE, self._hook_short_blocks, begin=lo, end=hi)
+                self._tb_flush_needed = True
+        self._short_block_hook = self._short_block_hooks.get(self._PADDING)
 
     def _hook_short_blocks(self, uc, address, size, user_data):
         """Nothing: being hooked keeps Unicorn's translation blocks short there
@@ -1268,6 +1304,9 @@ class AliMipsSimulator:
         object also answers the firmware's reads of the pins it drives
         (_hook_gpio_di_read)."""
         self.gpio_callback = handler
+        from lemontree_decoder import LemontreeDecoder
+        if isinstance(getattr(handler, "__self__", None), LemontreeDecoder):
+            self.gpio_devices = [d for d in self.gpio_devices if not isinstance(d, LemontreeDecoder)]
 
     def setI2CDump(self, enabled):
         """Enable or disable I2C/GPIO trace logging. TM1650 results always shown."""
@@ -1477,6 +1516,97 @@ class AliMipsSimulator:
         import ctypes
         perms = (UC_PROT_READ | UC_PROT_EXEC) if base < 0x80000000 else UC_PROT_ALL
         self.mu.mem_map_ptr(base, size, perms, ctypes.addressof(self.rom_buffer) + self._flash_offset(base))
+
+    def _sync_flash_windows(self):
+        pass
+
+    def _on_ram_size_changed(self):
+        pass
+
+    def set_upper_ram_mapped(self, on):
+        """Switch physical 0x0F000000..0x10000000 between the 16 MB flash window
+        (False, power-on reset) and the top 16 MB of a 256 MB DDR (True, once a
+        256 MB bootloader sets 0xB8000220 bit 24)."""
+        on = bool(on) and self.ram_size > 0x0F000000
+        target = self._upper_ram_mapped if self._upper_ram_pending is None else self._upper_ram_pending
+        if on == target:
+            return
+        if self._vt_slice_t0 is not None:
+            self._upper_ram_pending = on
+            if not self.is_stepping:
+                if self._stop_reason is None:
+                    self._stop_reason = 'flashhooks'
+                self._orig_emu_stop()
+            return
+        self._apply_upper_ram_map(on)
+
+    def _apply_upper_ram_map(self, on):
+        import ctypes
+        self._upper_ram_pending = None
+        on = bool(on) and self.ram_size > 0x0F000000
+        if on == self._upper_ram_mapped:
+            return
+        if self._rom_dirty:
+            self._rom_restore()
+        for h in self._flash_read_hooks:
+            self.mu.hook_del(h)
+        self._flash_read_hooks = []
+        self._upper_ram_mapped = on
+        self._mapped_ram_size = self.ram_size if on else min(self.ram_size, 0x0F000000)
+        self._ram_words_len = (self._mapped_ram_size >> 2) if self._ram_words is not None else 0
+        self._flash_windows = [0x1F000000] if on else [0x0F000000, 0x1F000000]
+        self._sync_flash_windows()
+        upper_sz = min(self.ram_size, 0x10000000) - 0x0F000000
+        ram_ptr = ctypes.addressof(self.ram_buffer)
+        slot = min(self.rom_size, 0x400000)
+        for seg in (0x00000000, 0x80000000, 0xA0000000):
+            self.mu.mem_unmap(seg + 0x0F000000, upper_sz)
+            if on:
+                self.mu.mem_map_ptr(seg + 0x0F000000, upper_sz, UC_PROT_ALL, ram_ptr + 0x0F000000)
+            else:
+                for offset in range(0, upper_sz, slot):
+                    self._map_flash_mirror(seg + 0x0F000000 + offset, slot)
+        fn = getattr(self.chip, 'on_upper_ram_mapped', None)
+        if fn is not None:
+            fn(on)
+        see = getattr(self.chip, 'see', None)
+        if see is not None and see.core is not None:
+            see.core.core.set_upper_ram_mapped(on)
+        self._apply_flash_hooks(force=True)
+        self._flush_tb()
+
+    def set_ram_size(self, size):
+        """Resize the primary core's DDR buffer between runs (e.g. 128 MB <->
+        256 MB on C3505 boards), resetting the 0x0F000000 window to flash."""
+        import ctypes
+        if self._shared is not None:
+            return
+        self._apply_upper_ram_map(False)
+        if size == self.ram_size:
+            return
+        old_low = min(self.ram_size, 0x0F000000)
+        for base in (0x80000000, 0xA0000000, 0x00000000):
+            self.mu.mem_unmap(base, old_low)
+        self.ge = None
+        self._delay_code_views.clear()
+        self._vector_page = None
+        self._scanned_ram_chunks.clear()
+        for h in self._virgin_hooks.values():
+            self.mu.hook_del(h)
+        self._virgin_hooks.clear()
+        self.ram_size = size
+        self._mapped_ram_size = min(size, 0x0F000000)
+        self.ram_buffer = ctypes.create_string_buffer(size)
+        ram_ptr = ctypes.addressof(self.ram_buffer)
+        new_low = min(size, 0x0F000000)
+        for base in (0x80000000, 0xA0000000, 0x00000000):
+            self.mu.mem_map_ptr(base, new_low, UC_PROT_ALL, ram_ptr)
+        self._ram_view = memoryview(self.ram_buffer).cast('B')
+        self._ram_words = self._ram_view.cast('I') if sys.byteorder == 'little' else None
+        self._ram_halfwords = self._ram_view.cast('H') if sys.byteorder == 'little' else None
+        self._ram_words_len = (self._mapped_ram_size >> 2) if self._ram_words is not None else 0
+        self._on_ram_size_changed()
+        self._flush_tb()
 
     def loadFileTruncated(self, filename, max_bytes):
         """Load a ROM file but keep only the first max_bytes.
@@ -2287,8 +2417,10 @@ class AliMipsSimulator:
         import demods
         import dump_catalog
         if self._demod_address is not None:
-            self.i2c_devices.pop(self._demod_address, None)
+            if self.i2c_devices.get(self._demod_address) is self._demod_device:
+                del self.i2c_devices[self._demod_address]
             self._demod_address = None
+            self._demod_device = None
         given = dump_catalog.demod_model(self.dump_path) if getattr(self, "dump_path", None) else None
         if given is None:
             return None
@@ -2297,6 +2429,7 @@ class AliMipsSimulator:
         if hasattr(device, "tuner"):
             device.tuner = self.tuner()
         self._demod_address = address
+        self._demod_device = device
         self.log(f"[I2C] demodulator model {chip} at 0x{address:02X}")
         return device
 
@@ -2322,6 +2455,11 @@ class AliMipsSimulator:
         pull_ups = dump_catalog.gpio_pull_ups(path)
         if pull_ups:
             self.gpio_devices.append(GpioKeys(pull_ups))
+        from front_panel import panel_spec
+        from lemontree_decoder import LemontreeDecoder
+        spec = panel_spec(path)
+        if spec.get("chip") == "lemontree" and not isinstance(getattr(self.gpio_callback, "__self__", None), LemontreeDecoder):
+            self.gpio_devices.append(LemontreeDecoder(spec["scl"], spec["sda"], log_handler=lambda m: None))
         return self.gpio_devices
 
     def tuner(self):
@@ -3295,7 +3433,7 @@ class AliMipsSimulator:
         seg = address >> 29
         w = None
         if seg in (0, 4, 5):
-            if phys + size <= self.ram_size:
+            if phys + size <= self._mapped_ram_size:
                 if size == 4 and not (address & 3) and self._ram_words is not None:
                     w = self._ram_words[phys >> 2]
                 elif size == 2 and not (address & 1) and self._ram_halfwords is not None:
@@ -4053,12 +4191,12 @@ class AliMipsSimulator:
                     self._bp_hooks[addr] = self.mu.hook_add(UC_HOOK_CODE, self._hook_breakpoint, begin=addr, end=addr)
                     self._tb_flush_needed = True
             if not self._virgin_hooks:
-                chunks = set(range(0, min(self.ram_size, self._RAM_CODE_LIMIT), self._VIRGIN_CHUNK))
+                chunks = set(range(0, min(self._mapped_ram_size, self._RAM_CODE_LIMIT), self._VIRGIN_CHUNK))
                 # and the chunks of the chip's code beyond that (a SEE core's program,
                 # whose delay() and LzmaDecode() only these scans find)
                 for start, length in self.chip.code_ranges():
                     phys = start & 0x1FFFFFFF
-                    if phys + length <= self.ram_size:
+                    if phys + length <= self._mapped_ram_size:
                         chunks.update(range(phys & -self._VIRGIN_CHUNK, phys + length, self._VIRGIN_CHUNK))
                 for seg in (0x80000000, 0xA0000000):
                     for base in sorted(seg + c for c in chunks):
@@ -4232,18 +4370,18 @@ class AliMipsSimulator:
         full = ranges is None
         if full:
             chunk = self._VIRGIN_CHUNK
-            ram_chunks = set(range(0, min(self.ram_size, self._RAM_CODE_LIMIT), chunk))
+            ram_chunks = set(range(0, min(self._mapped_ram_size, self._RAM_CODE_LIMIT), chunk))
             extra = []
             for start, length in self.chip.code_ranges():
                 phys = start & 0x1FFFFFFF
-                if (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size:
+                if (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size:
                     ram_chunks.update(range(phys & -chunk, phys + length, chunk))
                 else:
                     extra.append((start, length))
-            ranges = [(0x80000000 + c, min(chunk, self.ram_size - c)) for c in sorted(ram_chunks)] + extra
+            ranges = [(0x80000000 + c, min(chunk, self._mapped_ram_size - c)) for c in sorted(ram_chunks)] + extra
         for start, length in ranges:
             phys = start & 0x1FFFFFFF
-            in_ram = (start >> 29) in (0, 4, 5) and phys + length <= self.ram_size
+            in_ram = (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size
             ram_bytes = None
             if in_ram:
                 ram = self._ram_view[phys:phys + length]            # (the RAM buffer itself, no copy)
@@ -4994,8 +5132,8 @@ class AliMipsSimulator:
         """Up to `size` bytes of guest memory from `address`, as many as are
         mapped there (RAM straight from its buffer)."""
         phys = address & 0x1FFFFFFF
-        if (address >> 29) in (0, 4, 5) and phys < self.ram_size:
-            return bytes(self._ram_view[phys:min(phys + size, self.ram_size)])
+        if (address >> 29) in (0, 4, 5) and phys < self._mapped_ram_size:
+            return bytes(self._ram_view[phys:min(phys + size, self._mapped_ram_size)])
         out = bytearray()
         while len(out) < size:
             try:
@@ -5023,7 +5161,7 @@ class AliMipsSimulator:
             uc.mem_read(done_ptr, 4)                # (mapped)
             out_phys = out_addr & 0x1FFFFFFF
             if lc > 8 or lp > 4 or pb > 4 or buf_size < (0x736 + (0x300 << (lc + lp))) * 2 \
-                    or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self.ram_size:
+                    or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self._mapped_ram_size:
                 return
             dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
                 "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": max(1 << 12, out_size)}])
@@ -5152,7 +5290,7 @@ class AliMipsSimulator:
                     code_bytes = bytes(data[m.start():m.end()])
                     phys = a & 0x1FFFFFFF
                     self._delay_code_views[a] = (self._ram_view[phys:phys + len(code_bytes)]
-                                                 if (a >> 29) in (4, 5) and phys + len(code_bytes) <= self.ram_size else None)
+                                                 if (a >> 29) in (4, 5) and phys + len(code_bytes) <= self._mapped_ram_size else None)
                     self._delay_routines[a] = (code_bytes, gp_off, target, kind)
                     self._delay_loops[a + loop_at] = a
                     if a not in self._delay_hooks:
@@ -5222,7 +5360,7 @@ class AliMipsSimulator:
         gp = u32[28] if u32 is not None else self._reg_read(UC_MIPS_REG_GP)
         a = (gp + gp_off) & 0xFFFFFFFF
         words = self._ram_words
-        if words is not None and not a & 3 and (a >> 29) in (4, 5) and (a & 0x1FFFFFFF) < self.ram_size:
+        if words is not None and not a & 3 and (a >> 29) in (4, 5) and (a & 0x1FFFFFFF) < self._mapped_ram_size:
             clock = words[(a & 0x1FFFFFFF) >> 2]
         else:
             clock = int.from_bytes(self._guest_bytes(a, 4), 'little')

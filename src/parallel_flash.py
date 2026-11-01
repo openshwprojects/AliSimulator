@@ -36,9 +36,28 @@ SEQUENCES = {
 }
 PREFIXES = {seq[:n] for seq in SEQUENCES for n in range(1, len(seq))}
 
-# MXIC MX29LV400B (4 Mbit, bottom boot block), byte mode
+# MXIC MX29LVxxB bottom-boot parallel NOR parts (4..32 Mbit), byte mode --
+# all four device IDs (0xBA, 0x5B, 0x49, 0xA8) are in the ALi M3327/M3329 SDK's
+# 41-part flash table (sto_flash.c) with these exact bottom-boot sector maps.
 MX29LV400B = dict(manufacturer=0xC2, device=0xBA,
                   sectors=(0x4000, 0x2000, 0x2000, 0x8000) + (0x10000,) * 7)
+MX29LV800B = dict(manufacturer=0xC2, device=0x5B,
+                  sectors=(0x4000, 0x2000, 0x2000, 0x8000) + (0x10000,) * 15)
+MX29LV160B = dict(manufacturer=0xC2, device=0x49,
+                  sectors=(0x4000, 0x2000, 0x2000, 0x8000) + (0x10000,) * 31)
+MX29LV320B = dict(manufacturer=0xC2, device=0xA8,
+                  sectors=(0x2000,) * 8 + (0x10000,) * 63)
+
+
+def part_for_size(size):
+    """Pick the MX29LVxxB bottom-boot parallel NOR part fitting `size` bytes."""
+    if size <= 0x80000:
+        return MX29LV400B
+    if size <= 0x100000:
+        return MX29LV800B
+    if size <= 0x200000:
+        return MX29LV160B
+    return MX29LV320B
 
 
 class ParallelNorFlash:

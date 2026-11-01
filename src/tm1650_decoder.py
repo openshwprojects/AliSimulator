@@ -68,13 +68,13 @@ class PanelDecoder:
     @staticmethod
     def _gpio_to_offset_bit(gpio_num):
         """GPIO pin number -> (DO register offset, bit position)."""
-        bank = min(gpio_num // 32, len(GPIO_DO_OFFSETS) - 1)
-        return GPIO_DO_OFFSETS[bank], gpio_num - 32 * bank
+        bank = min(gpio_num // 32, len(GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS) - 1)
+        return (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS)[bank], gpio_num - 32 * bank
 
     @staticmethod
     def gpio_number(offset, bit):
         """(DO register offset, bit position) -> GPIO pin number, -1 for another register."""
-        return GPIO_DO_OFFSETS.index(offset) * 32 + bit if offset in GPIO_DO_OFFSETS else -1
+        return (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS).index(offset) * 32 + bit if offset in (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS) else -1
 
     def log(self, msg):
         if not self.dump_enabled and not msg.startswith(self.TAG):

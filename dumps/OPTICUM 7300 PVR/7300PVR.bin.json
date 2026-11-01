@@ -1,0 +1,53 @@
+{
+  "file": "7300PVR.bin",
+  "device": {
+    "brand": "Opticum",
+    "model": "7300 PVR CI2CX",
+    "type": "DVB-S satellite PVR receiver with Common Interface and dual Conax / MultiCAS card readers",
+    "board": "ALi M3329E 3329EA PVR CI2CX",
+    "soc": "ALi M3329E (M3327-platform DVB-S PVR SoC reading chip ID 0x3329, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327 at 0xB8013200, DECV_AVC_0, VPO_M3327, SND_M3327, OSD_S36_0/1, GE_M36 at 0xB800E000)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3329E / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "4 MB SPI (wired to SF_INS / SF_FMT at 0xB8000098 / 0x99)",
+    "panel": {
+      "chip": "PT6312 / uPD16312 14-segment 8-character VFD",
+      "clk": 3,
+      "dio": 2,
+      "stb": 4
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "1.0.78 (04020200107800; bootloader 3329EA 1.1.2; MultiCAS v.1.0 compiled Sep 4 2009)",
+    "date": "2009-09-04",
+    "size": 4194304,
+    "sha1": "d10e4f4d25c31343e9e2b90836845065dfea8424",
+    "layout": "bootloader 0x000000 (id 0xE3000010, 3329EA 1.1.2), maincode(AV) 0x010000 (04020200107800, LZMA -> 3.94 MB at 0x80000200), default_lang 0x1FFD80, patch 0x1FFF80, logo_user 0x210000, logo_menu 0x220000, logo_radio 0x228000, logo_def 0x230000, defaultdb(PRC) 0x238000, userdb(64+64) 0x27FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum_7300PVR.rar&directory=J-Tag_Dump_Flash",
+    "site": "satedu.cba.pl",
+    "author": "satedu.cba.pl J-Tag_Dump_Flash archive",
+    "date": "2009-09-04",
+    "login": false,
+    "note": "Archive Opticum_7300PVR.rar from the J-Tag_Dump_Flash directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "   ON   ",
+      "--------",
+      "1PLUS1  "
+    ],
+    "note": "Boots as the M3329 family (chips/m3329.py): M3329.default_chip_id() selects 0x3329 (M3329E) from the 3329EA bootloader's early check and M3329._uses_spi_flash() leaves parallel NOR disconnected so the native SPI flash controller serves its 4 MB flash.  The bootloader prints \"APP  init ok\", unpacks the 3.94 MB LZMA maincode to SDRAM and starts it (\"Starting mcas v.1.0 compiled Sep  4 2009\").  M3329E's GE_M36 at 0xB800E000 (GeM3602(base=0xE000)), DECV_M3327 at 0xB8013200 on IC line 12, SND_M3327 ready bits at 0xB80020E3..E4, and OSD_S36 regions in the second 8 MB SDRAM segment (0x00800000) render the live-TV channel banner (\"0001. 1PLUS1 UKR+RUS\") while PAN_pt6312_0 drives the 8-character 14-segment PT6312 VFD on GPIO 3 (CLK) / 2 (DIO) / 4 (STB) through \"  BOOT  \" -> \"   ON   \" -> \"--------\" -> \"1PLUS1  \".  Pressing OK and DOWN opens the channel list (\"Список телеканалів\") and moves selection to channel 0002 (\"$Inter\")."
+  },
+  "desc": [
+    "4 MB SPI flash dump (firmware 1.0.78, MultiCAS v.1.0, Sep 4 2009) from an Opticum 7300 PVR CI2CX DVB-S satellite PVR receiver.",
+    "Powered by ALi M3329E — the late M3327-platform bridge SoC that pairs the M3327 OSD/VPO display pipe with an M3602-generation command-list 2D graphics engine at 0xB800E000, MPEG-2 video engine at 0xB8013200, and an 8-character 14-segment PT6312 VFD front panel."
+  ]
+}

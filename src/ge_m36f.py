@@ -82,6 +82,8 @@ class GeM36F:
 
     def __init__(self, ram, log=None):
         self.ram = ram
+        n = len(ram)
+        self._phys_mask = (n - 1) if n and not (n & (n - 1)) else PHYS_MASK
         self.log = log
         self.stats = Counter()          # (api primitive, src mode, ptn type, prim, rop, formats) -> count
         self.unsupported = Counter()
@@ -132,13 +134,12 @@ class GeM36F:
     # ------------------------------------------------------------------
     # surfaces
     # ------------------------------------------------------------------
-    @staticmethod
-    def _addr(r, off):
+    def _addr(self, r, off):
         v = r[off >> 2]
         sel = v >> 28
         if sel:
             v = r[(0xBC + 4 * sel) >> 2]
-        return v & PHYS_MASK
+        return v & self._phys_mask
 
     def _read_raw(self, addr, pfreg, x, y, w, h, rle=False):
         """Raw pixel values (h, w) of a surface region (uint32 / uint16 / uint8)."""
@@ -543,7 +544,7 @@ class GeM36F:
 
     def _clut(self, r, n):
         """Palette (n, 4) float32 A, R, G, B from the CLUT address."""
-        addr = r[0x78 >> 2] & PHYS_MASK & ~7
+        addr = r[0x78 >> 2] & self._phys_mask & ~7
         ctl = r[0x74 >> 2]
         ram = self.ram
         n = max(2, n)

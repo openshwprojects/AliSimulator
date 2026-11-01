@@ -1,0 +1,51 @@
+{
+  "file": "dump opticum x80 premium.bin",
+  "device": {
+    "brand": "Opticum",
+    "model": "X80 Premium",
+    "type": "DVB-S satellite receiver with Conax / MultiCAS card reader",
+    "board": "ETK01 (Etek M3329C_DVBS)",
+    "soc": "ALi M3329C / M3101C (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, DECA_M3327, VPO_M3327, SND_M3327, OSD_M3327C; Libcore 1.3.4@Libcore_20100121)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3101C / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "2 MB SPI (wired to SF_INS / SF_FMT at 0xB8000098 / 0x99)",
+    "panel": {
+      "chip": "CH455 / TM1650-compatible",
+      "scl": 30,
+      "sda": 31
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "V1.2.62C (bootloader ETK01---0.1.0, 2011-11-15; maincode 2012-02-06; Libcore 1.3.4@Libcore_20100121)",
+    "date": "2012-02-06",
+    "size": 2097152,
+    "sha1": "fabac0db6e8c6c52461f1c8e318c98cafa627c68",
+    "layout": "bootloader 0x000000 (id 0xE3000010, ETK01---0.1.0, 2011-11-15), maincode 0x010000 (V1.2.62C, 2012-02-06, 0x09A0FE bytes LZMA -> 2.70 MB in RAM), otherdb 0x0B0000 (1.0.0), Radioback 0x0C0080 (1.0.0), defaultdb 0x0D0000 (1.1.0), userdb 0x0FFF80 (1.0.0, 1 MB)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=dump%20opticum%20x80%20premium.zip&directory=J-Tag_Dump_Flash",
+    "site": "satedu.cba.pl",
+    "author": "satedu.cba.pl J-Tag_Dump_Flash archive",
+    "date": "2012-02-06",
+    "login": false,
+    "note": "Archive dump opticum x80 premium.zip from the J-Tag_Dump_Flash directory on satedu.cba.pl; fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " on ",
+      "----",
+      "OOO1"
+    ],
+    "note": "Boots as the M3329 family (chips/m3329.py): M3329.default_chip_id() selects 0x3101 (M3329C / M3101C; 0x3329 hits sdbbp in the bootloader's chip-ID check at 0xAFC0122C) and M3329._uses_spi_flash() detects the bootloader's SF_INS / SF_FMT stores at 0xB8000098..99, leaving parallel NOR disconnected so the native SPI flash controller serves its 2 MB flash.  The bootloader prints \"BL: APP  init ok\" on UART 0xB8001300, unpacks the 2.7 MB LZMA maincode V1.2.62C to RAM and starts it (\"MC:APP  init ok\", \"APP init finished...\").  The application drives its 4-digit panel on GPIO 30 (SCL) / 31 (SDA) through \" on \" -> \"----\" -> \"OOO1\", draws the channel 0001 banner (\"$Pershiy Nacionaln\") and \"Немає сигналу!\" dialog via OSD_M3327C, and responds to remote navigation (0x0101 Libcore key table in RAM with customer code 0x02370000 off $gp: MENU opens the 3D-icon main menu, DOWN steps to \"Інсталяція\")."
+  },
+  "desc": [
+    "2 MB SPI flash dump (firmware V1.2.62C) from an Opticum X80 Premium compact DVB-S satellite receiver (Etek ETK01 M3329C_DVBS mainboard).",
+    "Unlike earlier 2005 M3329 boards with 8-bit parallel NOR flash and XIP maincode, this later M3329C / M3101C generation boots from a 2 MB SPI flash via SF_INS / SF_FMT (0xB8000098) and unpacks an LZMA-compressed Libcore 1.3.4 application into SDRAM."
+  ]
+}

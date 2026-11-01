@@ -32,7 +32,12 @@ from unicorn import UC_PROT_ALL, UC_PROT_EXEC, UC_PROT_READ
 from simulator import AliMipsSimulator, flash_size_for
 
 IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "ArivaT50_20111118_V102B214.abs",
-          "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs", "Ferguson_T760i_V1.5B4-14092021.abs")
+          "Software_Patch_X110TS_X110TSE_1.4.0C_PVR_UNI_ENG_2015-05-04.abs", "Ferguson_T760i_V1.5B4-14092021.abs",
+          "A53_20190813_V1.33B7.abs", "A54_20190926_V1.3B1.abs",
+          "FERGUSON ARIVA 255 COMBO/Ferguson_A255_V1.32B4.abs",
+          "AMIKO HD8260+/8260_Edision_Piccollo_ v.2468.abs",
+          "OPTICUM HD X4 220/OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs",
+          "OPTICUM XS65 TWIN/140_TWIN_RETAIL_PL.abs")
 ok = True
 
 
@@ -149,5 +154,72 @@ check(type(sim.chip).__name__ == "C3505" and type(atbm).__name__ == "ATBM7812" a
       f"the T760i: its board's ATBM7812 demodulator at 0x40 ({type(atbm).__name__})")
 sim.loadFile(IMAGES[1])
 check(0x40 not in sim.i2c_devices, "dump.bin after it: no demodulator at 0x40")
+sim.loadFile(IMAGES[6])
+c3503 = sim.chip
+check(type(c3503).__name__ == "C3503" and chip_word() == 0x3503C000
+      and bytes(c3503.otp.data[0x210:0x214]) == (5 << 20).to_bytes(4, "little")
+      and sim.peek(0xB804C0A3, 4) == bytes([0x01, 0x35, 0xC0, 0x00])
+      and sim.peek(0xB80280A3, 4) == bytes(4),
+      f"the Ariva 53 (C3503C): chip word 0x{chip_word():08X}, OTP product 5, internal demodulator at 0xB804C000")
+sim.loadFile(IMAGES[7])
+check(sim.chip is c3503 and chip_word() == 0x3503D000 and bytes(c3503.otp.data[0x210:0x214]) == bytes(4),
+      f"the Ariva 54 (same family, C3503D): chip word 0x{chip_word():08X}, OTP 0x210 blank again")
+sim.loadFile(IMAGES[1])
+left = [type(d).__name__ for d in devices(c3503) if id(d) in owners(sim)]
+check(not left and sim.peek(0xB804C0A3, 4) == bytes(4),
+      f"dump.bin after the C3503: no handler left ({left or 'none'}), 0xB804C0A3 cleared")
+sim.loadFile(IMAGES[8])
+c3505 = sim.chip
+avl = sim.i2c_devices.get(0x14)
+check(type(c3505).__name__ == "C3505" and sim.ram_size == 0x10000000 and not sim._upper_ram_mapped
+      and type(avl).__name__ == "AVL6862" and (avl.write(b"\x04\x00\x00") and avl.read(4) == b"\x68\x62\x49\x55")
+      and any(m.name == "SCB3" for m in sim.i2c_masters),
+      "the Ariva 255 Combo (256 MB C3505): 256 MB DDR, SCB3 registered, AVL6862 at 0x14")
+sim.loadFile(IMAGES[5])
+check(sim.chip is c3505 and sim.ram_size == 0x08000000 and 0x14 not in sim.i2c_devices and 0x40 in sim.i2c_devices,
+      "the T760i after it (same family, 128 MB): RAM back to 128 MB, ATBM7812 replaces AVL6862")
+sim.loadFile(IMAGES[1])
+left = [type(d).__name__ for d in devices(c3505) if id(d) in owners(sim)]
+check(not left and id(c3505) not in owners(sim) and sim.ram_size == 0x08000000
+      and not any(m.name == "SCB3" for m in sim.i2c_masters),
+      f"dump.bin after the C3505: no handler left ({left or 'none'}), SCB3 gone, RAM 128 MB")
+sim.loadFile(IMAGES[9])
+m3503_256 = sim.chip
+avl6762 = sim.i2c_devices.get(0x14)
+check(type(m3503_256).__name__ == "M3503" and chip_word() == 0x35030001
+      and sim.ram_size == 0x10000000 and not sim._upper_ram_mapped
+      and type(avl6762).__name__ == "AVL6762"
+      and (avl6762.write(b"\x10\x80\x00") and bytes([avl6762.read(1)[0] for _ in range(4)]) == b"\x00\x00\x00\x0E")
+      and any(type(d).__name__ == "GpioI2cBus" for d in sim.gpio_devices)
+      and any(m.name == "SCB3" for m in sim.i2c_masters),
+      "the Amiko HD8260+ (256 MB M3503): chip word 0x35030001 (rev B), 256 MB DDR, SCB3 registered, AVL6762 at 0x14 + GPIO 7/8 I2C")
+sim.loadFile(IMAGES[2])
+check(sim.chip is m3503_256 and chip_word() == 0x35030000 and sim.ram_size == 0x08000000 and 0x14 not in sim.i2c_devices
+      and not sim.gpio_devices and region(sim, 0x08000000) is not None,
+      "the Globo HD-XS2 after it (same family, 128 MB): chip word 0x35030000 (rev A), RAM back to 128 MB with M36xx mirror, GPIO I2C cleared")
+sim.loadFile(IMAGES[10])
+check(type(sim.chip).__name__ == "M3602" and sim.ram_size == 0x08000000 and demod_id() == bytes([0x01, 0x35, 0xC0, 0x00])
+      and any(type(d).__name__ == "LemontreeDecoder" for d in sim.gpio_devices),
+      "the Opticum HD X4 220 (M3602B): S3501 at 0x33 and headless LemontreeDecoder on GPIO 62 / 171")
+sim.loadFile(IMAGES[11])
+check(type(sim.chip).__name__ == "M3503" and chip_word() == 0x35030001 and sim.ram_size == 0x10000000
+      and demod_id() == bytes([0x01, 0x35, 0xC0, 0x00])
+      and any(type(d).__name__ == "GpioI2cBus" for d in sim.gpio_devices),
+      "the Opticum XS65 Twin (256 MB M3503): sidecar S3501 at 0x33 survives M3503.start() alongside internal demod")
+import dump_catalog
+vip3 = "Edision.vip3.0A050800_emu_1.6.60.abs"
+dump_catalog.set_override(vip3, False)
+try:
+    sim.loadFile(vip3)
+    check(type(sim.chip).__name__ == "M3602" and chip_word() == 0x36030500
+          and demod_id() == bytes([0x01, 0x35, 0xC0, 0x00]),
+          f"the Edision Argus VIP3 without sidecar: M3602.default_chip_id() selects C3603 (0x{chip_word():08X}) from M3606 chunks")
+finally:
+    dump_catalog.set_override(vip3, None)
+sim.loadFile(IMAGES[1])
+left = [type(d).__name__ for d in devices(m3503_256) if id(d) in owners(sim)]
+check(not left and id(m3503_256) not in owners(sim) and sim.ram_size == 0x08000000
+      and not sim.gpio_devices and not any(m.name == "SCB3" for m in sim.i2c_masters),
+      f"dump.bin after the 256 MB M3503 and X4 220: no handler left ({left or 'none'}), GPIO devices and SCB3 gone")
 print(f"\n[{'PASS' if ok else 'FAIL'}] chip family switch")
 sys.exit(0 if ok else 1)

@@ -67,5 +67,19 @@ put(dev, 0x6084, 0)
 check(gma_capture.de_registers(ram, bytes(dev)) == {} and gma_capture.de_layers(ram, bytes(dev)) == [],
       "a list without its load-enable bit sets nothing")
 
+# M3329E OSD_S36 / M3327 regions above 8 MB: raw_head in segment 0x00800000
+# keeps seg_base = 0x00800000 for bitmap addresses and stops on w1 bit 20 (0x100000)
+ram_m3329e = np.zeros(0x01000000, np.uint8)
+dev_m3329e = bytearray(0x10000)
+put(dev_m3329e, gma_capture.M3327_LAYER_ON, 1)
+put(dev_m3329e, 0x41A4, 0x00AAEAB0)
+# w0: 8 bpp (mode 2 << 2 = 8), next=0x2BEAC0 (ignored because w1 has 0x100000 end-of-chain)
+# w1: bitmap offset 0x03000 (<< 4 = 0x030000 -> 0x00830000), end bit 0x100000, x1=15
+put(ram_m3329e, 0x00AAEAB0, 0x002BEAC8, (15 << 22) | 0x100000 | 0x03000, 0, 7)
+regs_m3329e = gma_capture.m3327_regions(ram_m3329e, bytes(dev_m3329e))
+check(len(regs_m3329e) == 1 and regs_m3329e[0][1]['header'] == 0x00AAEAB0
+      and regs_m3329e[0][1]['bitmap'] == 0x00830000 and regs_m3329e[0][1]['bpp'] == 8,
+      f"m3327_regions preserves >8 MB segment base and w1 bit-20 chain end ({regs_m3329e})")
+
 print(f"\n[{'PASS' if not failures else 'FAIL'}] display engine register lists and layers")
 sys.exit(1 if failures else 0)

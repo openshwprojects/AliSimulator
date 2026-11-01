@@ -1,7 +1,7 @@
 """
 The ALi SoCs' hardware I2C masters ("SCB": 0xB8018200 and 0xB8018700 on the
-M3801, 0xB8018B00 on the M3821; the tuner, an EEPROM and other board chips
-hang on them), as the firmware's driver uses them (dump.bin's application,
+M3801, 0xB8018B00 on the M3821, plus 0xB8018D00 as SCB3 on the C3505; the tuner,
+an EEPROM and other board chips hang on them), as the firmware's driver uses them (dump.bin's application,
 0x801B0A0C..0x801B14EC; the M3821 application is a "newer chip" to it and
 writes +0x23 / +0x24):
 
@@ -78,6 +78,10 @@ class I2cMaster:
         self.reset()
         sim._mmio_on('w', self._write, base, base + self.SIZE - 1)
         sim._mmio_on('r', self._read, base, base + self.SIZE - 1)
+
+    def remove(self):
+        self.sim._mmio_off('w', self._write, self.base, self.base + self.SIZE - 1)
+        self.sim._mmio_off('r', self._read, self.base, self.base + self.SIZE - 1)
 
     def reset(self):
         self.tx = bytearray()               # queued for the next write

@@ -21,12 +21,12 @@ M3503).
   `crypto_engine.py`, `parallel_flash.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py [<dump>] [--family <name>] [--json <sidecar>]` (the TV: OSD,
-  panel, remote, with a toolbar to pick any of the repo's 100 dumps or browse a file,
+  panel, remote, with a toolbar to pick any of the repo's 102 dumps or browse a file,
   override the chip family, sidecar JSON and IR coding, and toggle live signal + TS) and
   `python src/gui_simulator.py [<dump>] [--family <name>] [--json <sidecar>] [--fast]`
   (the debugger, with the same target selectors and a Fast Mode toggle).
 * `src/chips/` -- the chip families, one module each (`m3602.py`, `m3801.py`,
-  `m3821.py`, `m3503.py`, `c3505.py`, `m3329.py`): what differs between ALi generations (the chip ID, how the CPU
+  `m3821.py`, `m3503.py`, `c3503.py`, `c3505.py`, `m3329.py`): what differs between ALi generations (the chip ID, how the CPU
   gets from reset to the flash's bootloader, extra memory, that generation's
   devices). `loadFile()` picks the family from the image's chunk headers (or takes an explicit override); the
   M3801 is the default and everything `simulator.py` models by itself. A
@@ -105,6 +105,23 @@ M3503).
   SEE's programs also read the chip's random number generator (`Trng`): a
   FIFO of its results that drops repeats never filled with the registers as
   plain memory, and its task never slept.
+  The Opticum HD X4 220 satellite update (`dumps/OPTICUM HD X4 220/`, bootloader "M3602B 1.1.5", single-CPU M3602B under the family's default 0x3602) pairs an external S3501 demodulator at I2C 0x33 with an Airoha AV2011 tuner at 0x60, bit-bangs an 8-byte CRC-16/XMODEM protocol on SCL = GPIO 62 / SDA = GPIO 171 (GPIO bank 5 at 0xB80003D4) to a Lemontree EuP front-panel standby MCU at I2C 0x28 (`lemontree_decoder.py`: " ON " -> " on " and key polling), and draws its "IDENT Error --UNKNOW!" hardware-ID check dialog through GeM36F (`run_dump_x4_220_app_starts.py`, `run_dump_x4_220_capture_screen.py`).
+  The Ferguson Ariva 52E update (`dumps/FERGUSON ARIVA 52E/`, 2026-10-31;
+  bootloader "HSJ2" 37019-01047, an M3606-class board read as 0x3603) runs
+  only its bootloader: it prints "APP  init!", parks the SEE through its boot
+  code at 0xA1E90D60, writes its PT6964 panel (STB / CLK / DIO = GPIO 64 /
+  65 / 66) and unpacks the SEE's program, then sends the main code's first
+  1 KB in 16-byte blocks to a security IC at I2C 0x62 on a bit-banged bus
+  (SCL / SDA = GPIO 62 / 63: request 0xC1, seven fixed bytes, the block and a
+  CRC-16/BUYPASS; a 26-byte answer) to be decrypted. The bootloader has no
+  cipher of its own and the chip is not modelled, so LzmaDecode() gets an
+  empty buffer and the jump to 0x80000200 lands in empty RAM
+  (`run_dump_a52e_security_ic.py` checks the requests and stops there; on
+  Unicorn the run of zero words crashes the engine natively, on the C++
+  engine the CPU slides into the SEE program's staging copy at 0x81A00200 and
+  then runs the same code as the SEE core). Its bootloader also stays in a
+  MIPS16 loop of its own when run in slices of 100 k instructions; in slices
+  of 500 k and more it gets through.
   The M3503 (`chips/m3503.py`, the Globo HD-XS2 / Opticum Blue XS65
   satellite updates in `dumps/GLOBO HD-XS2/`, recognised by the bootloader's
   version) is this family with the chip ID 0x3503 and the T750i's kind of
@@ -126,8 +143,8 @@ M3503).
   the chip ID 0x3503 -- and its single-CPU application draws its Quick Setup
   menu once that demodulator answers: a task of it kept the OSD layer off
   until the NIM device reported an S3501's chip ID
-  (`run_dump_esr250_capture_screen.py`).
-  The C3505 (`chips/c3505.py`, the Ferguson Ariva T760i, 54, 104, 154 Combo,
+  (`run_dump_esr250_capture_screen.py`). The Amiko HD8260+ (`dumps/AMIKO HD8260+/`, bootloader "M3516A 1.2.1", 16 MB SPI flash) is the 256 MB DDR3 dual-tuner sibling of this family: its XIP bootloader sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, unpacks its "M3606 SEE" program to 0xAE000200, and runs an application that configures an Availink AVL6762 DVB-T2/C demodulator (`demods.AVL6762`, ChipID 0x0E) at I2C 0x14 over bit-banged GPIO 7 / 8 (`AVL6862.read` auto-incrementing its 24-bit register pointer across `GpioI2cBus`'s byte-by-byte reads), an Airoha AV2012 DVB-S2 tuner at 0x61 on SCB0, and a CH455 panel on GPIO 135 / 134, then draws a Full HD 1920 x 1080 1:1 CLUT8 OSD layer (`gma_capture.py` resamples 1:1 1920 x 1080 GMA heads onto the 1280 x 720 canvas); `M3503.variant()` reports silicon revision B (`0xB8000000 = 0x35030001`) for "M3516" bootloaders so `sys_ic_get_rev_id()` returns 0x20002 instead of revision A 0x20001, under which the SDK's capability task cleared bit 0 of GMA layer 0 control 0xB8006300 (`run_dump_hd8260_app_starts.py`, `run_dump_hd8260_capture_screen.py`).
+  The C3505 (`chips/c3505.py`, the Ferguson Ariva T760i, 104, 154 Combo,
   204 and 254 Combo update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
   (0xB8000300 bit 8); its bootloader is the R265 Lite's generic build (entry at
@@ -139,7 +156,29 @@ M3503).
   bus (`demods.py`, `run_dump_t760i_capture_screen.py`) or the satellite /
   combo models' internal S3505 demodulator answering at 0xB8028000
   (`run_dump_a104_capture_screen.py`), opens its first-install wizard or
-  System Setup menu through the newer display engine's layer.
+  System Setup menu through the newer display engine's layer. The 256 MB DDR3 C3505 boards (`dumps/FERGUSON ARIVA 255 COMBO/`, `run_dump_a255_app_starts.py`, `run_dump_a255_capture_screen.py`) place their SEE program at 0xAE000200 instead of 0xA6000200 and set 0xB8000220 bit 24 before entering maincode, switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, where their display-engine framebuffers live) and restoring 0xBFE00000..0xBFEFFFFF from boot SRAM to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror (`SYS_FLASH_BASE_ADDR` = 0xBFC00000); their external Availink AVL6862 DVB-T2/C demodulator (`demods.AVL6862`) answers at I2C 0x14 on the C3505's fourth hardware I2C master SCB3 at 0xB8018D00 (the Ferguson Ariva 255 Combo S in `dumps/FERGUSON ARIVA 255 COMBO S/` runs the same 256 MB C3505 + AVL6862 platform with an RDA5816 DVB-S2 tuner at I2C 0x0C and an R840 terrestrial tuner, `run_dump_a255s_app_starts.py`, `run_dump_a255s_capture_screen.py`; the Amiko HD8155 in `dumps/AMIKO HD8155/` on 128 MB DDR3 and Amiko HD8265+ in `dumps/AMIKO HD8265+/` on 256 MB DDR3 with an AVL6762 on SCB3 and AV2012 at 0x61 are recognised as C3505 by their generic boot-ROM bootloader, "M3606 SEE" seecode and `maincode(AV)` chunk, drive a CH455 panel on GPIO 107 / 110 or 107 / 108, and render their hardware-ID warning dialog on OSD without the board's anti-clone IC, `run_dump_hd8155_app_starts.py`, `run_dump_hd8155_capture_screen.py`, `run_dump_hd8265_app_starts.py`, `run_dump_hd8265_capture_screen.py`).
+  The C3503 (`chips/c3503.py`, the Ferguson Ariva 53 and Ariva 54 satellite
+  updates in `dumps/FERGUSON ARIVA 53/` and `dumps/FERGUSON ARIVA 54/`,
+  recognised by `"M3503D"` in the unpacked main code or the `board_cfg`
+  chip-ID guards for 0x10050 / 0x10051) is the single-CPU cost-reduced
+  sibling of the C3505: its generic boot-ROM bootloader runs at 0x9FE00800
+  with `$sp = 0x9FE07F00` (so its stack does not overlap the bootloader body
+  at 0x9FE00800..0x9FE05EC8), polls bit 15 of the DDR ring-oscillator
+  halfword 0xB8000302, and unpacks a single-CPU application
+  (`see.run_program = False`) whose internal S3501-class DVB-S2 demodulator
+  (`NIM_S3505_0`) sits at 0xB804C000 instead of 0xB8028000 and talks to an
+  ALi M3031 tuner at I2C 0x20. `sys_ic_get_chip_id()` maps the chip word
+  0x3503D000 to 0x10051 (C3503D, which the Ariva 54's `board_cfg` requires)
+  and 0x3503C000 to 0x10050 (C3503C, which the Ariva 53's `board_cfg` checks
+  before calling `sys_ic_reboot`); on the C3503C a background check task also
+  reads the OTP product ID `(otp[0x210] >> 20) & 0x1F` against a 13-byte
+  capability table and clears bit 0 of the GMA layer control 0xB8006300 every
+  second unless product 5 (DVB-S2 enabled) is burnt there. Both boxes then
+  draw their 1280 x 720 System Setup menu and answer the remote
+  (`run_dump_a53_app_starts.py`, `run_dump_a53_capture_screen.py`,
+  `run_dump_a54_app_starts.py`, `run_dump_a54_capture_screen.py`); the Ariva
+  54 drives an FD650K on GPIO 24 / 23 (" On ", " on ", "Strt", "nenu"),
+  while the Ariva 53 leaves its panel I2C attach pointer NULL.
   The Ferguson T750i's M3821 boots without the
   boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
   locked D-cache lines at the top of the flash window's cached view until
@@ -520,8 +559,11 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   out the way the SDK's flash driver addresses it: offset 0 stays at
   0xAFC00000 (and the reset vector 0xBFC00000), and its 4 MB segment n sits
   4 MB × n below (offset 0x700000 at 0xAFB00000). The JEDEC id reports the
-  size (EF 40 16 for 4 MB, EF 40 17 for 8 MB) and, for an 8 MB part, the RES
-  electronic id (0x16) the bootloaders' device tables match.
+  size (EF 40 16 for 4 MB, EF 40 17 for 8 MB, EF 40 18 for 16 MB) and the RES
+  electronic id (0x15 / 0x16 / 0x17) the bootloaders' device tables match; on a
+  16 MB SPI part (the Amiko HD8260+) the upper 8 MB sits at 0xAE800000..0xAEFFFFFF
+  when RAM is 128 MB or less (on a 256 MB DDR board 0xAE000000..0xAEFFFFFF is DDR,
+  and SPI commands / DMA read the full 16 MB flash).
 
 * **Front panel** (`front_panel.py` picks the decoder per dump): the LED
   driver chip the firmware bit-bangs over GPIO. dump_maciej.bin and the Globo
@@ -559,8 +601,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   only while it acknowledges or sends a 0 bit, and the application writes
   " on ", "Strt", "noCH" and reads its three buttons (KI1/DIG4 and KI7/DIG4
   step its menu, KI2/DIG4 is power). GPIO numbers are the SDK driver's:
-  banks 0xB8000054, 0D4, 0F4, 354, 454 for GPIO 0..159 (older SDKs' third
-  bank, 0xB80000E8, is watched too).
+  banks 0xB8000054, 0D4, 0F4, 354, 454, 3D4 for GPIO 0..191 (older SDKs' third
+  bank, 0xB80000E8, is watched too). The Amiko HD8155, HD8265+ and HD8260+ drive
+  a **CH455** (`tm1650_decoder.py`: TM1650-compatible I2C addresses with bit 0
+  as display-enable in mode byte 0x48), and the Opticum HD X4 220 drives a
+  **Lemontree EuP MCU** at I2C 0x28 on SCL 62 / SDA 171 (`lemontree_decoder.py`:
+  8-byte CRC-16/XMODEM frames for 4-digit display and key polling).
   The Strong Prima VIII has no LED driver -- its CH455 driver talks to a
   software I2C bus with no pins -- but two **buttons straight on GPIO 31
   (channel up) and 9 (channel down)**, pulled up, which its application polls

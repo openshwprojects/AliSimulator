@@ -135,6 +135,24 @@ def main():
     cpu.frame(0x41, 0xFD)                            # uPD16312 LED port (the Cabletech URZ0195 writes it)
     check(dec.leds == 0xFD and dec.ram[0] == 0x7F, "LED port write decoded, display RAM untouched")
 
+    print("=== TM1628 decoder: PT6312 14-segment 8-grid VFD (Opticum 7300 PVR) ===")
+    spec_vfd = front_panel.panel_spec("OPTICUM 7300 PVR/7300PVR.bin")
+    check(spec_vfd.get("vfd_14seg") is True and (spec_vfd["clk"], spec_vfd["dio"], spec_vfd["stb"]) == (3, 2, 4),
+          f"panel_spec(7300PVR.bin) selects PT6312 14-seg VFD on GPIO 3/2/4 ({spec_vfd})")
+    dec3 = TM1628Decoder(clk_gpio=CLK, dio_gpio=DIO, stb_gpio=STB, vfd_14seg=True, log_handler=lambda m: None)
+    cpu3 = BitBang(dec3)
+    cpu3.frame(0x40)
+    cpu3.frame(0xC0, *([0xFF] * 48))
+    check(len(dec3.ram) == 48 and all(b == 0xFF for b in dec3.ram), "48-byte display RAM write accepted")
+    boot_words = (0x0000, 0x0000, 0x0CB9, 0x243C, 0x243C, 0x0091, 0x0000, 0x0000)   # "  BOOT  "
+    cpu3.frame(0xC0, *[b for w in boot_words for b in (w & 0xFF, w >> 8)])
+    check(dec3.get_display_text() == "  BOOT  " and dec3.digits == [0x7C, 0x3F, 0x3F, 0x78],
+          f"PT6312 14-seg VFD decodes '  BOOT  ' ({dec3.get_display_text()!r}, digits={dec3.digits})")
+    ch_words = (0x0420, 0x3834, 0x200C, 0x242C, 0x3C18, 0x0420, 0x0000, 0x0000)     # "1PLUS1  "
+    cpu3.frame(0xC0, *[b for w in ch_words for b in (w & 0xFF, w >> 8)])
+    check(dec3.get_display_text() == "1PLUS1  ",
+          f"PT6312 14-seg VFD decodes '1PLUS1  ' ({dec3.get_display_text()!r})")
+
     print("\n[PASS] TM1628 decoder" if ok else "\n[FAIL] TM1628 decoder")
     sys.exit(0 if ok else 1)
 

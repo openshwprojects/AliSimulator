@@ -316,7 +316,7 @@ class SeeStart:
 
     def reset(self):
         """The SEE back in reset (the simulator loads an image again)."""
-        self.state, self.pending = "reset", None
+        self.state, self.pending, self.cpu = "reset", None, None
         self._watch(True)
         self._stop_core()
         for counts in self.doorbells.taken.values():

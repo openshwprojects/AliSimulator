@@ -1,0 +1,54 @@
+{
+  "file": "PICCO_S2_v.1248.abs",
+  "device": {
+    "brand": "Edision",
+    "model": "Picco S2 (System ID 73010100)",
+    "type": "DVB-S2 Full HD H.265/HEVC compact satellite receiver",
+    "board": "73010100 (bootloader version \"3510DB 1.1.1\", 128 MB DDR3 single-CPU C3503D platform)",
+    "soc": "ALi M3510D / C3503D (chip word 0x3503D000, SDK chip code 0x10051, bootloader \"chip_id: HW_TYPE_CHIP+83; product_id 0.\")",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0 at 0xB804C000)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible, on external IR/LED sensor)",
+      "scl": 24,
+      "sda": 23
+    },
+    "irCoding": "necfirst",
+    "gpioI2c": {
+      "scl": 8,
+      "sda": 7
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.2.48 (maincode(AV) \"730101001248\", compiled 2021-01-13; bootloader \"3510DB 1.1.1\"; Libcore SDK4.0ia.17.15_20171115)",
+    "date": "2021-01-13",
+    "size": 8388608,
+    "sha1": "cae482f04be2403d83c22fda9ceb50286ea93759",
+    "layout": "bootloader 0x000000 (3510DB 1.1.1), maincode(AV) 0x060000 (730101001248, LZMA 0x2F5F9A -> 12.0 MB), default_lang 0x52FD00 (1.0.0), countryband 0x52FF80 (1.0.0), img_webserver 0x537F80 (1.0.0), html_webserver 0x597F80 (1.0.0), logo_user 0x637F80 (1.0.0), logo_menu 0x647F80 (1.0.0), logo_radio 0x667F80 (1.0.0), logo_boot 0x687F80 (1.0.0), patch 0x6AFF80 (1.0.0), defaultdb(PRC) 0x6D0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1, 0xC0070 bytes)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=PICCO_S2_v.1248.zip&directory=Firmware%20for%20to%20all%20receivers/Edison",
+    "site": "satedu.cba.pl (a mirror of the Edision firmware archive)",
+    "author": "Edision",
+    "date": "2021-01-13",
+    "login": false,
+    "note": "Archive PICCO_S2_v.1248.zip from the Edison folder on satedu.cba.pl; fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as the single-CPU C3503 family (chips/c3503.py, chip word 0x3503D000, run_dump_picco_s2_app_starts.py, run_dump_picco_s2_capture_screen.py): the boot-ROM SRAM bootloader (\"3510DB 1.1.1\") copies itself to 0x81000000, writes \" ON \" to the CH455 panel, verifies the CRC of maincode(AV), unpacks 12.0 MB to 0x80000200 and enters the application (CP0 EBase 0x80002000).  The application attaches its CH455 4-digit LED panel on GPIO 24 (SCL) / 23 (SDA) (\"---led 455 attach OK--\", updating it to \" on \"), initialises its Viaccess/MCAS database (\"[mcas] max_key_db_count = 516\"), unpacks defaultdb(PRC) into userdb(64+64), and draws its 1280x720 CLUT8 OSD dialog through GeM36F / GMA layer 0 (10 GE commands, 13 unique colours; without the board's anti-clone security IC on GPIO 8 / 7 it shows \"SW is not designed for this HW, please change back to offical SW!-----00000000000000 73010100\")."
+  },
+  "desc": [
+    "Edision Picco S2 firmware v.1248 (System ID 73010100, compiled 2021-01-13) for the compact Full HD DVB-S2 satellite receiver on the single-CPU ALi M3510D / C3503D SoC with 128 MB DDR3 and 8 MB SPI flash.",
+    "Shares the single-CPU C3503D architecture and external IR/LED sensor pins (GPIO 24 / 23) with the Ferguson Ariva 54, using a standard-layout CH455 LED driver instead of Ferguson's remapped FD650K and the Edision/Amiko 0x60xx remote key table (\"necfirst\" coding)."
+  ]
+}

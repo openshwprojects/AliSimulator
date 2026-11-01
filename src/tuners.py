@@ -237,6 +237,10 @@ class AV2011:
         return {"rf_hz": rf_hz, "bw_mhz": bw_mhz}
 
 
+class AV2012(AV2011):
+    pass
+
+
 class Si2144:
     """Silicon Labs Si2144 DVB-T2/C silicon tuner (Strong SRT Prima VIII,
     0x802618A0..0x8026F76C): command/property protocol where every read starts
@@ -382,6 +386,52 @@ class RDA5815:
         return {"rf_hz": rf_hz, "bw_mhz": None}
 
 
+class RDA5816:
+    """RDA Microelectronics RDA5816 / RDA5816S DVB-S2 silicon tuner at I2C 0x0C
+    (Ferguson Ariva 255 Combo S, 0x802B04C4..0x802B162C): a write sets the
+    starting register (data[0]) and writes data[1:] sequentially; a 1-byte write
+    selects the register to read next.  Registers 0x00..0x01 hold chip ID 0x581
+    and revision, 0x03 bits 1..0 report PLL lock (0x03), 0x07..0x0A program the
+    32-bit big-endian fractional-N word (fPLL_MHz * int(2^21 / xtal_MHz), with
+    fPLL doubled below 1075 MHz when 0x65 bit 3 is set), and 0x0B bits 5..0
+    program the baseband filter bandwidth in MHz."""
+    STATUS = {0x00: 0x58, 0x01: 0x11, 0x03: 0x03}
+
+    def __init__(self, xtal_hz=27_000_000):
+        self.xtal_hz = xtal_hz
+        self.regs = bytearray(256)
+        self.read_reg = 0
+        self.reads = collections.Counter()
+        self.writes = 0
+        self.tuned = False
+
+    def write(self, data):
+        if data:
+            self.read_reg = data[0]
+            for i, b in enumerate(data[1:]):
+                reg = (data[0] + i) & 0xFF
+                self.regs[reg] = b
+                self.writes += 1
+                if reg == 0x0A and any(self.regs[0x07:0x0B]):
+                    self.tuned = True
+        return True
+
+    def read(self, n):
+        self.reads[self.read_reg] += 1
+        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
+                     for i in range(n))
+
+    def frequency(self):
+        if not self.tuned:
+            return None
+        r = self.regs
+        n_val = int.from_bytes(r[0x07:0x0B], "big")
+        div = 2 if (r[0x65] & 0x08) else 1
+        rf_hz = round(self.xtal_hz * n_val / ((1 << 21) * div))
+        bw_mhz = (r[0x0B] & 0x3F) or None
+        return {"rf_hz": rf_hz, "bw_mhz": bw_mhz}
+
+
 MODELS = {
     "mxl603": MxL603,
     "mxl608": MxL608,
@@ -392,9 +442,11 @@ MODELS = {
     "r840": R840,
     "r850": R850,
     "av2011": AV2011,
+    "av2012": AV2012,
     "si2144": Si2144,
     "m3031": M3031,
     "rda5815": RDA5815,
+    "rda5816": RDA5816,
 }
 
 
@@ -424,6 +476,6 @@ def describe(device):
 
 def is_tuner(device):
     """Whether an I2C device is one of these tuner models."""
-    return isinstance(device, (MaxLinear, R820T, AV2011, Si2144, M3031, RDA5815))
+    return isinstance(device, (MaxLinear, R820T, AV2011, Si2144, M3031, RDA5815, RDA5816))
 
 

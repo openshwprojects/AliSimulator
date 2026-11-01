@@ -21,6 +21,13 @@ which 7-bit address, is its dump sidecar's device.demodModel
     assembles from them, 0x350100C0 (NIM_CHIP_ID_M3501A).  Without it the
     S60's driver reset its tuner 11 times, logged "ERROR: reset nim
     failed!!!" and went on without a front end.  It never locks.
+  * Availink AVL6862 / AVL6762 (the Ferguson Ariva 255 Combo's external
+    DVB-T2/C demodulator on SCB3 at 0xB8018D00, 7-bit address 0x14): 24-bit
+    big-endian register addresses and big-endian 16/32-bit registers.  Answers
+    its FamilyID 0x68624955 at 0x040000, ChipID 0x00000002 at 0x108000,
+    patch-decompression ready bit 0 at 0x110048, core running (reset = 0) at
+    0x110840, core ready word 0x5AA57FF7 at 0x0000A0, and idle command mailbox
+    0x0000 at 0x000200 so AVL_Init completes without a 50-poll timeout.
 """
 from i2c_scb import RegisterSlave
 
@@ -168,7 +175,88 @@ class ATBM7812:
         return bytes(out)
 
 
-MODELS = {"atbm7812": ATBM7812, "s3501": S3501}
+class AVL6862:
+    """Availink AVL6862 / AVL6762 DVB-T2/C/S2 demodulator (24-bit big-endian
+    register addresses, 7-bit I2C address 0x14 = 8-bit 0x28 on SCB3)."""
+    ADDRESS = 0x14
+    GATE_REG = 0x118010                 # I2C repeater bypass control (low byte bit 0)
+    READ_ONLY = {
+        # 0x040000: FamilyID = 0x68624955 ("hbIU", checked by GetFamilyID / InitRegBase)
+        0x040000: 0x68, 0x040001: 0x62, 0x040002: 0x49, 0x040003: 0x55,
+        # 0x108000: ChipID = 0x00000002 (AVL6862TA)
+        0x108000: 0x00, 0x108001: 0x00, 0x108002: 0x00, 0x108003: 0x02,
+        # 0x0000A0: rs_core_ready_word = 0x5AA57FF7 (checked by AVL_CheckChipReady_Demod)
+        0x0000A0: 0x5A, 0x0000A1: 0xA5, 0x0000A2: 0x7F, 0x0000A3: 0xF7,
+        # 0x110048: patch decompression ready (bit 0 = 1 in AVL_Patch_parse)
+        0x110048: 0x00, 0x110049: 0x00, 0x11004A: 0x00, 0x11004B: 0x01,
+        # 0x110840: core reset / uiCoreRunning = 0 (running, != 1)
+        0x110840: 0x00, 0x110841: 0x00, 0x110842: 0x00, 0x110843: 0x00,
+        # 0x000200: rc_fw_command_saddr = 0x0000 (command mailbox idle / completed)
+        0x000200: 0x00, 0x000201: 0x00,
+    }
+
+    def __init__(self, tuned=None, tuner=None):
+        self.regs = {}
+        self.address = 0
+        self.signal = False
+        self.tuned = tuned
+        self.tuner = tuner
+        self.writes = 0
+        self.reads = 0
+
+    def locked(self):
+        return self.signal and (self.tuned is None or self.tuned())
+
+    def set_signal(self, on=True):
+        self.signal = bool(on)
+
+    def write(self, data):
+        if len(data) >= 3:
+            self.address = (data[0] << 16) | (data[1] << 8) | data[2]
+            self.writes += 1
+            if 3 < len(data) <= 19:
+                for i, b in enumerate(data[3:]):
+                    reg = (self.address + i) & 0xFFFFFF
+                    if reg not in self.READ_ONLY:
+                        self.regs[reg] = b
+        return True
+
+    def read(self, n):
+        self.reads += 1
+        out = bytearray(n)
+        for i in range(n):
+            reg = (self.address + i) & 0xFFFFFF
+            if reg in self.READ_ONLY:
+                out[i] = self.READ_ONLY[reg]
+            else:
+                out[i] = self.regs.get(reg, 0)
+        self.address = (self.address + n) & 0xFFFFFF
+        return bytes(out)
+
+
+class AVL6762(AVL6862):
+    """Availink AVL6762 DVB-T2/C demodulator (the terrestrial/cable sibling of
+    the AVL6862 on dual-tuner boards whose DVB-S2 demodulator is inside the ALi
+    SoC, such as the Amiko HD8260+ and HD8265+): same 0x68624955 FamilyID at
+    0x040000, ChipID 0x0000000E at 0x108000 ("Demod is 6762!!!")."""
+    READ_ONLY = {**AVL6862.READ_ONLY, 0x108003: 0x0E}
+
+
+class AVL6862A(AVL6862):
+    """Availink AVL6862 combo DVB-S2 + DVB-T2/C silicon reporting ChipID
+    0x0000000F at 0x108000 (paired with AVL6762's 0x0000000E in SDK4.0bd
+    Availink drivers such as the Edision Optimuss Underline 3in1:
+    "Demod is 6862!!!")."""
+    READ_ONLY = {**AVL6862.READ_ONLY, 0x108003: 0x0F}
+
+
+MODELS = {
+    "atbm7812": ATBM7812,
+    "avl6762": AVL6762,
+    "avl6862": AVL6862,
+    "avl6862a": AVL6862A,
+    "s3501": S3501,
+}
 
 
 def make(chip, **kwargs):

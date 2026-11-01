@@ -125,6 +125,32 @@ def main():
           f"capture shows the drawn pixels (green fill {tuple(rgb[4, 3])}, blue icon row {tuple(rgb[21, 22])})")
     check(not g.unsupported, f"no unsupported GE features hit ({dict(g.unsupported)})")
 
+    # 5. 1080i (1125-line) output scaling: a native 1920x1080 CLUT8 head is resampled onto 1280x720
+    #    (not cropped to 0..1279 x 0..719), while a 1008x640 bitmap upscaled 1.5x by GMA to 1512x960
+    #    at (204, 60) is placed 1:1 at (136, 40).
+    ram_fhd = np.zeros(0x300000, np.uint8)
+    PAL_FHD, HEAD_FHD, BMP_FHD = 0x010000, 0x011000, 0x020000
+    struct.pack_into('<II', ram_fhd, PAL_FHD, 0x00FF00FF, 0xFF2080E0)   # idx 0 transparent, idx 1 opaque
+    ram_fhd[BMP_FHD + 900 * 1920 + 1500:BMP_FHD + 900 * 1920 + 1506] = 1
+    ram_fhd[BMP_FHD + 901 * 1920 + 1500:BMP_FHD + 901 * 1920 + 1506] = 1
+    head_fhd = [0xAA2004C1, PAL_FHD, 1919 << 16, 1079 << 16, (1080 << 16) | 1920, (1920 << 16) | 0x0F, 0, BMP_FHD, 0, 0]
+    ram_fhd[HEAD_FHD:HEAD_FHD + 40] = np.frombuffer(struct.pack('<10I', *head_fhd), np.uint8)
+    dev_fhd = bytearray(0x10000)
+    struct.pack_into('<I', dev_fhd, gma_capture.DE_TIMING_REG, 1125 << 16)
+    struct.pack_into('<II', dev_fhd, 0x6300, 1, HEAD_FHD)
+    rgb_fhd, _ = gma_capture.capture(ram_fhd, bytes(dev_fhd), screen=(1280, 720))
+    check(rgb_fhd.shape == (720, 1280, 3) and tuple(rgb_fhd[600, 1000]) == (0x20, 0x80, 0xE0),
+          f"Full HD 1920x1080 1:1 GMA head resamples (1500, 900) -> (1000, 600) ({tuple(rgb_fhd[600, 1000])})")
+
+    ram_up = np.zeros(0x200000, np.uint8)
+    ram_up[PAL_FHD:PAL_FHD + 8] = ram_fhd[PAL_FHD:PAL_FHD + 8]
+    ram_up[BMP_FHD + 500 * 1008 + 900] = 1
+    head_up = [0xAA2004C1, PAL_FHD, (1715 << 16) | 204, (1019 << 16) | 60, (640 << 16) | 1008, (1008 << 16) | 0x0F, 0, BMP_FHD, 0, 0]
+    ram_up[HEAD_FHD:HEAD_FHD + 40] = np.frombuffer(struct.pack('<10I', *head_up), np.uint8)
+    rgb_up, _ = gma_capture.capture(ram_up, bytes(dev_fhd), screen=(1280, 720))
+    check(tuple(rgb_up[40 + 500, 136 + 900]) == (0x20, 0x80, 0xE0),
+          f"1008x640 GMA head upscaled 1.5x to 1080i maps 1:1 to (136+900, 40+500) ({tuple(rgb_up[540, 1036])})")
+
     if fails:
         print(f"\n[FAIL] {len(fails)} check(s) failed")
         sys.exit(1)

@@ -216,6 +216,10 @@ def main():
     for dump_name, want_coding in (
         ("S16_CHN_2.8.abs", "necfirst"),
         ("ALI3606_0A010A00_gui_edision_1.6.89.abs", "necfirst"),
+        ("AMIKO 8155 Edision_v.1453.abs", "necfirst"),
+        ("AMIKO 8265+ Edision_v.1529.abs", "necfirst"),
+        ("8260_Edision_Piccollo_ v.2468.abs", "necfirst"),
+        ("OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs", "necfirst"),
         ("OPTIMUSS_underline_official_hd_1.5.87.abs", "necfirst"),
         ("miniplus_highspeed_official_hd_1.5.87.abs", "necfirst"),
         ("A204_20190903_V1.3B1.abs", "ext00"),
@@ -223,6 +227,8 @@ def main():
         ("A154Combo_10102018_V1.29B8.abs", "ext00"),
         ("A254Combo_09102018_V1.29B7.abs", "ext00"),
         ("254Combo_20200423_V1.32B3.abs", "ext00"),
+        ("Ferguson_A255_V1.32B4.abs", "ext00"),
+        ("Ferguson_A255 Slim_V1.30B4_20231103_EU.abs", "ext00"),
     ):
         if ir_remote.coding_for(dump_name) != want_coding:
             print(f"[FAIL] coding_for({dump_name!r}) -> {ir_remote.coding_for(dump_name)!r}, expected {want_coding!r}")

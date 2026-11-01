@@ -1,0 +1,60 @@
+{
+  "file": "A52E_20160812_V1.31B2.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 52E",
+    "type": "DVB-S2 HD satellite receiver with Ethernet, USB recording and internet apps (2015)",
+    "board": null,
+    "soc": "ALi M3606-class dual-CPU chip (the main code's strings name the M3601E / M3606 platform, the seecode chunk is the SEE's program; Application SDK4.0ba.7.20_SAB_S2_20130314)",
+    "family": "M3602 (chips/m3602.py), matched by the bootloader chunk's version \"37019-01047\"; chip ID 0x3603 (chipId)",
+    "demod": "internal DVB-S2 (NIM_S3501_0, the main code's names)",
+    "tuner": "unknown (the main code carries an nim_av7306 driver)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "PT6964 (TM1628-class 3-wire)",
+      "clk": 65,
+      "dio": 66,
+      "stb": 64
+    },
+    "irCoding": "nec",
+    "chipId": "0x3603",
+    "gpioI2c": {
+      "scl": 62,
+      "sda": 63
+    },
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.31B2 (maincode \"V1.31B2*\" 2016-08-12; bootloader HSJ2 37019-01047, Libcore 1.1.6@Auto_20100413)",
+    "date": "2016-08-12",
+    "size": 8388608,
+    "sha1": "d28c333e55ae4aed035fa82ff64a6e488df6efc4",
+    "layout": "bootloader 0x000000 (HSJ2 37019-01047, 2015-01-27), maincode 0x020000 (V1.31B2*, 2016-08-12), seecode 0x3E0000 (V1.31B2), radioback 0x540000, ARIVA52E 0x560000 (logo), seeback 0x57FF80, data1 0x590000, data2 0x5A0000, defaultdb 0x680000, userdb 0x6DFF80"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_52E/firmware/A52E_20160812_V1.31B2.zip",
+    "site": "ferguson-digital.eu (the manufacturer's download area)",
+    "author": "Ferguson",
+    "date": "2026-10-31",
+    "login": false,
+    "note": "Archive A52E_20160812_V1.31B2.zip from the Ariva 52E firmware directory of Ferguson's download area (with the change list and the upgrade instructions in Polish, English and German); fetched 2026-10-31."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "The bootloader runs (run_dump_a52e_security_ic.py): it prints \"APP  init!\", parks the SEE through its boot code at 0xA1E90D60, writes the PT6964 panel and unpacks the SEE's program, then has the board's security IC (I2C 0x62 on GPIO 62 / 63) decrypt the first 1 KB of the main code in 64 blocks of 16 bytes.  That chip is not modelled -- its key and cipher are not known --, so LzmaDecode() gets an empty buffer, nothing is unpacked and the jump to 0x80000200 lands in empty RAM (on Unicorn a native crash in the run of zero words; on the C++ engine the CPU slides on to the SEE program's copy at 0x81A00200).  No application, no OSD."
+  },
+  "desc": [
+    "Ferguson Ariva 52E firmware V1.31B2 (2016-08-12), the manufacturer's USB update image (an 8 MB all-code image: the update menu's \"Allcode\"); the same firmware family covers the Ariva 102E (bootloader HS17), 150 Combo (HS1C) and 250 Combo, and an older V1.27B9 (2015-10-12) is in the same directory as a .7z.",
+    "Chunk chain: bootloader 0x000000 (\"HSJ2\", version 37019-01047, its chunk header's CRC field reads \"NCRC\"), maincode 0x020000 (3.4 MB), seecode 0x3E0000 (the SEE's program, 1.1 MB, LZO1X-packed; it runs from 0xA6000200), radioback, the ARIVA52E logo, seeback, data1 / data2, defaultdb and userdb.  The bootloader's strings: \"Boot loader: No 6M compress buffer!\", \"APP  init!\", PAN_PT6964_0, STO_SFLASH_0, ota_prog_restore (stored reversed) and Libcore version 1.1.6@Auto_20100413.  The main code names an Airoha-family nim_av7306 tuner driver and the internal S3501 demodulator; the change list mentions multiroom, IPTV and internet apps.",
+    "The main code is encrypted at its start, and the decryption is done by a chip on the board: the bootloader sends the main-code chunk's first 1024 bytes, 16 at a time, over a bit-banged I2C bus (SCL = GPIO 62, SDA = GPIO 63, bank 0xB80000D4 bits 30 / 31) to address 0x62 -- each request is 0xC1, the seven bytes bd 29 8c 0b f9 d6 cd, the 16 encrypted bytes and a CRC-16/BUYPASS (polynomial 0x8005, initial 0) of the 24 before it, big-endian -- and reads 26 bytes back.  The bootloader holds no cipher tables (no AES or DES S-box); the encrypted 0xE0 bytes at the start are the same in V1.27B9 and V1.31B2 and in the 102E and 150 Combo images (the same LZMA stream start), and the plaintext is then unpacked with LzmaDecode() to 0x80000200.  Without the chip's answers (no acknowledge: each block is tried nine times) the bootloader carries on with an empty buffer, so the application never starts in the simulator.",
+    "Front panel: the 3-wire PT6964 on GPIO bank 2 (0xB80000F4) bits 0..2 -- STB = GPIO 64, CLK = GPIO 65, DIO = GPIO 66 --; the bootloader writes 0x13 0x03 to RAM 2-3 and 0x33 0x03 to RAM 6-7, whose segment wiring is not known (the font is the application's).  The remote's coding is not known either (irCoding \"nec\" is the default, untested).",
+    "The bootloader's progress depends on the slice length: in slices of 100 k instructions it stays in a MIPS16 loop of its own (0x81E868A6..) for more than 60 M instructions, in slices of 500 k and more it reaches the security IC after ~2 M instructions and LzmaDecode() at ~4.5 M (not looked into)."
+  ]
+}
