@@ -54,12 +54,7 @@ class TM1628Decoder(PanelDecoder):
         0x1881: '+', 0x1800: '-', 0x0600: ':', 0x0200: '.', 0x0008: '_',
         0x0800: ',',
     }
-    _CHAR_TO_7SEG = {
-        **{ch.upper(): seg for seg, ch in PanelDecoder.SEG_TO_CHAR.items() if len(ch) == 1},
-        ' ': 0x00, '0': 0x3F, 'O': 0x3F, 'B': 0x7C, 'D': 0x5E, 'G': 0x3D,
-        'K': 0x76, 'M': 0x37, 'N': 0x37, 'Q': 0x67, 'R': 0x50, '5': 0x6D,
-        'S': 0x6D, 'T': 0x78, 'V': 0x3E, 'W': 0x3E, 'Z': 0x5B,
-    }
+    _CHAR_TO_7SEG = PanelDecoder.CHAR_TO_7SEG
 
     def __init__(self, clk_gpio=31, dio_gpio=9, stb_gpio=11, digit_addrs=(0, 2, 4, 6),
                  seg_map=PanelDecoder.STANDARD_SEG_MAP, vfd_14seg=False,
@@ -222,9 +217,7 @@ class TM1628Decoder(PanelDecoder):
     def digits(self):
         """Segment bytes of the 4 digits (RAM bytes digit_addrs), standard layout."""
         if self.vfd_14seg:
-            t = self.get_display_text()
-            s = t[2:6] if (t[:2] == "  " and t[6:] == "  ") else t.strip()[:4].ljust(4)
-            return [self._CHAR_TO_7SEG.get(ch.upper(), 0x00) for ch in s]
+            return self.vfd_to_7seg_digits(self.get_display_text())
         return [self._segments(self.ram[a]) if a < self.RAM_SIZE else 0 for a in self.digit_addrs]
 
     def get_display_text(self):

@@ -144,14 +144,99 @@ check(untouched(sim), "other code at the entry: left alone")
 print("--- scan: the routine in a RAM chunk")
 sim = AliMipsSimulator(log_handler=lambda m: None)
 sim.mu.mem_write(0x80A00100, AliMipsSimulator._LZMA_DECODE_SIG)
+sim.mu.mem_write(0x80A00302, AliMipsSimulator._LZMA_DECODE_M16_SIG)
+sim.mu.mem_write(0x80A00500, AliMipsSimulator._LZMA_DECODE_O2_SIG)
+sim.mu.mem_write(0x80A00700, AliMipsSimulator._LZMA_DECODE_9_SIG)
 sim._rescan_cp0_sites([(0x80A00000, 0x100000)])
-check({0x80A00100, 0xA0A00100} <= set(sim._lzma_hooks), f"hooked at {[hex(a) for a in sim._lzma_hooks]}")
+check({0x80A00100, 0xA0A00100, 0x80A00302, 0xA0A00302, 0x80A00500, 0xA0A00500,
+       0x80A00700, 0xA0A00700} <= set(sim._lzma_hooks),
+      f"hooked MIPS32 (-O0, -O2, SDK 9.x) + MIPS16 at {[hex(a) for a in sorted(sim._lzma_hooks)]}")
+
+print("--- hook (-O2 MIPS32): synthetic M3329C/M3329E bootloader LzmaDecode call")
+import struct
+from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_RA, UC_MIPS_REG_SP
+sim = AliMipsSimulator(log_handler=lambda m: None)
+o2_stream = lzma.compress(DATA, format=lzma.FORMAT_RAW, filters=[
+    {"id": lzma.FILTER_LZMA1, "lc": 3, "lp": 0, "pb": 2, "dict_size": 1 << 16}])
+sim.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_O2_SIG)
+sim.mu.mem_write(SRC, o2_stream)
+for reg, v in ((UC_MIPS_REG_A0, BUF), (UC_MIPS_REG_A1, (0x736 + (0x300 << 3)) * 2),
+               (UC_MIPS_REG_A2, 3), (UC_MIPS_REG_A3, 0), (UC_MIPS_REG_SP, SP),
+               (UC_MIPS_REG_RA, RA), (UC_MIPS_REG_PC, ENTRY)):
+    sim.mu.reg_write(reg, v)
+sim.mu.mem_write(SP + 16, struct.pack("<6I", 2, SRC, len(o2_stream), DST, len(DATA), DONE))
+sim._hook_lzma(sim.mu, ENTRY, 4, None)
+check(applied(sim) and abs(sim.busy_pending - len(DATA) * (sim.lzma_insns_per_byte * 0.3) / sim._insn_rate) < 1e-9,
+      "-O2 MIPS32 LzmaDecode decoded in Python with 0.3x instruction timeline charge")
+
+print("--- hook (LZMA SDK 9.x): synthetic C3505/C3503D/M3821 bootloader LzmaDecode call")
+SRC_LEN_PTR, PROP_PTR, STATUS_PTR = DONE + 0x10, DONE + 0x20, DONE + 0x30
+sdk9_stream = lzma.compress(DATA, format=lzma.FORMAT_RAW, filters=[
+    {"id": lzma.FILTER_LZMA1, "lc": 3, "lp": 0, "pb": 2, "dict_size": 1 << 16}])
+prop_bytes = bytes([(2 * 5 + 0) * 9 + 3]) + (1 << 16).to_bytes(4, "little")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+sim.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_9_SIG)
+sim.mu.mem_write(SRC, sdk9_stream)
+sim.mu.mem_write(DONE, struct.pack("<I", len(DATA)))
+sim.mu.mem_write(SRC_LEN_PTR, struct.pack("<I", len(sdk9_stream)))
+sim.mu.mem_write(PROP_PTR, prop_bytes)
+for reg, v in ((UC_MIPS_REG_A0, DST), (UC_MIPS_REG_A1, DONE),
+               (UC_MIPS_REG_A2, SRC), (UC_MIPS_REG_A3, SRC_LEN_PTR),
+               (UC_MIPS_REG_SP, SP), (UC_MIPS_REG_RA, RA), (UC_MIPS_REG_PC, ENTRY)):
+    sim.mu.reg_write(reg, v)
+sim.mu.mem_write(SP + 16, struct.pack("<5I", PROP_PTR, 5, 0, STATUS_PTR, 0))
+sim._hook_lzma(sim.mu, ENTRY, 4, None)
+check(applied(sim)
+      and int.from_bytes(sim.mu.mem_read(SRC_LEN_PTR, 4), "little") == len(sdk9_stream)
+      and int.from_bytes(sim.mu.mem_read(STATUS_PTR, 4), "little") == 1
+      and abs(sim.busy_pending - len(DATA) * (sim.lzma_insns_per_byte * 0.3) / sim._insn_rate) < 1e-9,
+      "LZMA SDK 9.x LzmaDecode decoded in Python (*destLen, *srcLen, *status = 1, 0.3x charge)")
+
+sim_bad9 = AliMipsSimulator(log_handler=lambda m: None)
+sim_bad9.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_9_SIG)
+sim_bad9.mu.mem_write(DONE, struct.pack("<I", len(DATA)))
+sim_bad9.mu.mem_write(SRC_LEN_PTR, struct.pack("<I", len(sdk9_stream)))
+sim_bad9.mu.mem_write(PROP_PTR, b"\xFF" + (1 << 16).to_bytes(4, "little"))
+for reg, v in ((UC_MIPS_REG_A0, DST), (UC_MIPS_REG_A1, DONE),
+               (UC_MIPS_REG_A2, SRC), (UC_MIPS_REG_A3, SRC_LEN_PTR),
+               (UC_MIPS_REG_SP, SP), (UC_MIPS_REG_RA, RA), (UC_MIPS_REG_PC, ENTRY)):
+    sim_bad9.mu.reg_write(reg, v)
+sim_bad9.mu.mem_write(SP + 16, struct.pack("<5I", PROP_PTR, 5, 0, STATUS_PTR, 0))
+sim_bad9._hook_lzma(sim_bad9.mu, ENTRY, 4, None)
+check(untouched(sim_bad9), "LZMA SDK 9.x invalid property byte (>= 225): left to the emulated decoder")
+
+print("--- hook (MIPS16): synthetic M3329 bootloader LzmaDecode call")
+sim = AliMipsSimulator(log_handler=lambda m: None)
+m16_stream = lzma.compress(DATA, format=lzma.FORMAT_RAW, filters=[
+    {"id": lzma.FILTER_LZMA1, "lc": 3, "lp": 0, "pb": 2, "dict_size": 1 << 16}])
+sim.mu.mem_write(ENTRY, AliMipsSimulator._LZMA_DECODE_M16_SIG)
+sim.mu.mem_write(SRC, m16_stream)
+sim.mu.mem_write(RA, bytes.fromhex("5a6c0065"))     # MIPS16: li a0, 0x5a; nop
+for reg, v in ((UC_MIPS_REG_A0, BUF), (UC_MIPS_REG_A1, (0x736 + (0x300 << 3)) * 2),
+               (UC_MIPS_REG_A2, 3), (UC_MIPS_REG_A3, 0), (UC_MIPS_REG_SP, SP),
+               (UC_MIPS_REG_RA, RA | 1), (UC_MIPS_REG_PC, ENTRY | 1)):
+    sim.mu.reg_write(reg, v)
+sim.mu.mem_write(SP + 16, struct.pack("<6I", 2, SRC, len(m16_stream), DST, len(DATA), DONE))
+sim._hook_lzma(sim.mu, ENTRY, 2, None)
+check(applied(sim) and sim.is_mips16_mode(),
+      "MIPS16 LzmaDecode decoded in Python and returned to MIPS16 $ra")
 
 print("--- signature: LzmaDecode in the flash images")
 for name in ("dump_maciej.bin", "dump.bin", "Ferguson_T750i_V1.20B2_18092019.abs", "URZ0086_V1.2.1.abs",
              "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.abs", "ArivaT50_20111118_V102B214.abs"):
     image = open(resolve_dump(name), "rb").read()
     check(AliMipsSimulator._LZMA_DECODE_SIG in image, f"{name} carries the routine")
+for name in ("sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin", "dump bigsat 6500 lux.bin",
+             "DumpFlash Opticum4000a(Globo7xxx)4,5w.bin"):
+    image = open(resolve_dump(name), "rb").read()
+    check(AliMipsSimulator._LZMA_DECODE_M16_SIG in image, f"{name} carries the MIPS16 routine")
+for name in ("7300PVR.bin", "dump opticum x80 premium.bin", "flash ECHOLINK EL700FTA mx29lv160.bin"):
+    image = open(resolve_dump(name), "rb").read()
+    check(AliMipsSimulator._LZMA_DECODE_O2_SIG in image, f"{name} carries the -O2 MIPS32 routine")
+for name in ("Amiko_HD8142_Twin-C_1.1.11_conax.abs", "Amiko_HD8140C_SE_1.1.04_emu.abs",
+             "PICCO_S2_v.1248.abs", "Ferguson_A204_V1.3B3.abs", "T2GEN265_1.1.5-2022-08-01.abs"):
+    image = open(resolve_dump(name), "rb").read()
+    check(AliMipsSimulator._LZMA_DECODE_9_SIG in image, f"{name} carries the LZMA SDK 9.x routine")
 
 print("--- decode: dump_maciej.bin")
 sim, text, at = boot("dump_maciej.bin", until="success!")

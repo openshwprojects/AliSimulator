@@ -54,7 +54,7 @@ import struct
 from unicorn import UC_HOOK_CODE, UC_PROT_ALL
 from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
-from .base import ChipFamily, DemodulatorLock, ReadyBits, chunk_chain, maincode
+from .base import ChipFamily, DemodulatorLock, ReadyBits, chunk_chain, maincode, word_after_store
 from .see import SeeStart
 
 SRAM_PHYS = 0x1FE00000          # the boot SRAM the boot ROM copies the bootloader into
@@ -67,6 +67,8 @@ def xip_bootloader(image):
     """A bootloader that runs from the flash window (the M3801's kind): its
     word at 0x490, where the chunk header's branch lands, calls into the
     flash window (JAL 0x?FCxxxxx)."""
+    if len(image) < 0x494:
+        return False
     w = struct.unpack_from("<I", image, 0x490)[0]
     return w >> 26 == 0x03 and ((w & 0x03FFFFFF) << 2) & 0x0FC00000 == 0x0FC00000
 
@@ -238,9 +240,8 @@ class SpiStream:
     def _write_mode(self, uc, access, address, size, value, user_data):
         # The register as the store leaves it: the application writes the word, the
         # 2023 bootloader only its top byte.
-        shift = 8 * (address & 3)
-        mask = ((1 << (8 * size)) - 1) << shift
-        word = int.from_bytes(uc.mem_read(0xB8000000 + self.MODE, 4), 'little') & ~mask | (value << shift) & mask
+        old = int.from_bytes(uc.mem_read(0xB8000000 + self.MODE, 4), 'little')
+        word = word_after_store(old, address, self.MODE, size, value)
         on = bool(word & self.MODE_BITS)
         if on == self.active:
             return                  # (also the replay of this store after the hook change below)
@@ -476,9 +477,16 @@ class M3821(ChipFamily):
     def matches(cls, image):
         if bytes(image[0x20:0x25]) == b"M3821":         # the bootloader chunk's version string
             return True
-        if any(name.lower() == "hdcpkey" and ver.startswith("M3821") for _o, name, ver in chunk_chain(image)):
+        chunks = chunk_chain(image)
+        if any(name.lower() == "hdcpkey" and ver.startswith("M3821") for _o, name, ver in chunks):
             return True
-        return xip_bootloader(image) and b"NIM_S3821" in maincode(image)
+        if not xip_bootloader(image) or not any(name.lower() == "seecode" for _o, name, _v in chunks):
+            return False
+        from .m3503 import M3503
+        from .m3602 import M3602
+        if M3503.matches(image) or M3602.matches(image):
+            return False
+        return b"NIM_S3821" in maincode(image)
 
     def variant(self):
         # XIP M3821 builds (T750i, Amiko T58) want plain M3821 revision B (low byte
@@ -564,6 +572,7 @@ class M3821(ChipFamily):
         self._set_sram_mapped(False)
         sim._spi_stream = None
         del sim._SELF_COMPLETING            # (the instance's copy with 0x2A06F: the class's again)
+        super().uninstall()
 
     def start(self):
         """What the boot ROM does: the bootloader area into the SRAM, enter it

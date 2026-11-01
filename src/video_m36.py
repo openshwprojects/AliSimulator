@@ -409,11 +409,13 @@ class VideoOutput(_Device):
     """A video output's interrupt register: the HD output's (VPO_INT, line VPO_LINE, VPO_FIELD_BIT) or the
     SD output's (DEO_INT, DEO_LINE, DEO_FIELD_BIT)."""
 
-    def __init__(self, sim, register=VPO_INT, line=VPO_LINE, field_bit=VPO_FIELD_BIT):
+    def __init__(self, sim, register=VPO_INT, line=VPO_LINE, field_bit=VPO_FIELD_BIT, reset=None):
         self.register, self.line, self.field_bit = register, line, field_bit
+        self.reset = reset              # (device-reset register offset, the output's bit) or None
         self.status = 0                 # bits 0..5 of the status (register bits 8..13)
         self.field = 0
         self.fields = 0
+        self.resets = 0
         self._next = None
         self._mid = None                # when status bit 0 comes in this field
         super().__init__(sim)
@@ -422,6 +424,19 @@ class VideoOutput(_Device):
     def wire(self, core):
         offset = self.register & 0xFFFFFF
         core._mmio_on('w', self._write, offset, offset + 3)
+        if self.reset is not None:
+            core._mmio_on('w', self._write_reset, self.reset[0], self.reset[0] + 3)
+
+    def _write_reset(self, uc, access, address, size, value, user_data):
+        """The chip's device-reset register: the output's bit set puts it in
+        reset -- interrupt enables and pending status cleared, line dropped."""
+        if (value << (address & 3) * 8) & self.reset[1]:
+            self.resets += 1
+            self.status = 0
+            self.field = 0
+            self.sim.poke(self.register, b"\x00\x00\x00\x00")
+            self._set_line(self.line, False)
+        return None
 
     def _word(self, enables_from=None):
         word = int.from_bytes(self.sim.peek(self.register, 4), 'little') if enables_from is None else enables_from

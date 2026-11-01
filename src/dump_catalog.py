@@ -204,7 +204,7 @@ def sha1_of(path):
     return h.hexdigest()
 
 
-def problems(path, data):
+def problems(path, data, image_bytes=None):
     """What is wrong with an image's sidecar: a list of messages (empty = fine).
     The facts that can be checked against the file are (size, SHA-1 when
     given, the file name); the rest is the schema."""
@@ -225,10 +225,13 @@ def problems(path, data):
     if data.get("file") != os.path.basename(path):
         out.append(f"{rel}: \"file\" is {data.get('file')!r}")
     image = data.get("image") or {}
-    if image.get("size") != os.path.getsize(path):
-        out.append(f"{rel}: size {image.get('size')} but the file has {os.path.getsize(path)} bytes")
-    if image.get("sha1") and image["sha1"] != sha1_of(path):
-        out.append(f"{rel}: SHA-1 {image['sha1']} but the file's is {sha1_of(path)}")
+    actual_size = len(image_bytes) if image_bytes is not None else os.path.getsize(path)
+    if image.get("size") != actual_size:
+        out.append(f"{rel}: size {image.get('size')} but the file has {actual_size} bytes")
+    if image.get("sha1"):
+        actual_sha1 = hashlib.sha1(image_bytes).hexdigest() if image_bytes is not None else sha1_of(path)
+        if image["sha1"] != actual_sha1:
+            out.append(f"{rel}: SHA-1 {image['sha1']} but the file's is {actual_sha1}")
     source = data.get("source") or {}
     if not source.get("url") and not source.get("note"):
         out.append(f"{rel}: no source URL and no note saying why")

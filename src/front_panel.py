@@ -38,6 +38,7 @@ one shows a blank display and ignores the keys).
 import os
 
 from gpio_keys import GpioKeys
+from hc164_decoder import HC164Decoder
 from lemontree_decoder import LemontreeDecoder
 from tm1628_decoder import TM1628Decoder
 from tm1650_decoder import TM1650Decoder
@@ -60,6 +61,11 @@ _R265_LITE = dict(chip="tm1650", scl=57, sda=58, labels={(1, 4): "▼", (7, 4): 
 # channel-editing menu, down moves that menu's highlight)
 _FERGUSON_KEYS = {(4, 1): "▼", (4, 2): "EXIT", (5, 1): "◀", (5, 2): "MENU", (6, 1): "▶", (6, 2): "PWR",
                   (7, 1): "▲", (7, 2): "OK"}
+
+
+def _fd650k(scl, sda):
+    return dict(chip="tm1650", scl=scl, sda=sda, digit_order=(2, 3, 1, 0),
+                seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)
 
 # (substring of the dump's path, case-insensitive) -> panel spec
 PANELS = [
@@ -112,35 +118,25 @@ PANELS = [
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:
     # '0' = 0xEF, '1' = 0x60, '8' = 0xF7, '-' = 0x10): " On " from the bootloader, "Strt"
     # when the application starts
-    ("T650i", dict(chip="tm1650", scl=31, sda=9, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("T650i", _fd650k(31, 9)),
     # Ferguson Ariva T750i / T760i (the M3821 generation): the T650i's FD650K and digit layout on
     # other pins -- the T750i's on GPIO bank 4 (0xB8000454), SCL = GPIO 128 (bit 0, always an
     # output), SDA = GPIO 129 (bit 1, switched to an input for the chip's answers); the T760i's on
     # bank 3 (0xB8000354), SCL = GPIO 107, SDA = GPIO 110.  Both write " On " from the
     # bootloader, the T750i " on ", "Strt" and "Find" from its application.  All three Fergusons'
     # PAN_FD650K drivers switch on the key byte (key - 0x5C, a jump table: _FERGUSON_KEYS)
-    ("T750i", dict(chip="tm1650", scl=128, sda=129, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("T760i", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A104_", dict(chip="tm1650", scl=107, sda=110, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A204_", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
-                   seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A154", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
-                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A254", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
-                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("254Combo", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
-                      seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
-    ("A255", dict(chip="tm1650", scl=107, sda=108, digit_order=(2, 3, 1, 0),
-                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("T750i", _fd650k(128, 129)),
+    ("T760i", _fd650k(107, 110)),
+    ("A104_", _fd650k(107, 110)),
+    ("A204_", _fd650k(107, 108)),
+    ("A154", _fd650k(107, 108)),
+    ("A254", _fd650k(107, 108)),
+    ("254Combo", _fd650k(107, 108)),
+    ("A255", _fd650k(107, 108)),
     # Ferguson Ariva 54 (the C3503D, chips/c3503.py): the same FD650K and layout on GPIO bank 0
     # (0xB8000054), SCL = GPIO 24, SDA = GPIO 23 (" On ", " on ", "nenu" on its external IR/LED
     # eye; the Ariva 53's board_cfg leaves its panel I2C attach pointer NULL -- no display)
-    ("A54_", dict(chip="tm1650", scl=24, sda=23, digit_order=(2, 3, 1, 0),
-                  seg_map=(1, 5, 6, 0, 7, 2, 4, 3), labels=_FERGUSON_KEYS)),
+    ("A54_", _fd650k(24, 23)),
     ("PICCO_S2", dict(chip="tm1650", scl=24, sda=23, labels={})),
     ("underline.3in1", dict(chip="tm1650", scl=31, sda=9, labels={})),
     # Amiko HD8155 (128 MB C3505) and HD8265+ (256 MB C3505): a CH455 ("---led 455 attach OK--"),
@@ -149,20 +145,36 @@ PANELS = [
     # on the HD8155; SCL = GPIO 107, SDA = GPIO 108 on the HD8265+
     ("AMIKO 8155", dict(chip="tm1650", scl=107, sda=110, labels={})),
     ("Impluse_H265", dict(chip="tm1650", scl=107, sda=110, labels={})),
+    ("Mini_Combo_Extra", dict(chip="tm1650", scl=107, sda=110, labels={})),
     ("AMIKO 8265", dict(chip="tm1650", scl=107, sda=108, labels={})),
+    ("HD8275_", dict(chip="tm1650", scl=107, sda=108, labels={})),
+    ("HD8140C_SE", dict(chip="tm1650", scl=107, sda=108, labels={})),
+    ("HD8142_Twin-C", dict(chip="tm1650", scl=107, sda=108, labels={})),
+    # Amiko X-Finder 3 (256 MB M3529F / C3505 handheld meter with built-in TFT LCD): no 4-digit LED
+    # display is fitted (the generic M3529F bootloader probes 107/110), while maincode's
+    # panel_ch455_task enables CH455 (0x48 = 0x01) and scans the meter's keypad on GPIO 107 / 108
+    ("AMIKO_XFinder_III", dict(chip="tm1650", scl=107, sda=108, labels={})),
     # Amiko T58 (4 MB SPI, single-CPU M3821) and Amiko Eco TC-200 (8 MB SPI, dual-CPU M3821A): CH455
     # (PAN_CH455_0) on GPIO bank 4, SCL = GPIO 128, SDA = GPIO 129 (" ON " -> " on ")
     ("AMIKO_T58", dict(chip="tm1650", scl=128, sda=129, labels={})),
     ("AMIKO_ECO_TC-200", dict(chip="tm1650", scl=128, sda=129, labels={})),
-    # Amiko HD8260+ (16 MB SPI, 256 MB M3516A / M3503): a CH455 ("CH455 panel init OK!") on GPIO
-    # bank 4 (0xB8000454), SCL = GPIO 135, SDA = GPIO 134 (" ON " -> " on ")
+    # Amiko HD8260+ (16 MB SPI, 256 MB M3516A / M3503) and Amiko Impulse SAT (8 MB SPI, 128 MB
+    # M3510B / M3503): a CH455 ("CH455 panel init OK!") on GPIO bank 4 (0xB8000454), SCL = GPIO 135,
+    # SDA = GPIO 134 (" ON " -> " on ")
     ("8260_Edision", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    ("Impulse_SAT", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    ("AMIKO_HD8150", dict(chip="tm1650", scl=135, sda=134, labels={})),
     # Opticum HD X4 220 (M3602B "Lemontree"): external front-panel and EuP standby MCU at I2C 0x28
     # on SCL = GPIO 62 (0x0D4 bit 30), SDA = GPIO 171 (legacy third bank 0x0E8 bit 11), speaking
     # 8-byte CRC-16/XMODEM frames (" ON " -> "    " -> " on " -> "tUnE")
     ("OPTICUM_HD_X4", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("Opticum HD X402p-403p", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("amstar_yumatu", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("Opticum_HD_x7", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("Edision.vip3", dict(chip="lemontree", scl=103, sda=102, labels={})),
+    # Amiko X-Finder 2 (M3516A / M3503 handheld meter): bootloader drives CH455 (" ON ") on GPIO 135/134,
+    # application drives the handheld meter's Lemontree-protocol MCU at I2C 0x28 on the same bus
+    ("AMIKO_XFinder2", dict(chip="lemontree", scl=135, sda=134, labels={})),
     ("M3822P", _R265_LITE),
     ("T2GEN265", _R265_LITE),
     # Opticum X110TS and X110p (the C3603): a TM1650-compatible chip on SCL = GPIO 9, SDA = GPIO 8 -- " ON "
@@ -213,6 +225,12 @@ PANELS = [
     # Opticum 7300 PVR CI2CX (M3329E, 4 MB SPI): PT6312 / uPD16312 8-grid 14-segment VFD
     # (PAN_pt6312_0) on CLK = GPIO 3, DIO = GPIO 2, STB = GPIO 4 ("  BOOT  " -> "   ON   " -> "1PLUS1  ")
     ("7300PVR", dict(chip="tm1628", clk=3, dio=2, stb=4, vfd_14seg=True, labels={})),
+    # BigSat DSR 6500 Lux (M3329, 2 MB MX29LV160B parallel NOR): PAN_COMMON_0 74HC164 shift register
+    # on CLK = GPIO 16, DATA = GPIO 17 with 4 active-low digit strobes on GPIO 18..21 (" ON " -> "----")
+    ("bigsat 6500", dict(chip="hc164", clk=16, data=17, digits=(18, 19, 20, 21), labels={})),
+    # Opticum 4000A / Globo 7010A (M3329, 2 MB MX29LV160B parallel NOR): the same PAN_COMMON_0 74HC164
+    # shift register on CLK = GPIO 16, DATA = GPIO 17, digits GPIO 18..21 (" ON " -> "1737" / "OOO1")
+    ("Opticum4000a", dict(chip="hc164", clk=16, data=17, digits=(18, 19, 20, 21), labels={})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 
@@ -260,6 +278,16 @@ def make_panel(dump, log_handler=None):
         dec = GpioKeys(spec["keys"], log_handler=log_handler)
         keys = [(labels.get(pin, f"GPIO {pin}"), GpioKeys.key_code(pin)) for pin in spec["keys"]]
         desc = "buttons on GPIO " + " / ".join(str(pin) for pin in spec["keys"]) + ", no display"
+    elif spec["chip"] == "hc164":
+        digits = tuple(spec.get("digits", (18, 19, 20, 21)))
+        dec = HC164Decoder(clk_gpio=spec["clk"], data_gpio=spec["data"], digit_gpios=digits,
+                           seg_map=spec.get("seg_map", HC164Decoder.STANDARD_SEG_MAP),
+                           active_low_segments=spec.get("active_low_segments", True),
+                           active_low_digits=spec.get("active_low_digits", True),
+                           log_handler=log_handler)
+        keys = []
+        desc = (f"74HC164 shift register on CLK {spec['clk']} / DATA {spec['data']}, "
+                f"digits GPIO {'/'.join(str(d) for d in digits)}")
     elif spec["chip"] == "lemontree":
         dec = LemontreeDecoder(scl_gpio=spec["scl"], sda_gpio=spec["sda"], log_handler=log_handler,
                                digit_order=spec.get("digit_order", (0, 1, 2, 3)),

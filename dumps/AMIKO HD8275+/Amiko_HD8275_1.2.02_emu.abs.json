@@ -1,0 +1,62 @@
+{
+  "file": "Amiko_HD8275_1.2.02_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8275+ (System ID 6C000A00, firmware 1.2.02 emu)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI slot, CA card reader, Ethernet and USB PVR",
+    "board": "6C000A00 (bootloader version \"M3529A 1.1.2\", 8 MB SPI flash, 256 MB DDR3 C3505 combo platform)",
+    "soc": "ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode \"M3606 SEE\" at 0xAE000200; SDK4.0ia.17.15_20171115)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14",
+    "demodModel": {
+      "chip": "avl6762",
+      "address": 20
+    },
+    "tuner": "Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "mxl608",
+        "address": 96
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.2.02 emu (maincode(AV) \"6C000A001202\"; bootloader \"M3529A 1.1.2\", 2016-7-20; seecode \"M3606 SEE\", 2018-1-23; SDK4.0ia.17.15_20171115)",
+    "date": "2018-01-23",
+    "size": 8388608,
+    "sha1": "65ee717385a11632b739a5578bd95a282981feef",
+    "layout": "bootloader 0x000000 (M3529A 1.1.2, 2016-7-20, boot-ROM script at 0x480 + code at 0x800 in 0x9FE00800), maincode(AV) 0x060000 (6C000A001202, LZMA -> 12.16 MB at 0x80000200), seecode 0x3F0000 (M3606 SEE, 2018-1-23, LZMA -> 3.73 MB at 0xAE000200), default_lang 0x52FD00, cipluskey 0x52FF80, countryband 0x53FF80, img_webserver 0x547F80, html_webserver 0x5A7F80, logo_user 0x647F80, logo_menu 0x657F80, logo_radio 0x677F80, logo_boot 0x697F80, patch 0x6BFF80, defaultdb(PRC) 0x6E0000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.2.02_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2018-01-23",
+    "login": false,
+    "note": "Archive Amiko_HD8275_1.2.02_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8275_app_starts.py, run_dump_hd8275_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, writes \" ON \" to the CH455 panel on GPIO 107 / 108, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR (restoring flash at 0xBF800000..0xBFFFFFFF), unpacks 3.73 MB seecode (\"M3606 SEE\") to 0xAE000200 and 12.16 MB maincode(AV) (\"6C000A001202\") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to \" on \", downloads firmware into its external Availink AVL6762 DVB-T2/C demodulator on SCB3 at I2C 0x14 (\"Demod is 6762!!!\", demods.py:AVL6762), configures its Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB1 and MaxLinear MxL608 DVB-T2/C tuner at I2C 0x60 on SCB3, populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD dialog through the display engine's G1 CLUT8 layer at 0xB8006A00 (5 GE commands; without the board's anti-clone IC it displays \"SW is not designed for this HW, please change back to offical SW!-----00000000000000 6c000a00\")."
+  },
+  "desc": [
+    "Firmware 1.2.02 emu (2018-01-23, System ID 6C000A00) for the Amiko HD8275+ Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3529A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.",
+    "Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3, chip_id 0x0E) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108."
+  ]
+}

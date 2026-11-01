@@ -5111,6 +5111,30 @@ class AliMipsSimulator:
         "4c00c2af5000c0af010003249800c28f04104300ffff42245400c2af9400c28f"
         "04104300ffff42245800c2af5c00c0af1000c28f401802008c00c28f2b104300"
         "040040100000000002000224")
+    # -O2 MIPS32 build of LzmaDecode() in M3329C/M3329E bootloaders (39 words up
+    # to its first J: identical C ABI a0..a3 + sp+16..36; inlines BitDecode, so
+    # its emulated instruction cost per byte is ~0.3x the -O0 build's).
+    _LZMA_DECODE_O2_SIG = bytes.fromhex(
+        "98ffbd276400bfaf6000beaf5c00b7af5800b6af5400b5af5000b4af4c00b3af"
+        "4800b2af4400b1af4000b0af7000a6af8400b78f2118c7000003022404306200"
+        "3607c62421a0800021b000002800a0af21900000010011242c00b1af01001e24"
+        "010002243000a2af219800007800a28f04105100ffff42243400a2af0438f100"
+        "3800a7af2118e000ffff6324401006002b28a2000500a0103800a3af")
+    # LZMA SDK 9.x LzmaDecode(dest, &destLen, src, &srcLen, propData, propSize,
+    # finishMode, &status, alloc) in newer C3505/C3503D/M3821 bootloaders (29
+    # position-independent words up to its first JAL; ~0.3x -O0 instruction cost).
+    _LZMA_DECODE_9_SIG = bytes.fromhex(
+        "50ffbd27a800bfafa400b7afa000b6af9c00b5af9800b4af9400b3af9000b2af"
+        "8c00b1af8800b0af21b080002190a00021b8c0002180e000cc00b38fd000b58f"
+        "0000b48c0000f18c0000e0ac0000a0ac000060ae0500222e2300401406000324"
+        "2c00a0af2800a0af1800a427c000a58fc400a68f")
+    # MIPS16e build of the same LZMA SDK 4.0x LzmaDecode() in M3329 bootloaders
+    # (54 halfwords / 108 bytes up to its first JAL: identical C ABI a0..a3 + sp+16..36).
+    _LZMA_DECODE_M16_SIG = bytes.fromhex(
+        "f363186217d116d01cd6ede600f3006ac267c4eb20f7164e0ad4006a0bd20cd2"
+        "0dd20169016b0ed30fd310d311d21e92916784eaff4c12d4516744efff4a13d2"
+        "c43243ed0460026a5111016a4f11006b092600f4006c64320a95a9e280ca014b"
+        "c3ebf9619d67104c1f952096")
 
     def _find_lzma_decoders(self, data, base, views):
         """Hook LzmaDecode() wherever data -- code at physical offset `base` --
@@ -5118,15 +5142,17 @@ class AliMipsSimulator:
         if not self.lzma_hle:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
-        i = data.find(self._LZMA_DECODE_SIG)
-        while i >= 0:
-            if i % 4 == 0:
-                for view in views:
-                    a = view + base + i
-                    if a not in self._lzma_hooks:
-                        self._lzma_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_lzma, begin=a, end=a)
-                        self._tb_flush_needed = True
-            i = data.find(self._LZMA_DECODE_SIG, i + 1)
+        for sig, align in ((self._LZMA_DECODE_SIG, 4), (self._LZMA_DECODE_O2_SIG, 4),
+                           (self._LZMA_DECODE_9_SIG, 4), (self._LZMA_DECODE_M16_SIG, 2)):
+            i = data.find(sig)
+            while i >= 0:
+                if i % align == 0:
+                    for view in views:
+                        a = view + base + i
+                        if a not in self._lzma_hooks:
+                            self._lzma_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_lzma, begin=a, end=a)
+                            self._tb_flush_needed = True
+                i = data.find(sig, i + 1)
 
     def _guest_bytes(self, address, size):
         """Up to `size` bytes of guest memory from `address`, as many as are
@@ -5145,7 +5171,24 @@ class AliMipsSimulator:
     def _hook_lzma(self, uc, address, size, user_data):
         """LzmaDecode()'s entry: decode the stream with the lzma module and
         return to the caller, or leave the call to the emulated decoder."""
-        if size != 4 or not self.lzma_hle or self._code_hook_h is not None or self.is_stepping:
+        rate_scale = 1.0
+        sdk9 = False
+        if size == 4:
+            head = self._guest_bytes(address, 4)
+            if head == self._LZMA_DECODE_O2_SIG[:4]:
+                sig = self._LZMA_DECODE_O2_SIG
+                rate_scale = 0.3
+            elif head == self._LZMA_DECODE_9_SIG[:4]:
+                sig = self._LZMA_DECODE_9_SIG
+                rate_scale = 0.3
+                sdk9 = True
+            else:
+                sig = self._LZMA_DECODE_SIG
+        elif size == 2:
+            sig = self._LZMA_DECODE_M16_SIG
+        else:
+            return
+        if not self.lzma_hle or self._code_hook_h is not None or self.is_stepping:
             return
         near = range(address - 0x1000, address + 0x1000)    # (the decoder's functions: a breakpoint
         if self.stop_instr in near or any(b in near for b in self.breakpoints):     # there is honoured)
@@ -5153,19 +5196,41 @@ class AliMipsSimulator:
         import lzma
         import struct
         try:
-            if self._guest_bytes(address, len(self._LZMA_DECODE_SIG)) != self._LZMA_DECODE_SIG:
+            if self._guest_bytes(address, len(sig)) != sig:
                 return                              # (code changed since the scan)
-            buf_size, lc, lp = (self._reg_read(self.gpr_map[n]) for n in (5, 6, 7))
             sp, ra = self._reg_read(UC_MIPS_REG_SP), self._reg_read(UC_MIPS_REG_RA)
-            pb, in_addr, in_size, out_addr, out_size, done_ptr = struct.unpack("<6I", uc.mem_read(sp + 16, 24))
-            uc.mem_read(done_ptr, 4)                # (mapped)
-            out_phys = out_addr & 0x1FFFFFFF
-            if lc > 8 or lp > 4 or pb > 4 or buf_size < (0x736 + (0x300 << (lc + lp))) * 2 \
-                    or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self._mapped_ram_size:
-                return
+            if sdk9:
+                out_addr, done_ptr, in_addr, src_len_ptr = (
+                    self._reg_read(self.gpr_map[n]) for n in (4, 5, 6, 7))
+                prop_ptr, prop_size, _finish_mode, status_ptr = struct.unpack("<4I", uc.mem_read(sp + 16, 16))
+                out_size = struct.unpack("<I", uc.mem_read(done_ptr, 4))[0]
+                in_size = struct.unpack("<I", uc.mem_read(src_len_ptr, 4))[0]
+                uc.mem_read(status_ptr, 4)          # (mapped)
+                if prop_size < 5 or in_size < 5:
+                    return
+                prop = bytes(uc.mem_read(prop_ptr, 5))
+                d = prop[0]
+                raw_dict = int.from_bytes(prop[1:5], "little")
+                out_phys = out_addr & 0x1FFFFFFF
+                if d >= 9 * 5 * 5 or raw_dict > (1 << 27) \
+                        or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self._mapped_ram_size:
+                    return
+                lc, d = d % 9, d // 9
+                lp, pb = d % 5, d // 5
+                dict_size = max(1 << 12, raw_dict)
+            else:
+                buf_size, lc, lp = (self._reg_read(self.gpr_map[n]) for n in (5, 6, 7))
+                pb, in_addr, in_size, out_addr, out_size, done_ptr = struct.unpack("<6I", uc.mem_read(sp + 16, 24))
+                uc.mem_read(done_ptr, 4)            # (mapped)
+                out_phys = out_addr & 0x1FFFFFFF
+                if lc > 8 or lp > 4 or pb > 4 or buf_size < (0x736 + (0x300 << (lc + lp))) * 2 \
+                        or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self._mapped_ram_size:
+                    return
+                dict_size = max(1 << 12, out_size)
+            raw_in = self._guest_bytes(in_addr, min(in_size, 1 << 26))
             dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
-                "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": max(1 << 12, out_size)}])
-            out = dec.decompress(self._guest_bytes(in_addr, min(in_size, 1 << 26)), max_length=out_size)
+                "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": dict_size}])
+            out = dec.decompress(raw_in, max_length=out_size)
         except (lzma.LZMAError, UcError, ValueError, struct.error):
             return
         if len(out) < out_size and not dec.eof:
@@ -5179,6 +5244,9 @@ class AliMipsSimulator:
         # the periodic rescans to see it appear).
         self._ram_view[out_phys:out_phys + len(out)] = out
         uc.mem_write(done_ptr, struct.pack("<I", len(out)))
+        if sdk9:
+            uc.mem_write(src_len_ptr, struct.pack("<I", len(raw_in) - len(dec.unused_data)))
+            uc.mem_write(status_ptr, struct.pack("<I", 1 if dec.eof else 4))
         self._reg_write(self.gpr_map[2], 0)
         self._reg_write(UC_MIPS_REG_PC, ra)
         self._tb_flush_needed = True
@@ -5190,7 +5258,7 @@ class AliMipsSimulator:
             cb = bytes(self._ram_view[c:c + chunk])
             self._scanned_ram_chunks[(c, chunk)] = cb
             self._scanned_ram_chunks[(c, chunk, False)] = cb
-        self.busy_pending += len(out) * self.lzma_insns_per_byte / self._insn_rate
+        self.busy_pending += len(out) * (self.lzma_insns_per_byte * rate_scale) / self._insn_rate
         self.lzma_decodes.append((address, in_addr, out_addr, len(out)))
         self.log(f"[LZMA] LzmaDecode at 0x{address:08X} (from 0x{ra:08X}): 0x{in_addr:08X} -> 0x{out_addr:08X}, "
                  f"{len(out)} bytes decoded in Python (lc {lc}, lp {lp}, pb {pb})")
@@ -5230,19 +5298,21 @@ class AliMipsSimulator:
     _JAL = rb"[\x00-\xff]{3}[\x0c-\x0f]"
     _DELAY_TAIL = bytes.fromhex("00000000" "23105100" "2b105000" "fbff4014" "1800bf8f" "1400b18f" "1000b08f"
                                 "0800e003" "2000bd27")     # (nop; subu; sltu; bnez loop; lw ra / s1 / s0; jr ra)
+    _DELAY_TAIL_RE = (re.escape(bytes.fromhex("00000000" "23105100" "2b105000" "fbff4014")) + rb"(?:\x00{4})?" +
+                      re.escape(bytes.fromhex("1800bf8f" "1400b18f" "1000b08f" "0800e003" "2000bd27")))
     # Each build: its words (the calls' target and the clock's gp offset
     # masked), the offsets of its first and its loop's get_count() call, the
     # loop's registers holding the ticks to wait and the Count it started at,
     # the argument's mask, how the variable at gp gives the ticks per
     # microsecond (the CPU clock "mul"tiplied by 0x431BDE83 >> 51 or "div"ided
-    # by 2,000,000, or None: they are its value), whether the loop ends only
+    # by 2,000,000, an int constant when compiled in, or None: they are its value), whether the loop ends only
     # past the ticks, v0 at its end and v1 ("per_us", the last "count" or
     # None: untouched).
     _DELAYS = (
         dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
                             re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
                             re.escape(bytes.fromhex("1b43023c" "83de4234" "19006200" "10180000" "c21c0300"
-                                                    "02800372")) + _JAL + re.escape(_DELAY_TAIL)),
+                                                    "02800372")) + _JAL + _DELAY_TAIL_RE),
              first=16, loop=56, ticks=16, start=17, mask=0xFFFF, clock="mul", past=False, v0=0, v1="per_us"),
         dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1c00bfaf" "1800b2af" "1400b1af" "1000b0af")) +
                             _JAL + re.escape(bytes.fromhex("21808000" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
@@ -5255,7 +5325,7 @@ class AliMipsSimulator:
              first=20, loop=60, ticks=18, start=17, mask=0xFFFFFFFF, clock="mul", past=True, v0=1, v1="count"),
         dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
                             re.escape(bytes.fromhex("ffff9030" "21884000")) + rb"([\x00-\xff]{2})\x82\x8f" +
-                            re.escape(bytes.fromhex("02800272")) + _JAL + re.escape(_DELAY_TAIL)),
+                            re.escape(bytes.fromhex("02800272")) + _JAL + _DELAY_TAIL_RE),
              first=16, loop=36, ticks=16, start=17, mask=0xFFFF, clock=None, past=False, v0=0, v1=None),
         dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af")) + _JAL +
                             re.escape(bytes.fromhex("21808000" "21884000")) + rb"([\x00-\xff]{2})\x83\x8f" +
@@ -5266,6 +5336,10 @@ class AliMipsSimulator:
                                                     "ffff4224" "2b100202" "f2ff4010" "1800bf8f" "1400b18f"
                                                     "1000b08f" "0800e003" "2000bd27"))),
              first=16, loop=68, ticks=16, start=17, mask=0xFFFFFFFF, clock="div", past=True, v0=1, v1="count"),
+        dict(sig=re.compile(re.escape(bytes.fromhex("e0ffbd27" "1800bfaf" "1400b1af" "1000b0af" "21808000")) + _JAL +
+                            re.escape(bytes.fromhex("ffff1032" "21884000" "c0101000" "23105000" "80100200"
+                                                    "23105000" "80800200")) + _JAL + _DELAY_TAIL_RE),
+             first=20, loop=52, ticks=16, start=17, mask=0xFFFF, clock=108, past=False, v0=0, v1=None),
     )
 
     def _find_delay_routines(self, data, base, views):
@@ -5281,7 +5355,7 @@ class AliMipsSimulator:
                 call = data[m.start() + first:m.start() + first + 4]
                 if m.start() % 4 or data[m.start() + loop_at:m.start() + loop_at + 4] != call:
                     continue                        # (both calls go to the same get_count())
-                gp_off = int.from_bytes(m.group(1), 'little', signed=True)
+                gp_off = 0 if isinstance(build["clock"], int) else int.from_bytes(m.group(1), 'little', signed=True)
                 for view in views:
                     a = view + base + m.start()
                     target = (a & 0xF0000000) | (int.from_bytes(call, 'little') & 0x03FFFFFF) << 2
@@ -5357,15 +5431,18 @@ class AliMipsSimulator:
         code, gp_off, get_count, kind = routine
         build = self._DELAYS[kind]
         u32 = self._env_u32
-        gp = u32[28] if u32 is not None else self._reg_read(UC_MIPS_REG_GP)
-        a = (gp + gp_off) & 0xFFFFFFFF
-        words = self._ram_words
-        if words is not None and not a & 3 and (a >> 29) in (4, 5) and (a & 0x1FFFFFFF) < self._mapped_ram_size:
-            clock = words[(a & 0x1FFFFFFF) >> 2]
+        if isinstance(build["clock"], int):
+            per_us = build["clock"]
         else:
-            clock = int.from_bytes(self._guest_bytes(a, 4), 'little')
-        per_us = (((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF if build["clock"] == "mul" else
-                  clock // 2_000_000 if build["clock"] == "div" else clock)
+            gp = u32[28] if u32 is not None else self._reg_read(UC_MIPS_REG_GP)
+            a = (gp + gp_off) & 0xFFFFFFFF
+            words = self._ram_words
+            if words is not None and not a & 3 and (a >> 29) in (4, 5) and (a & 0x1FFFFFFF) < self._mapped_ram_size:
+                clock = words[(a & 0x1FFFFFFF) >> 2]
+            else:
+                clock = int.from_bytes(self._guest_bytes(a, 4), 'little')
+            per_us = (((clock * 0x431BDE83) >> 51) & 0xFFFFFFFF if build["clock"] == "mul" else
+                      clock // 2_000_000 if build["clock"] == "div" else clock)
         a0 = u32[4] if u32 is not None else self._reg_read(UC_MIPS_REG_A0)
         ticks = ((a0 & build["mask"]) * per_us) & 0xFFFFFFFF
         if build["past"]:

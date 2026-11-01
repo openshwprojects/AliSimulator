@@ -1,0 +1,54 @@
+{
+  "file": "DumpFlash Opticum4000a(Globo7xxx)4,5w.bin",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "Opticum 4000A / Globo 7010A",
+    "type": "DVB-S FTA / MultiCAS satellite receiver",
+    "board": "ALi M3329 2 MB parallel-NOR DVB-S board",
+    "soc": "ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3101 / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "2 MB Macronix MX29LV160B 8-bit parallel NOR flash (0xAFC00000)",
+    "panel": {
+      "chip": "74HC164 shift register + 4-digit multiplexed LED (PAN_COMMON_0)",
+      "clk": 16,
+      "data": 17,
+      "digits": [18, 19, 20, 21]
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "Aug. 02. 2006 (bootloader 1.1.2, 2008-03-03; maincode(AV) 2008-3-19)",
+    "date": "2008-03-19",
+    "size": 2097152,
+    "sha1": "1eae9839ecdfd6be74acf476c2af3eccdb6a6f0e",
+    "layout": "bootloader 0x000000 (id 0xE3000010, 1.1.2, 2008-03-03), maincode(AV) 0x010000 (Aug. 02. 2006 / 2008-3-19, 0x0A4D9B bytes LZMA), default_lang 0x0BFD80 (1.0.0), patch 0x0BFF80 (1.0.0), logo_user 0x0D0000 (1.0.0), logo_menu 0x0E0000 (1.0.0), logo_radio 0x0E8000 (1.0.0), logo_def 0x0F0000 (1.0.0), defaultdb(PRC) 0x0F8000 (0.9.1), userdb(64+64) 0x13FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=DumpFlash-Opticum4000a-Globo7xxx45w.zip&directory=J-Tag_Dump_Flash",
+    "site": "satedu.cba.pl",
+    "author": "satedu.cba.pl J-Tag_Dump_Flash archive",
+    "date": "2008-03-19",
+    "login": false,
+    "note": "Archive DumpFlash-Opticum4000a-Globo7xxx45w.zip from the J-Tag_Dump_Flash directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "OFF ",
+      "----",
+      "1737",
+      "OOO1"
+    ],
+    "note": "Boots as the M3329 family (chips/m3329.py, chip ID 0x3101) from its 2 MB parallel NOR flash at 0xAFC00000: the 1.1.2 bootloader (STO_FLASH_0, \"APP  init ok\") unpacks maincode(AV) into SDRAM and starts it (\"APP  init ok\", \"main emu init\", \"TPSKeyDB Initing... 0\", \"max_key_db_count = 442\").  Because the JTAG dump's userdb(64+64) was captured in standby, PAN_COMMON_0 multiplexes its 74HC164 4-digit panel on GPIO 16..21 through \" ON \" -> \"OFF \" -> \"----\" -> \"1737\"; pressing POWER (NEC 0x807F00FF from its 76-entry 8-byte {nec32, vkey} remote table) writes the active power state to parallel NOR, pulses VPO reset (0xB8000060 bit 3) and soft-reboots to channel \"OOO1\", where OSD_M3327_0 renders its 720x576 8 bpp CLUT \"Информация - Нет сигнала!\" dialog and responds to MENU and DOWN."
+  },
+  "desc": [
+    "2 MB Macronix MX29LV160B parallel-NOR JTAG flash dump (maincode dated 2008-03-19, preloaded with 4W/5E satellite channel list) from an Opticum 4000A / Globo 7010A DVB-S satellite receiver.",
+    "Captured while the receiver's userdb(64+64) power state was standby (clock 17:37); waking via IR POWER updates parallel NOR flash, soft-reboots into channel 0001, and renders the full 8 bpp CLUT Russian OSD and illustrated Main Menu."
+  ]
+}

@@ -47,10 +47,13 @@ class LemontreeDecoder(PanelDecoder):
     """I2C slave + 4-digit 7-segment / 8-char PT6311 VFD front-panel decoder for the Lemontree MCU."""
     TAG = "[LEMONTREE]"
     ADDRESS = 0x28
+    TM1650_ADDRS = frozenset({0x24, 0x34, 0x35, 0x36, 0x37})   # bootloader CH455 / TM1650 on shared bus (Amiko X-Finder 2/3)
     LEMONTREE_SEG_MAP = (7, 6, 5, 4, 3, 2, 1, 0)    # bit 7..0 = a, b, c, d, e, f, g, DP
     ECHO_OPS = frozenset({
-        0x14, 0x52, 0x54, 0x55, 0x56, 0x57, 0x58,
-        0x6A, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x77, 0x79,
+        0x12, 0x14, 0x50, 0x52, 0x54, 0x55, 0x56, 0x57, 0x58,
+        0x5E, 0x60, 0x62, 0x64, 0x66, 0x6A, 0x6B, 0x6D, 0x6E,
+        0x6F, 0x70, 0x71, 0x77, 0x79, 0x7A, 0x83, 0x84, 0x85,
+        0x90, 0xA0,
     })
     # PT6311 14-segment VFD glyph words (low | high << 8 at PT6311 RAM 0xC0+3*g, 0xC1+3*g),
     # read directly from the PAN_PT6311 font table in Opticum HD X7 firmware (0x80741A48).
@@ -65,12 +68,7 @@ class LemontreeDecoder(PanelDecoder):
         0x0448: '/', 0x0244: '1', 0x70E1: '2', 0x70F0: '3', 0x0AE4: '4',
         0x68F1: '6', 0x3010: '7', 0x78F1: '8', 0x78F0: '9',
     }
-    _CHAR_TO_7SEG = {
-        **{ch.upper(): seg for seg, ch in PanelDecoder.SEG_TO_CHAR.items() if len(ch) == 1},
-        ' ': 0x00, '0': 0x3F, 'O': 0x3F, 'B': 0x7C, 'D': 0x5E, 'G': 0x3D,
-        'K': 0x76, 'M': 0x37, 'N': 0x37, 'Q': 0x67, 'R': 0x50, '5': 0x6D,
-        'S': 0x6D, 'T': 0x78, 'V': 0x3E, 'W': 0x3E, 'Z': 0x5B,
-    }
+    _CHAR_TO_7SEG = PanelDecoder.CHAR_TO_7SEG
 
     def __init__(self, scl_gpio=62, sda_gpio=171, log_handler=None,
                  digit_order=(0, 1, 2, 3), seg_map=LEMONTREE_SEG_MAP):
@@ -92,7 +90,9 @@ class LemontreeDecoder(PanelDecoder):
         self.written = bytearray()
 
         # Display and key state
+        self._cur_addr = 0
         self.raw = [0x00, 0x00, 0x00, 0x00]
+        self._tm1650_digits = None
         self.vfd_ram = [0x00] * 24
         self.vfd_text = None
         self._last_text = None
@@ -119,8 +119,9 @@ class LemontreeDecoder(PanelDecoder):
     def digits(self):
         """Segment bytes of the 4 display positions, left to right, standard layout."""
         if self.vfd_text is not None:
-            s = self.vfd_text[2:6] if (self.vfd_text[:2] == "  " and self.vfd_text[6:] == "  ") else self.vfd_text.strip()[:4].ljust(4)
-            return [self._CHAR_TO_7SEG.get(ch.upper(), 0x00) for ch in s]
+            return self.vfd_to_7seg_digits(self.vfd_text)
+        if self._tm1650_digits is not None:
+            return list(self._tm1650_digits)
         return [self._segments(self.raw[i]) for i in self.digit_order]
 
     def get_display_text(self):
@@ -163,7 +164,17 @@ class LemontreeDecoder(PanelDecoder):
 
     def _finish_write(self):
         if self.state == "WRITE" and self.written:
-            self._handle_command(bytes(self.written))
+            if self._cur_addr == self.ADDRESS:
+                self._handle_command(bytes(self.written))
+            elif 0x34 <= self._cur_addr <= 0x37 and self.vfd_text is None and self.raw == [0, 0, 0, 0]:
+                if self._tm1650_digits is None:
+                    self._tm1650_digits = [0x00, 0x00, 0x00, 0x00]
+                self._tm1650_digits[self._cur_addr - 0x34] = self.written[0]
+                self.frame_count += 1
+                text = self.get_display_text()
+                if text != self._last_text:
+                    self._last_text = text
+                    self.log(f"{self.TAG} CH455 Display: [{text}]")
             self.written.clear()
 
     def _scl_rise(self):
@@ -182,9 +193,10 @@ class LemontreeDecoder(PanelDecoder):
             if self.state == "ADDR":
                 addr = self.byte >> 1
                 self.reading = bool(self.byte & 1)
-                if addr != self.ADDRESS:
+                if addr != self.ADDRESS and (self.reading or addr not in self.TM1650_ADDRS):
                     self.state = "IGNORE"
                     return
+                self._cur_addr = addr
                 self.phase = "ack"
             elif self.state == "WRITE":
                 self.written.append(self.byte)
@@ -218,6 +230,7 @@ class LemontreeDecoder(PanelDecoder):
         op = b[0]
         if op == 0x31 and len(b) >= 6:
             self.vfd_text = None
+            self._tm1650_digits = None
             self.raw = [b[2], b[3], b[4], b[5]]
             self.frame_count += 1
             text = self.get_display_text()
@@ -225,6 +238,7 @@ class LemontreeDecoder(PanelDecoder):
                 self._last_text = text
                 self.log(f"{self.TAG} Display: [{text}] (raw: {' '.join(f'{x:02X}' for x in self.raw)})")
         elif op == 0x33 and len(b) >= 38 and b[1] == 0x22 and b[2] != 3:
+            self._tm1650_digits = None
             for idx in range(4, 36, 2):
                 addr, val = b[idx], b[idx + 1]
                 if 0xC0 <= addr < 0xD8:

@@ -45,6 +45,7 @@ Recognised by the first chunk's ID, 0xE3000010 (every later image here has
 0x23010010): the M3327 platform's chunk header, which is also the
 bootloader's first instruction (a branch over the header).
 """
+from collections import deque
 import os
 import struct
 
@@ -53,6 +54,7 @@ from .base import ChipFamily, ReadyBits, chunk_chain
 BOOTLOADER_CHUNK_ID = 0xE3000010
 SDRAM_CONTROL = 0x80                    # in the device window
 UART = 0x1300
+UART2, UART2_LINE = 0x1400, 6           # SCI_16550_1 (external front-panel / security MCU link)
 IC_STATUS, IC_ENABLE = 0x38, 0x3C       # the interrupt controller: lines 0..16, on IP3
 VIDEO_LINE = 9                          # the video decoder's and the video output's line
 VPO_INT = 0xB8004004
@@ -71,11 +73,123 @@ REMOTE_KEYS = {'LEFT': 0x0A, 'RIGHT': 0x0B, 'UP': 0x0C, 'DOWN': 0x0D, 'MENU': 0x
                'VOL-': 0x1F, 'VOL+': 0x20, 'CH-': 0x21, 'CH+': 0x22,
                'RECALL': 0x23, 'FAV': 0x29,
                **{str(d): 0x30 + d for d in range(10)}}
+# 2006-2008 Globo / Opticum / BigSat M3329 SDK builds store flat 8-byte
+# {uint32 nec32, uint32 vkey} tables in RAM where digits '0'..'9' are 0..9 and
+# POWER / MUTE are 0x18 / 0x15.
+GLOBO_M3329_KEYS = {
+    **{str(d): (d,) for d in range(10)},
+    'LEFT': (0x0A,), 'RIGHT': (0x0B,), 'UP': (0x0C,), 'DOWN': (0x0D,),
+    'MENU': (0x0E,), 'OK': (0x0F,), 'ENTER': (0x0F,), 'EXIT': (0x10,), 'BACK': (0x10,),
+    'MUTE': (0x15, 0x11), 'INFO': (0x17,), 'POWER': (0x18, 0x12),
+    'PAUSE': (0x29, 0x13), 'TVRADIO': (0x35, 0x14), 'AUDIO': (0x26, 0x15),
+    'FAV': (0x2A, 0x29), 'PAGE+': (0x2C, 0x1A), 'PAGE-': (0x2B, 0x1B),
+    'RECALL': (0x34, 0x23), 'VOL-': (0x0A, 0x1F), 'VOL+': (0x0B, 0x20),
+    'CH-': (0x0D, 0x21), 'CH+': (0x0C, 0x22),
+}
 KEY_CONFIG = 0x8003B640
 
 
-def _rev8(b):
-    return int(f"{b:08b}"[::-1], 2)
+from ir_remote import bitrev8 as _rev8
+
+
+class Uart16550:
+    """M3329's second 16550 UART (`SCI_16550_1` at 0xB8001400, IC line 6),
+    used on boards such as Moresat / Echolink `SMT01` to talk to an external
+    front-panel / security microcontroller (`PAN_SMTM51_0`) without mixing
+    binary frames into the primary console UART (`SCI_16550_0` at 0xB8001300)."""
+
+    def __init__(self, sim, base=UART2, line=UART2_LINE):
+        self.sim = sim
+        self.base = base
+        self.line = line
+        self.tx_handler = None
+        self.rx_queue = deque()
+        self.tx_bytes = bytearray()
+        self.reset()
+        sim._mmio_on('w', self._write, base, base + 7)
+        sim._mmio_on('r', self._read, base, base + 9)
+
+    def reset(self):
+        self.rx_queue.clear()
+        self.tx_bytes.clear()
+        self.lcr = 0
+        self.ier = 0
+        self.dll = 0
+        self.dlm = 0
+        self.sim._ic_set_line(self.line, False)
+
+    def _sync_irq(self):
+        self.sim._mmio_view[(self.base & 0xFFFFFF) + 5] = 0x60 | (0x01 if self.rx_queue else 0x00)
+        self.sim._ic_set_line(self.line, bool((self.ier & 0x01) and self.rx_queue))
+
+    def receive(self, data):
+        if isinstance(data, int):
+            self.rx_queue.append(data & 0xFF)
+        else:
+            self.rx_queue.extend(b & 0xFF for b in data)
+        self._sync_irq()
+
+    def _write(self, uc, access, address, size, value, user_data):
+        sim = self.sim
+        sim._device_access(uc)
+        reg = (address - self.base) & 0xF
+        val = value & 0xFF
+        if reg == 0:
+            if self.lcr & 0x80:
+                self.dll = val
+            else:
+                if sim._dev_replay_of(uc, 'u2thr', address, val) is None:
+                    self.tx_bytes.append(val)
+                    sim._dev_note(uc, 'u2thr', address, val)
+                    if self.tx_handler is not None:
+                        self.tx_handler(val)
+                sim._mmio_view[(self.base & 0xFFFFFF) + 5] = 0x60 | (0x01 if self.rx_queue else 0x00)
+        elif reg == 1:
+            if self.lcr & 0x80:
+                self.dlm = val
+            else:
+                self.ier = val
+                self._sync_irq()
+        elif reg == 2:
+            if val & 0x02:
+                self.rx_queue.clear()
+                self._sync_irq()
+        elif reg == 3:
+            self.lcr = val
+        elif reg == 5:
+            return 0x60 | (0x01 if self.rx_queue else 0x00)
+
+    def _read(self, uc, access, address, size, value, user_data):
+        sim = self.sim
+        sim._device_access(uc)
+        off = address & 0xFFFFFF
+        reg = (address - self.base) & 0xF
+        if reg <= 5 < reg + size:
+            sim._mmio_view[(self.base & 0xFFFFFF) + 5] = 0x60 | (0x01 if self.rx_queue else 0x00)
+        if reg == 0:
+            if self.lcr & 0x80:
+                sim._mmio_view[off] = self.dll
+            else:
+                rp = sim._dev_replay_of(uc, 'u2rbr', address)
+                if rp is not None:
+                    sim._mmio_view[off] = rp[2]
+                elif self.rx_queue:
+                    b = self.rx_queue.popleft()
+                    sim._mmio_view[off] = b
+                    sim._dev_note(uc, 'u2rbr', address, b)
+                    self._sync_irq()
+        elif reg == 1:
+            sim._mmio_view[off] = self.dlm if (self.lcr & 0x80) else self.ier
+        elif reg == 2:
+            n = len(self.rx_queue)
+            if not (self.ier & 0x01) or n == 0:
+                sim._mmio_view[off] = 0x01
+            elif n >= 4:
+                sim._mmio_view[off] = 0x04
+            else:
+                sim._mmio_view[off] = 0x0C
+        elif reg == 3:
+            sim._mmio_view[off] = self.lcr
 
 
 class Osd:
@@ -111,11 +225,16 @@ class M3329(ChipFamily):
     @staticmethod
     def _uses_spi_flash(image):
         """Later M3329C / M3101C / M3329E boards wire an SPI flash to SF_INS /
-        SF_FMT (0xB8000098 / 0x99); older M3327 / M3329 / M3329B boards wire an
-        8-bit parallel NOR flash directly to 0xAFC00000 without touching 0x98."""
+        SF_FMT (0xB8000098 / 0x99, driver `STO_SFLASH_0` without `STO_FLASH_0`);
+        older M3327 / M3329 / M3329C boards wire an 8-bit parallel NOR flash
+        directly to 0xAFC00000 (`STO_FLASH_0`)."""
         chain = chunk_chain(image, limit=2)
         bl_end = chain[1][0] if len(chain) > 1 and 0 < chain[1][0] <= len(image) else min(len(image), 0x10000)
-        bl = image[:bl_end]
+        bl = bytes(image[:bl_end])
+        if b"STO_FLASH_0" in bl:
+            return False
+        if b"STO_SFLASH_0" in bl:
+            return True
         for off in range(0, len(bl) - 16, 4):
             w = struct.unpack_from("<I", bl, off)[0]
             if (w & 0xFFE0FFFF) == 0x3C00B800:      # lui $r, 0xb800
@@ -161,15 +280,17 @@ class M3329(ChipFamily):
         super().install()
         sim = self.sim
         sim._mmio_on('w', self._sdram_command, SDRAM_CONTROL, SDRAM_CONTROL)
-        # the UART, a 16550 like the later chips' at 0xB8018300, sits at 0xB8001300
+        # the UART, a 16550 like the later chips' at 0xB8018300, sits at 0xB8001300;
+        # SCI_16550_1 sits at 0xB8001400 on IC line 6
         sim._mmio_on('w', sim._hook_uart_write, UART, UART + 5)
         sim._mmio_on('r', sim._hook_uart_read, UART, UART + 9)
+        self.uart2 = Uart16550(sim)
         self._configure_flash()
         sim.set_ic_layout(IC_STATUS, IC_ENABLE)
         from video_m36 import VideoEngine, VideoOutput
         self._ve = VideoEngine(sim, line=VIDEO_LINE, reset=(0x60, 0x04))
         self._ve_e = VideoEngine(sim, line=12, reset=(0x60, 0x04), base=0xB8013200)
-        self.video_output = VideoOutput(sim, register=VPO_INT, line=VIDEO_LINE, field_bit=0)
+        self.video_output = VideoOutput(sim, register=VPO_INT, line=VIDEO_LINE, field_bit=0, reset=(0x60, 0x08))
         self._count_hz = sim.count_hz
         sim.count_hz = COUNT_HZ
         sim._mmio_on('r', sim._hook_irc_read, IRC + 1, IRC + 1)
@@ -183,6 +304,7 @@ class M3329(ChipFamily):
         self.ge = GeM3602(sim, base=0xE000)
         self.snd_ready = ReadyBits(sim, {0x20E3: 0x01, 0x20E4: 0x01})
         self._ir_usr_code = None
+        self._nec32_key_table = None
 
     @property
     def video_engine(self):
@@ -230,17 +352,69 @@ class M3329(ChipFamily):
                         if usr is not None and (usr & 0xFFFF) == 0 and 0 < (usr >> 16) < 0xFFFF:
                             self._ir_usr_code = usr
                             return usr
-        self._ir_usr_code = 0
         return 0
+
+    def _find_nec32_key_table(self):
+        """Scan loaded RAM (then flash) for 2006-2008 M3329 8-byte
+        `{uint32 nec32, uint32 vkey}` remote tables where every `nec32` has a
+        valid NEC command / complement pair (`((nec32 >> 8) ^ nec32) & 0xFF == 0xFF`)
+        and `vkey < 0x80`.  Returns `{vkey: nec32}`."""
+        if self._nec32_key_table:
+            return self._nec32_key_table
+        import numpy as np
+        sim = self.sim
+        ram_words = np.frombuffer(sim.ram_buffer, dtype='<u4', count=min(sim.ram_size, 0x800000) // 4)
+        regions = [ram_words]
+        if len(sim.rom_image) >= 128:
+            regions.append(np.frombuffer(sim.rom_image, dtype='<u4', count=len(sim.rom_image) // 4))
+        best_len = 0
+        best_pairs = None
+        for words in regions:
+            for phase in (0, 1):
+                w = words[phase:]
+                n = len(w) // 2
+                if n < 16:
+                    continue
+                nec = w[:2 * n:2]
+                vk = w[1:2 * n:2]
+                ok = (((nec >> 8) ^ nec) & 0xFF == 0xFF) & ((nec >> 16) != 0) & ((nec >> 16) != 0xFFFF) & (vk < 0x80)
+                if not np.any(ok):
+                    continue
+                padded = np.empty(n + 2, dtype=np.int8)
+                padded[0] = 0
+                padded[1:-1] = ok
+                padded[-1] = 0
+                diff = np.diff(padded)
+                starts = np.nonzero(diff == 1)[0]
+                ends = np.nonzero(diff == -1)[0]
+                lengths = ends - starts
+                idx = int(np.argmax(lengths))
+                run_len = int(lengths[idx])
+                if run_len >= 16 and run_len > best_len:
+                    s, e = int(starts[idx]), int(ends[idx])
+                    best_len = run_len
+                    best_pairs = (nec[s:e], vk[s:e])
+            if best_pairs is not None:
+                break
+        if best_pairs is None:
+            return {}
+        table = {}
+        nec_arr, vk_arr = best_pairs
+        for nec32, vkey in zip(nec_arr.tolist(), vk_arr.tolist()):
+            table.setdefault(int(vkey), int(nec32))
+        self._nec32_key_table = table
+        return table
 
     def remote_frame(self, key):
         """(address, command, address_hi) of the NEC frame of a remote key
         (a name of REMOTE_KEYS / ir_remote.VKEYS or the application's key
         code), from the application's key table (simulator.press_key); None if
         it uses the standard ir_remote path.  Older 2005 builds (s15125) keep
-        a 4-byte {cmd, ~cmd, key, 0} table at KEY_CONFIG; later M3329C / M3329E
-        Libcore builds keep an 8-byte 0x0101 ir_key_map_t table with 8-bit key
-        codes (0x00xx) gated by `IR_USR_CODE` off `$gp`."""
+        a 4-byte {cmd, ~cmd, key, 0} table at KEY_CONFIG; 2006-2008 Globo /
+        Opticum / BigSat builds keep a flat 8-byte {uint32 nec32, uint32 vkey}
+        table; later M3329C / M3329E Libcore builds keep an 8-byte 0x0101
+        ir_key_map_t table with 8-bit key codes (0x00xx) gated by `IR_USR_CODE`
+        off `$gp`."""
         code = REMOTE_KEYS.get(key.upper()) if isinstance(key, str) else int(key)
         sim = self.sim
         word = lambda a: int.from_bytes(sim.peek(a, 4), 'little')   # noqa: E731
@@ -254,31 +428,44 @@ class M3329(ChipFamily):
         import ir_remote
         import numpy as np
         if not sim._ir_key_table:
-            ram = np.frombuffer(sim.ram_buffer, dtype=np.uint8, count=sim.ram_size)
+            ram = np.frombuffer(sim.ram_buffer, dtype=np.uint8, count=min(sim.ram_size, 0x2000000))
             sim._ir_key_table = ir_remote.find_key_table(ram)
-        if not sim._ir_key_table:
-            return None
-        vkey = ir_remote.VKEYS.get(key.upper()) if isinstance(key, str) else int(key)
-        if vkey is not None and vkey not in sim._ir_key_table and isinstance(key, str):
-            vkey = next((v for v in ir_remote.VKEY_FALLBACKS.get(key.upper(), ())
-                         if v in sim._ir_key_table), vkey)
-        ir16 = sim._ir_key_table.get(vkey)
-        if ir16 is not None and (ir16 >> 8) == 0:
-            usr = self._find_ir_usr_code()
-            if usr:
-                return _rev8((usr >> 24) & 0xFF), (~_rev8(ir16 & 0xFF)) & 0xFF, _rev8((usr >> 16) & 0xFF)
+        if sim._ir_key_table:
+            vkey = ir_remote.VKEYS.get(key.upper()) if isinstance(key, str) else int(key)
+            if vkey is not None and vkey not in sim._ir_key_table and isinstance(key, str):
+                vkey = next((v for v in ir_remote.VKEY_FALLBACKS.get(key.upper(), ())
+                             if v in sim._ir_key_table), vkey)
+            ir16 = sim._ir_key_table.get(vkey)
+            if ir16 is not None and (ir16 >> 8) == 0:
+                usr = self._find_ir_usr_code()
+                if usr:
+                    return _rev8((usr >> 24) & 0xFF), (~_rev8(ir16 & 0xFF)) & 0xFF, _rev8((usr >> 16) & 0xFF)
+        nec_table = self._find_nec32_key_table()
+        if nec_table:
+            candidates = GLOBO_M3329_KEYS.get(key.upper(), ()) if isinstance(key, str) else (int(key),)
+            for cand in candidates:
+                nec32 = nec_table.get(cand)
+                if nec32 is not None:
+                    return (_rev8((nec32 >> 24) & 0xFF),
+                            _rev8((nec32 >> 8) & 0xFF),
+                            _rev8((nec32 >> 16) & 0xFF))
         return None
 
     def uninstall(self):
         sim = self.sim
         if self.flash is not None:
             self.flash.disconnect()
+            self.flash = None
+        self.uart2.reset()
         sim.set_ic_layout(sim.ic_base, sim.ic_base + 8)
         sim.count_hz = self._count_hz
         sim.irc_base, sim.irc_line = 0x18100, sim._IC_IRC
+        super().uninstall()
 
     def start(self):
         self._ir_usr_code = None
+        self._nec32_key_table = None
+        self.uart2.reset()
         self._configure_flash()
         super().start()
 

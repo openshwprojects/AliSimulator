@@ -101,9 +101,15 @@ EXPECTED = [
     ("Ferguson_A255 Slim_V1.30B4_20231103_EU.abs", "C3505"),      # Ferguson Ariva 255 Combo S: 256 MB DDR3 C3505 (HASG4, RDA5816 + R840)
     ("AMIKO 8155 Edision_v.1453.abs", "C3505"),                   # Amiko HD8155: 128 MB DDR3 C3505, maincode(AV) + seecode "M3606 SEE" at 0xA6000200
     ("AMIKO_Impluse_H265_T2C_1.3.87_emu.abs", "C3505"),           # Amiko Impulse H.265 T2/C: 128 MB DDR3 M3626A / C3505, seecode "M3606 SEE" at 0xA6000200
+    ("Amiko_HD8140C_SE_1.1.04_emu.abs", "C3505"),                 # Amiko HD8140C SE: 128 MB DDR3 M3712A / C3505 DVB-C, DECV_HEVC_0 + seecode at 0xA6000200
+    ("Amiko_HD8142_Twin-C_1.1.11_conax.abs", "C3505"),            # Amiko HD8142 Twin-C: 128 MB DDR3 M3716A / C3505 dual DVB-C, DECV_HEVC_0 + seecode at 0xA6000200
     ("AMIKO 8265+ Edision_v.1529.abs", "C3505"),                  # Amiko HD8265+: 256 MB DDR3 C3505, maincode(AV) + seecode "M3606 SEE" at 0xAE000200
+    ("Amiko_HD8275_1.2.02_emu.abs", "C3505"),                     # Amiko HD8275+: 256 MB DDR3 M3529A / C3505 combo, maincode(AV) + seecode "M3606 SEE" at 0xAE000200
+    ("AMIKO_XFinder_III_1.0.49_emu.abs", "C3505"),                # Amiko X-Finder 3: 256 MB DDR3 M3529F / C3505 handheld meter, seecode "M3505 SEE" at 0xAE000200
     ("8260_Edision_Piccollo_ v.2468.abs", "M3503"),               # Amiko HD8260+: 16 MB SPI flash, 256 MB DDR3 M3516A / M3503, bootloader "M3516A 1.2.1"
     ("OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs", "M3602"),       # Opticum HD X4 220: bootloader "M3602B 1.1.5", Lemontree EuP MCU
+    ("Opticum HD X402p-403p_220_ps_synaps_rc2_1.5.48_by dreamer1983.abs", "M3602"),  # Opticum HD X402p / X403p: bootloader "M3602B 1.1.6", Lemontree EuP MCU
+    ("amstar_yumatu_1.5.25_x4_newoldremote.abs", "M3602"),         # Yumatu Full HD Amstar: 4 MB SPI M3602B, bootloader "M3602B 1.1.6", Lemontree EuP MCU
     ("Opticum_HD_x7_galaxy_UPC_synaps_1.5.24.VI.abs", "M3602"),   # Opticum HD X7 Combo: bootloader "M3602A 1.1.6", Lemontree PT6311 VFD MCU
     ("A53_20190813_V1.33B7.abs", "C3503"),                        # Ferguson Ariva 53: boot-ROM bootloader, no SEE, get_clock_3503D (C3503C)
     ("A54_20190926_V1.3B1.abs", "C3503"),                         # Ferguson Ariva 54: boot-ROM bootloader, no SEE, get_clock_3503D (C3503D)
@@ -116,24 +122,54 @@ EXPECTED = [
     ("sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin", "M3329"),
     ("dump opticum x80 premium.bin", "M3329"),                    # Opticum X80 Premium: 2 MB SPI M3329C / M3101C (0xE3000010, chip ID 0x3101)
     ("7300PVR.bin", "M3329"),                                     # Opticum 7300 PVR CI2CX: 4 MB SPI M3329E (0xE3000010, chip ID 0x3329)
+    ("AMIKO_Mini_Combo_Extra_1.0.46_emu.abs", "C3505"),           # Amiko Mini Combo Extra: 8 MB SPI 256 MB DDR3 M3526A / C3505, bootloader "3526A 1.1.1"
+    ("AMIKO_Impulse_SAT_2.3.40_emu.abs", "M3503"),                # Amiko Impulse SAT: 8 MB SPI 128 MB DDR3 M3510B / M3503 rev B, bootloader "M3510B 1.1.1"
+    ("AMIKO_HD8150_2.3.40_Synaps_2.3.40_by Dekolte.abs", "M3503"),  # Amiko HD8150: 8 MB SPI 128 MB DDR3 M3511D / M3503 rev B, bootloader "M3511D 1.1.1"
+    ("dump bigsat 6500 lux.bin", "M3329"),                        # BigSat DSR 6500 Lux: 2 MB parallel NOR M3329, OSD_M3327 + 74HC164 panel
+    ("AMIKO_XFinder2_2.0.48_emu.abs", "M3503"),                   # Amiko X-Finder 2: 16 MB SPI 256 MB DDR3 M3516A / M3503 handheld meter
+    ("OPENBOX-S16_Eu1129.abs", "M3602"),                          # Openbox S16 EU: 4 MB SPI dual-CPU S3606H / M3606C (chip ID 0x3603)
+    ("DumpFlash Opticum4000a(Globo7xxx)4,5w.bin", "M3329"),       # Opticum 4000A / Globo 7010A: 2 MB parallel NOR M3329 (STO_FLASH_0)
+    ("flash ECHOLINK EL700FTA mx29lv160.bin", "M3329"),           # Echolink EL-700 FTA: 2 MB parallel NOR M3329C ("SMT01---0.9.6", PAN_SMTM51_0)
 ]
 
 print("=== Test: chips.detect() picks each image's chip family ===")
 failures = 0
+detected_by_path = {}
+seen_expected = set()
+duplicate_expected = []
 for dump, family in EXPECTED:
-    with open(resolve_dump(dump), "rb") as f:
+    resolved = resolve_dump(dump)
+    norm = os.path.normcase(os.path.abspath(resolved))
+    if norm in seen_expected:
+        duplicate_expected.append(dump)
+    seen_expected.add(norm)
+    with open(resolved, "rb") as f:
         got = chips.detect(f.read()).__name__
+    detected_by_path[norm] = got
     ok = got == family
     failures += not ok
     print(f"  [{'PASS' if ok else 'FAIL'}] {dump}: {got}" + ("" if ok else f" (expected {family})"))
+
+ok_no_dups = not duplicate_expected
+failures += not ok_no_dups
+print(f"  [{'PASS' if ok_no_dups else 'FAIL'}] EXPECTED has no duplicate entries"
+      + ("" if ok_no_dups else f": {duplicate_expected}"))
+
+ok_short = all(chips.detect(buf) is chips.M3801 for buf in (b"", b"\x00" * 64, b"\xFF" * 0x490))
+failures += not ok_short
+print(f"  [{'PASS' if ok_short else 'FAIL'}] short / empty buffers safely fall back to M3801")
 
 catalog_entries = dump_catalog.catalog()
 catalog_mismatches = []
 for path, data in catalog_entries:
     if data is None:
         continue
-    with open(path, "rb") as f:
-        got = chips.detect(f.read()).__name__
+    norm = os.path.normcase(os.path.abspath(path))
+    got = detected_by_path.get(norm)
+    if got is None:
+        with open(path, "rb") as f:
+            got = chips.detect(f.read()).__name__
+        detected_by_path[norm] = got
     want_fam = data["device"]["family"].split()[0]
     if got != want_fam:
         catalog_mismatches.append((os.path.basename(path), got, want_fam))
@@ -151,6 +187,21 @@ ok = chain == want
 failures += not ok
 print(f"  [{'PASS' if ok else 'FAIL'}] chunk_chain(URZ0083_V1.2.5.abs): "
       + ", ".join(f"{name}@0x{off:06X} ({version})" for off, name, version in chain))
+
+from chips.m3329 import M3329
+for m3329_dump, want_spi in (
+    ("sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin", False),
+    ("dump bigsat 6500 lux.bin", False),
+    ("DumpFlash Opticum4000a(Globo7xxx)4,5w.bin", False),
+    ("flash ECHOLINK EL700FTA mx29lv160.bin", False),
+    ("dump opticum x80 premium.bin", True),
+    ("7300PVR.bin", True),
+):
+    with open(resolve_dump(m3329_dump), "rb") as f:
+        got_spi = M3329._uses_spi_flash(f.read())
+    ok = got_spi is want_spi
+    failures += not ok
+    print(f"  [{'PASS' if ok else 'FAIL'}] M3329._uses_spi_flash({m3329_dump}): {got_spi}")
 
 print(f"\n[{'PASS' if not failures else 'FAIL'}] chip family detection")
 sys.exit(1 if failures else 0)

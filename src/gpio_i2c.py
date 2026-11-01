@@ -30,6 +30,9 @@ class GpioI2cBus:
         self.sim, self.name = sim, name
         self.scl_offset, self.scl_bit = PanelDecoder._gpio_to_offset_bit(scl)
         self.sda_offset, self.sda_bit = PanelDecoder._gpio_to_offset_bit(sda)
+        self._same_bank = self.scl_offset == self.sda_offset
+        self._scl_mask = 1 << self.scl_bit
+        self._sda_mask = 1 << self.sda_bit
         self.scl, self.sda = 1, 1               # the levels the CPU leaves on the lines (idle: high)
         self.state = 'IDLE'                     # IDLE, ADDR, WRITE, READ, IGNORE (no slave: wait for STOP)
         self.phase = 'bits'                     # bits; ack (the slave acknowledges); mack (the master does)
@@ -46,14 +49,37 @@ class GpioI2cBus:
     # ---- the CPU side: pin levels --------------------------------------------
     def on_gpio_write(self, address, size, levels):
         offset = address & 0xFFF
-        scl, sda = self.scl, self.sda
-        if offset == self.scl_offset:
-            scl = (levels >> self.scl_bit) & 1
-        if offset == self.sda_offset:
-            sda = (levels >> self.sda_bit) & 1
+        if self._same_bank:
+            if offset != self.scl_offset:
+                return
+            scl = 1 if (levels & self._scl_mask) else 0
+            sda = 1 if (levels & self._sda_mask) else 0
+            if scl == self.scl and sda == self.sda:
+                return
+        else:
+            scl, sda = self.scl, self.sda
+            if offset == self.scl_offset:
+                scl = 1 if (levels & self._scl_mask) else 0
+            elif offset == self.sda_offset:
+                sda = 1 if (levels & self._sda_mask) else 0
+            else:
+                return
+            if scl == self.scl and sda == self.sda:
+                return
         if scl != self.scl:
             self.scl, self.sda = scl, sda
-            self._rising() if scl else self._falling()
+            if scl:
+                if self.phase == 'bits':
+                    st = self.state
+                    if st == 'WRITE' or st == 'ADDR':
+                        self.byte = ((self.byte << 1) | sda) & 0xFF
+                        self.nbits += 1
+                    elif st == 'READ':
+                        self.nbits += 1
+                else:
+                    self._rising()
+            elif self.phase != 'bits' or self.nbits == 8:
+                self._falling()
         elif sda != self.sda:
             self.sda = sda
             if scl and self._sda_out() is None:     # the CPU's own edge while SCL is high

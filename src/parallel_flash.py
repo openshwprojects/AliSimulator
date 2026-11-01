@@ -88,6 +88,8 @@ class ParallelNorFlash:
         self.sim.flash_device = self
 
     def disconnect(self):
+        self._set_autoselect(False)
+        self.reset()
         if self.sim.flash_device is self:
             self.sim.flash_device = None
 

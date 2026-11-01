@@ -109,8 +109,14 @@ def nec_rlc(address, command, address_hi=None):
     return bytes(out)
 
 
-def _rev8(b):
-    return int(f"{b & 0xFF:08b}"[::-1], 2)
+BITREV8 = bytes(int(f"{b:08b}"[::-1], 2) for b in range(256))
+
+
+def bitrev8(b):
+    return BITREV8[b & 0xFF]
+
+
+_rev8 = bitrev8
 
 
 def ir16_to_nec(ir16):
@@ -172,9 +178,13 @@ IR_CODINGS = [("dump_maciej", "nec"), ("Ali_3801_Globo", "nec"), ("T90", "nec"),
               ("dump.bin", "ext00"), ("URZ0083_", "ext00"), ("KM00183", "ext00"), ("THT501", "ext00"),
               ("ESR-250", "necfirst"), ("_S60_", "necfirst"), ("S16_", "necfirst"), ("Software_S50", "necfirst"),
               ("ALI3606_", "necfirst"), ("OPTIMUSS_underline", "necfirst"), ("underline.3in1", "necfirst"), ("Edision.vip3", "necfirst"), ("miniplus_highspeed", "necfirst"),
-              ("AMIKO 8155", "necfirst"), ("Impluse_H265", "necfirst"), ("AMIKO 8265", "necfirst"), ("AMIKO_T58", "necfirst"), ("8260_Edision", "necfirst"),
+              ("AMIKO 8155", "necfirst"), ("Impluse_H265", "necfirst"), ("AMIKO 8265", "necfirst"),
+              ("HD8275_", "necfirst"), ("HD8140C_SE", "necfirst"), ("HD8142_Twin-C", "necfirst"),
+              ("AMIKO_T58", "necfirst"), ("8260_Edision", "necfirst"), ("AMIKO_HD8150", "necfirst"),
               ("PICCO_S2", "necfirst"),
               ("OPTICUM_HD_X4", "necfirst"),
+              ("Opticum HD X402p-403p", "necfirst"),
+              ("amstar_yumatu", "necfirst"),
               ("Opticum_HD_x7", "necfirst"),
               ("X110p_M3606_MCAS", "necfirst"), ("_x110p_1.2", "necfirst"), ("X110p_special", "necfirst"),
               ("URZ0083Q", "necfirst"), ("urz0194", "necfirst"), ("ArivaT50", "cmd")]
@@ -223,49 +233,64 @@ def _scan_key_table(ram, min_entries, old_layout=False):
     older M3327/M3329 Libcore (`old_layout=True`) packs `ir_code` in bits 0..15
     and `hdr = 0x0101` (`PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)`) in 16..31."""
     import numpy as np
-    rev = np.array([_rev8(b) for b in range(256)], np.int64)
     n = len(ram) // 8 * 8
+    if n < 8:
+        return {}
+    rev = np.frombuffer(BITREV8, dtype=np.uint8)
+    pair_lo = rev[(~rev) & 0xFF]
     best = {}
-    hdr = (PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)) if old_layout else (PAN_KEY_TYPE_REMOTE | (PAN_KEY_PRESSED << 4))
+    hdr = np.uint32(
+        (PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)) if old_layout else (PAN_KEY_TYPE_REMOTE | (PAN_KEY_PRESSED << 4))
+    )
     for phase in (0, 4):
         w = ram[phase:phase + n - 8].view('<u4')
-        k, v = w[0::2].astype(np.int64), w[1::2].astype(np.int64)
+        k, v = w[0::2], w[1::2]
         m = min(len(k), len(v))
         k, v = k[:m], v[:m]
-        if old_layout:
-            hdr_ok = ((k >> 16) & 0xFFFF) == hdr
-            ir = k & 0xFFFF
-        else:
-            hdr_ok = (k & 0xFFFF) == hdr
-            ir = (k >> 16) & 0xFFFF
-        ok = hdr_ok & (v < 0x100)
-        ir_hi = (ir >> 8) & 0xFF
-        pair = (ir & 0xFF) == rev[~rev[ir_hi] & 0xFF]
-        same = ok[1:] & ok[:-1] & ((ir_hi[1:] == ir_hi[:-1]) | (pair[1:] & pair[:-1]))
-        s = np.concatenate(([0], same.astype(np.int8), [0]))
-        d = np.diff(s)
-        for st, en in zip(np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]):
-            if en - st + 1 < max(min_entries, len(best)):
+        ok = ((k >> 16) == hdr if old_layout else (k & np.uint32(0xFFFF)) == hdr) & (v < 0x100)
+        idx = np.flatnonzero(ok)
+        if len(idx) < min_entries:
+            continue
+        splits = np.flatnonzero(np.diff(idx) != 1) + 1
+        bounds = [0, *splits.tolist(), len(idx)]
+        runs = [(int(idx[a]), int(idx[b - 1]) + 1)
+                for a, b in zip(bounds[:-1], bounds[1:]) if b - a >= min_entries]
+        if not runs:
+            continue
+        for r0, r1 in runs:
+            if r1 - r0 < max(min_entries, len(best), 2):
                 continue
-            table = {}
-            for i in range(st, en + 1):
-                table.setdefault(int(v[i]), int(ir[i]))
-            if len(table) >= min_entries and len(table) > len(best):
-                best = table
+            rk = k[r0:r1]
+            rv = v[r0:r1]
+            ir = (rk & np.uint32(0xFFFF)) if old_layout else (rk >> 16)
+            ir_hi = (ir >> 8) & 0xFF
+            pair = (ir & 0xFF) == pair_lo[ir_hi]
+            same = (ir_hi[1:] == ir_hi[:-1]) | (pair[1:] & pair[:-1])
+            s = np.concatenate(([0], same.astype(np.int8), [0]))
+            d = np.diff(s)
+            for st, en in zip(np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]):
+                if en - st + 1 < max(min_entries, len(best)):
+                    continue
+                table = {}
+                for i in range(st, en + 1):
+                    table.setdefault(int(rv[i]), int(ir[i]))
+                if len(table) >= min_entries and len(table) > len(best):
+                    best = table
         # Also check contiguous `ok` runs where a few secondary-remote entries
         # split the main remote's address-byte run: keep entries matching the
         # run's dominant high byte.
-        s_ok = np.concatenate(([0], ok.astype(np.int8), [0]))
-        d_ok = np.diff(s_ok)
-        for st, en in zip(np.nonzero(d_ok == 1)[0], np.nonzero(d_ok == -1)[0]):
-            if en - st < max(min_entries, len(best)):
+        for r0, r1 in runs:
+            if r1 - r0 < max(min_entries, len(best)):
                 continue
-            hi = ir_hi[st:en]
+            rk = k[r0:r1]
+            rv = v[r0:r1]
+            ir = (rk & np.uint32(0xFFFF)) if old_layout else (rk >> 16)
+            hi = (ir >> 8) & 0xFF
             dom = int(np.bincount(hi).argmax())
             table = {}
-            for i in range(st, en):
-                if int(ir_hi[i]) == dom:
-                    table.setdefault(int(v[i]), int(ir[i]))
+            for i in range(r1 - r0):
+                if int(hi[i]) == dom:
+                    table.setdefault(int(rv[i]), int(ir[i]))
             if len(table) >= min_entries and len(table) > len(best):
                 best = table
     return best

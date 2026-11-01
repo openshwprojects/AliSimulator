@@ -74,7 +74,7 @@ class SimulatorCrash(Exception):
 def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, min_colours=8,
         panel_text=None, title=None, retries=1, navigation=(), nav_diff_pct=None, nav_settle_s=0,
         signal=False, tuner=True, mux=False, slice_instructions=5_000_000, probe_s=10,
-        signal_frequencies=None, ge=True):
+        signal_frequencies=None, ge=True, wake_on=None):
     """Boot `dump`, wait for min_ge_ops GE commands plus settle_s seconds, capture,
     compare with `expected` (a PNG in tests/expected/).  Exits the process
     with the test's result.  A run the simulator itself crashes (the asynchronous
@@ -101,7 +101,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,
                  panel_text, title, navigation, max_diff_pct if nav_diff_pct is None else nav_diff_pct,
-                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies, ge)
+                 nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies, ge, wake_on)
         except SimulatorCrash as e:
             if attempt < retries:
                 print(f"[WARN] simulator crashed ({e}); booting again (retry {attempt + 1} of {retries})")
@@ -113,7 +113,7 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
 
 def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours, panel_text, title,
          navigation, nav_diff_pct, nav_settle_s, signal, tuner, mux, slice_instructions, probe_s, signal_frequencies,
-         ge=True):
+         ge=True, wake_on=None):
     make_expected = "--make-expected" in sys.argv or os.environ.get("MAKE_EXPECTED") == "1"
     name = os.path.splitext(os.path.basename(expected))[0].replace("_screen", "")
     sim = AliMipsSimulator(rom_size=flash_size_for(dump), log_handler=lambda m: None)
@@ -165,6 +165,7 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
     last_ops = captured_ops = 0
     frames, prev = 0, None
     panel_texts = []
+    woke = False
     ok = True
 
     def note_panel():
@@ -190,6 +191,11 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
             raise SimulatorCrash(f"jump to NULL at {time.time() - start:.0f} s, {sim.ge_ops} GE commands")
         note_panel()
+        if wake_on and not woke and panel.get_display_text() == wake_on[0]:
+            woke = True
+            addr, cmd = sim.press_key(wake_on[1])
+            print(f"[{time.time() - start:6.1f}s] waking from standby [{wake_on[0]}] with {wake_on[1]} "
+                  f"(NEC 0x{addr:02X}/0x{cmd:02X})")
         if app_t is None and "Application version" in "".join(uart[-400:]):
             app_t = time.time()
             print(f"[{app_t - start:6.1f}s] application started")

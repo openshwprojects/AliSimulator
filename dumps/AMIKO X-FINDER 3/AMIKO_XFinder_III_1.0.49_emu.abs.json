@@ -1,0 +1,55 @@
+{
+  "file": "AMIKO_XFinder_III_1.0.49_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "X-Finder 3 (System ID 70020A00, firmware 1.0.49 emu)",
+    "type": "Handheld DVB-S2 + DVB-T2 + DVB-C H.265/HEVC combo signal meter and spectrum analyser with 7-inch TFT LCD",
+    "board": "70020A00 (bootloader version \"M3529F 1.1.1\", 8 MB SPI flash, 256 MB DDR3 C3505 handheld meter platform)",
+    "soc": "ALi M3529F / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, DMX_S3601_0/2, DECV_HEVC_0, DECV_AVC_0, seecode \"M3505 SEE\" at 0xAE000200; SDK4.0ia.17.9_20170226)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal ALi C3505 DVB-S2 (NIM_C3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14",
+    "demodModel": {
+      "chip": "avl6762",
+      "address": 20
+    },
+    "tuner": "Airoha AV2011 (DVB-S2) + MaxLinear MxL603 on SCB3 at I2C 0x60 (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "mxl603",
+      "address": 96
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 keypad scanner (TM1650-compatible; no 4-digit LED display fitted, bootloader probes 107/110)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.49 emu (maincode(AV) \"70020A001049\"; bootloader \"M3529F 1.1.1\", 2016-07-20; seecode \"M3505 SEE\", 2019-02-21; SDK4.0ia.17.9_20170226)",
+    "date": "2019-02-21",
+    "size": 8388608,
+    "sha1": "c6a74f622ea7cc7f5e61807ebfbb51cef9737f86",
+    "layout": "bootloader 0x000000 (M3529F 1.1.1, 2016-7-20, boot-ROM script at 0x480 + code at 0x800 in 0x9FE00800), maincode(AV) 0x060000 (70020A001049, LZMA -> 10.99 MB at 0x80000200), seecode 0x3F0000 (M3505 SEE, 2019-2-21, LZMA -> 4.11 MB at 0xAE000200), default_lang 0x52FD00, cipluskey 0x52FF80, countryband 0x540000, img_webserver 0x548000, html_webserver 0x5B8000, logo_user 0x638000, logo_menu 0x648000, logo_radio 0x668000, logo_boot 0x688000, patch 0x6AFF80, defaultdb(PRC) 0x6D0000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_XFinder_III_1.0.49_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2019-02-21",
+    "login": false,
+    "note": "Archive AMIKO_XFinder_III_1.0.49_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as a 256 MB C3505 board (chips/c3505.py, run_dump_xfinder3_app_starts.py, run_dump_xfinder3_capture_screen.py): the boot-ROM bootloader \"M3529F 1.1.1\" runs in boot SRAM at 0x9FE00800, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, probes its generic CH455 display pins on GPIO 107 / 110 (\"Initial panel success!\"), unpacks 4.11 MB seecode (\"M3505 SEE\") to 0xAE000200 and 10.99 MB maincode(AV) (\"70020A001049\") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The handheld meter application enables its CH455 keypad scanner on GPIO 107 / 108 (no 4-digit LED display is fitted), initialises the Availink AVL6762 DVB-T2/C demodulator on SCB3 at I2C 0x14 and MaxLinear MxL603 tuner at I2C 0x60 (\"0  attach tuner=0\", \"1  attach tuner=0\"), configures battery Coulomb-counter thresholds (10.0..12.8 V, mAh, Celsius), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine's G1 layer at 0xB8006A00 (without the handheld unit's hardware-ID IC on SCB1 it displays \"SW is not designed for this HW, please change back to offical SW! -----00000000000000 70020a00\")."
+  },
+  "desc": [
+    "Firmware 1.0.49 emu (2019-02-21, System ID 70020A00) for the Amiko X-Finder 3 professional handheld DVB-S2 / DVB-T2 / DVB-C H.265/HEVC signal meter and spectrum analyser with built-in 7-inch TFT LCD, built on the ALi M3529F / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.",
+    "Pairs the C3505's internal DVB-S2 demodulator with an external Availink AVL6762 DVB-T2/C demodulator (SCB3 0x14) and MaxLinear MxL603 tuner (SCB3 0x60), scans the meter's keypad through a CH455 on GPIO 107 / 108, configures the onboard battery gas gauge at startup, and drives the display engine's G1 CLUT8 OSD layer at 0xB8006A00."
+  ]
+}

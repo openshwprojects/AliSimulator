@@ -50,7 +50,7 @@ import struct
 from unicorn import UC_ARCH_MIPS, UC_MODE_LITTLE_ENDIAN, UC_MODE_MIPS32, UC_PROT_ALL, Uc, UcError
 from unicorn.mips_const import UC_CPU_MIPS32_24KF, UC_MIPS_REG_PC
 
-from .base import ChipFamily
+from .base import ChipFamily, word_after_store
 
 START, FLAG, CONTROL = 0x200, 0x20C, 0x220     # offsets in the register block 0xB8000000
 MAIN_IC, SEE_IC = 0x00030, 0x40030              # the CPUs' interrupt controllers (0xB8000030 / 0xB8040030)
@@ -350,12 +350,7 @@ class SeeStart:
     def _word(self, offset):
         return int.from_bytes(self.sim.mmio_buffer[offset:offset + 4], 'little')
 
-    @staticmethod
-    def _after(old, address, base, size, value):
-        """A register word as a store of `size` bytes at `address` leaves it."""
-        shift = 8 * ((address & 0xFFFFFF) - base)
-        mask = ((1 << (8 * size)) - 1) << shift
-        return (old & ~mask) | ((value << shift) & mask)
+    _after = staticmethod(word_after_store)
 
     # (the write handlers run before the store lands: the registers still hold the old
     # values.  A store that makes a start is noted (_pend): one the simulator re-executes

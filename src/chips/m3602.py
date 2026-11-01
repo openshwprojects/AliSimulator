@@ -191,4 +191,5 @@ class M3602(ChipFamily):
         for address, size in self._ram_mirrors():
             self.sim.mu.mem_unmap(address, size)
         self._remove_demod()
+        super().uninstall()
 

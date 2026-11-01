@@ -470,7 +470,18 @@ class CppAliMipsSimulator(AliMipsSimulator):
         """The logged pin levels after each GPIO store, to the GPIO handler and
         the board's GPIO devices, in order (as _hook_gpio_write passes them)."""
         cb, devices = self.gpio_callback, self.gpio_devices
-        if not cb and not devices:
+        if not cb:
+            ndev = len(devices)
+            if ndev == 0:
+                return
+            if ndev == 1:
+                on_write = devices[0].on_gpio_write
+                for i in range(0, 2 * count, 2):
+                    on_write(0xB8000000 | data[i], 4, data[i + 1])
+                return
+        elif not devices:
+            for i in range(0, 2 * count, 2):
+                cb(0xB8000000 | data[i], 4, data[i + 1])
             return
         for i in range(0, 2 * count, 2):
             address, levels = 0xB8000000 | data[i], data[i + 1]

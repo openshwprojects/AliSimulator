@@ -81,5 +81,67 @@ check(len(regs_m3329e) == 1 and regs_m3329e[0][1]['header'] == 0x00AAEAB0
       and regs_m3329e[0][1]['bitmap'] == 0x00830000 and regs_m3329e[0][1]['bpp'] == 8,
       f"m3327_regions preserves >8 MB segment base and w1 bit-20 chain end ({regs_m3329e})")
 
+# C3505 G1 layer at 0xB8006A00 driven through 8-byte DMA channel 0x6088 in FXDE CLUT8 (0x0D -> GE 0x0C)
+# with 256-entry ARGB8888 palette at 0x6AEC, resampled from 1920 x 1080 onto 1280 x 720
+ram_g1 = np.zeros(0x400000, np.uint8)
+dev_g1 = bytearray(0x10000)
+register_list(ram_g1, 0x010000, 0, [
+    (0x6A00, 0xF010000D),               # FXDE CLUT8 (0x0D -> GE 0x0C)
+    (0x6A10, 0x077F0000), (0x6A14, 0x04370000),
+    (0x6A18, 1920 << 16), (0x6A1C, 1080 << 16), (0x6A34, 1920),
+    (0x6AA4, 1), (0x6AE0, 0x020000), (0x6AEC, 0x030000)])
+put(ram_g1, 0x020000, 0, 0x100000)      # G1 head -> bitmap at 0x100000
+put(ram_g1, 0x030000 + 4 * 7, 0xFFE70919)   # palette[7] = opaque crimson (0xE7, 0x09, 0x19)
+bmp_g1 = ram_g1[0x100000:0x100000 + 1920 * 1080].reshape(1080, 1920)
+bmp_g1[450:630, 600:1320] = 7           # centered 720 x 180 box -> resampled to (400..880, 300..420)
+put(dev_g1, 0x6088, 0x010000, 1)
+layers_g1 = gma_capture.de_layers(ram_g1, bytes(dev_g1))
+check(len(layers_g1) == 1 and layers_g1[0]['base'] == 0x6A00 and layers_g1[0]['enabled']
+      and layers_g1[0]['format'] == 0x0C and layers_g1[0]['palette'] == 0x030000,
+      f"channel 0x6088 configures G1 layer 0x6A00 CLUT8 with palette at 0x6AEC ({layers_g1})")
+rgb_g1, _ = gma_capture.capture(ram_g1, bytes(dev_g1))
+center_px = tuple(int(c) for c in rgb_g1[360, 640])
+corner_px = tuple(int(c) for c in rgb_g1[10, 10])
+check(center_px == (0xE7, 0x09, 0x19) and corner_px == (0, 0, 0),
+      f"1920 x 1080 CLUT8 G1 layer resampled to 1280 x 720 (center={center_px}, corner={corner_px})")
+
+# M3327 direct-framebuffer OSD_M3327 mode (BigSat DSR 6500 Lux): 0x41A8 holds
+# (pitch_bytes << 16) | height, 0x41A4 points directly to the 8 bpp framebuffer
+ram_m3327d = np.zeros(0x100000, np.uint8)
+dev_m3327d = bytearray(0x10000)
+put(dev_m3327d, gma_capture.M3327_LAYER_ON, 0x0000800F)
+put(dev_m3327d, 0x41A4, 0x80040000)
+put(dev_m3327d, 0x41A8, (16 << 16) | 8)
+put(dev_m3327d, 0x41B0, (0 << 10) | 15)
+put(dev_m3327d, 0x41B4, (0 << 10) | 7)
+ram_m3327d[0x040000:0x040000 + 16 * 8] = 3
+regs_m3327d = gma_capture.m3327_regions(ram_m3327d, bytes(dev_m3327d))
+check(len(regs_m3327d) == 1 and regs_m3327d[0][1]['header'] is None
+      and regs_m3327d[0][1]['bitmap'] == 0x040000 and regs_m3327d[0][1]['bpp'] == 8
+      and (regs_m3327d[0][1]['width'], regs_m3327d[0][1]['height'], regs_m3327d[0][1]['pitch']) == (16, 8, 16),
+      f"m3327_regions decodes OSD_M3327 direct-framebuffer window ({regs_m3327d})")
+rgba_m3327d = gma_capture.render_m3327(ram_m3327d, regs_m3327d[0][1], {3: (235 << 16) | (128 | 3) << 8 | (128 | 3)})
+check(rgba_m3327d is not None and rgba_m3327d.shape == (8, 16, 4) and int(rgba_m3327d[0, 0, 3]) == 255,
+      f"render_m3327 renders OSD_M3327 direct-framebuffer pixels ({None if rgba_m3327d is None else rgba_m3327d[0, 0].tolist()})")
+
+# 74HC164 shift-register multiplexed 4-digit front panel (PAN_COMMON_0, hc164_decoder.py)
+from hc164_decoder import HC164Decoder
+hc = HC164Decoder(clk_gpio=16, data_gpio=17, digit_gpios=(18, 19, 20, 21))
+def hc_shift(sr_byte, strobe_idx):
+    all_hi = (1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)
+    for i in range(7, -1, -1):
+        d = ((sr_byte >> i) & 1) << 17
+        hc.on_gpio_write(0xB8000054, 4, all_hi | d)
+        hc.on_gpio_write(0xB8000054, 4, all_hi | d | (1 << 16))
+    hc.on_gpio_write(0xB8000054, 4, (all_hi ^ (1 << (18 + strobe_idx))) | (1 << 16))
+    hc.on_gpio_write(0xB8000054, 4, all_hi | (1 << 16))
+for idx, raw_b in enumerate((0xFF, 0xC0, 0xC8, 0xFF)):
+    hc_shift(0x00, idx) if False else None
+    hc_shift(raw_b, idx)
+check(hc.get_display_text() == " ON ", f"HC164Decoder decodes ' ON ' -> {hc.get_display_text()!r}")
+for idx in range(4):
+    hc_shift(0xBF, idx)
+check(hc.get_display_text() == "----", f"HC164Decoder decodes '----' -> {hc.get_display_text()!r}")
+
 print(f"\n[{'PASS' if not failures else 'FAIL'}] display engine register lists and layers")
 sys.exit(1 if failures else 0)

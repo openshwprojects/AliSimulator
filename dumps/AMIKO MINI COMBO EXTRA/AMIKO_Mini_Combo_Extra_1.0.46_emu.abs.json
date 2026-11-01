@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_Mini_Combo_Extra_1.0.46_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini Combo Extra (System ID 24000A00)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo satellite, terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB",
+    "board": "24000A00 (bootloader version \"3526A 1.1.1\", 256 MB DDR3 C3505 platform)",
+    "soc": "ALi M3526A / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, NIM_QAM_S3202, DMX_S3601_0/2, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode \"M3606 SEE\" at 0xAE000200; SDK4.0ia.17.8_20161212byD17CRB)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal ALi C3505 DVB-S2 (NIM_C3505_0) + DVB-T2/C front end (NIM_COFDM_0 / NIM_QAM_S3202)",
+    "tuner": "Airoha AV2018 / ALi M3031 (DVB-S2) + Rafael Micro R836 (DVB-T2/C) drivers compiled in",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.46 (maincode(AV) \"24000A001046\"; bootloader \"3526A 1.1.1\"; SDK4.0ia.17.8_20161212byD17CRB)",
+    "date": "2017-07-17",
+    "size": 8388608,
+    "sha1": "b315358c343c5c8fbf7961cc6b46b4437fb707a2",
+    "layout": "bootloader 0x000000 (3526A 1.1.1, 2016-08-12, boot-ROM script at 0x480 + code at 0x800 in 0x9FE00800), maincode(AV) 0x02F000 (24000A001046, LZMA -> 11.17 MB at 0x80000200), seecode 0x3A0000 (M3606 SEE, 2017-7-17, LZMA -> 3.59 MB at 0xAE000200), default_lang 0x4AFD00, cipluskey 0x4AFF80, countryband 0x4C0000, logo_user 0x4C8000, logo_menu 0x4D8000, logo_radio 0x4F8000, logo_boot 0x518000, patch 0x53FF80, defaultdb(PRC) 0x560000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20Mini%20Combo%20Extra%201046%20emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2017-07-17",
+    "login": false,
+    "note": "Archive AMIKO Mini Combo Extra 1046 emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 256 MB C3505 board (chips/c3505.py, run_dump_mini_combo_extra_app_starts.py, run_dump_mini_combo_extra_capture_screen.py): the boot-ROM bootloader runs at 0x9FE00800, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, writes \" ON \" to the CH455 panel on GPIO 107 / 110, unpacks seecode (\"M3606 SEE\", 3.59 MB) to 0xAE000200 and maincode(AV) (\"24000A001046\", 11.17 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001; UART logging is muted in this release build).  The application updates the CH455 panel to \" on \", probes the RF front-end sharing GPIO 107 / 110 (M3031 at 0x20, AV2018 at 0x62, demod at 0x14), populates userdb(64+64) from defaultdb(PRC) over SPI, configures the display engine's Full HD 1920x1080 CLUT8 G1 layer at 0xB8006A00 (DMA register-list channel 0x6088, 256-entry ARGB8888 palette at 0x6AEC), and without the board's anti-clone security IC displays \"SW is not designed for this HW, please change back to offical SW!-----00000000000000 24000a00\"."
+  },
+  "desc": [
+    "Amiko Mini Combo Extra (System ID 24000A00) firmware v1.0.46 (2017-07-17) for the compact Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3526A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.",
+    "Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), and the display engine's Full HD 1920x1080 CLUT8 G1 OSD layer at 0xB8006A00."
+  ]
+}

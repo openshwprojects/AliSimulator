@@ -38,9 +38,7 @@ chip to from those registers (None before the first tune):
 """
 import collections
 
-
-def bitrev8(b):
-    return int(f"{b:08b}"[::-1], 2)
+from ir_remote import bitrev8
 
 
 class MaxLinear:
@@ -191,38 +189,78 @@ class R850(R836):
     pass
 
 
-class AV2011:
+class R858(R836):
+    """Rafael Micro R858 dual-path DVB-C silicon tuner (Amiko HD8142 Twin-C,
+    SCB1 0x6A): 105+ registers covering Path A (0x00..0x2F) and Path B
+    (0x30..0x68)."""
+    NUM_REGS = 128
+
+    def __init__(self, xtal_hz=16_000_000, if_hz=5_000_000):
+        super().__init__(xtal_hz=xtal_hz, if_hz=if_hz)
+        self.regs[0x30] = self.CHIP_ID
+        self.regs[0x31] = 0x20
+        self.regs[0x32] = 0x40
+        self.regs[0x34] = 0x28
+
+
+class SequentialTuner:
+    """Common I2C register-file silicon tuner protocol (AV2011/2012, M3031,
+    RDA5815, RDA5816): a write sets the starting register (`data[0] & REG_MASK`)
+    and writes `data[1:]` sequentially; a 1-byte write selects the register for
+    the next sequential `read(n)`, with read-only status registers in `STATUS`."""
+    NUM_REGS = 256
+    REG_MASK = 0xFF
+    DEFAULT_READ_REG = 0
+    STATUS = {}
+
+    def __init__(self, xtal_hz=27_000_000):
+        self.xtal_hz = xtal_hz
+        self.regs = bytearray(self.NUM_REGS)
+        self.read_reg = self.DEFAULT_READ_REG
+        self.reads = collections.Counter()
+        self.writes = 0
+        self.tuned = False
+
+    def _on_reg_write(self, reg):
+        pass
+
+    def _after_write(self, data):
+        pass
+
+    def write(self, data):
+        if data:
+            self.read_reg = data[0] & self.REG_MASK
+            for i, b in enumerate(data[1:]):
+                reg = (data[0] + i) & self.REG_MASK
+                self.regs[reg] = b
+                self.writes += 1
+                self._on_reg_write(reg)
+            self._after_write(data)
+        return True
+
+    def read(self, n):
+        self.reads[self.read_reg] += 1
+        return bytes(
+            self.STATUS.get((self.read_reg + i) & self.REG_MASK,
+                            self.regs[(self.read_reg + i) & self.REG_MASK])
+            for i in range(n)
+        )
+
+
+class AV2011(SequentialTuner):
     """Airoha AV2011 DVB-S2 silicon tuner: a write sets the starting register
     (data[0]) and writes data[1:] sequentially from there; a 1-byte write
     selects the register to read next.  Register 0x0B bits 1..0 report PLL
     lock; a 4-register write to 0x00..0x03 programs the fractional-N divider
     (r[0] = round(rf_mhz / xtal_mhz), frac[16:0] in r[1]:r[2]:r[3][7])."""
+    NUM_REGS = 64
+    REG_MASK = 0x3F
+    DEFAULT_READ_REG = 0x0B
     STATUS = {0x0B: 0x03}
 
-    def __init__(self, xtal_hz=27_000_000):
-        self.xtal_hz = xtal_hz
-        self.regs = bytearray(64)
-        self.read_reg = 0x0B
-        self.reads = collections.Counter()
-        self.writes = 0
-        self.tuned = False
-
-    def write(self, data):
-        if data:
-            self.read_reg = data[0] & 0x3F
-            if data[0] == 0x00 and len(data) > 1:
-                self.tuned = len(data) == 5
-            for i, b in enumerate(data[1:]):
-                reg = (data[0] + i) & 0x3F
-                self.regs[reg] = b
-                self.writes += 1
-        return True
-
-    def read(self, n):
-        self.reads[self.read_reg] += 1
-        out = [self.STATUS.get((self.read_reg + i) & 0x3F, self.regs[(self.read_reg + i) & 0x3F])
-               for i in range(n)]
-        return bytes(out)
+    def _after_write(self, data):
+        if data[0] == 0x00 and len(data) > 1:
+            self.tuned = len(data) == 5
 
     def frequency(self):
         """{"rf_hz", "bw_mhz"} of the L-band frequency tuned to, or None before
@@ -298,7 +336,7 @@ class Si2144:
         return {"rf_hz": self.rf_hz, "bw_mhz": bw if bw in (6, 7, 8) else None}
 
 
-class M3031:
+class M3031(SequentialTuner):
     """ALi M3031 DVB-S2 silicon tuner at I2C 0x20 (Ferguson Ariva 104 / 204 /
     154 Combo / 254 Combo, 0x8029D010..0x8029DD68): a write sets the starting
     register (data[0]) and writes data[1:] sequentially; a 1-byte write selects
@@ -307,29 +345,9 @@ class M3031:
     word, and a 6-register write to 0x26..0x2B tunes the L-band synthesizer."""
     STATUS = {0x00: 0x02, 0x42: 0x00, 0x51: 0x01, 0x74: 0xEA, 0x75: 0x01}
 
-    def __init__(self, xtal_hz=27_000_000):
-        self.xtal_hz = xtal_hz
-        self.regs = bytearray(256)
-        self.read_reg = 0
-        self.reads = collections.Counter()
-        self.writes = 0
-        self.tuned = False
-
-    def write(self, data):
-        if data:
-            self.read_reg = data[0]
-            if data[0] == 0x26 and len(data) >= 7:
-                self.tuned = True
-            for i, b in enumerate(data[1:]):
-                reg = (data[0] + i) & 0xFF
-                self.regs[reg] = b
-                self.writes += 1
-        return True
-
-    def read(self, n):
-        self.reads[self.read_reg] += 1
-        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
-                     for i in range(n))
+    def _after_write(self, data):
+        if data[0] == 0x26 and len(data) >= 7:
+            self.tuned = True
 
     def frequency(self):
         if not self.tuned:
@@ -343,7 +361,7 @@ class M3031:
         return {"rf_hz": rf_hz, "bw_mhz": bw_mhz}
 
 
-class RDA5815:
+class RDA5815(SequentialTuner):
     """RDA Microelectronics RDA5815 / RDA5815M DVB-S2 silicon tuner at I2C 0x60
     (Echosonic Mini ESR-250, 0x8027A2B4..0x8027AA00): a write sets the starting
     register (data[0]) and writes data[1:]; a 1-byte write selects the register
@@ -353,29 +371,9 @@ class RDA5815:
     27 MHz in r[1]:r[2]:r[3])."""
     STATUS = {0x00: 0xC3, 0x05: 0x02, 0x66: 0x80}
 
-    def __init__(self, xtal_hz=27_000_000):
-        self.xtal_hz = xtal_hz
-        self.regs = bytearray(256)
-        self.read_reg = 0
-        self.reads = collections.Counter()
-        self.writes = 0
-        self.tuned = False
-
-    def write(self, data):
-        if data:
-            self.read_reg = data[0]
-            for i, b in enumerate(data[1:]):
-                reg = (data[0] + i) & 0xFF
-                self.regs[reg] = b
-                self.writes += 1
-                if reg == 0x04 and (self.regs[1] or self.regs[2] or self.regs[3]):
-                    self.tuned = True
-        return True
-
-    def read(self, n):
-        self.reads[self.read_reg] += 1
-        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
-                     for i in range(n))
+    def _on_reg_write(self, reg):
+        if reg == 0x04 and (self.regs[1] or self.regs[2] or self.regs[3]):
+            self.tuned = True
 
     def frequency(self):
         if not self.tuned:
@@ -386,7 +384,7 @@ class RDA5815:
         return {"rf_hz": rf_hz, "bw_mhz": None}
 
 
-class RDA5816:
+class RDA5816(SequentialTuner):
     """RDA Microelectronics RDA5816 / RDA5816S DVB-S2 silicon tuner at I2C 0x0C
     (Ferguson Ariva 255 Combo S, 0x802B04C4..0x802B162C): a write sets the
     starting register (data[0]) and writes data[1:] sequentially; a 1-byte write
@@ -397,29 +395,9 @@ class RDA5816:
     program the baseband filter bandwidth in MHz."""
     STATUS = {0x00: 0x58, 0x01: 0x11, 0x03: 0x03}
 
-    def __init__(self, xtal_hz=27_000_000):
-        self.xtal_hz = xtal_hz
-        self.regs = bytearray(256)
-        self.read_reg = 0
-        self.reads = collections.Counter()
-        self.writes = 0
-        self.tuned = False
-
-    def write(self, data):
-        if data:
-            self.read_reg = data[0]
-            for i, b in enumerate(data[1:]):
-                reg = (data[0] + i) & 0xFF
-                self.regs[reg] = b
-                self.writes += 1
-                if reg == 0x0A and any(self.regs[0x07:0x0B]):
-                    self.tuned = True
-        return True
-
-    def read(self, n):
-        self.reads[self.read_reg] += 1
-        return bytes(self.STATUS.get((self.read_reg + i) & 0xFF, self.regs[(self.read_reg + i) & 0xFF])
-                     for i in range(n))
+    def _on_reg_write(self, reg):
+        if reg == 0x0A and any(self.regs[0x07:0x0B]):
+            self.tuned = True
 
     def frequency(self):
         if not self.tuned:
@@ -441,6 +419,7 @@ MODELS = {
     "r836": R836,
     "r840": R840,
     "r850": R850,
+    "r858": R858,
     "av2011": AV2011,
     "av2012": AV2012,
     "si2144": Si2144,
@@ -476,6 +455,6 @@ def describe(device):
 
 def is_tuner(device):
     """Whether an I2C device is one of these tuner models."""
-    return isinstance(device, (MaxLinear, R820T, AV2011, Si2144, M3031, RDA5815, RDA5816))
+    return isinstance(device, (MaxLinear, R820T, SequentialTuner, Si2144))
 
 

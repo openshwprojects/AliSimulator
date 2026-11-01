@@ -1,0 +1,51 @@
+{
+  "file": "dump bigsat 6500 lux.bin",
+  "device": {
+    "brand": "BigSat",
+    "model": "DSR 6500 Lux",
+    "type": "DVB-S FTA / MultiCAS satellite receiver",
+    "board": "ALi M3329 2 MB parallel-NOR DVB-S board",
+    "soc": "ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, DECA_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3101 / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "2 MB Macronix MX29LV160B 8-bit parallel NOR flash (0xAFC00000)",
+    "panel": {
+      "chip": "74HC164 shift register + 4-digit multiplexed LED (PAN_COMMON_0)",
+      "clk": 16,
+      "data": 17,
+      "digits": [18, 19, 20, 21]
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "Aug. 02. 2006 (bootloader 1.1.1, 2006-10-17; maincode(AV) 2007-10-14)",
+    "date": "2007-10-14",
+    "size": 2097152,
+    "sha1": "a1b57b7e2a6c32162a9fd57f2c053d22be3a6ce8",
+    "layout": "bootloader 0x000000 (id 0xE3000010, 1.1.1, 2006-10-17), maincode(AV) 0x010000 (Aug. 02. 2006 / 2007-10-14, 0x0987EE bytes LZMA), default_lang 0x0BFD80 (1.0.0), patch 0x0BFF80 (1.0.0), logo_user 0x0D0000 (1.0.0), logo_menu 0x0E0000 (1.0.0), logo_radio 0x0E8000 (1.0.0), logo_def 0x0F0000 (1.0.0), defaultdb(PRC) 0x0F8000 (0.9.1), userdb(64+64) 0x13FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=dump%20bigsat%206500%20lux.zip&directory=J-Tag_Dump_Flash",
+    "site": "satedu.cba.pl",
+    "author": "satedu.cba.pl J-Tag_Dump_Flash archive",
+    "date": "2007-10-14",
+    "login": false,
+    "note": "Archive dump bigsat 6500 lux.zip from the J-Tag_Dump_Flash directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "----"
+    ],
+    "note": "Boots as the M3329 family (chips/m3329.py, chip ID 0x3101) from its 2 MB parallel NOR flash at 0xAFC00000: the bootloader (1.1.1, \"APP  init ok\") unpacks maincode(AV) into SDRAM and starts it (\"APP  init ok\", \"main emu init\", \"TPSKeyDB Initing... 0\", \"max_key_db_count = 389\").  PAN_COMMON_0 multiplexes its 4-digit 7-segment front panel through a 74HC164 shift register on CLK = GPIO 16, DATA = GPIO 17 and active-low digit strobes GPIO 18..21 (hc164_decoder.py: \" ON \" -> \"----\"), while OSD_M3327_0 renders its 58-colour 720x576 8 bpp CLUT direct framebuffer (0xB80041A0 = 0x0000800F, 0xB80041A4 = 0x805AC060, 0xB80041A8 = 0x02D00240) showing the \"Information - No program found!\" dialog."
+  },
+  "desc": [
+    "2 MB Macronix MX29LV160B parallel-NOR JTAG flash dump (maincode dated 2007-10-14) from a BigSat DSR 6500 Lux DVB-S satellite receiver.",
+    "Pairs the older direct-framebuffer OSD_M3327 driver (0xB80041A8 window pitch/height register, rather than OSD_M3327C's 16-byte region-header linked list) with ALi's timer-multiplexed 74HC164 shift-register front panel (PAN_COMMON_0 on GPIO 16..21)."
+  ]
+}

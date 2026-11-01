@@ -1,0 +1,58 @@
+{
+  "file": "Opticum HD X402p-403p_220_ps_synaps_rc2_1.5.48_by dreamer1983.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD X402p / X403p (System ID 06020200, Synaps RC2 1.5.48 build)",
+    "type": "DVB-S2 Full HD satellite receiver with CA card reader, CI slot, Ethernet (X403p), and USB PVR",
+    "board": "06020200 (Globo / Opticum M3602B \"220\" platform with Lemontree EuP front-panel MCU)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\"; NIM_S3501_0, NIM_COFDM_0, NIM_QAM_S3202_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.12_GLS_S2_20120627 / SDK4.0aa.5.5_20110905)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.48 (maincode(AV) \"060202001548\", 2012-03-18; bootloader \"M3602B 1.1.6\", 2009-12-29; SDK4.0aa.5.12_GLS_S2_20120627)",
+    "date": "2012-06-27",
+    "size": 4194304,
+    "sha1": "3cf8bb555ee1fd37478af1b2c59fa65c778798c6",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001548, LZMA -> 7.37 MB at 0x80008000), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc2_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": "Globo / Opticum (Synaps RC2 packaging by dreamer1983)",
+    "date": "2012-06-27",
+    "login": false,
+    "note": "Archive Opticum HD X402p-403p_220_ps_synaps_rc2_1.5.48_by dreamer1983.rar from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as an M3602B board (chips/m3602.py, lemontree_decoder.py, run_dump_x403p_app_starts.py, run_dump_x403p_capture_screen.py): the \"M3602B 1.1.6\" bootloader communicates with the external Lemontree front-panel and EuP standby microcontroller at I2C 0x28 on bit-banged SCL = GPIO 62 / SDA = GPIO 171 using 8-byte CRC-16/XMODEM frames (updating the 4-digit 7-segment display \" ON \" -> \"    \" -> \" on \"), prints \"APP  init ok\", unpacks maincode(AV) (7.37 MB) to 0x80008000, and starts the single-CPU application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 on SCB1, initialises hs_config_init over SPI, prints \"Version:06020200_1.5.48 EMU\", and without the board's anti-clone security IC renders its teal Synaps OSD dialog (\"SW is not designed for this HW, please change back to offical SW! ----00000000000000 06020200\") through GeM3602 (29 GE commands, 18 colours)."
+  },
+  "desc": [
+    "Opticum HD X402p / X403p (System ID 06020200) firmware 1.5.48 with the Synaps RC2 PS GUI (2012-06-27) on a 4 MB SPI flash for the ALi M3602B Full HD DVB-S2 satellite receiver.",
+    "Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol), an ALi S3501 DVB-S2 demodulator at I2C 0x33, and an Airoha AV2011 tuner at I2C 0x60."
+  ]
+}

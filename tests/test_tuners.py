@@ -254,6 +254,12 @@ by_byte = b"".join(avl67.read(1) for _ in range(4))
 check(by_byte == b"\x5A\xA5\x7F\xF7" and i2c_write(0x14, [0x10, 0x80, 0x00]) and i2c_read(0x14, 4) == b"\x00\x00\x00\x0E",
       "AVL6762: ChipID 0x0000000E at 0x108000 and read(1) auto-increments across 0x5AA57FF7 for GpioI2cBus")
 
+# R858 dual-path DVB-C tuner at 0x6A (Amiko HD8142 Twin-C on SCB1): Path B registers 0x30..0x68
+r858 = sim.i2c_devices[0x6A] = tuners.make("r858")
+check(i2c_write(0x6A, [0x30, 0x20, 0x40, 0xD1, 0x00, 0x90, 0x25, 0x00, 0x08])
+      and r858.regs[0x37] == 0x08 and tuners.is_tuner(r858),
+      "R858: accepts Path B writes at registers 0x30..0x38 (NUM_REGS=128) and reports is_tuner")
+
 print(f"\n[{'PASS' if ok else 'FAIL'}] tuner models")
 sys.exit(0 if ok else 1)
 

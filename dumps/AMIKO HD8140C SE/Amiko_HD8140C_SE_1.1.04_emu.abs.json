@@ -1,0 +1,54 @@
+{
+  "file": "Amiko_HD8140C_SE_1.1.04_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8140C SE (System ID 72020A00, firmware 1.1.04 emu)",
+    "type": "DVB-C Full HD H.265/HEVC cable receiver with Conax card reader, Ethernet and USB PVR",
+    "board": "72020A00 (bootloader version \"M3712A 1.1.1\", 8 MB SPI flash, 128 MB DDR3 C3505 QAM cable platform)",
+    "soc": "ALi M3712A / C3505 (128 MB DDR3 dual-CPU H.265/HEVC cable SoC reading chip ID 0x3505; NIM_S3281_0, NIM_QAM_S3202, DMX_S3601_0/2, DECV_HEVC_0, DECV_AVC_0, seecode \"M3606 SEE\" at 0xA6000200; SDK4.0ia.16.7a_SEC_S2_20170510)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal ALi M3712A / S3281 DVB-C QAM demodulator (NIM_S3281_0)",
+    "tuner": "MaxLinear MxL603 DVB-C silicon tuner on SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "mxl603",
+      "address": 96
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.04 emu (maincode(AV) \"72020A001104\"; bootloader \"M3712A 1.1.1\", 2012-12-20; seecode \"M3606 SEE\", 2018-8-27; SDK4.0ia.16.7a_SEC_S2_20170510)",
+    "date": "2018-08-27",
+    "size": 8388608,
+    "sha1": "535c96e7261f4713c8ac66a9674e876173b0eb9d",
+    "layout": "bootloader 0x000000 (M3712A 1.1.1, 2012-12-20, boot-ROM script at 0x480 + code at 0x800 in 0x9FE00800), MemCfg 0x060000 (00000001, 2018-8-27), maincode(AV) 0x061000 (72020A001104, LZMA -> 12.71 MB at 0x80000200), seecode 0x3F0000 (M3606 SEE, 2018-8-27, LZMA -> 3.01 MB at 0xA6000200), default_lang 0x51FD00, cipluskey 0x51FF80, countryband 0x52FF80, img_webserver 0x537F80, html_webserver 0x597F80, logo_user 0x637F80, logo_menu 0x647F80, logo_radio 0x667F80, logo_boot 0x687F80, patch 0x6AFF80, defaultdb(PRC) 0x6D0000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8140C_SE_1.1.04_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2018-08-27",
+    "login": false,
+    "note": "Archive Amiko_HD8140C_SE_1.1.04_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB C3505 board (chips/c3505.py, run_dump_hd8140c_se_app_starts.py, run_dump_hd8140c_se_capture_screen.py; ALi M3712A is the single-tuner DVB-C cable package of C3505 silicon reading chip ID 0x3505 = \"HW_TYPE_CHIP+80\"): the boot-ROM bootloader runs at 0x9FE00800, writes \" ON \" to the CH455 panel on GPIO 107 / 108, unpacks 3.01 MB seecode (\"M3606 SEE\") to 0xA6000200 and 12.71 MB maincode(AV) (\"72020A001104\") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to \" on \", registers its MaxLinear MxL603 DVB-C tuner on SCB1 at I2C 0x60 (tuners.MxL603, \"[tun_mxl603_init_DVBC]line=294,success!\"), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine's G1 CLUT8 layer at 0xB8006A00 (5 GE commands; without the board's anti-clone IC on SCB1 it displays \"SW is not designed for this HW, please change back to offical SW!-----00000000000000 72020a00\")."
+  },
+  "desc": [
+    "Firmware 1.1.04 emu (2018-08-27, System ID 72020A00) for the Amiko HD8140C SE Full HD H.265/HEVC DVB-C cable receiver on an 8 MB SPI flash with 128 MB DDR3.",
+    "Runs on the ALi M3712A cable SoC (C3505 silicon ID 0x3505 with internal NIM_S3281_0 QAM demodulator and DECV_HEVC_0), paired with a MaxLinear MxL603 silicon tuner (SCB1 0x60) and a CH455 4-digit LED panel on GPIO 107 / 108."
+  ]
+}

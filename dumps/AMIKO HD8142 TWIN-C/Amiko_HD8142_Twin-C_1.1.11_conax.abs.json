@@ -1,0 +1,54 @@
+{
+  "file": "Amiko_HD8142_Twin-C_1.1.11_conax.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8142 Twin-C (System ID 72010A00, firmware 1.1.11 conax)",
+    "type": "Dual-tuner DVB-C Full HD H.265/HEVC cable receiver with Conax card reader, Ethernet and USB PVR",
+    "board": "72010A00 (bootloader version \"M3716A 1.1.1\", 8 MB SPI flash, 128 MB DDR3 C3505 dual-QAM cable platform)",
+    "soc": "ALi M3716A / C3505 (128 MB DDR3 dual-CPU H.265/HEVC cable SoC reading chip ID 0x3505; NIM_S3281_0/1, NIM_QAM_S3202, DMX_S3601_0/2, DECV_HEVC_0, DECV_AVC_0, seecode \"M3606 SEE\" at 0xA6000200; SDK4.0ia.16.7a_SEC_S2_20170510)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal ALi M3716A / S3281 dual DVB-C QAM demodulators (NIM_S3281_0, NIM_S3281_1)",
+    "tuner": "Rafael Micro R858 dual-path DVB-C silicon tuner on SCB1 at I2C 0x6A",
+    "tunerModel": {
+      "chip": "r858",
+      "address": 106
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.11 conax (maincode(AV) \"72010A001111\"; bootloader \"M3716A 1.1.1\", 2012-12-20; seecode \"M3606 SEE\", 2018-10-18; SDK4.0ia.16.7a_SEC_S2_20170510)",
+    "date": "2018-10-18",
+    "size": 8388608,
+    "sha1": "1fc4bc543d2bd594876fd31ea620ed34e4614ac1",
+    "layout": "bootloader 0x000000 (M3716A 1.1.1, 2012-12-20, boot-ROM script at 0x480 + code at 0x800 in 0x9FE00800), MemCfg 0x060000 (00000001, 2018-10-18), maincode(AV) 0x061000 (72010A001111, LZMA -> 12.58 MB at 0x80000200), seecode 0x3F0000 (M3606 SEE, 2018-10-18, LZMA -> 3.01 MB at 0xA6000200), default_lang 0x51FD00, cipluskey 0x51FF80, countryband 0x52FF80, img_webserver 0x537F80, html_webserver 0x597F80, logo_user 0x637F80, logo_menu 0x647F80, logo_radio 0x667F80, logo_boot 0x687F80, patch 0x6AFF80, defaultdb(PRC) 0x6D0000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8142_Twin-C_1.1.11_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2018-10-18",
+    "login": false,
+    "note": "Archive Amiko_HD8142_Twin-C_1.1.11_conax.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB C3505 board (chips/c3505.py, run_dump_hd8142_twinc_app_starts.py, run_dump_hd8142_twinc_capture_screen.py; ALi M3716A is the dual-DVB-C cable package of C3505 silicon reading chip ID 0x3505 = \"HW_TYPE_CHIP+80\"): the boot-ROM bootloader runs at 0x9FE00800, writes \" ON \" to the CH455 panel on GPIO 107 / 108, unpacks 3.01 MB seecode (\"M3606 SEE\") to 0xA6000200 and 12.58 MB maincode(AV) (\"72010A001111\") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to \" on \", initialises both paths of the Rafael Micro R858 dual-path cable tuner on SCB1 at I2C 0x6A (tuners.R858, \"*tuner_id=0, r858_tuner_cnt=1!\", \"*tuner_id=1, r858_tuner_cnt=2!\"), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine's G1 CLUT8 layer at 0xB8006A00 (5 GE commands; without the board's anti-clone IC on SCB1 it displays \"SW is not designed for this HW, please change back to offical SW!-----00000000000000 72010a00\")."
+  },
+  "desc": [
+    "Official Conax firmware 1.1.11 (2018-10-18, System ID 72010A00) for the Amiko HD8142 Twin-C dual-tuner Full HD H.265/HEVC DVB-C cable receiver on an 8 MB SPI flash with 128 MB DDR3.",
+    "Runs on the ALi M3716A cable SoC (C3505 silicon ID 0x3505 with internal NIM_S3281_0 / NIM_S3281_1 dual QAM demodulators and DECV_HEVC_0), paired with a Rafael Micro R858 dual-path silicon tuner (SCB1 0x6A) and a CH455 4-digit LED panel on GPIO 107 / 108."
+  ]
+}

@@ -119,10 +119,22 @@ def routine4(call=GET_COUNT, again=None, gp_off=GP_OFF):
             0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s1 / s0; jr ra; addiu sp, 32
 
 
+def routine5(call=GET_COUNT, again=None):
+    """Older 216 MHz M3329C bootloader build (SMT01): ticks = (us & 0xFFFF) * 108
+    computed via shift-and-subtract without reading $gp; v0 = 0, v1 left alone."""
+    return [0x27BDFFE0, 0xAFBF0018, 0xAFB10014, 0xAFB00010,    # addiu sp, -32; sw ra / s1 / s0
+            0x00808021, jal(call), 0x3210FFFF, 0x00408821,      # move s0, a0; jal get_count; andi s0, 0xffff; move s1, v0
+            0x001010C0, 0x00501023, 0x00021080, 0x00501023,     # sll v0, s0, 3; subu v0, s0; sll v0, 2; subu v0, s0
+            0x00028080,                                         # sll s0, v0, 2 (us * 108)
+            jal(call if again is None else again), NOP,         # loop: jal get_count
+            0x00511023, 0x0050102B, 0x1440FFFB, 0x8FBF0018,     # subu v0, s1; sltu v0, s0; bnez loop; lw ra
+            0x8FB10014, 0x8FB00010, 0x03E00008, 0x27BD0020]     # lw s1 / s0; jr ra; addiu sp, 32
+
+
 GET_COUNT_CODE = [mfc0(2, COUNT)] + [NOP] * 5 + [0x03E00008, NOP]   # mfc0 v0, Count; ...; jr ra
 GET_COUNT_CODE2 = [mfc0(2, COUNT), NOP, 0x000000C0] + [NOP] * 4 + [0x03E00008, NOP]   # (an EHB)
 BUILDS = {1: (routine, GET_COUNT_CODE), 2: (routine2, GET_COUNT_CODE2), 3: (routine3, GET_COUNT_CODE),
-          4: (routine4, GET_COUNT_CODE2)}
+          4: (routine4, GET_COUNT_CODE2), 5: (routine5, GET_COUNT_CODE)}
 SETUP = li(GP, GP_VALUE) + li(SP, STACK)
 
 
@@ -258,6 +270,17 @@ sim, pc, regs, ticks, done = call(50_000, build=4, batch_timeout_us=10_000)
 check(pc == done and sim.delay_jumps >= 5 and 0.045 <= sim.delay_skipped <= 0.0501 and ticks > 5_000_000,
       f"a 50 ms wait in 10 ms slices: {sim.delay_jumps} loop jumps, {sim.delay_skipped * 1e3:.2f} ms skipped")
 
+print("--- M3329C fixed-216MHz build (108 ticks/us)")
+sim, pc, regs, ticks, done = call(5, build=5)
+_, npc, nregs, nticks, _ = call(5, hle=False, build=5)
+check(pc == done and sim.delay_calls == 1 and abs(sim.delay_skipped - 5.4e-6) < 1e-12 and ticks >= 540
+      and regs == nregs and regs["v0"] == 0,
+      f"delay(5) returned at once ({sim.delay_calls} call, {sim.delay_skipped * 1e6:.3f} us skipped: 540 ticks "
+      f"at 100 MHz), {ticks} Count ticks ({nticks} when it runs), v1 untouched: {show(regs)}")
+sim, pc, regs, ticks, done = call(50_000, build=5, batch_timeout_us=10_000)
+check(pc == done and sim.delay_jumps >= 5 and 0.048 <= sim.delay_skipped <= 0.0541 and ticks >= 5_400_000,
+      f"a 50 ms wait in 10 ms slices: {sim.delay_jumps} loop jumps, {sim.delay_skipped * 1e3:.2f} ms skipped")
+
 
 def ticking(us, seconds=0.3):
     """1 ms ticks (the handler logs how late each came, in Count ticks) while
@@ -351,9 +374,14 @@ def scan(data, base=0x00140000, hle=True, get_count=GET_COUNT_CODE):
 for build, (code, get_count) in BUILDS.items():
     sim = scan(pack(code()) + bytes(64), get_count=get_count)
     found = sim._delay_routines.get(DELAY, (None,) * 4)
-    check(sorted(sim._delay_hooks) == [DELAY, DELAY | 0x20000000] and found[1:] == (GP_OFF, GET_COUNT, build - 1),
+    exp_gp = 0 if build == 5 else GP_OFF
+    check(sorted(sim._delay_hooks) == [DELAY, DELAY | 0x20000000] and found[1:] == (exp_gp, GET_COUNT, build - 1),
           f"build {build}: found in both views ({[hex(a) for a in sorted(sim._delay_hooks)]}), gp offset "
           f"{found[1]:#x}, get_count() at 0x{found[2]:08X}, build index {found[3]}")
+r5_nop = routine5()[:-5] + [NOP] + routine5()[-5:]
+sim = scan(pack(r5_nop) + bytes(64), get_count=GET_COUNT_CODE)
+check(sorted(sim._delay_hooks) == [DELAY, DELAY | 0x20000000] and sim._delay_routines.get(DELAY, (None,) * 4)[1:] == (0, GET_COUNT, 4),
+      "build 5 with unscheduled NOP delay slot (M3329 maincode): found in both views")
 for what, data, hle, get_count in (
         ("calls going elsewhere", pack(routine(call=GET_COUNT + 0x40)), True, GET_COUNT_CODE),
         ("two calls that differ", pack(routine(again=GET_COUNT + 0x40)), True, GET_COUNT_CODE),

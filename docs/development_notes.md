@@ -21,7 +21,7 @@ M3503).
   `crypto_engine.py`, `parallel_flash.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py [<dump>] [--family <name>] [--json <sidecar>]` (the TV: OSD,
-  panel, remote, with a toolbar to pick any of the repo's 102 dumps or browse a file,
+  panel, remote, with a toolbar to pick any of the repo's 134 dumps or browse a file,
   override the chip family, sidecar JSON and IR coding, and toggle live signal + TS) and
   `python src/gui_simulator.py [<dump>] [--family <name>] [--json <sidecar>] [--fast]`
   (the debugger, with the same target selectors and a Fast Mode toggle).
@@ -105,7 +105,7 @@ M3503).
   SEE's programs also read the chip's random number generator (`Trng`): a
   FIFO of its results that drops repeats never filled with the registers as
   plain memory, and its task never slept.
-  The Opticum HD X4 220 satellite update (`dumps/OPTICUM HD X4 220/`, bootloader "M3602B 1.1.5", single-CPU M3602B under the family's default 0x3602) pairs an external S3501 demodulator at I2C 0x33 with an Airoha AV2011 tuner at 0x60, bit-bangs an 8-byte CRC-16/XMODEM protocol on SCL = GPIO 62 / SDA = GPIO 171 (GPIO bank 5 at 0xB80003D4) to a Lemontree EuP front-panel standby MCU at I2C 0x28 (`lemontree_decoder.py`: " ON " -> " on " and key polling), and draws its "IDENT Error --UNKNOW!" hardware-ID check dialog through GeM36F (`run_dump_x4_220_app_starts.py`, `run_dump_x4_220_capture_screen.py`).
+  The Opticum HD X4 220 satellite update (`dumps/OPTICUM HD X4 220/`, bootloader "M3602B 1.1.5", single-CPU M3602B under the family's default 0x3602) pairs an external S3501 demodulator at I2C 0x33 with an Airoha AV2011 tuner at 0x60, bit-bangs an 8-byte CRC-16/XMODEM protocol on SCL = GPIO 62 / SDA = GPIO 171 (GPIO bank 5 at 0xB80003D4) to a Lemontree EuP front-panel standby MCU at I2C 0x28 (`lemontree_decoder.py`: " ON " -> " on " and key polling), and draws its "IDENT Error --UNKNOW!" hardware-ID check dialog through GeM36F (`run_dump_x4_220_app_starts.py`, `run_dump_x4_220_capture_screen.py`); the Opticum HD X7 Combo (`M3602A 1.1.6`), Opticum HD X402p / X403p (`M3602B 1.1.6`) and Yumatu Full HD IQ (`M3602B 1.1.6`, Amstar GUI) run the same single-CPU 0x3602 + S3501 + AV2011 + Lemontree GPIO 62 / 171 platform (`run_dump_x7_app_starts.py`, `run_dump_x403p_app_starts.py`, `run_dump_yumatu_amstar_app_starts.py`), while the dual-CPU Edision Argus VIP3 (`M3606c 1.1.3`, Lemontree MCU on GPIO 103 / 102) and Openbox S16 EU (`S3606H` bootloader signature, TM1650 on GPIO 62 / 63) run as 0x3603 with their SEE co-processor (`run_dump_vip3_app_starts.py`, `run_dump_s16_eu_app_starts.py`), and the single-CPU Edision Optimuss Underline 3in1 (`M3612 1.0.4`, reading 0x3811 as `M3801`) drives an Availink AVL6862 DVB-S2 + DVB-T2/C combo demodulator on SCB0 with AV2012 + R836 tuners (`run_dump_underline_3in1_app_starts.py`).
   The Ferguson Ariva 52E update (`dumps/FERGUSON ARIVA 52E/`, 2026-10-31;
   bootloader "HSJ2" 37019-01047, an M3606-class board read as 0x3603) runs
   only its bootloader: it prints "APP  init!", parks the SEE through its boot
@@ -143,7 +143,7 @@ M3503).
   the chip ID 0x3503 -- and its single-CPU application draws its Quick Setup
   menu once that demodulator answers: a task of it kept the OSD layer off
   until the NIM device reported an S3501's chip ID
-  (`run_dump_esr250_capture_screen.py`). The Amiko HD8260+ (`dumps/AMIKO HD8260+/`, bootloader "M3516A 1.2.1", 16 MB SPI flash) is the 256 MB DDR3 dual-tuner sibling of this family: its XIP bootloader sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, unpacks its "M3606 SEE" program to 0xAE000200, and runs an application that configures an Availink AVL6762 DVB-T2/C demodulator (`demods.AVL6762`, ChipID 0x0E) at I2C 0x14 over bit-banged GPIO 7 / 8 (`AVL6862.read` auto-incrementing its 24-bit register pointer across `GpioI2cBus`'s byte-by-byte reads), an Airoha AV2012 DVB-S2 tuner at 0x61 on SCB0, and a CH455 panel on GPIO 135 / 134, then draws a Full HD 1920 x 1080 1:1 CLUT8 OSD layer (`gma_capture.py` resamples 1:1 1920 x 1080 GMA heads onto the 1280 x 720 canvas); `M3503.variant()` reports silicon revision B (`0xB8000000 = 0x35030001`) for "M3516" bootloaders so `sys_ic_get_rev_id()` returns 0x20002 instead of revision A 0x20001, under which the SDK's capability task cleared bit 0 of GMA layer 0 control 0xB8006300 (`run_dump_hd8260_app_starts.py`, `run_dump_hd8260_capture_screen.py`).
+  (`run_dump_esr250_capture_screen.py`). The Amiko HD8260+ (`dumps/AMIKO HD8260+/`, bootloader "M3516A 1.2.1", 16 MB SPI flash) is the 256 MB DDR3 dual-tuner sibling of this family: its XIP bootloader sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, unpacks its "M3606 SEE" program to 0xAE000200, and runs an application that configures an Availink AVL6762 DVB-T2/C demodulator (`demods.AVL6762`, ChipID 0x0E) at I2C 0x14 over bit-banged GPIO 7 / 8 (`AVL6862.read` auto-incrementing its 24-bit register pointer across `GpioI2cBus`'s byte-by-byte reads), an Airoha AV2012 DVB-S2 tuner at 0x61 on SCB0, and a CH455 panel on GPIO 135 / 134, then draws a Full HD 1920 x 1080 1:1 CLUT8 OSD layer (`gma_capture.py` resamples 1:1 1920 x 1080 GMA heads onto the 1280 x 720 canvas); `M3503.variant()` reports silicon revision B (`0xB8000000 = 0x35030001`) for "M3516" bootloaders so `sys_ic_get_rev_id()` returns 0x20002 instead of revision A 0x20001, under which the SDK's capability task cleared bit 0 of GMA layer 0 control 0xB8006300 (`run_dump_hd8260_app_starts.py`, `run_dump_hd8260_capture_screen.py`). The 256 MB rev-B path also boots the Opticum XS65 Combo (`M3515`, AV2011 + FD650K on GPIO 135 / 134, `run_dump_xs65_combo_app_starts.py`), the Opticum XS65 Twin (`M3511`, second S3501 demodulator on bit-banged GPIO 6 / 7, `run_dump_xs65_twin_app_starts.py`) and the Amiko X-Finder 2 handheld satellite/terrestrial meter (`M3516A`, 16 MB SPI flash, Lemontree meter MCU on GPIO 135 / 134, `run_dump_xfinder2_app_starts.py`), while the 128 MB rev-B `M3510B` / `M3511D` path boots the Amiko Impulse SAT and Amiko HD8150 (`run_dump_impulse_sat_app_starts.py`, `run_dump_hd8150_app_starts.py`).
   The C3505 (`chips/c3505.py`, the Ferguson Ariva T760i, 104, 154 Combo,
   204 and 254 Combo update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
@@ -156,7 +156,7 @@ M3503).
   bus (`demods.py`, `run_dump_t760i_capture_screen.py`) or the satellite /
   combo models' internal S3505 demodulator answering at 0xB8028000
   (`run_dump_a104_capture_screen.py`), opens its first-install wizard or
-  System Setup menu through the newer display engine's layer. The 256 MB DDR3 C3505 boards (`dumps/FERGUSON ARIVA 255 COMBO/`, `run_dump_a255_app_starts.py`, `run_dump_a255_capture_screen.py`) place their SEE program at 0xAE000200 instead of 0xA6000200 and set 0xB8000220 bit 24 before entering maincode, switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, where their display-engine framebuffers live) and restoring 0xBFE00000..0xBFEFFFFF from boot SRAM to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror (`SYS_FLASH_BASE_ADDR` = 0xBFC00000); their external Availink AVL6862 DVB-T2/C demodulator (`demods.AVL6862`) answers at I2C 0x14 on the C3505's fourth hardware I2C master SCB3 at 0xB8018D00 (the Ferguson Ariva 255 Combo S in `dumps/FERGUSON ARIVA 255 COMBO S/` runs the same 256 MB C3505 + AVL6862 platform with an RDA5816 DVB-S2 tuner at I2C 0x0C and an R840 terrestrial tuner, `run_dump_a255s_app_starts.py`, `run_dump_a255s_capture_screen.py`; the Amiko HD8155 in `dumps/AMIKO HD8155/` on 128 MB DDR3 and Amiko HD8265+ in `dumps/AMIKO HD8265+/` on 256 MB DDR3 with an AVL6762 on SCB3 and AV2012 at 0x61 are recognised as C3505 by their generic boot-ROM bootloader, "M3606 SEE" seecode and `maincode(AV)` chunk, drive a CH455 panel on GPIO 107 / 110 or 107 / 108, and render their hardware-ID warning dialog on OSD without the board's anti-clone IC, `run_dump_hd8155_app_starts.py`, `run_dump_hd8155_capture_screen.py`, `run_dump_hd8265_app_starts.py`, `run_dump_hd8265_capture_screen.py`).
+  System Setup menu through the newer display engine's layer. The 256 MB DDR3 C3505 boards (`dumps/FERGUSON ARIVA 255 COMBO/`, `run_dump_a255_app_starts.py`, `run_dump_a255_capture_screen.py`) place their SEE program at 0xAE000200 instead of 0xA6000200 and set 0xB8000220 bit 24 before entering maincode, switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, where their display-engine framebuffers live) and restoring 0xBFE00000..0xBFEFFFFF from boot SRAM to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror (`SYS_FLASH_BASE_ADDR` = 0xBFC00000); their external Availink AVL6862 DVB-T2/C demodulator (`demods.AVL6862`) answers at I2C 0x14 on the C3505's fourth hardware I2C master SCB3 at 0xB8018D00 (the Ferguson Ariva 255 Combo S in `dumps/FERGUSON ARIVA 255 COMBO S/` runs the same 256 MB C3505 + AVL6862 platform with an RDA5816 DVB-S2 tuner at I2C 0x0C and an R840 terrestrial tuner, `run_dump_a255s_app_starts.py`, `run_dump_a255s_capture_screen.py`; the Amiko HD8155 in `dumps/AMIKO HD8155/` on 128 MB DDR3 and Amiko HD8265+ in `dumps/AMIKO HD8265+/` on 256 MB DDR3 with an AVL6762 on SCB3 and AV2012 at 0x61 are recognised as C3505 by their generic boot-ROM bootloader, "M3606 SEE" seecode and `maincode(AV)` chunk, drive a CH455 panel on GPIO 107 / 110 or 107 / 108, and render their hardware-ID warning dialog on OSD without the board's anti-clone IC, `run_dump_hd8155_app_starts.py`, `run_dump_hd8155_capture_screen.py`, `run_dump_hd8265_app_starts.py`, `run_dump_hd8265_capture_screen.py`; the same C3505 family also covers the 256 MB Amiko HD8275+ (`M3529A`, AVL6762 + AV2012 + MxL608), Amiko Mini Combo Extra (`M3526A`), and Amiko X-Finder 3 handheld meter (`M3529F`, AVL6762 + MxL603), the 128 MB Amiko Impulse H.265 T2/C (`M3626A`, AVL6762 on bit-banged GPIO 105 / 104 + MxL608), and the H.265 cable variants `M3712A` in the Amiko HD8140C SE (`MxL603` on SCB1) and `M3716A` in the dual-tuner Amiko HD8142 Twin-C (`tuners.R858` dual-path DVB-C tuner at I2C 0x6A on SCB1, `run_dump_hd8142_twinc_app_starts.py`)).
   The C3503 (`chips/c3503.py`, the Ferguson Ariva 53 and Ariva 54 satellite
   updates in `dumps/FERGUSON ARIVA 53/` and `dumps/FERGUSON ARIVA 54/`,
   recognised by `"M3503D"` in the unpacked main code or the `board_cfg`
@@ -178,7 +178,7 @@ M3503).
   (`run_dump_a53_app_starts.py`, `run_dump_a53_capture_screen.py`,
   `run_dump_a54_app_starts.py`, `run_dump_a54_capture_screen.py`); the Ariva
   54 drives an FD650K on GPIO 24 / 23 (" On ", " on ", "Strt", "nenu"),
-  while the Ariva 53 leaves its panel I2C attach pointer NULL.
+  while the Ariva 53 leaves its panel I2C attach pointer NULL; the Edision Picco S2 (`M3510D` / `C3503D`, `run_dump_picco_s2_app_starts.py`) runs the same single-CPU `0x3503D000` platform with a CH455 sensor display on GPIO 24 / 23.
   The Ferguson T750i's M3821 boots without the
   boot ROM's step: an XIP bootloader of the M3801's kind whose stack sits in
   locked D-cache lines at the top of the flash window's cached view until
@@ -204,7 +204,7 @@ M3503).
   main code is damaged, see its sidecar). The
   simulator itself gained CP0 EBase for it (the application moves the
   exception vectors). The family also models the chip's OTP memory
-  (`m3821.Otp` at 0xB8042000: 1 KB read a word at a time, burnt a byte at a
+  (`m3821.Otp` at 0xB8042000 -- also covering the XIP single-CPU Amiko T58 with an R836 on SCB2, `run_dump_amiko_t58_app_starts.py`, and the dual-CPU M3821A Amiko Eco TC-200 with SEE at 0xA6000200, `run_dump_eco_tc200_app_starts.py` --: 1 KB read a word at a time, burnt a byte at a
   time) with what a board's sidecar says it holds (`device.otp`; none does
   yet): the Fergusons' firmwares look for a signature there every minute of
   play and show "STB not signed!" while it is blank, as on an unsigned box;
@@ -228,7 +228,7 @@ M3503).
   its channel database byte by byte (~250 M instructions) it shows its
   channel banner, then MENU its Channel menu (`run_dump_m3329_capture_screen.py`).
   Its kernel ticks every 108000 Count cycles, so the family's Count runs at
-  10 MHz -- at 100 MHz the tick took most of the emulated time.
+  10 MHz -- at 100 MHz the tick took most of the emulated time. The family auto-detects SPI vs parallel NOR flash from the bootloader's flash access pattern, reports chip ID 0x3101 on M3329C / M3101C builds (`Opticum X80 Premium`, `BigSat DSR 6500 Lux`, `Opticum 4000A / Globo 7010A`, `Echolink EL-700 FTA`) and 0x3329 on M3329 / M3329E (`Opticum 7300 PVR CI2CX`, which draws through `GeM3602` at 0xB800E000 with `DECV` at 0xB8013200 and drives a 14-segment PT6312 VFD on GPIO 3 / 2 / 4, `run_dump_7300pvr_app_starts.py`), wires a second 16550 UART at 0xB8001400 (`Uart16550`, polled by the Echolink EL-700 FTA's bootloader for its SMTM51 security MCU before XTEA maincode decryption, `run_dump_el700_security_mcu.py`), decodes time-multiplexed 74HC164 + 4-digit LED panels (`hc164_decoder.py` on GPIO 16 / 17 + strobes 18..21 for the BigSat 6500 Lux and Opticum 4000A), and scans both 24-bit and `{nec32, vkey}` remote key tables (`M3329.remote_frame`).
 * `dumps/` -- the firmware images, each with a `<name>.json` sidecar: the
   box (SoC, demodulator, tuner, flash part, front-panel chip and pins, IR
   coding), the image (dump or update, version, size, SHA-1, chunk layout),
@@ -343,7 +343,7 @@ M3503).
   instead of 41 s, the T750i at 50.5 M (50.3 M) after 4 s instead of 75 s.
   Anything unexpected -- the arguments, a stream the module rejects or that
   ends early, output outside the RAM, exact mode, a breakpoint in the decoder
-  -- leaves the call to the emulated decoder (`test_lzma_hle.py`). `tv_gui.py`
+  -- leaves the call to the emulated decoder (`test_lzma_hle.py`, which also checks the three other bootloader builds hooked the same way: `_LZMA_DECODE_M16_SIG` for MIPS16e M3329 bootloaders, `_LZMA_DECODE_O2_SIG` for `-O2` MIPS32 M3329C/M3329E bootloaders, and `_LZMA_DECODE_9_SIG` for the LZMA SDK 9.x `LzmaDecode` in newer C3505 / C3503D / M3821 bootloaders, the latter two charged at 0.3x the `-O0` instruction rate). `tv_gui.py`
   sets `lzma_insns_per_byte = 0`: no firmware time for it, a quick boot.
   **The RTOS's microsecond delay** (`sim.delay_hle`, default on): the TDS
   RTOS's `delay(us)` polls a `get_count()` (one MFC0 Count) until `us` times
@@ -365,8 +365,8 @@ M3503).
   code at its entry leave it to run (`test_delay_hle.py`). dump_maciej's
   screen regression takes 46 s instead of 50 s, and the S60 draws its OSD
   after 26 s instead of 43 s of wall time (43 s of firmware time instead of
-  51 s: its driver loops' `delay(1)` lasts ~10 us instead of ~25 us). Four
-  builds of the routine are known (`_DELAYS`): besides that one, the newer
+  51 s: its driver loops' `delay(1)` lasts ~10 us instead of ~25 us). Five
+  builds of the routine are known (`_DELAYS`, including `-O1` builds with an extra delay-slot `nop` and the M3329C's fixed 108 ticks/us 216 MHz build): besides that one, the newer
   SDK's (the T760i's: the whole argument, the loop ending only past the
   ticks, an EHB in its `get_count()`), its bootloader's (the ticks per
   microsecond in a variable of their own) and its SEE program's (the clock

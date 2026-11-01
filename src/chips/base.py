@@ -6,6 +6,39 @@ import struct
 
 from unicorn.mips_const import UC_MIPS_REG_PC
 
+REMAP_CTRL = 0x220                  # 0xB8000220: SEE control + bit 24 upper-DDR remap
+REMAP_BIT = 0x01000000              # 0xB8000220 bit 24: 0x0F000000..0x0FFFFFFF is DDR (240..256 MB), not flash
+
+
+def word_after_store(old, address, base, size, value):
+    """A register word at `base` as a store of `size` bytes at `address` leaves it."""
+    shift = 8 * ((address & 0xFFFFFF) - base)
+    mask = ((1 << (8 * size)) - 1) << shift
+    return (old & ~mask) | ((value << shift) & mask)
+
+
+def count_lui(code, hi_val):
+    """Count aligned MIPS `lui $r, hi_val` instructions in `code`."""
+    hi = hi_val.to_bytes(2, "little")
+    n = 0
+    pos = code.find(hi)
+    while pos >= 0:
+        if (pos & 3) == 0 and pos + 4 <= len(code) and (code[pos + 3] >> 2) == 0x0F:
+            n += 1
+        pos = code.find(hi, pos + 1)
+    return n
+
+
+def uses_256m_ddr(image):
+    """Whether a dual-CPU M3503 / C3505 image targets a 256 MB DDR layout: it
+    has a `seecode` / `secseecode` chunk and compiles `SYS_FLASH_BASE_ADDR` as
+    `0xBFC00000` instead of `0xAFC00000` so `0x0F000000..0x0FFFFFFF` can be
+    remapped to DDR (240..256 MB) via `0xB8000220` bit 24."""
+    if not any(name.lower() in ("seecode", "secseecode") for _o, name, _v in chunk_chain(image)):
+        return False
+    mc = maincode(image)
+    return count_lui(mc, 0xBFC0) > count_lui(mc, 0xAFC0)
+
 
 def chunk_chain(image, limit=40):
     """The ALi chunk chain from offset 0 of a flash image: [(offset, name,
@@ -135,7 +168,9 @@ class ChipFamily:
         handlers and slice services, which the simulator resets itself when it
         switches to another family (simulator._switch_family): memory mapped
         over the flash window or above the RAM, Unicorn hooks, simulator
-        attributes.  Nothing here."""
+        attributes."""
+        if self.see is not None:
+            self.see.reset()
 
     def default_chip_id(self):
         """The 16-bit chip ID before any sidecar override (chip_id by default)."""
@@ -176,3 +211,33 @@ class ChipFamily:
         """Memory besides RAM and flash that holds code: [(address, length)] in the
         0x80000000 view, scanned for CP0 instruction sites like RAM is."""
         return []
+
+
+class UpperRamMixin:
+    """Fourth I2C master (`SCB3` at `0xB8018D00`) and 256 MB upper-DDR window
+    remap (`0xB8000220` bit 24) shared by the M3503 and C3505 chip families."""
+    remapped_flash_base = "0xBFC00000"
+
+    def _install_upper_ram_and_scb3(self):
+        import i2c_scb
+        self.scb3 = i2c_scb.I2cMaster(self.sim, 0x18D00, "SCB3")
+        self.sim.i2c_masters.append(self.scb3)
+        self.sim._mmio_on('w', self._write_remap_ctrl, REMAP_CTRL, REMAP_CTRL + 3)
+
+    def _uninstall_upper_ram_and_scb3(self):
+        self._ram_256m = False
+        self.sim._mmio_off('w', self._write_remap_ctrl, REMAP_CTRL, REMAP_CTRL + 3)
+        if self.scb3 in self.sim.i2c_masters:
+            self.sim.i2c_masters.remove(self.scb3)
+        self.scb3.remove()
+
+    def _write_remap_ctrl(self, uc, access, address, size, value, user_data):
+        if not self._ram_256m:
+            return
+        old = int.from_bytes(self.sim.mmio_buffer[REMAP_CTRL:REMAP_CTRL + 4], 'little')
+        new = word_after_store(old, address, REMAP_CTRL, size, value)
+        if (old ^ new) & REMAP_BIT:
+            on = bool(new & REMAP_BIT)
+            self.sim.log(f"[{self.name}] 0xB8000220 bit 24 -> {int(on)}: 0x0F000000..0x0FFFFFFF is "
+                         f"{'DDR (240..256 MB), flash at ' + self.remapped_flash_base if on else 'the flash window'}")
+            self.sim.set_upper_ram_mapped(on)

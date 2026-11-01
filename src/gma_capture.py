@@ -32,26 +32,31 @@ are the output's: the T50's OSD driver has the GE scale its 912 x 640 CLUT8
 screen to the TV system's size itself (513 x 512 for PAL, at 103, 32), so
 the capture scales the layer up to its 1280 x 720 canvas (output_scale).
 
-The M3329's OSD (OSD_M3327C, chips/m3329.py) has two layers, enabled by
-bits 0 and 16 of 0xB80041A0, whose registers at 0xB80041A4 / 0xB80041C4 hold
-the address of the first of a chain of 16-byte region headers in RAM
+The M3329's OSD (OSD_M3327 / OSD_M3327C, chips/m3329.py) has two layers, enabled
+by bits 0 and 16 of 0xB80041A0, whose registers at 0xB80041A4 / 0xB80041C4 hold
+either a direct pixel framebuffer address when the older OSD_M3327 window-size
+register (0xB80041A8 / 0xB80041CC: pitch_bytes << 16 | height, with x0/x1 at
+0x41B0 / 0x41D0 and y0/y1 at 0x41B4 / 0x41D4) is configured, or the address of
+the first of a chain of 16-byte region headers in RAM on OSD_M3327C / OSD_S36
 (m3327_regions); a region is a 2, 4 or 8 bpp bitmap through its layer's
 256-entry palette, which the driver writes through a port (0xB80041AC /
 0xB80041C8) and the simulator records, a 4 bpp region using one bank of 16.
 The application's PAL output (0xB800400C) is scaled to the canvas.
 
 The newer display engine of the Ferguson T750i (an M3821 with the SDK's
-dual-CPU build) has layers of its own at 0xB8006900 and 0xB8006B00, which
-no CPU store sets: the drivers build register lists in RAM and hand them to
-the display engine (DE_LIST_CHANNELS: the list's physical address, then a
-load-enable bit at +4), which loads them every frame.  A list is a 0x20-byte
-header (+4 the next list, +8 the number of pairs) and that many (register's
-physical address, value) pairs.  A layer (DE_LAYERS) then has its control
-word at +0 (b0-4 the pixel format, the SDK's GE_PIXEL_FORMAT), its bitmap's
-size at +18 / +1C (in the upper halves), its pitch in pixels at +34, an
-enable bit at +A4 and at +E0 a head in RAM whose second word is the bitmap
-address.  de_registers() and de_layers() read that the way the hardware
-does, at the moment of the capture.
+dual-CPU build) and C3505 family has graphics layers G0 at 0xB8006900, G1 at
+0xB8006A00 and VSD0 at 0xB8006B00, which no CPU store sets: the drivers build
+register lists in RAM and hand them to the display engine's 8-byte DMA channels
+(DE_LIST_CHANNELS at 0x6080, 0x6088, 0x6090..0x60B0: the list's physical
+address, then a load-enable bit at +4), which loads them every frame.  A list
+is a 0x20-byte header (+4 the next list, +8 the number of pairs) and that many
+(register's physical address, value) pairs.  A layer (DE_LAYERS) then has its
+control word at +0 (b0-4 the FXDE pixel format), its bitmap's size at +18 / +1C
+(in the upper halves), its pitch in pixels at +34, an enable bit at +A4, at +E0
+a head in RAM whose second word is the bitmap address, and at +EC (0x6AEC) the
+256-entry ARGB8888 CLUT palette address for CLUT2/4/8/ACLUT88 layers.
+de_registers() and de_layers() read that the way the hardware does, at the
+moment of the capture.
 """
 import struct
 
@@ -126,6 +131,29 @@ def _palette(ram, h):
     return pal, lvl
 
 
+def _clut_rgba(pal, raw, ga=0xFF):
+    if ga != 0xFF:
+        pal[:, 0] *= ga / 255.0
+    pal_rgba = np.clip(pal[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+    if raw.dtype == np.uint8 and pal_rgba.shape[0] >= 256:
+        return pal_rgba[raw]
+    return pal_rgba[np.minimum(raw, pal_rgba.shape[0] - 1)]
+
+
+def _resample_to(img, th, tw):
+    rh, rw = img.shape[:2]
+    rows = np.minimum((np.arange(th) * rh // th).astype(int), rh - 1)
+    cols = np.minimum((np.arange(tw) * rw // tw).astype(int), rw - 1)
+    return img[rows][:, cols]
+
+
+def _scale_by(img, fx, fy):
+    h, w = img.shape[:2]
+    rows = np.minimum((np.arange(round(h * fy)) / fy).astype(int), h - 1)
+    cols = np.minimum((np.arange(round(w * fx)) / fx).astype(int), w - 1)
+    return img[rows][:, cols]
+
+
 def render_head(ram, h):
     """(rgba uint8 (h, w, 4), x, y) of one region."""
     fmt = h['format']
@@ -144,12 +172,7 @@ def render_head(ram, h):
     if fmt in ge_m36f.CLUT_FORMATS:
         pal, _ = _palette(ram, h)
         if fmt not in (0x0E, 0x0B):
-            if ga != 0xFF:
-                pal[:, 0] *= ga / 255.0
-            pal_rgba = np.clip(pal[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
-            if raw.dtype == np.uint8 and pal_rgba.shape[0] >= 256:
-                return pal_rgba[raw], x0, y0
-            return pal_rgba[np.minimum(raw, pal_rgba.shape[0] - 1)], x0, y0
+            return _clut_rgba(pal, raw, ga), x0, y0
         px = g._decode(raw, fmt, pfreg, pal)
         if ga != 0xFF:
             px[..., 0] *= ga / 255.0
@@ -205,31 +228,67 @@ def render_m3602(ram, layer):
 
 
 M3327_LAYER_ON = 0x41A0
-M3327_HEADS = ((0x41A4, 0x00001), (0x41C4, 0x10000))    # (first header register, its bit in M3327_LAYER_ON)
+# (base/header register, enable bit in M3327_LAYER_ON, mode shift, OSD_M3327 pitch<<16|height, x0<<10|x1, y0<<10|y1)
+M3327_LAYERS = (
+    (0x41A4, 0x00001, 1, 0x41A8, 0x41B0, 0x41B4),
+    (0x41C4, 0x10000, 17, 0x41CC, 0x41D0, 0x41D4),
+)
+M3327_HEADS = ((0x41A4, 0x00001), (0x41C4, 0x10000))    # kept for callers inspecting (reg, enable_bit)
 M3327_TIMING_REG = 0x400C           # b16-26 the video output's total lines, as DE_TIMING_REG
 M3327_BPP = {0: 2, 1: 4, 2: 8, 3: 4}
+M3327_DIRECT_BPP = {0: 2, 1: 4, 2: 4, 3: 8, 4: 8, 7: 8}
 
 
 def m3327_regions(ram, dev):
-    """The M3329's OSD regions (OSD_M3327C / OSD_S36 on M3329E): [(layer,
-    region dict)] of the enabled layers, each layer's chain of 16-byte
-    headers in RAM from its register:
-      +0  b2-3 colour mode (0 2 bpp, 1 4 bpp, 2 8 bpp, 3 4 bpp), b4-22 the
-          next header within the 8 MB segment (0 ends), b24-27 the palette
-          bank of a 2 / 4 bpp region
-      +4  b0-18 the bitmap address >> 4 within the 8 MB segment, b20
-          end-of-chain on M3329E, b22-31 x end
-      +8  b0-9 the height, b22-31 x start
-      +C  b0-9 y end, b16-25 y start
-    a bitmap's rows being the width's bytes rounded up to 16."""
+    """The M3329's OSD regions (OSD_M3327 direct framebuffer or OSD_M3327C /
+    OSD_S36 16-byte header chain on M3329C / M3329E): [(layer, region dict)] of
+    the enabled layers.
+      * OSD_M3327 direct-window mode (0x41A8 / 0x41CC non-zero): 0x41A4 / 0x41C4
+        points directly to the pixel framebuffer in RAM, 0x41A8 / 0x41CC holds
+        (pitch_bytes << 16) | height, 0x41B0 / 0x41D0 holds (x0 << 10) | x1, and
+        0x41B4 / 0x41D4 holds (y0 << 10) | y1.
+      * OSD_M3327C / OSD_S36 region-header chain (0x41A8 / 0x41CC == 0): 16-byte
+        headers in RAM from 0x41A4 / 0x41C4:
+          +0  b2-3 colour mode (0 2 bpp, 1 4 bpp, 2 8 bpp, 3 4 bpp), b4-22 the
+              next header within the 8 MB segment (0 ends), b24-27 the palette
+              bank of a 2 / 4 bpp region
+          +4  b0-18 the bitmap address >> 4 within the 8 MB segment, b20
+              end-of-chain on M3329E, b22-31 x end
+          +8  b0-9 the height, b22-31 x start
+          +C  b0-9 y end, b16-25 y start
+        a bitmap's rows being the width's bytes rounded up to 16."""
     on = struct.unpack_from('<I', dev, M3327_LAYER_ON)[0]
     regions = []
-    for layer, (reg, bit) in enumerate(M3327_HEADS):
+    for layer, (reg, bit, mode_shift, stride_reg, x_reg, y_reg) in enumerate(M3327_LAYERS):
+        if not (on & bit):
+            continue
         raw_head = struct.unpack_from('<I', dev, reg)[0]
         seg_base = raw_head & 0x07800000
         a = raw_head & 0x07FFFFF0
+        if not a:
+            continue
+        stride_h = struct.unpack_from('<I', dev, stride_reg)[0]
+        pitch_bytes, direct_h = stride_h >> 16, stride_h & 0xFFFF
+        if pitch_bytes and direct_h:
+            xy_x = struct.unpack_from('<I', dev, x_reg)[0]
+            xy_y = struct.unpack_from('<I', dev, y_reg)[0]
+            x0, x1 = (xy_x >> 10) & 0x3FF, xy_x & 0x3FF
+            y0, y1 = (xy_y >> 10) & 0x3FF, xy_y & 0x3FF
+            width = (x1 - x0 + 1) if x1 >= x0 else 0
+            height = (y1 - y0 + 1) if y1 >= y0 else direct_h
+            mode_bits = (on >> mode_shift) & 7
+            inferred_bpp = (pitch_bytes * 8 // width) if width > 0 else 0
+            bpp = M3327_DIRECT_BPP.get(mode_bits, inferred_bpp if inferred_bpp in (2, 4, 8) else 8)
+            if width <= 0:
+                width = pitch_bytes * 8 // bpp
+            regions.append((layer, {
+                'header': None, 'words': (on, raw_head, stride_h, xy_x), 'bpp': bpp, 'bank': 0,
+                'x0': x0, 'y0': y0, 'width': width, 'height': min(height, direct_h),
+                'bitmap': a, 'pitch': pitch_bytes,
+            }))
+            continue
         seen = set()
-        while on & bit and a and a not in seen and len(seen) < 64:
+        while a and a not in seen and len(seen) < 64:
             seen.add(a)
             w0, w1, w2, w3 = (_w(ram, a, 4 * i) for i in range(4))
             bpp = M3327_BPP[(w0 >> 2) & 3]
@@ -268,11 +327,15 @@ def render_m3327(ram, region, palette):
     return np.clip(np.concatenate([rgb, px[..., 3:4]], -1) + 0.5, 0, 255).astype(np.uint8)
 
 
-DE_LIST_CHANNELS = (0x6080, 0x6090, 0x60A0, 0x60B0)     # (list address, +4 load enable) of the register lists
-DE_LAYERS = (0x6900, 0x6B00)
-# the SDK's GE_PIXEL_FORMAT (ge.h) -> the GE's HW format codes ge_m36f decodes (no CLUT formats:
-# where their palette is, is not known yet)
-DE_FORMATS = {0x00: 0x06, 0x01: 0x00, 0x02: 0x04, 0x03: 0x02, 0x05: 0x01, 0x06: 0x05, 0x07: 0x03}
+DE_LIST_CHANNELS = (0x6080, 0x6088, 0x6090, 0x6098, 0x60A0, 0x60A8, 0x60B0)     # (list address, +4 load enable) 8-byte DMA channels
+DE_LAYERS = (0x6900, 0x6A00, 0x6B00)
+# the FXDE layer control register's pixel format (bits 0..4 of +0) -> the GE's HW format codes
+# ge_m36f decodes, including CLUT2/4/8/ACLUT88 (0x0B..0x0E) whose 256-entry ARGB8888 palette
+# address sits at +0xEC (0x6AEC)
+DE_FORMATS = {
+    0x00: 0x06, 0x01: 0x00, 0x02: 0x04, 0x03: 0x02, 0x05: 0x01, 0x06: 0x05, 0x07: 0x03,
+    0x0B: 0x08, 0x0C: 0x0A, 0x0D: 0x0C, 0x0E: 0x0E,
+}
 
 
 def de_registers(ram, dev):
@@ -299,7 +362,7 @@ def de_registers(ram, dev):
 def de_layers(ram, dev):
     """The display engine's layers the register lists configure: dicts with
     the layer's base, whether it is on, its bitmap (address, HW format,
-    width, height, pitch in pixels) and where it starts on the screen
+    palette, width, height, pitch in pixels) and where it starts on the screen
     (the low halves of +10 / +14)."""
     phys = _phys(ram)
     regs = de_registers(ram, dev)
@@ -309,11 +372,14 @@ def de_layers(ram, dev):
         if not head:
             continue
         fmt = DE_FORMATS.get(regs.get(base, 0) & 0x1F)
+        palette = (regs.get(base + 0xEC) or regs.get(0x6AEC) or 0) & phys
+        is_clut = fmt in ge_m36f.CLUT_FORMATS
         layers.append({
             'base': base,
-            'enabled': bool(regs.get(base + 0xA4, 0) & 1) and fmt is not None,
+            'enabled': bool(regs.get(base + 0xA4, 0) & 1) and fmt is not None and (not is_clut or bool(palette)),
             'format': fmt,
             'bitmap': _w(ram, head, 4) & phys,
+            'palette': palette,
             'width': regs.get(base + 0x18, 0) >> 16,
             'height': regs.get(base + 0x1C, 0) >> 16,
             'pitch': regs.get(base + 0x34, 0) & 0xFFFF,
@@ -330,6 +396,12 @@ def render_de_layer(ram, layer):
     g = ge_m36f.GeM36F(ram)
     pfreg = (fmt << 12) | (pitch & 0xFFF)
     raw = g._read_raw(layer['bitmap'], pfreg, 0, 0, width, height)
+    if fmt in ge_m36f.CLUT_FORMATS:
+        pal, _ = _palette(ram, {'palette': layer['palette'], 'pal_alpha_level': 0})
+        if fmt not in (0x0E, 0x0B):
+            return _clut_rgba(pal, raw)
+        px = g._decode(raw, fmt, pfreg, pal)
+        return np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
     return g.decode_rgba_u8(raw, fmt, pfreg)
 
 
@@ -420,6 +492,8 @@ def _render_de_on_bg(ram, layer, screen, background):
         return None
     x0, y0 = layer['x'], layer['y']
     W, H = screen
+    if x0 + width > W or y0 + height > H:
+        return None
     hh, ww = min(height, H - y0), min(width, W - x0)
     if hh <= 0 or ww <= 0:
         out = np.empty((H, W, 3), np.uint8)
@@ -497,12 +571,7 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
                 return res, info
     if video_rgb is not None:
         vh, vw = video_rgb.shape[:2]
-        if (vw, vh) != (W, H):
-            rows = np.minimum((np.arange(H) * vh // H).astype(int), vh - 1)
-            cols = np.minimum((np.arange(W) * vw // W).astype(int), vw - 1)
-            video_bg = video_rgb[rows][:, cols]
-        else:
-            video_bg = video_rgb
+        video_bg = _resample_to(video_rgb, H, W) if (vw, vh) != (W, H) else video_rgb
         if not info['m3602_layers'] and not info.get('m3327_regions') and not active_heads and not active_de:
             return video_bg.copy(), info
         canvas = video_bg.astype(np.float32)
@@ -514,10 +583,7 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
         if 'resample' in h:
             rx, ry = h['resample']
             rh, rw = rgba.shape[:2]
-            th, tw = max(1, round(rh * ry)), max(1, round(rw * rx))
-            rows = np.minimum((np.arange(th) * rh // th).astype(int), rh - 1)
-            cols = np.minimum((np.arange(tw) * rw // tw).astype(int), rw - 1)
-            rgba = rgba[rows][:, cols]
+            rgba = _resample_to(rgba, max(1, round(rh * ry)), max(1, round(rw * rx)))
             x, y = round(x * rx), round(y * ry)
         _blend(canvas, rgba, x, y)
     # the M3602's layers (the T50), in the output's coordinates: scaled up to the canvas
@@ -525,10 +591,7 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
         rgba = render_m3602(ram, layer)
         if rgba is None:
             continue
-        h, w = rgba.shape[:2]
-        rows = np.minimum((np.arange(round(h * fy)) / fy).astype(int), h - 1)
-        cols = np.minimum((np.arange(round(w * fx)) / fx).astype(int), w - 1)
-        _blend(canvas, rgba[rows][:, cols], round(layer['x0'] * fx), round(layer['y0'] * fy))
+        _blend(canvas, _scale_by(rgba, fx, fy), round(layer['x0'] * fx), round(layer['y0'] * fy))
     # the M3329's OSD layers, in its PAL output's coordinates: scaled up to the canvas
     if m3327_palettes is not None:
         lines = (struct.unpack_from('<I', dev, M3327_TIMING_REG)[0] >> 16) & 0x7FF
@@ -538,13 +601,19 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
             rgba = render_m3327(ram, region, m3327_palettes[layer])
             if rgba is None:
                 continue
-            h, w = rgba.shape[:2]
-            rows = np.minimum((np.arange(round(h * gy)) / gy).astype(int), h - 1)
-            cols = np.minimum((np.arange(round(w * gx)) / gx).astype(int), w - 1)
-            _blend(canvas, rgba[rows][:, cols], round(region['x0'] * gx), round(region['y0'] * gy))
-    # the newer display engine's layers (the T750i), on top
+            _blend(canvas, _scale_by(rgba, gx, gy), round(region['x0'] * gx), round(region['y0'] * gy))
+    # the newer display engine's layers (T750i G0 at 0x6900, C3505 G1 at 0x6A00), on top;
+    # Full HD 1920 x 1080 layers are resampled onto the 1280 x 720 canvas like active_heads.
     for layer in active_de:
-        _blend(canvas, render_de_layer(ram, layer), layer['x'], layer['y'])
+        rgba = render_de_layer(ram, layer)
+        lx, ly = layer['x'], layer['y']
+        rh, rw = rgba.shape[:2]
+        if lx + rw > W or ly + rh > H:
+            out_w, out_h = max(W, lx + rw), max(H, ly + rh)
+            rx, ry = W / out_w, H / out_h
+            rgba = _resample_to(rgba, max(1, round(rh * ry)), max(1, round(rw * rx)))
+            lx, ly = round(lx * rx), round(ly * ry)
+        _blend(canvas, rgba, lx, ly)
     canvas += 0.5
     np.clip(canvas, 0, 255, out=canvas)
     return canvas.astype(np.uint8), info

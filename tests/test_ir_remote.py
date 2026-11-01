@@ -213,13 +213,45 @@ def main():
         if frame is None or frame[0] != 0x04 or frame[2] != 0xBA:
             print(f"[FAIL] M3329 remote_frame({name!r}) -> {frame}")
             ok = False
+    # 5. M3329 8-byte {uint32 nec32, uint32 vkey} Globo/Opticum remote table & VideoOutput reset
+    sim.poke(KEY_CONFIG, b"\x00" * 16)
+    sim._ir_key_table = {}
+    m3329._nec32_key_table = None
+    nec_base = 0x80140000
+    globo_entries = [(0x807F00FF, 0x18), (0x807F08F7, 0x0E), (0x807F6897, 0x0D), (0x807F48B7, 0x0F)]
+    globo_entries += [(0x807F0000 | ((0x80 + i) << 8) | ((0x7F - i) & 0xFF), i) for i in range(14)]
+    for i, (nec32, vk) in enumerate(globo_entries):
+        sim.poke(nec_base + 8 * i, np.array([nec32, vk], '<u4').tobytes())
+    if (m3329.remote_frame('POWER') != (0x01, 0x00, 0xFE) or
+            m3329.remote_frame('MENU') != (0x01, 0x10, 0xFE) or
+            m3329.remote_frame('DOWN') != (0x01, 0x16, 0xFE) or
+            m3329.remote_frame('OK') != (0x01, 0x12, 0xFE)):
+        print("[FAIL] M3329 8-byte {nec32, vkey} remote_frame mapping")
+        ok = False
+    from video_m36 import VideoOutput
+    vpo = VideoOutput(sim, register=0xB8004004, line=9, field_bit=0, reset=(0x60, 0x08))
+    sim.poke(sim._ic_en, (1 << 9).to_bytes(4, 'little'))
+    sim._mmio_write(sim.mu, 0x4004, 4, 0x14, None)
+    vpo._post(0x14)
+    if vpo.status != 0x14 or not (sim._ic_lines & (1 << 9)):
+        print("[FAIL] VideoOutput did not assert line 9 on enabled status")
+        ok = False
+    sim._mmio_write(sim.mu, 0x0060, 4, 0x08, None)
+    if vpo.status != 0 or (sim._ic_lines & (1 << 9)) or int.from_bytes(sim.peek(0xB8004004, 4), 'little') != 0:
+        print("[FAIL] VideoOutput reset=(0x60, 0x08) did not clear status/register/line")
+        ok = False
     for dump_name, want_coding in (
         ("S16_CHN_2.8.abs", "necfirst"),
         ("ALI3606_0A010A00_gui_edision_1.6.89.abs", "necfirst"),
         ("AMIKO 8155 Edision_v.1453.abs", "necfirst"),
         ("AMIKO 8265+ Edision_v.1529.abs", "necfirst"),
+        ("Amiko_HD8275_1.2.02_emu.abs", "necfirst"),
+        ("Amiko_HD8140C_SE_1.1.04_emu.abs", "necfirst"),
+        ("Amiko_HD8142_Twin-C_1.1.11_conax.abs", "necfirst"),
         ("8260_Edision_Piccollo_ v.2468.abs", "necfirst"),
+        ("AMIKO_HD8150_2.3.40_Synaps_2.3.40_by Dekolte.abs", "necfirst"),
         ("OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs", "necfirst"),
+        ("amstar_yumatu_1.5.25_x4_newoldremote.abs", "necfirst"),
         ("OPTIMUSS_underline_official_hd_1.5.87.abs", "necfirst"),
         ("miniplus_highspeed_official_hd_1.5.87.abs", "necfirst"),
         ("A204_20190903_V1.3B1.abs", "ext00"),

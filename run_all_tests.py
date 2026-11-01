@@ -54,7 +54,7 @@ import report_artifacts                                # noqa: E402
 
 # Scripts whose name does not say which dump they run: look for it in the source
 DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
-         ("SRT_Prima", "SRT Prima VIII"), ("Globo", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
+         ("SRT_Prima", "SRT Prima VIII"), ("Ali_3801_Globo", "Globo N3"), ("globo_", "Globo N3"), ("URZ0083Q", "Cabletech URZ0083Q"),
          ("URZ0083_V", "Cabletech URZ0083"), ("URZ0083_v", "Cabletech URZ0083"), ("URZ0086", "Cabletech URZ0086"),
          ("KM00183", "Kruger&Matz KM0183"), ("KM00186", "Kruger&Matz KM0186"),
          ("urz0195", "Cabletech URZ0195"), ("urz0194", "Cabletech URZ0194S"), ("srt8115", "Strong SRT 8115"),
@@ -84,15 +84,47 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("x7_", "Opticum HD X7 Combo"),
          ("underline.3in1", "Edision Optimuss Underline 3in1"),
          ("underline_3in1", "Edision Optimuss Underline 3in1"),
-         ("dump opticum x80 premium.bin", "Opticum X80 Premium 2 MB SPI dump"),
-         ("AMIKO_T58_1.0.60_fta.abs", "Amiko T58 1.0.60 FTA firmware"),
+         ("dump opticum x80 premium.bin", "Opticum X80 Premium"),
+         ("x80_premium_", "Opticum X80 Premium"),
+         ("AMIKO_T58_1.0.60_fta.abs", "Amiko T58"),
+         ("amiko_t58_", "Amiko T58"),
          ("AMIKO_Impluse_H265_T2C_1.3.87_emu.abs", "Amiko Impulse H.265 T2/C"),
+         ("impulse_h265_", "Amiko Impulse H.265 T2/C"),
          ("140_TWIN_RETAIL_PL.abs", "Opticum XS65 Twin"),
          ("xs65_twin", "Opticum XS65 Twin"),
          ("Edision.vip3", "Edision Argus VIP3"),
          ("vip3_", "Edision Argus VIP3"),
-         ("OPTICUM 7300 PVR/7300PVR.bin", "Opticum 7300 PVR CI2CX (7300PVR.bin)"),
-         ("AMIKO ECO TC-200/AMIKO_ECO_TC-200_2.3.09_emu.abs", "Amiko Eco TC-200 (AMIKO_ECO_TC-200_2.3.09_emu.abs)"),
+         ("7300PVR.bin", "Opticum 7300 PVR CI2CX"),
+         ("7300pvr_", "Opticum 7300 PVR CI2CX"),
+         ("AMIKO_ECO_TC-200", "Amiko Eco TC-200"),
+         ("eco_tc200_", "Amiko Eco TC-200"),
+         ("AMIKO_Mini_Combo_Extra", "Amiko Mini Combo Extra"),
+         ("mini_combo_extra_", "Amiko Mini Combo Extra"),
+         ("AMIKO_Impulse_SAT", "Amiko Impulse SAT"),
+         ("impulse_sat_", "Amiko Impulse SAT"),
+         ("Opticum HD X402p-403p", "Opticum HD X402p / X403p"),
+         ("x403p_", "Opticum HD X402p / X403p"),
+         ("bigsat 6500", "BigSat DSR 6500 Lux"),
+         ("bigsat_6500", "BigSat DSR 6500 Lux"),
+         ("AMIKO_XFinder2", "Amiko X-Finder 2"),
+         ("xfinder2", "Amiko X-Finder 2"),
+         ("AMIKO_XFinder_III", "Amiko X-Finder 3"),
+         ("xfinder3", "Amiko X-Finder 3"),
+         ("HD8142_Twin-C", "Amiko HD8142 Twin-C"),
+         ("hd8142_twinc", "Amiko HD8142 Twin-C"),
+         ("OPENBOX-S16_Eu1129", "Openbox S16 EU"),
+         ("s16_eu", "Openbox S16 EU"),
+         ("Opticum4000a", "Opticum 4000A / Globo 7010A"),
+         ("opticum_4000a", "Opticum 4000A / Globo 7010A"),
+         ("HD8140C_SE", "Amiko HD8140C SE"),
+         ("hd8140c_se_", "Amiko HD8140C SE"),
+         ("HD8275_", "Amiko HD8275+"),
+         ("hd8275_", "Amiko HD8275+"),
+         ("AMIKO_HD8150", "Amiko HD8150"),
+         ("hd8150_", "Amiko HD8150"),
+         ("amstar_yumatu", "Yumatu Full HD Amstar"),
+         ("yumatu_amstar_", "Yumatu Full HD Amstar"),
+         ("ECHOLINK EL700FTA", "Echolink EL-700 FTA"),
          ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
@@ -128,7 +160,20 @@ SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.
               "run_dump_xs65_twin_capture_screen.py",
               "run_dump_vip3_capture_screen.py",
               "run_dump_7300pvr_capture_screen.py",
-              "run_dump_eco_tc200_capture_screen.py")
+              "run_dump_eco_tc200_capture_screen.py",
+              "run_dump_mini_combo_extra_capture_screen.py",
+              "run_dump_impulse_sat_capture_screen.py",
+              "run_dump_x403p_capture_screen.py",
+              "run_dump_bigsat_6500_capture_screen.py",
+              "run_dump_xfinder2_capture_screen.py",
+              "run_dump_xfinder3_capture_screen.py",
+              "run_dump_hd8142_twinc_capture_screen.py",
+              "run_dump_s16_eu_capture_screen.py",
+              "run_dump_opticum_4000a_capture_screen.py",
+              "run_dump_hd8140c_se_capture_screen.py",
+              "run_dump_hd8275_capture_screen.py",
+              "run_dump_hd8150_capture_screen.py",
+              "run_dump_yumatu_amstar_capture_screen.py")
 # The per-dump UART console tests (console_regression.ConsoleHarness): every
 # firmware with the ODM's interactive console gets its command table walked
 # through ("startconsole", each command and what it does); 15-60 s each.
@@ -162,6 +207,20 @@ def discover_test_files(include_slow=False):
         "run_dump_hd8155_app_starts.py", "run_dump_hd8265_app_starts.py",
         "run_dump_hd8260_app_starts.py", "run_dump_x4_220_app_starts.py",
         "run_dump_t750i_app_starts.py", "run_dump_hdxs2_app_starts.py", "run_dump_x110ts_see_start.py",
+        "run_dump_el700_security_mcu.py",
+        "run_dump_yumatu_amstar_app_starts.py",
+        "run_dump_hd8150_app_starts.py",
+        "run_dump_hd8275_app_starts.py",
+        "run_dump_hd8140c_se_app_starts.py",
+        "run_dump_opticum_4000a_app_starts.py",
+        "run_dump_s16_eu_app_starts.py",
+        "run_dump_hd8142_twinc_app_starts.py",
+        "run_dump_xfinder3_app_starts.py",
+        "run_dump_xfinder2_app_starts.py",
+        "run_dump_bigsat_6500_app_starts.py",
+        "run_dump_x403p_app_starts.py",
+        "run_dump_impulse_sat_app_starts.py",
+        "run_dump_mini_combo_extra_app_starts.py",
         "run_dump_eco_tc200_app_starts.py",
         "run_dump_7300pvr_app_starts.py",
         "run_dump_vip3_app_starts.py",
@@ -420,6 +479,37 @@ def report_only():
     print(f"HTML report written: {path}")
 
 
+def _parallel_order(test_files):
+    """Longest-job-first dispatch order for parallel runs, using the previous
+    run's per-script timings from REPORT_DIR/results.json when available (with a
+    coarse category fallback on a fresh checkout) so long tests do not start at
+    the tail of the queue."""
+    prior = {}
+    for candidate in (REPORT_DIR / "results.json", ROOT / "report" / "cpp" / "results.json", ROOT / "report" / "results.json"):
+        if candidate.exists():
+            try:
+                with open(candidate, encoding="utf-8") as f:
+                    for r in json.load(f).get("results", ()):
+                        s = r.get("script")
+                        if s and s not in prior:
+                            prior[s] = float(r.get("elapsed", 0.0))
+            except Exception:
+                pass
+    slow_set, console_set = set(SLOW_TESTS), set(CONSOLE_TESTS)
+
+    def est(path):
+        name = os.path.basename(path)
+        if name in prior:
+            return prior[name]
+        if name in slow_set:
+            return 60.0
+        if name in console_set or name.startswith("run_dump_"):
+            return 20.0
+        return 5.0
+
+    return sorted(test_files, key=lambda p: (-est(p), os.path.basename(p)))
+
+
 def main():
     """Main test runner function."""
     global ENGINE, REPORT_DIR
@@ -471,9 +561,13 @@ def main():
         # Parallel: the simulations are CPU bound and independent (firmware time
         # follows each emulation thread's own CPU time), so N at once on N cores
         # cuts the wall time of the slow suite; outputs are printed per test.
+        # Dispatch longest tests first so slow unit/dump tests do not straggle at
+        # the end, then restore discover_test_files() order for the summary/report.
         from concurrent.futures import ThreadPoolExecutor
+        work_files = _parallel_order(test_files)
         with ThreadPoolExecutor(max_workers=jobs) as pool:
-            results = list(pool.map(lambda t: run_test_file(t, timeout, stream=False), test_files))
+            by_file = dict(zip(work_files, pool.map(lambda t: run_test_file(t, timeout, stream=False), work_files)))
+        results = [by_file[t] for t in test_files]
     else:
         results = [run_test_file(t, timeout) for t in test_files]
 

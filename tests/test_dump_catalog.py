@@ -25,9 +25,12 @@ failures = []
 entries = dump_catalog.catalog()
 rows = []
 for path, data in entries:
-    failures += dump_catalog.problems(path, data)
     if data is None:
+        failures += dump_catalog.problems(path, data)
         continue
+    with open(path, "rb") as f:
+        image_bytes = f.read()
+    failures += dump_catalog.problems(path, data, image_bytes=image_bytes)
     rel = os.path.relpath(path, dump_catalog.DUMPS_DIR)
     # the panel pins the decoders use must be the sidecar's
     spec = front_panel.panel_spec(path)
@@ -37,12 +40,13 @@ for path, data in entries:
     if spec and not panel:
         failures.append(f"{rel}: front_panel.PANELS has a panel for it, the sidecar none")
     elif spec:
-        for pin in ("scl", "sda", "clk", "dio", "stb"):
+        for pin in ("scl", "sda", "clk", "dio", "stb", "data"):
             if pin in spec and spec[pin] != panel.get(pin):
                 failures.append(f"{rel}: panel {pin} is {panel.get(pin)} in the sidecar, {spec[pin]} in front_panel.PANELS")
-        if "keys" in spec and list(spec["keys"]) != list(panel.get("keys") or []):
-            failures.append(f"{rel}: panel keys are {panel.get('keys')} in the sidecar, {list(spec['keys'])} in "
-                            f"front_panel.PANELS")
+        for seq_key in ("keys", "digits"):
+            if seq_key in spec and list(spec[seq_key]) != list(panel.get(seq_key) or []):
+                failures.append(f"{rel}: panel {seq_key} are {panel.get(seq_key)} in the sidecar, "
+                                f"{list(spec[seq_key])} in front_panel.PANELS")
     model = data["device"].get("tunerModel")
     if model is not None:
         if model.get("chip") not in tuners.MODELS:
@@ -55,8 +59,10 @@ for path, data in entries:
                         f"ir_remote.coding_for gives {coding!r}")
 
     dev, sim_info = data["device"], data["simulator"]
-    with open(path, "rb") as f:
-        fam = chips.detect(f.read()).__name__
+    fam = chips.detect(image_bytes).__name__
+    sidecar_fam = (dev.get("family") or "").split()[0]
+    if sidecar_fam != fam:
+        failures.append(f"{rel}: device.family starts with {sidecar_fam!r}, chips.detect gives {fam!r}")
     plat = f"{fam} ({dev['chipId']})" if dev.get("chipId") else fam
     if sim_info.get("boots") and sim_info.get("application") and sim_info.get("display"):
         st = "boots+app+OSD"

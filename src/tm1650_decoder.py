@@ -32,6 +32,7 @@ GPIO_DO_OFFSETS = (0x054, 0x0D4, 0x0F4, 0x354, 0x454)  # the DO (data-out) regis
                                                        # bank's DI register is DO - 4, its DIR register DO + 4
 GPIO_EXTRA_DO_OFFSETS = (0x0E8,)                       # older SDKs' third bank (the Cabletech URZ0083Q's, the
                                                        # Strong SRT 8115's firmware), which has no number here
+_ALL_GPIO_DO_OFFSETS = GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS
 
 
 class PanelDecoder:
@@ -54,6 +55,13 @@ class PanelDecoder:
         0x40: '-', 0x08: '_', 0x80: '.',
     }
 
+    CHAR_TO_7SEG = {
+        **{ch.upper(): seg for seg, ch in SEG_TO_CHAR.items() if len(ch) == 1},
+        ' ': 0x00, '0': 0x3F, 'O': 0x3F, 'B': 0x7C, 'D': 0x5E, 'G': 0x3D,
+        'K': 0x76, 'M': 0x37, 'N': 0x37, 'Q': 0x67, 'R': 0x50, '5': 0x6D,
+        'S': 0x6D, 'T': 0x78, 'V': 0x3E, 'W': 0x3E, 'Z': 0x5B,
+    }
+
     STANDARD_SEG_MAP = (0, 1, 2, 3, 4, 5, 6, 7)      # bit of a, b, c, d, e, f, g, DP in a digit byte
 
     def __init__(self, log_handler=None):
@@ -68,13 +76,13 @@ class PanelDecoder:
     @staticmethod
     def _gpio_to_offset_bit(gpio_num):
         """GPIO pin number -> (DO register offset, bit position)."""
-        bank = min(gpio_num // 32, len(GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS) - 1)
-        return (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS)[bank], gpio_num - 32 * bank
+        bank = min(gpio_num // 32, len(_ALL_GPIO_DO_OFFSETS) - 1)
+        return _ALL_GPIO_DO_OFFSETS[bank], gpio_num - 32 * bank
 
     @staticmethod
     def gpio_number(offset, bit):
         """(DO register offset, bit position) -> GPIO pin number, -1 for another register."""
-        return (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS).index(offset) * 32 + bit if offset in (GPIO_DO_OFFSETS + GPIO_EXTRA_DO_OFFSETS) else -1
+        return _ALL_GPIO_DO_OFFSETS.index(offset) * 32 + bit if offset in _ALL_GPIO_DO_OFFSETS else -1
 
     def log(self, msg):
         if not self.dump_enabled and not msg.startswith(self.TAG):
@@ -117,6 +125,12 @@ class PanelDecoder:
     def get_display_text(self):
         """The 4 digits as characters (unknown segment patterns show as '?')."""
         return ''.join(self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits)
+
+    @classmethod
+    def vfd_to_7seg_digits(cls, text):
+        """Project an 8-character VFD display string onto 4 standard 7-segment bytes."""
+        s = text[2:6] if (text[:2] == "  " and text[6:] == "  ") else text.strip()[:4].ljust(4)
+        return [cls.CHAR_TO_7SEG.get(ch.upper(), 0x00) for ch in s]
 
 
 class TM1650Decoder(PanelDecoder):

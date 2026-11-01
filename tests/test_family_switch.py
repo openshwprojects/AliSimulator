@@ -37,7 +37,9 @@ IMAGES = ("M3822P.bin", "dump.bin", "Sw_Globo_HD-XS2_SmartHD_1.3.5_2015-05-08.ab
           "FERGUSON ARIVA 255 COMBO/Ferguson_A255_V1.32B4.abs",
           "AMIKO HD8260+/8260_Edision_Piccollo_ v.2468.abs",
           "OPTICUM HD X4 220/OPTICUM_HD_X4_220_ps_lemontree_1.3.37.abs",
-          "OPTICUM XS65 TWIN/140_TWIN_RETAIL_PL.abs")
+          "OPTICUM XS65 TWIN/140_TWIN_RETAIL_PL.abs",
+          "ECHOLINK EL-700 FTA/flash ECHOLINK EL700FTA mx29lv160.bin",
+          "OPTICUM X80 PREMIUM/dump opticum x80 premium.bin")
 ok = True
 
 
@@ -221,5 +223,21 @@ left = [type(d).__name__ for d in devices(m3503_256) if id(d) in owners(sim)]
 check(not left and id(m3503_256) not in owners(sim) and sim.ram_size == 0x08000000
       and not sim.gpio_devices and not any(m.name == "SCB3" for m in sim.i2c_masters),
       f"dump.bin after the 256 MB M3503 and X4 220: no handler left ({left or 'none'}), GPIO devices and SCB3 gone")
+sim.loadFile(IMAGES[12])
+m3329 = sim.chip
+check(type(m3329).__name__ == "M3329" and sim.flash_device is m3329.flash and m3329.flash.ids[1] == 0x49
+      and sim.count_hz == 10_000_000 and sim._ic_en == 0xB800003C and sim.irc_base == 0x1100
+      and id(m3329.uart2) in owners(sim) and any(type(d).__name__ == "GpioI2cBus" for d in sim.gpio_devices),
+      "the Echolink EL-700 FTA (parallel-NOR M3329): MX29LV160B flash, UART2, 10 MHz Count, IC 0x38/0x3C, IRC 0x1100, GPIO 10/9 I2C")
+m3329.flash._set_autoselect(True)
+sim.loadFile(IMAGES[13])
+check(sim.chip is m3329 and chip_word() == 0x310100F0 and sim.flash_device is None and m3329.flash is None
+      and bytes(sim.mu.mem_read(0x9FC00000, 16)) == bytes(sim.rom_image[:16]),
+      "the Opticum X80 Premium after it (same family, SPI M3329): parallel flash disconnected, autoselect cleared, chip word 0x310100F0")
+sim.loadFile(IMAGES[1])
+left = [type(d).__name__ for d in devices(m3329) if id(d) in owners(sim)]
+check(type(sim.chip).__name__ == "M3801" and not left and sim.flash_device is None
+      and sim.count_hz == 100_000_000 and sim._ic_en == 0xB8000038 and sim.irc_base == 0x18100,
+      f"dump.bin after the M3329: no handler left ({left or 'none'}), 100 MHz Count, IC 0x30/0x38, IRC 0x18100 restored")
 print(f"\n[{'PASS' if ok else 'FAIL'}] chip family switch")
 sys.exit(0 if ok else 1)

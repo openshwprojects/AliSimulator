@@ -1,0 +1,58 @@
+{
+  "file": "amstar_yumatu_1.5.25_x4_newoldremote.abs",
+  "device": {
+    "brand": "Yumatu",
+    "model": "Full HD IQ / HD X4 (System ID 06020200, Amstar GUI 1.5.25 new+old remote)",
+    "type": "DVB-S2 Full HD satellite receiver with CA card reader, CI slot, Ethernet and USB PVR",
+    "board": "06020200 (Globo / Opticum / Yumatu M3602B \"220\" platform with Lemontree EuP front-panel MCU)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.17_SAB_S2_20130810)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB1 / SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.25 Amstar (maincode(AV) \"060202001525\", 2012-03-18; bootloader \"M3602B 1.1.6\", 2009-12-29; SDK4.0aa.5.17_SAB_S2_20130810)",
+    "date": "2013-08-10",
+    "size": 4194304,
+    "sha1": "2fbf427761e5039a7b180ccca9ff3f1c32f14322",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001525, LZMA -> 6.73 MB at 0x80008000), default_lang 0x25FD80 (1.0.0), countryband 0x260000 (1.0.0), logo_user 0x268000 (1.0.0), logo_menu 0x270000 (1.0.0), logo_radio 0x278000 (1.0.0), logo_boot 0x280000 (1.0.0), patch 0x29FF80 (1.0.0), defaultdb(PRC) 0x2C0000 (1.0.2), userdb(64+64) 0x2EFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amstar_yumatu_1.5.25_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": "Yumatu / Globo (Amstar GUI)",
+    "date": "2013-08-10",
+    "login": false,
+    "note": "Archive amstar_yumatu_1.5.25_x4_newoldremote.zip from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as an M3602B board (chips/m3602.py, lemontree_decoder.py, run_dump_yumatu_amstar_app_starts.py, run_dump_yumatu_amstar_capture_screen.py): the \"M3602B 1.1.6\" bootloader communicates with the external Lemontree front-panel and EuP standby microcontroller at I2C 0x28 on bit-banged SCL = GPIO 62 / SDA = GPIO 171 using 8-byte CRC-16/XMODEM frames (updating the 4-digit 7-segment display \" ON \" -> \"    \" -> \" on \"), prints \"APP  init ok\", unpacks maincode(AV) (6.73 MB) to 0x80008000, and starts the single-CPU application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 (\"---nim 3501 a-=[1]--type=[0x350100c0]----\") and Airoha AV2011 tuner at I2C 0x60, initialises hs_config_init over SPI, and without the board's anti-clone security IC renders its blue Turkish Amstar OSD dialog (\"Cihazınız farklı,yazılım uymaz!\") through GeM3602 (14 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Yumatu Full HD IQ / Opticum HD X4-series (System ID 06020200) firmware 1.5.25 with the Amstar GUI and dual (new + old) IR remote support (2013-08-10) on a 4 MB SPI flash for the ALi M3602B Full HD DVB-S2 satellite receiver.",
+    "Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol), an ALi S3501 DVB-S2 demodulator at I2C 0x33, and an Airoha AV2011 tuner at I2C 0x60."
+  ]
+}
