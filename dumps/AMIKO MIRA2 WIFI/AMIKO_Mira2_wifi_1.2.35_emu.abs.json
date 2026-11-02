@@ -1,0 +1,54 @@
+{
+  "file": "AMIKO_Mira2_wifi_1.2.35_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mira2 WiFi (System ID 73010A00)",
+    "type": "DVB-S2 Full HD H.265/HEVC compact satellite receiver with built-in Wi-Fi",
+    "board": "73010A00 (bootloader version \"3510DB 1.1.1\", 128 MB DDR3 single-CPU C3503D platform)",
+    "soc": "ALi M3510D / C3503D (chip word 0x3503D000, SDK chip code 0x10051, bootloader \"chip_id: HW_TYPE_CHIP+83; product_id 0.\")",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0 at 0xB804C000)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible, driven by bootloader on external IR/LED sensor pins)",
+      "scl": 24,
+      "sda": 23
+    },
+    "irCoding": "necfirst",
+    "gpioI2c": {
+      "scl": 8,
+      "sda": 7
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.2.35 emu (maincode(AV) \"73010A001235\", 2021-04-14; bootloader \"3510DB 1.1.1\")",
+    "date": "2021-04-14",
+    "size": 8388608,
+    "sha1": "c108658a8c051aaec8813c5b991a563644b8a5b1",
+    "layout": "bootloader 0x000000 (3510DB 1.1.1), maincode(AV) 0x060000 (73010A001235, LZMA 0x360D90 -> 12.6 MB), default_lang 0x52FD00 (1.0.0), countryband 0x52FF80 (1.0.0), img_webserver 0x537F80 (1.0.0), html_webserver 0x597F80 (1.0.0), logo_user 0x637F80 (1.0.0), logo_menu 0x647F80 (1.0.0), logo_radio 0x667F80 (1.0.0), logo_boot 0x687F80 (1.0.0), patch 0x6AFF80 (1.0.0), defaultdb(PRC) 0x6D0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1, 0xC0070 bytes)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mira2_wifi_1.2.35_emu%2014.04.2021.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte / Amiko",
+    "date": "2021-04-14",
+    "login": false,
+    "note": "Archive AMIKO_Mira2_wifi_1.2.35_emu 14.04.2021.zip from the Amiko/Amiko HD folder on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as the single-CPU C3503 family (chips/c3503.py, chip word 0x3503D000, run_dump_mira2_wifi_app_starts.py, run_dump_mira2_wifi_capture_screen.py): the boot-ROM SRAM bootloader (\"3510DB 1.1.1\") copies itself to 0x81000000, writes \" ON \" to the CH455 panel bus on GPIO 24 (SCL) / 23 (SDA), verifies the CRC of maincode(AV), unpacks 12.6 MB (0xC9840C bytes) to 0x80000200 and enters the application (CP0 EBase 0x80002000, where libc_printf at 0x802F7C04 is a stubbed no-op).  The application attaches its CH455 4-digit LED panel on GPIO 24 / 23 (updating it to \" on \"), unpacks defaultdb(PRC) into userdb(64+64), and draws its 4-colour 1280x720 CLUT8 OSD dialog through GeM36F / GMA layer 0 (9 GE commands)."
+  },
+  "desc": [
+    "Amiko Mira2 WiFi EMU firmware v1.2.35 (System ID 73010A00, dated 2021-04-14) for the compact Full HD H.265/HEVC DVB-S2 satellite receiver with built-in Wi-Fi on the single-CPU ALi M3510D / C3503D SoC (128 MB DDR3, 8 MB SPI flash).",
+    "Amiko sibling of the Edision Picco S2 (System ID 73010100), sharing the 3510DB 1.1.1 bootloader on GPIO 24 / 23 while compiling out maincode UART printf."
+  ]
+}

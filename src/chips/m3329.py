@@ -219,8 +219,7 @@ class M3329(ChipFamily):
     @classmethod
     def matches(cls, image):
         chain = chunk_chain(image, limit=2)
-        return bool(chain) and chain[0][1] == "bootloader" and \
-            struct.unpack_from(">I", image, chain[0][0])[0] == BOOTLOADER_CHUNK_ID
+        return bool(chain) and struct.unpack_from(">I", image, chain[0][0])[0] == BOOTLOADER_CHUNK_ID
 
     @staticmethod
     def _uses_spi_flash(image):

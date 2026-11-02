@@ -922,6 +922,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
             if (start >> 29) in (4, 5):
                 self._find_lzma_decoders(data, phys, (0x80000000, 0xA0000000))
                 self._find_delay_routines(data, phys, (0x80000000, 0xA0000000))
+                self._find_poll_loops(data, phys, (0x80000000, 0xA0000000))
 
     def _cpp_hook_code(self, uc, address, size, user_data):
         """Exact mode: the per-instruction bookkeeping of the Python engine's
@@ -985,6 +986,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._run_tid = threading.get_ident()
         self._external_stop = False
         self._run_max_vtime = max_vtime
+        _last_progress = None
+        _stall_slices = 0
         try:
             while True:
                 if self._external_stop:
@@ -993,6 +996,17 @@ class CppAliMipsSimulator(AliMipsSimulator):
                     break
                 if max_vtime is not None and self._vtime() >= max_vtime:
                     break
+                _prog = (self.instruction_count, self._vtime(), cur_pc)
+                if _prog == _last_progress:
+                    _stall_slices += 1
+                    if _stall_slices >= 64:
+                        raise RuntimeError(
+                            f"Emulation stalled with zero progress at PC=0x{cur_pc:08X} "
+                            f"(stop_reason={self._stop_reason!r})"
+                        )
+                else:
+                    _last_progress = _prog
+                    _stall_slices = 0
                 if cur_pc in self.breakpoints or (self.stop_instr is not None and cur_pc == self.stop_instr):
                     self.step()
                     cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)

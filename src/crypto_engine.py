@@ -32,8 +32,10 @@ CE = 0x34000                            # in the device window
 CE_LINE = 44
 ALGORITHMS = {0: "sha1", 1: "sha224", 2: "sha256", 3: "sha384", 4: "sha512"}
 DMA_SRC, DMA_LEN, DMA_CTRL, DMA_STATUS = 0x80, 0x88, 0x90, 0x94
+CMDQ_SLOT, CMDQ_BASE, CMDQ_CTRL, CMDQ_PTR, CMDQ_STATUS = 0xD0, 0xD4, 0xD8, 0xDC, 0xE0
 SHA_CTRL, SHA_STATUS, SHA_SRC, SHA_LEN, SHA_WORD, SHA_INDEX = 0x300, 0x304, 0x308, 0x30C, 0x314, 0x318
 DMA_START, DMA_DONE = 1 << 16, 0x10
+CMDQ_EN = 1 << 16
 SHA_FROM_DMA = 0x20
 
 
@@ -57,6 +59,8 @@ class CryptoEngine:
         rewound runs its handler again, and must not start the job twice)."""
         core._mmio_on('w', lambda *a: self._write_dma_control(core, *a), CE + DMA_CTRL, CE + DMA_CTRL + 3)
         core._mmio_on('w', self._write_dma_status, CE + DMA_STATUS, CE + DMA_STATUS + 3)
+        core._mmio_on('w', lambda *a: self._write_cmdq_ptr(core, *a), CE + CMDQ_PTR, CE + CMDQ_PTR + 3)
+        core._mmio_on('w', self._write_cmdq_status, CE + CMDQ_STATUS, CE + CMDQ_STATUS + 3)
         core._mmio_on('w', lambda *a: self._write_sha_control(core, *a), CE + SHA_CTRL, CE + SHA_CTRL + 3)
         core._mmio_on('w', self._write_sha_status, CE + SHA_STATUS, CE + SHA_STATUS + 3)
         core._mmio_on('w', self._write_sha_index, CE + SHA_INDEX, CE + SHA_INDEX + 3)
@@ -132,6 +136,69 @@ class CryptoEngine:
         self._show_word(word)
         return None
 
+    def _cmdq_write_reg(self, reg, val, be):
+        cur = self._rd(reg & ~3)
+        byte_mask = sum(0xFF << (8 * b) for b in range(4) if (be >> b) & 1)
+        word = (cur & ~byte_mask) | (val & byte_mask)
+        if reg == DMA_CTRL:
+            if word & DMA_START:
+                if self._rd(SHA_INDEX) & SHA_FROM_DMA:
+                    self._hash(self._data(self._rd(DMA_SRC) & 0x1FFFFFFF, self._rd(DMA_LEN)))
+                self._wr(DMA_STATUS, (self._rd(DMA_STATUS) | DMA_DONE) & ~0x100)
+            self._wr(DMA_CTRL, word & ~DMA_START)
+        elif reg == DMA_STATUS:
+            self._wr(DMA_STATUS, cur & ~(val & byte_mask & 0x3F))
+        elif reg == SHA_CTRL:
+            self._wr(SHA_CTRL, word & ~1)
+            if word & 1:
+                self._hash(self._data(self._rd(SHA_SRC) & 0x1FFFFFFF, self._rd(SHA_LEN)))
+        elif reg == SHA_STATUS:
+            self._wr(SHA_STATUS, cur & ~(val & byte_mask & 1))
+        elif reg == SHA_INDEX:
+            self._wr(SHA_INDEX, word)
+            self._show_word(word)
+        else:
+            self._wr(reg & ~3, word)
+
+    def _run_cmdq(self, r_idx, w_idx, ring_units):
+        base = self._rd(CMDQ_BASE) & 0x1FFFFFFF
+        ring_bytes = (ring_units or 0x400) * 16
+        pos = (r_idx * 16) % ring_bytes
+        end = (w_idx * 16) % ring_bytes
+        steps = 0
+        while pos != end and steps < ring_bytes // 8:
+            val, cmd = struct.unpack("<II", self._data(base + pos, 8))
+            op = (cmd >> 20) & 0xF
+            reg = (cmd >> 4) & 0xFFFF
+            be = cmd & 0xF
+            if op == 1 and reg < 0x1000:
+                self._cmdq_write_reg(reg, val, be)
+            elif op == 4 and reg == DMA_STATUS and be == 1 and (val & 0x80):
+                slot = self._rd(CMDQ_SLOT) & 0x1F
+                self._wr(CMDQ_STATUS, self._rd(CMDQ_STATUS) | (1 << slot))
+            pos = (pos + 8) % ring_bytes
+            steps += 1
+
+    def _write_cmdq_ptr(self, core, uc, access, address, size, value, user_data):
+        word, shift, mask = _merge(uc, address, size, value)
+        ctrl = self._rd(CMDQ_CTRL)
+        if (ctrl & CMDQ_EN) and self._first_time(core, uc, address, value):
+            w_idx = (word >> 16) & 0xFFFF
+            r_idx = word & 0xFFFF
+            self._run_cmdq(r_idx, w_idx, ctrl & 0xFFFF)
+            word = (w_idx << 16) | w_idx
+            self._wr(CMDQ_PTR, word)
+            self._update_line()
+            return (word & mask) >> shift
+        return None
+
+    def _write_cmdq_status(self, uc, access, address, size, value, user_data):
+        word, shift, mask = _merge(uc, address, size, value)
+        status = self._rd(CMDQ_STATUS) & ~((value << shift) & mask)
+        self._wr(CMDQ_STATUS, status)
+        self._update_line()
+        return (status & mask) >> shift
+
     def _cores(self):
         cores = [self.sim]
         see = getattr(self.sim.chip, "see", None)
@@ -142,7 +209,9 @@ class CryptoEngine:
 
     def _update_line(self, control=None):
         control = self._rd(DMA_CTRL) if control is None else control
-        on = bool(self._rd(DMA_STATUS) & (control >> 8) & 0x3F)
+        dma_irq = bool(self._rd(DMA_STATUS) & (control >> 8) & 0x3F)
+        cmdq_irq = bool((self._rd(CMDQ_CTRL) & CMDQ_EN) and self._rd(CMDQ_STATUS))
+        on = dma_irq or cmdq_irq
         for core in self._cores():
             enables = int.from_bytes(core.peek(core._ic_en + 4 * (CE_LINE // 32), 4), 'little')
             on_here = on and bool(enables >> (CE_LINE % 32) & 1)

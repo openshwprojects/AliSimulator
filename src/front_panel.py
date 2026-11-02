@@ -138,12 +138,15 @@ PANELS = [
     # eye; the Ariva 53's board_cfg leaves its panel I2C attach pointer NULL -- no display)
     ("A54_", _fd650k(24, 23)),
     ("PICCO_S2", dict(chip="tm1650", scl=24, sda=23, labels={})),
+    ("AMIKO_Mira2_wifi", dict(chip="tm1650", scl=24, sda=23, labels={})),
     ("underline.3in1", dict(chip="tm1650", scl=31, sda=9, labels={})),
     # Amiko HD8155 (128 MB C3505) and HD8265+ (256 MB C3505): a CH455 ("---led 455 attach OK--"),
     # TM1650-compatible in the standard digit and segment layout (" ON " from the bootloader,
     # " on " from the application), on GPIO bank 3 (0xB8000354) -- SCL = GPIO 107, SDA = GPIO 110
     # on the HD8155; SCL = GPIO 107, SDA = GPIO 108 on the HD8265+
     ("AMIKO 8155", dict(chip="tm1650", scl=107, sda=110, labels={})),
+    ("Amiko_Mini_HD265", dict(chip="tm1650", scl=107, sda=110, labels={})),
+    ("piccollino_S2+T2C", dict(chip="tm1650", scl=107, sda=110, labels={})),
     ("Impluse_H265", dict(chip="tm1650", scl=107, sda=110, labels={})),
     ("Mini_Combo_Extra", dict(chip="tm1650", scl=107, sda=110, labels={})),
     ("AMIKO 8265", dict(chip="tm1650", scl=107, sda=108, labels={})),
@@ -158,10 +161,12 @@ PANELS = [
     # (PAN_CH455_0) on GPIO bank 4, SCL = GPIO 128, SDA = GPIO 129 (" ON " -> " on ")
     ("AMIKO_T58", dict(chip="tm1650", scl=128, sda=129, labels={})),
     ("AMIKO_ECO_TC-200", dict(chip="tm1650", scl=128, sda=129, labels={})),
+    ("AMIKO_Impulse_T2C", dict(chip="tm1650", scl=128, sda=129, labels={})),
     # Amiko HD8260+ (16 MB SPI, 256 MB M3516A / M3503) and Amiko Impulse SAT (8 MB SPI, 128 MB
     # M3510B / M3503): a CH455 ("CH455 panel init OK!") on GPIO bank 4 (0xB8000454), SCL = GPIO 135,
     # SDA = GPIO 134 (" ON " -> " on ")
     ("8260_Edision", dict(chip="tm1650", scl=135, sda=134, labels={})),
+    ("piccollo_3in1_PLUS_CI", dict(chip="tm1650", scl=135, sda=134, labels={})),
     ("Impulse_SAT", dict(chip="tm1650", scl=135, sda=134, labels={})),
     ("AMIKO_HD8150", dict(chip="tm1650", scl=135, sda=134, labels={})),
     # Opticum HD X4 220 (M3602B "Lemontree"): external front-panel and EuP standby MCU at I2C 0x28
@@ -170,8 +175,10 @@ PANELS = [
     ("OPTICUM_HD_X4", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("Opticum HD X402p-403p", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("amstar_yumatu", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("globo_x4_amstar_sab", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("Opticum_HD_x7", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("Edision.vip3", dict(chip="lemontree", scl=103, sda=102, labels={})),
+    ("amiko_0A040A00", dict(chip="lemontree", scl=44, sda=43, labels={})),
     # Amiko X-Finder 2 (M3516A / M3503 handheld meter): bootloader drives CH455 (" ON ") on GPIO 135/134,
     # application drives the handheld meter's Lemontree-protocol MCU at I2C 0x28 on the same bus
     ("AMIKO_XFinder2", dict(chip="lemontree", scl=135, sda=134, labels={})),
@@ -231,6 +238,11 @@ PANELS = [
     # Opticum 4000A / Globo 7010A (M3329, 2 MB MX29LV160B parallel NOR): the same PAN_COMMON_0 74HC164
     # shift register on CLK = GPIO 16, DATA = GPIO 17, digits GPIO 18..21 (" ON " -> "1737" / "OOO1")
     ("Opticum4000a", dict(chip="hc164", clk=16, data=17, digits=(18, 19, 20, 21), labels={})),
+    # BigSat DSR 7035 Plus (M3329, 2 MB M29W160ET parallel NOR): PAN_COMMON_0 74HC164 shift register
+    # on CLK = GPIO 0, DATA = GPIO 1 with 4 active-low digit strobes on GPIO 2, 3, 5, 6 and custom
+    # segment wiring (" ON " -> "Strt" -> "noCH")
+    ("bigsat 7035", dict(chip="hc164", clk=0, data=1, digits=(2, 3, 5, 6),
+                         seg_map=(4, 6, 1, 2, 3, 5, 0, 7), labels={})),
 ]
 DEFAULT = dict(chip="tm1650", scl=31, sda=9, labels={})
 

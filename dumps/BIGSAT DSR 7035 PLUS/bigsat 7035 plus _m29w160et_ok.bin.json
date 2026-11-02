@@ -1,0 +1,52 @@
+{
+  "file": "bigsat 7035 plus _m29w160et_ok.bin",
+  "device": {
+    "brand": "BigSat",
+    "model": "DSR 7035 Plus",
+    "type": "DVB-S FTA / MultiCAS satellite receiver",
+    "board": "S1E52-2SR (ALi M3329 2 MB M29W160ET parallel-NOR DVB-S board)",
+    "soc": "ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, DECA_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0, RFM_TA1243_0)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3101 / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "2 MB ST M29W160ET parallel NOR flash (0xAFC00000, 1,984 KB dumped)",
+    "panel": {
+      "chip": "74HC164 shift register + 4-digit multiplexed LED (PAN_COMMON_0)",
+      "clk": 0,
+      "data": 1,
+      "digits": [2, 3, 5, 6]
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "dump",
+    "version": "V1.07B5* (bootloader S1E52-2SR 31001-00000, 2007-06-05; maincode 2007-06-07)",
+    "date": "2007-06-07",
+    "size": 2031616,
+    "sha1": "e78bccac68ade75e978214b006ceef98e98cdf36",
+    "layout": "S1E52-2SR 0x000000 (id 0xE3000010, 31001-00000, 20070605-161652), maincode 0x010000 (V1.07B5*, 20070607-101628, 0x07350C bytes LZSS), sky 0x0A0000 (1.0.0), RadioBack 0x0A8000 (1.0.0), keydata 0x0AFF80 (1.0.0), defaultdb 0x0C0000 (1.0.0), userdb 0x0EFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=bigsat%207035%20plus%20_m29w160et_ok.zip&directory=J-Tag_Dump_Flash",
+    "site": "satedu.cba.pl",
+    "author": "satedu.cba.pl J-Tag_Dump_Flash archive",
+    "date": "2007-06-07",
+    "login": false,
+    "note": "Archive bigsat 7035 plus _m29w160et_ok.zip from the J-Tag_Dump_Flash directory on satedu.cba.pl; fetched 2026-11-01."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "Strt",
+      "noCH"
+    ],
+    "note": "Boots as the M3329 family (chips/m3329.py, chip ID 0x3101) from its 2 MB ST M29W160ET parallel NOR flash at 0xAFC00000 (its first chunk has BOOTLOADER_CHUNK_ID 0xE3000010 and OEM board name \"S1E52-2SR\"): the bootloader unpacks maincode V1.07B5* into SDRAM and starts it (\"APP  init ok\").  PAN_COMMON_0 multiplexes its 4-digit 7-segment front panel through a 74HC164 shift register on CLK = GPIO 0, DATA = GPIO 1 and active-low digit strobes GPIO 2, 3, 5, 6 with segment mapping (4, 6, 1, 2, 3, 5, 0, 7) (hc164_decoder.py: \" ON \" -> \"Strt\" -> \"noCH\"), while OSD_M3327_0 renders its 156-colour 608x430 centered 8 bpp CLUT direct framebuffer window at (56, 73) (0xB80041A0 = 0x0000800F, 0xB80041A4 = 0x80212420, 0xB80041A8 = 0x026001AE, 0xB80041B0 = 0x00380297, 0xB80041B4 = 0x004901F6) showing the \"Edit Channel\" main menu."
+  },
+  "desc": [
+    "2 MB ST M29W160ET parallel-NOR JTAG flash dump (1,984 KB file, maincode V1.07B5* dated 2007-06-07) from a BigSat DSR 7035 Plus DVB-S satellite receiver (board S1E52-2SR).",
+    "Uses the M3327 direct-window OSD controller (OSD_M3327_0 centered 608x430 window at (56, 73) via 0xB80041B0 / 0xB80041B4) and a 74HC164 shift-register front panel on GPIO 0 / 1 with digit strobes on GPIO 2, 3, 5, 6."
+  ]
+}

@@ -4400,6 +4400,7 @@ class AliMipsSimulator:
                 sites |= {seg + off for off in found}
             if (start >> 29) in (0, 4, 5):
                 self._find_long_blocks(ram, phys, (0x80000000, 0xA0000000))
+                self._find_poll_loops(ram, phys, (0x80000000, 0xA0000000))
             if not full and (start >> 29) in (4, 5):                # (a chunk's first execution, new code)
                 self._find_lzma_decoders(ram, phys, (0x80000000, 0xA0000000))
                 self._find_delay_routines(ram, phys, (0x80000000, 0xA0000000))
@@ -4937,13 +4938,13 @@ class AliMipsSimulator:
             imm_x = (((br & 0xFFFF) ^ 0x8000) - 0x8000) & 0xFFFFFFFF
             reg_x = (br >> 16) & 31
             br = words[i + 2]
-            if words[i + 3] != 0 or (br >> 26) not in (4, 5) or not (0xFFF0 <= (br & 0xFFFF) <= 0xFFFE):
+            if words[i + 3] != 0 or (br >> 26) not in (4, 5) or not (0xFFE0 <= (br & 0xFFFF) <= 0xFFFE):
                 return None
             rs = (lw >> 21) & 31
             w_m2, w_m1 = words[i - 2], words[i - 1]
             if (w_m2 >> 16) == (0x3C00 | rs) and (w_m1 >> 16) == (0x3400 | (rs << 5) | rs):
                 base_val = ((w_m2 & 0xFFFF) << 16) | (w_m1 & 0xFFFF)
-        elif words[i + 2] != 0 or (br & 0xFFFF) != 0xFFFE or (br >> 26) not in (4, 5):
+        elif words[i + 2] != 0 or not (0xFFE0 <= (br & 0xFFFF) <= 0xFFFE) or (br >> 26) not in (4, 5):
             return None
         rs, rt, a, b = (lw >> 21) & 31, (lw >> 16) & 31, (br >> 21) & 31, (br >> 16) & 31
         if rt not in (a, b):
@@ -4982,6 +4983,44 @@ class AliMipsSimulator:
             until = min(until, now + budget / self._insn_rate)
         return until if until > now else None
 
+    _POLL_ORI_RE = re.compile(rb"[\x00\x04]\x02[\x00-\xff][\x34-\x37]")
+
+    def _find_poll_loops(self, data, base, views):
+        """Hook mailbox poll loops in `data` (code at physical offset `base`)
+        whose base register is set up by `ori rS, rX, 0x200 / 0x204` nearby."""
+        if not self.poll_skip:
+            return
+        data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
+        n = len(data)
+        unpack = struct.unpack_from
+        for m in self._POLL_ORI_RE.finditer(data):
+            p = m.start()
+            if p & 3:
+                continue
+            ori = unpack("<I", data, p)[0]
+            rs = (ori >> 16) & 31
+            end = min(n - 16, p + 36 * 4)
+            for q in range(p + 4, end + 1, 4):
+                lw = unpack("<I", data, q)[0]
+                if (lw & 0xFC00FFFF) != 0x8C000000 or ((lw >> 21) & 31) != rs:
+                    continue
+                rt = (lw >> 16) & 31
+                w1, w2, w3 = unpack("<3I", data, q + 4)
+                if (w1 >> 21) == 0x120:
+                    br, nop = w2, w3
+                else:
+                    br, nop = w1, w2
+                if nop != 0 or (br >> 26) not in (4, 5) or not (0xFFE0 <= (br & 0xFFFF) <= 0xFFF8):
+                    continue
+                if rt not in ((br >> 21) & 31, (br >> 16) & 31):
+                    continue
+                for view in views:
+                    start = view + base + q
+                    if start not in self._poll_loops:
+                        self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
+                                                                   begin=start, end=start)
+                        self._tb_flush_needed = True
+
     def _poll_start(self, pc):
         """The start (its load) of the mailbox poll whose load or branch is at
         pc, while it holds; its code hook is installed then.  None otherwise."""
@@ -4993,28 +5032,27 @@ class AliMipsSimulator:
         w = words[i]
         op = w >> 26
         if op == 0x23:
-            start = pc
+            candidates = (pc,)
         elif op in (4, 5):
-            start = pc - 8 if i >= 2 and (words[i - 1] >> 21) == 0x120 else pc - 4
+            candidates = (pc - 8 if i >= 2 and (words[i - 1] >> 21) == 0x120 else pc - 4,)
         elif op == 9:
-            start = pc - 4
+            candidates = (pc - 4,)
         elif op == 0x0D:
-            start = pc + 4
+            candidates = (pc + 4,)
         elif op == 0x0F:
-            start = pc + 8
-        elif op == 3:
-            start = pc + 40
-        elif op == 0 and (w & 0x3F) == 0x23:
-            start = pc + 32
+            candidates = (pc + 8,)
+        elif op == 3 or (op == 0 and (w & 0x3F) == 0x23):
+            candidates = tuple(pc + off for off in range(32, 116, 4))
         else:
             return None
-        si = (start & 0x1FFFFFFF) >> 2
-        if 0 <= si < self._ram_words_len - 4 and (words[si] >> 26) == 0x23 and self._poll_loop(start) is not None:
-            if start not in self._poll_loops:
-                self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
-                                                           begin=start, end=start)
-                self._tb_flush_needed = True
-            return start
+        for start in candidates:
+            si = (start & 0x1FFFFFFF) >> 2
+            if 0 <= si < self._ram_words_len - 4 and (words[si] >> 26) == 0x23 and self._poll_loop(start) is not None:
+                if start not in self._poll_loops:
+                    self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
+                                                               begin=start, end=start)
+                    self._tb_flush_needed = True
+                return start
         return None
 
     def _skip_poll(self, pc, max_vtime):
@@ -5539,6 +5577,8 @@ class AliMipsSimulator:
         self._run_tid = threading.get_ident()
         self._external_stop = False
         self._run_max_vtime = max_vtime
+        _last_progress = None
+        _stall_slices = 0
         try:
             while True:
                 if self._external_stop:
@@ -5547,6 +5587,17 @@ class AliMipsSimulator:
                     break
                 if max_vtime is not None and self._vtime() >= max_vtime:
                     break
+                _prog = (self.instruction_count, self._vtime(), cur_pc)
+                if _prog == _last_progress:
+                    _stall_slices += 1
+                    if _stall_slices >= 64:
+                        raise RuntimeError(
+                            f"Emulation stalled with zero progress at PC=0x{cur_pc:08X} "
+                            f"(stop_reason={self._stop_reason!r})"
+                        )
+                else:
+                    _last_progress = _prog
+                    _stall_slices = 0
 
                 # Sitting on a breakpoint / stop address: step over it first,
                 # otherwise emu_start would stop on it immediately.

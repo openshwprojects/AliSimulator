@@ -47,6 +47,12 @@ class C3505(UpperRamMixin, M3821):
         super().install()
         self.ready300 = ReadyBits(self.sim, {0x301: 0x01})     # bit 8 of 0xB8000300: polled before the bootloader goes on
         self.nim = InternalDemod(self.sim)
+        from video_m36 import VideoEngine, VideoOutputM36F
+        from crypto_engine import CryptoEngine
+        self.video_engine = VideoEngine(self.sim, reset=(0x80, 0x02))
+        self.video_output = VideoOutputM36F(self.sim)
+        self.ce = CryptoEngine(self.sim)
+        self.core_devices = getattr(self, "core_devices", ()) + (self.dma, self.video_engine, self.video_output, self.ce)
         self._install_upper_ram_and_scb3()
         self._configure_memory()
 

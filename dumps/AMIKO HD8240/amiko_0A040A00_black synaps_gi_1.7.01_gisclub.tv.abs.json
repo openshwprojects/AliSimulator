@@ -1,0 +1,59 @@
+{
+  "file": "amiko_0A040A00_black synaps_gi_1.7.01_gisclub.tv.abs",
+  "device": {
+    "brand": "Amiko / Galaxy Innovations",
+    "model": "HD8240 / GI Black Synaps (System ID 0A040A00, 1.7.01 EMU build)",
+    "type": "Full HD DVB-S2 / DVB-T / DVB-C receiver with CA, CI and Ethernet",
+    "board": "0A040A00 (Fulansoft / Synaps ALi M3606B Lemontree EuP platform, stb_board_type = 2)",
+    "soc": "ALi M3606B / C3603 (bootloader \"M3606B 1.1.3\", seecode \"M3606 SEE\")",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3603",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28)",
+      "scl": 44,
+      "sda": 43
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.7.01 Black Synaps GI (maincode(AV) \"0A040A001701\"; bootloader \"M3606B 1.1.3\", 2010-09-06; seecode \"M3606 SEE\", 2016-03-31)",
+    "date": "2016-04-01",
+    "size": 8388608,
+    "sha1": "75941ab95521b908f7be381e6bbc1c52e44bb243",
+    "layout": "bootloader 0x000000 (M3606B 1.1.3, 2010-09-06), maincode(AV) 0x020000 (0A040A001701, 2016-4-1, LZMA -> 8.85 MB), seecode 0x320000 (M3606 SEE, 2016-3-31, LZMA -> 2.18 MB), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), countryband 0x480000 (1.0.0), logo_user 0x488000 (1.0.0), logo_menu 0x498000 (1.0.0), logo_radio 0x4B8000 (1.0.0), logo_boot 0x4D8000 (1.0.0), patch 0x52FF80 (1.0.0), defaultdb(PRC) 0x550000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_0A040A00_black%20synaps_gi_1.7.01_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko / Galaxy Innovations firmware archive)",
+    "author": "Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod)",
+    "date": "2016-04-01",
+    "login": false,
+    "note": "Archive amiko_0A040A00_black synaps_gi_1.7.01_gisclub.tv.rar from the Amiko/Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as an M3602-family board with chip ID 0x3603 (C3603, chips/m3602.py, lemontree_decoder.py, run_dump_hd8240_app_starts.py, run_dump_hd8240_capture_screen.py): under 0x3603 the \"M3606B 1.1.3\" bootloader maps the 8 MB flash in the 16 MB window at 0xAF000000, prints \"APP  init ok\", parks the SEE boot stub at 0xA1E8F2A8, exchanges CRC-16/XMODEM frames (\" ON \" -> \"    \") with the Lemontree EuP standby and 4-digit LED microcontroller at I2C 0x28 on bit-banged GPIO 44 (SCL) / 43 (SDA), and unpacks maincode(AV) to 0x80000200.  The application starts \"M3606 SEE\" at 0xA7000200 (EBase 0x80000000 / 0x80000001), updates the Lemontree panel to \" on \", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (\"stb_tuner_type = 1, stb_board_type =2.\"), and renders its 1280x720 OSD dialog (9 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Amiko HD8240 / Galaxy Innovations Black Synaps (System ID 0A040A00) firmware 1.7.01 (2016-04-01) on an 8 MB SPI flash for the ALi M3606B / C3603 Full HD receiver.",
+    "Pairs dual-CPU M3606 maincode + seecode (\"M3606 SEE\" at 0xA7000200) with a Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 44 / 43 (\" ON \" -> \" on \"), ALi S3501 DVB-S2 demodulator at I2C 0x33, and Airoha AV2011 tuner at I2C 0x60."
+  ]
+}

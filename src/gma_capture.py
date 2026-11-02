@@ -245,8 +245,8 @@ def m3327_regions(ram, dev):
     the enabled layers.
       * OSD_M3327 direct-window mode (0x41A8 / 0x41CC non-zero): 0x41A4 / 0x41C4
         points directly to the pixel framebuffer in RAM, 0x41A8 / 0x41CC holds
-        (pitch_bytes << 16) | height, 0x41B0 / 0x41D0 holds (x0 << 10) | x1, and
-        0x41B4 / 0x41D4 holds (y0 << 10) | y1.
+        (pitch_bytes << 16) | height, 0x41B0 / 0x41D0 holds (x0 << 16) | x1, and
+        0x41B4 / 0x41D4 holds (y0 << 16) | y1.
       * OSD_M3327C / OSD_S36 region-header chain (0x41A8 / 0x41CC == 0): 16-byte
         headers in RAM from 0x41A4 / 0x41C4:
           +0  b2-3 colour mode (0 2 bpp, 1 4 bpp, 2 8 bpp, 3 4 bpp), b4-22 the
@@ -272,8 +272,8 @@ def m3327_regions(ram, dev):
         if pitch_bytes and direct_h:
             xy_x = struct.unpack_from('<I', dev, x_reg)[0]
             xy_y = struct.unpack_from('<I', dev, y_reg)[0]
-            x0, x1 = (xy_x >> 10) & 0x3FF, xy_x & 0x3FF
-            y0, y1 = (xy_y >> 10) & 0x3FF, xy_y & 0x3FF
+            x0, x1 = (xy_x >> 16) & 0x3FF, xy_x & 0x3FF
+            y0, y1 = (xy_y >> 16) & 0x3FF, xy_y & 0x3FF
             width = (x1 - x0 + 1) if x1 >= x0 else 0
             height = (y1 - y0 + 1) if y1 >= y0 else direct_h
             mode_bits = (on >> mode_shift) & 7

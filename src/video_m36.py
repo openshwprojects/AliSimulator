@@ -481,3 +481,63 @@ class VideoOutput(_Device):
         word = self._word()
         self.sim.poke(self.register, struct.pack("<I", word))
         self._line(word)
+
+
+class VideoOutputM36F(_Device):
+    """VPO_M36F_0 interrupt registers at 0xB8006288 (HD) and 0xB8006488 (SD) on
+    interrupt-controller line 2: enables in bits 16..24, status in bits 0..8
+    (write 1 to clear): bit 2 = vertical blank, bit 4 = top field, bit 5 =
+    bottom field.  Used by C3505 / M3526A bootloaders and applications when
+    decoding and displaying the MPEG-2 boot logo."""
+    REGS = (0xB8006288, 0xB8006488)
+
+    def __init__(self, sim, line=VPO_LINE):
+        self.line = line
+        self.status = [0, 0]
+        self.field = 0
+        self.fields = 0
+        self._next = None
+        super().__init__(sim)
+        sim.slice_services.append(self.service)
+
+    def wire(self, core):
+        for idx, reg in enumerate(self.REGS):
+            off = reg & 0xFFFFFF
+            core._mmio_on('w', lambda uc, a, addr, sz, val, ud, i=idx: self._write(i, uc, addr, sz, val), off, off + 3)
+
+    def _enables(self, idx):
+        word = int.from_bytes(self.sim.peek(self.REGS[idx], 4), 'little')
+        return (word >> 16) & 0x1FF
+
+    def _update_line(self):
+        active = any(self.status[i] & self._enables(i) for i in range(2))
+        self._set_line(self.line, active)
+
+    def _write(self, idx, uc, address, size, value):
+        base, word, shift, mask = _merge(uc, address, size, value)
+        written_low = ((value << shift) & mask) & 0x1FF
+        self.status[idx] &= ~written_low
+        landed = (word & ~0x1FF) | (self.status[idx] & 0x1FF)
+        self.sim.poke(self.REGS[idx], struct.pack("<I", landed))
+        self._update_line()
+        return (landed & mask) >> shift
+
+    def due(self):
+        return self._next
+
+    def service(self):
+        now = self.sim._vtime()
+        if self._next is None:
+            self._next = now + FIELD_S
+        if now < self._next:
+            return
+        self._next = now + FIELD_S
+        self.fields += 1
+        self.field ^= 1
+        bits = 0x04 | (0x20 if self.field else 0x10)
+        for i, reg in enumerate(self.REGS):
+            self.status[i] = (self.status[i] & ~0x34) | bits
+            word = int.from_bytes(self.sim.peek(reg, 4), 'little')
+            self.sim.poke(reg, struct.pack("<I", (word & ~0x1FF) | (self.status[i] & 0x1FF)))
+        self._update_line()
+
