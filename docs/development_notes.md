@@ -21,7 +21,7 @@ M3503).
   `crypto_engine.py`, `parallel_flash.py`,
   the panel decoders, `front_panel.py`, `ir_remote.py`, `i2c_scb.py`), plus the two GUIs:
   `python src/tv_gui.py [<dump>] [--family <name>] [--json <sidecar>]` (the TV: OSD,
-  panel, remote, with a toolbar to pick any of the repo's 134 dumps or browse a file,
+  panel, remote, with a toolbar to pick any of the repo's 174 dumps or browse a file,
   override the chip family, sidecar JSON and IR coding, and toggle live signal + TS) and
   `python src/gui_simulator.py [<dump>] [--family <name>] [--json <sidecar>] [--fast]`
   (the debugger, with the same target selectors and a Fast Mode toggle).
@@ -143,7 +143,7 @@ M3503).
   the chip ID 0x3503 -- and its single-CPU application draws its Quick Setup
   menu once that demodulator answers: a task of it kept the OSD layer off
   until the NIM device reported an S3501's chip ID
-  (`run_dump_esr250_capture_screen.py`). The Amiko HD8260+ (`dumps/AMIKO HD8260+/`, bootloader "M3516A 1.2.1", 16 MB SPI flash) is the 256 MB DDR3 dual-tuner sibling of this family: its XIP bootloader sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, unpacks its "M3606 SEE" program to 0xAE000200, and runs an application that configures an Availink AVL6762 DVB-T2/C demodulator (`demods.AVL6762`, ChipID 0x0E) at I2C 0x14 over bit-banged GPIO 7 / 8 (`AVL6862.read` auto-incrementing its 24-bit register pointer across `GpioI2cBus`'s byte-by-byte reads), an Airoha AV2012 DVB-S2 tuner at 0x61 on SCB0, and a CH455 panel on GPIO 135 / 134, then draws a Full HD 1920 x 1080 1:1 CLUT8 OSD layer (`gma_capture.py` resamples 1:1 1920 x 1080 GMA heads onto the 1280 x 720 canvas); `M3503.variant()` reports silicon revision B (`0xB8000000 = 0x35030001`) for "M3516" bootloaders so `sys_ic_get_rev_id()` returns 0x20002 instead of revision A 0x20001, under which the SDK's capability task cleared bit 0 of GMA layer 0 control 0xB8006300 (`run_dump_hd8260_app_starts.py`, `run_dump_hd8260_capture_screen.py`). The 256 MB rev-B path also boots the Opticum XS65 Combo (`M3515`, AV2011 + FD650K on GPIO 135 / 134, `run_dump_xs65_combo_app_starts.py`), the Opticum XS65 Twin (`M3511`, second S3501 demodulator on bit-banged GPIO 6 / 7, `run_dump_xs65_twin_app_starts.py`) and the Amiko X-Finder 2 handheld satellite/terrestrial meter (`M3516A`, 16 MB SPI flash, Lemontree meter MCU on GPIO 135 / 134, `run_dump_xfinder2_app_starts.py`), while the 128 MB rev-B `M3510B` / `M3511D` path boots the Amiko Impulse SAT and Amiko HD8150 (`run_dump_impulse_sat_app_starts.py`, `run_dump_hd8150_app_starts.py`).
+  (`run_dump_esr250_capture_screen.py`). The Amiko HD8260+ (`dumps/AMIKO HD8260+/`, bootloader "M3516A 1.2.1", 16 MB SPI flash) is the 256 MB DDR3 dual-tuner sibling of this family: its XIP bootloader sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, unpacks its "M3606 SEE" program to 0xAE000200, and runs an application that configures an Availink AVL6762 DVB-T2/C demodulator (`demods.AVL6762`, ChipID 0x0E) at I2C 0x14 over bit-banged GPIO 7 / 8 (`AVL6862.read` auto-incrementing its 24-bit register pointer across `GpioI2cBus`'s byte-by-byte reads), an Airoha AV2012 DVB-S2 tuner at 0x61 on SCB0, and a CH455 panel on GPIO 135 / 134, then draws a Full HD 1920 x 1080 1:1 CLUT8 OSD layer (`gma_capture.py` resamples 1:1 1920 x 1080 GMA heads onto the 1280 x 720 canvas); `M3503.variant()` reports silicon revision B (`0xB8000000 = 0x35030001`) for "M3516" bootloaders so `sys_ic_get_rev_id()` returns 0x20002 instead of revision A 0x20001, under which the SDK's capability task cleared bit 0 of GMA layer 0 control 0xB8006300 (`run_dump_hd8260_app_starts.py`, `run_dump_hd8260_capture_screen.py`). The 256 MB rev-B path also boots the Opticum XS65 Combo (`M3515`, AV2011 + FD650K on GPIO 135 / 134, `run_dump_xs65_combo_app_starts.py`), the Opticum XS65 Twin (`M3511`, second S3501 demodulator on bit-banged GPIO 6 / 7, `run_dump_xs65_twin_app_starts.py`) and the Amiko X-Finder 2 (`M3516A`, 16 MB SPI flash, Lemontree meter MCU on GPIO 135 / 134, `run_dump_xfinder2_app_starts.py`) and Amiko X-Finder+ (`M3516F`, 16 MB SPI flash, CH455 keypad and LED controller on GPIO 135 / 134, `run_dump_xfinder_plus_app_starts.py`) handheld satellite/terrestrial meters, while the 128 MB rev-B `M3510B` / `M3511A` / `M3511D` path boots the Amiko Impulse SAT, Amiko Mini HD RE and Amiko HD8150 (`run_dump_impulse_sat_app_starts.py`, `run_dump_minihd_re_app_starts.py`, `run_dump_hd8150_app_starts.py`).
   The C3505 (`chips/c3505.py`, the Ferguson Ariva T760i, 104, 154 Combo,
   204 and 254 Combo update images) is the
   M3821's boot-ROM path with its own chip ID 0x3505 and one more ready bit
@@ -888,7 +888,13 @@ then every 1000th.
   time: sparse commands, as during the bootloader's decompression, cost two
   flushes each, but dense sequences keep the hook — dump.bin's application
   reads its flash database byte by byte, ~750k commands, 5x faster this way;
-  0 toggles it around every command). Two native Unicorn crashes
+  0 toggles it around every command; write-only SPI opcodes `_SPI_NO_READ_HOOK`
+  such as 0x06 WREN, 0x02 / 0xAD page program and 0x20 / 0xD8 sector erase do
+  not install the read hook, and `_spi_fast_page_program` skips zero-effect
+  page-program bytes (`val & cur == cur`) in `_hook_spi_flash_write`, so
+  6.27 M-byte factory userdb formatting on the Amiko STHD-8800 Combo and
+  SHD-8000 runs without translation-cache flushes or `rom_image` write-backs).
+  Two native Unicorn crashes
   (access violations, 7-30% of the boots) came with an earlier version: memory
   hooks added / removed from a device callback while the CPU ran, and Python
   writes (`uc.mem_write`) into the read-only guest flash mapping from a hook

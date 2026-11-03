@@ -1,0 +1,51 @@
+{
+  "file": "Piccollino_S2_v.1375.abs",
+  "device": {
+    "brand": "Edision",
+    "model": "Piccollino S2 (System ID 6B000100, v.1375 build)",
+    "type": "Full HD H.265/HEVC DVB-S2 satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "M3606-01V01-DH-W (ALi M3521A / C3505 128 MB DDR3 board)",
+    "soc": "ALi M3521A / C3505 (bootloader \"M3521A 1.1.1\", seecode \"M3606 SEE\", 128 MB DDR3)",
+    "family": "C3505 (chips/c3505.py)",
+    "chipId": "0x3505",
+    "demod": "internal ALi C3505 DVB-S2 (NIM_C3505_0 / NIM_S3505_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "v.1375 (maincode(AV) \"6B0001001375\"; bootloader \"M3521A 1.1.1\", 2016-07-20; seecode \"M3606 SEE\", 2019-07-10)",
+    "date": "2019-07-10",
+    "size": 8388608,
+    "sha1": "99a3963604e7841ad24065da471f5ee8a83dfcba",
+    "layout": "bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x060000 (6B0001001375, 2010-08-12, LZMA -> 12.48 MB), seecode 0x3F0000 (M3606 SEE, 2019-7-10, LZMA -> 3.54 MB), default_lang 0x51FD00 (1.0.0), cipluskey 0x51FF80 (1.1.0), countryband 0x52FF80 (1.0.0), img_webserver 0x537F80 (1.0.0), html_webserver 0x597F80 (1.0.0), logo_user 0x637F80 (1.0.0), logo_menu 0x647F80 (1.0.0), logo_radio 0x667F80 (1.0.0), logo_boot 0x687F80 (1.0.0), patch 0x6AFF80 (1.0.0), defaultdb(PRC) 0x6D0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Piccollino_S2_v.1375.zip&directory=Firmware%20for%20to%20all%20receivers/Edison",
+    "site": "satedu.cba.pl (a mirror of the Edision firmware archive)",
+    "author": "Edision",
+    "date": "2019-07-10",
+    "login": false,
+    "note": "Archive Piccollino_S2_v.1375.zip from the Edison directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as C3505 with 128 MB DDR3 (chips/c3505.py, run_dump_piccollino_s2_app_starts.py, run_dump_piccollino_s2_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, copies itself to 0x81000000, writes \" ON \" to the CH455 front panel on GPIO 107 (SCL) / 110 (SDA), shows the boot logo through VideoOutputM36F, unpacks seecode (\"M3606 SEE\") to 0xA6000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x86002001).  The application updates the CH455 panel to \" on \", initializes MultiCAS (\"[mcas] max_key_db_count = 505\"), and renders its 1280x720 ARGB8888 OSD dialog through the display engine at 0xB8006900 (5 GE commands, 14 colours)."
+  },
+  "desc": [
+    "Edision Piccollino S2 (System ID 6B000100) firmware v.1375 (2019-07-10) on an 8 MB SPI flash for the ALi M3521A / C3505 Full HD H.265/HEVC DVB-S2 satellite receiver with 128 MB DDR3.",
+    "Pairs dual-CPU C3505 maincode + seecode (\"M3606 SEE\" at 0xA6000200) with a CH455 4-digit LED panel on GPIO 107 / 110 (\" ON \" -> \" on \") and a 60-entry 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

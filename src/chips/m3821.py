@@ -250,6 +250,8 @@ class SpiStream:
             self._reset()
         else:
             self._end()
+        if hasattr(self.sim, "_cpp_spi_sync"):
+            self.sim._cpp_spi_sync()
         self.sim._update_flash_read_hooks()     # the window's hooks follow the mode
 
     def _write_dma_ctrl(self, uc, access, address, size, value, user_data):
@@ -588,4 +590,4 @@ class M3821(ChipFamily):
         sim.mu.reg_write(UC_MIPS_REG_PC, ENTRY)
 
     def code_ranges(self):
-        return [] if self.xip else [(0x80000000 + SRAM_PHYS, BOOT_COPY)]
+        return [] if self.xip else [(0x80000000 + SRAM_PHYS, BOOT_COPY), (0x82800000, 0x100000)]

@@ -42,8 +42,8 @@ from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
 import cpp_core
 from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_EPC, F_EBASE, F_COMPARE, F_COUNT,
-                      F_TI, F_TIMER_ARMED, F_TIMER_ENABLED, F_TIMER_IRQS, F_IC_IRQS, F_IC_LINES, F_UART_IP3,
-                      F_UART_PENDING, F_UART_DELIVERED, F_UART_AT, F_UART_FORCE, F_IDLE_SKIP, F_EXACT,
+                      F_TI, F_TIMER_ARMED, F_TIMER_ENABLED, F_TIMER_IRQS, F_IC_IRQS, F_IC_LINES, F_IC_LINES_HI,
+                      F_UART_IP3, F_UART_PENDING, F_UART_DELIVERED, F_UART_AT, F_UART_FORCE, F_IDLE_SKIP, F_EXACT,
                       F_IRQS_ENABLED, F_M16, F_DS_ACTIVE, F_IDLE_SKIPPED, F_FAULT_PC, F_FAULT_ADDR,
                       F_STEP_OVER_BP, F_IRQ_DELIVERABLE, F_IC_IP3, F_TIMER_ANCHOR, F_LAST_ERROR,
                       F_PC_MODE, F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_COUNT_RAW_WRITE,
@@ -169,8 +169,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
     def _spi_native_wanted(self):
         """Whether the core's own SPI controller serves the firmware: not while the
         Python model is needed -- SPI logging, a family's byte-stream mode of the
-        window (the M3821's), a parallel flash, an observer on its registers."""
-        return (not self._spi_dump_enabled and not self._spi_dump_flash_reads and self._spi_stream is None
+        window (the M3821's, while active), a parallel flash, an observer on its registers."""
+        return (not self._spi_dump_enabled and not self._spi_dump_flash_reads
+                and (self._spi_stream is None or not self._spi_stream.active)
                 and self.flash_device is None and getattr(self, "spi_native", True)
                 and not any(lo <= off <= hi for _w, lo, hi, _cb in self._mmio_observers for off in SPI_REGS))
 
@@ -584,7 +585,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
     @_ic_lines.setter
     def _ic_lines(self, value):
         self.__dict__['_ic_lines_v'] = value
-        self._core.set(F_IC_LINES, value)
+        self._core.set(F_IC_LINES, value & 0xFFFFFFFFFFFFFFFF)
+        self._core.set(F_IC_LINES_HI, (value >> 64) & 0xFFFFFFFFFFFFFFFF)
 
     def set_ic_layout(self, status, enable):
         super().set_ic_layout(status, enable)

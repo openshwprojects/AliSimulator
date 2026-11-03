@@ -474,7 +474,9 @@ class VideoOutput(_Device):
         self._mid = now + FIELD_S / 2
         self.fields += 1
         self.field ^= 1
-        self._post(VPO_BLANK | VPO_FIELD_START)
+        word = int.from_bytes(self.sim.peek(self.register, 4), 'little')
+        field_status = 0x20 if (self.field and (word & 0x20)) else VPO_FIELD_START
+        self._post(VPO_BLANK | field_status)
 
     def _post(self, bits):
         self.status |= bits

@@ -1,0 +1,49 @@
+{
+  "file": "AMIKO_HD8150_Galaxy_S_2.4.51_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8150 (System ID 10030A00, Galaxy S v2.4.51 by Dekolte)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "10030A00 (bootloader version \"M3511D 1.1.1\", 128 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0xA6000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko HD8150 (Galaxy S v2.4.51 by Dekolte) (bootloader 'M3511D 1.1.1'; MemCfg '00000001'; maincode(AV) '10030A002451')",
+    "date": "2017-03-15",
+    "size": 8388608,
+    "sha1": "04f3d76bf44706652824312df56bec7e61dc1c3d",
+    "layout": "bootloader 0x000000 (M3511D 1.1.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_S_2.4.51_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2017-03-15",
+    "login": false,
+    "note": "Archive AMIKO_HD8150_Galaxy_S_2.4.51_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots on M3503 (chips/m3503.py) (run_dump_hd8150_galaxy_s_2451_app_starts.py, run_dump_hd8150_galaxy_s_2451_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko HD8150 (System ID 10030A00, Galaxy S v2.4.51 by Dekolte) firmware (2017-03-15) on a 8 MB SPI flash for ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0xA6000200)."
+  ]
+}

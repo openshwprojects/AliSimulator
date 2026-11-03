@@ -20,7 +20,7 @@ enum Field : int {
   F_IC_IP3, F_TIMER_ANCHOR, F_LAST_ERROR, F_STOP_REASON, F_ERROR_EPC, F_COMPARE_WRITE, F_PC_MODE,
   F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_CHUNK_EVENTS, F_DS_TARGET, F_DS_M16, F_BADVADDR, F_LLBIT,
   F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
-  F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS, F_FF_SKIPPED,
+  F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS, F_FF_SKIPPED, F_IC_LINES_HI,
 };
 
 ALI_API void *ali_new() { return new Core(); }
@@ -245,6 +245,7 @@ ALI_API uint64_t ali_get(void *c, int field) {
     case F_IC_IRQS: return k->ic_irqs;
     case F_UART_IRQS: return k->uart_irqs;
     case F_IC_LINES: return k->ic_lines_;
+    case F_IC_LINES_HI: return k->ic_lines_hi_;
     case F_UART_IP3: return k->uart_ip3;
     case F_UART_PENDING: return k->uart_pending_;
     case F_UART_DELIVERED: return k->uart_delivered_;
@@ -313,6 +314,7 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_IC_IRQS: k->ic_irqs = v; break;
     case F_UART_IRQS: k->uart_irqs = v; break;
     case F_IC_LINES: k->ic_lines_ = v; break;
+    case F_IC_LINES_HI: k->ic_lines_hi_ = v; break;
     case F_UART_IP3: k->uart_ip3 = v != 0; break;
     case F_UART_PENDING: k->uart_pending_ = v != 0; break;
     case F_UART_DELIVERED: k->uart_delivered_ = v != 0; break;

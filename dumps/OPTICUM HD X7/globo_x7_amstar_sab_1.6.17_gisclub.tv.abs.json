@@ -1,0 +1,58 @@
+{
+  "file": "globo_x7_amstar_sab_1.6.17_gisclub.tv.abs",
+  "device": {
+    "brand": "SAB / Globo",
+    "model": "HD X7 Combo (System ID 06000200, SAB Amstar GUI 1.6.17)",
+    "type": "DVB-S2 + DVB-T / Twin Full HD satellite & terrestrial combo receiver with VFD, 2x CA, 2x CI",
+    "board": "06000200 (Globo / Opticum M3602A \"Lemontree\" VFD platform with EuP standby MCU)",
+    "soc": "ALi M3602A (bootloader \"M3602A 1.1.6\"; Libcore SDK4.0aa.5.5_20110905 / SDK4.0aa.5.12_GLS_S2_20120627)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 / SCB1 at I2C 0x33 (+ COFDM DVB-T probe at I2C 0x11)",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0 / SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + PT6311 8-char VFD (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.6.17 SAB Amstar (maincode(AV) \"060002001617\", 2016-07-08; bootloader \"M3602A 1.1.6\", 2009-12-29)",
+    "date": "2016-07-08",
+    "size": 4194304,
+    "sha1": "0529af7646a0207a9658ec20c2701498e1a2c080",
+    "layout": "bootloader 0x000000 (M3602A 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060002001617, 2016-7-8, LZMA -> 6.54 MB at 0x80008000), default_lang 0x29FD80 (1.0.0), countryband 0x2A0000 (1.0.0), logo_user 0x2A8000 (1.0.0), logo_menu 0x2A8080 (1.0.0), logo_radio 0x2A8100 (1.0.0), logo_boot 0x2B0000 (1.0.0), patch 0x2CFF80 (1.0.0), defaultdb(PRC) 0x2F0000 (1.0.2), userdb(64+64) 0x31FF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x7_amstar_sab_1.6.17_gisclub.tv.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": "SAB / Globo (gisclub.tv Amstar GUI mod)",
+    "date": "2016-07-08",
+    "login": false,
+    "note": "Archive globo_x7_amstar_sab_1.6.17_gisclub.tv.zip from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "GISCLUB "
+    ],
+    "note": "Boots as an M3602A board (chips/m3602.py, lemontree_decoder.py, run_dump_globo_x7_amstar_1617_app_starts.py, run_dump_globo_x7_amstar_1617_capture_screen.py): the \"M3602A 1.1.6\" bootloader prints \"APP  init ok\", exchanges CRC-16/XMODEM transactions and 38-byte PT6311 8-character 14-segment VFD frames with the external Lemontree EuP standby and VFD microcontroller at I2C 0x28 over bit-banged GPIO 62 (SCL) / 171 (SDA), unpacks the 6.54 MB maincode(AV) to 0x80008000 and enters the application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 on SCB0 and SCB1, and renders its SAB Amstar OSD dialog through GeM3602."
+  },
+  "desc": [
+    "Globo / Opticum HD X7 Combo (System ID 06000200) firmware 1.6.17 with the SAB Amstar GUI (2016-07-08) on a 4 MB SPI flash for the ALi M3602A Full HD combo/twin receiver with 2x CA and 2x CI.",
+    "Drives an 8-character 14-segment PT6311 VFD display through the external Lemontree EuP standby microcontroller at I2C 0x28 on GPIO 62 / 171 using 38-byte op-0x33 CRC-16/XMODEM frames, alongside ALi S3501 DVB-S2 demodulator(s) at I2C 0x33 and Airoha AV2011 tuner(s) at I2C 0x60."
+  ]
+}

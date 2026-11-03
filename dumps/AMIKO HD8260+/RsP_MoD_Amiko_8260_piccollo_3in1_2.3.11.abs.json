@@ -1,0 +1,49 @@
+{
+  "file": "RsP_MoD_Amiko_8260_piccollo_3in1_2.3.11.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8260+ / Edision Piccollo 3in1 RSP Mod (System ID 14000A00, v2.3.11)",
+    "type": "DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "14000A00 (bootloader version \"M3516A 1.2.1\", 256 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 / M3516A DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)",
+    "tuner": null,
+    "flash": "16 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko HD8260+ / Edision Piccollo 3in1 (RSP Mod v2.3.11) (bootloader 'M3516A 1.2.1'; MemCfg '00000001'; maincode(AV) '14000A002311')",
+    "date": "2016-03-01",
+    "size": 16777216,
+    "sha1": "fde13d75cc651b5b0ebf0fd18baa47644b78b28f",
+    "layout": "bootloader 0x000000 (M3516A 1.2.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=RsP_MoD_Amiko_8260_piccollo_3in1_2.3.11.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2016-03-01",
+    "login": false,
+    "note": "Archive RsP_MoD_Amiko_8260_piccollo_3in1_2.3.11.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots on M3503 (chips/m3503.py) (run_dump_rsp_amiko8260_piccollo_2311_app_starts.py, run_dump_rsp_amiko8260_piccollo_2311_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko HD8260+ / Edision Piccollo 3in1 RSP Mod (System ID 14000A00, v2.3.11) firmware (2016-03-01) on a 16 MB SPI flash for ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0xAE000200)."
+  ]
+}

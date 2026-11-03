@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import time
 
+from unicorn.mips_const import UC_MIPS_REG_PC
 from simulator import AliMipsSimulator, flash_size_for, resolve_dump
 
 LOGGED = ("[SEE] started", "[CAR]")     # log lines echoed and kept (Run.logs)
@@ -88,13 +89,19 @@ def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart
             while sim.instruction_count < limit and not (abort and abort(r)) \
                     and not (all(done >= wanted for done, wanted, _ in exchanges()) and (wait_for is None or wait_for(r))):
                 sim.run(max_instructions=sim.instruction_count + STEP)
+                pc = sim.mu.reg_read(UC_MIPS_REG_PC) & ~1
+                if pc == 0 or ((pc >> 29) in (0, 4, 5) and bytes(sim.mu.mem_read(pc & ~3, 32)) == b"\x00" * 32):
+                    r.error = RuntimeError(f"jump to NULL/zeroed RAM (0x{pc:08X})")
+                    break
         except Exception as e:
             r.error = e
         print(f"\n{time.time() - t0:.1f}s, {sim.instruction_count:,} instructions, messages taken {r.taken}"
               + (f", stopped: {r.error!r}" if r.error else ""))
-        if r.error is None or attempt == retries:
+        done_all = all(done >= wanted for done, wanted, _ in exchanges()) and (wait_for is None or wait_for(r))
+        crashed = r.error is not None or (bool(starts) and not r.see.starts) or not done_all
+        if not crashed or attempt == retries:
             break
-        print(f"[WARN] simulator crashed ({r.error!r}); booting again (retry {attempt + 1} of {retries})")
+        print(f"[WARN] simulator stalled/crashed ({r.error or 'target not reached'}); booting again (retry {attempt + 1} of {retries})")
 
     name = type(sim.chip).__name__
     results = [(name == family and chip_id in (None, sim.chip.chip_id),

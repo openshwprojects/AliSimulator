@@ -1117,6 +1117,8 @@ class AliMipsSimulator:
             return False
         if self._spi_ins == 0x05 and self._spi_can_inline_status():
             return False
+        if self._spi_ins in self._SPI_NO_READ_HOOK and (self._spi_stream is None or not self._spi_stream.active):
+            return False
         return True
 
     def _update_flash_read_hooks(self):
@@ -2586,11 +2588,12 @@ class AliMipsSimulator:
 
     def _hook_ic_status_read(self, uc, access, address, size, value, user_data):
         """Interrupt-controller status (0xB8000030 / 34; the SEE's at 0xB8040030 /
-        34, ic_base) shows the asserted lines (a write-back acknowledge does not
-        clear a line its device still drives)."""
-        if self._ic_lines:
-            for word in (0, 1):
-                bits = (self._ic_lines >> (32 * word)) & self._M32
+        34, ic_base; or 4 words at 0xB8081080..8C on C3507) shows the asserted
+        lines (a write-back acknowledge does not clear a line its device still drives)."""
+        lines = self._ic_lines
+        if lines:
+            for word in range(4):
+                bits = (lines >> (32 * word)) & self._M32
                 if bits:
                     a = self._ic + 4 * word
                     self._mmio_write_word(a, self._mmio_word(a) | bits)
@@ -2615,19 +2618,28 @@ class AliMipsSimulator:
         lines = self._ic_lines
         if lines:
             en = self._mmio_word(self._ic_en) | (self._mmio_word(self._ic_en + 4) << 32)
+            if lines >> 64:
+                en |= (self._mmio_word(self._ic_en + 8) << 64) | (self._mmio_word(self._ic_en + 12) << 96)
             if lines & en:
                 return True
         return self._doorbell_ip3()
 
     def set_ic_layout(self, status, enable):
-        """Where an older chip's interrupt controller keeps its status and
-        enable words (device-window offsets; the M3329's 0x38 and 0x3C, which
-        take lines 0..31 only): the modelled devices' lines go there.  A chip
-        family calls it from install() (and with 0x30, 0x38 from uninstall())."""
+        """Where a chip's interrupt controller keeps its status and enable
+        words (device-window offsets; the M3329's 0x38 and 0x3C, which take
+        lines 0..31 only, or the C3507's 4-word controller at 0x81080 and
+        0x81040): the modelled devices' lines go there.  A chip family calls it
+        from install() (and with 0x30, 0x38 from uninstall())."""
+        if self._ic != 0xB8000000 + self.ic_base:
+            old_s = self._ic - 0xB8000000
+            old_e = self._ic_en - 0xB8000000
+            old_span = min(16, abs(old_e - old_s)) if old_e != old_s else 8
+            self._mmio_off('r', self._hook_ic_status_read, old_s, old_s + old_span - 1)
         self._ic = 0xB8000000 + status
         self._ic_en = 0xB8000000 + enable
         if status != self.ic_base:
-            self._mmio_on('r', self._hook_ic_status_read, status, status + 3)
+            span = min(16, abs(enable - status)) if enable != status else 8
+            self._mmio_on('r', self._hook_ic_status_read, status, status + span - 1)
 
     def _doorbell_ip3(self):
         """The other CPU of a dual-CPU chip rings this one (chips/see.py
@@ -2885,6 +2897,7 @@ class AliMipsSimulator:
         return self._spi_ins in self._SPI_READS and not (stream is not None and stream.active)
 
     _SPI_READS = (0x03, 0x0B, 0x3B, 0x6B, 0xBB, 0xEB)
+    _SPI_NO_READ_HOOK = frozenset((0x01, 0x02, 0x04, 0x06, 0x20, 0x32, 0x52, 0x60, 0xAD, 0xC7, 0xD8))
 
     def _flash_offset(self, address):
         """Offset into the flash image for any mirror of the memory-mapped flash.
@@ -3051,6 +3064,128 @@ class AliMipsSimulator:
                 stream.write(data)
             return
         self._spi_execute(self._spi_ins, off, data)
+        if size in (1, 4) and self._spi_ins in (0x02, 0x32) and self._code_hook_h is None and not self._spi_dump_enabled \
+                and self.flash_device is None:
+            self._spi_fast_page_program(address, off, size)
+
+    def _spi_fast_page_program(self, address, off, size=1):
+        """Fast-forward the remaining bytes of an ALi SDK sflash_write byte or
+        word loop in fast mode so multi-megabyte first-boot flash
+        initializations do not fault on every store."""
+        pc = self._reg_read(UC_MIPS_REG_PC)
+        phys_pc = pc & 0x1FFFFFFF
+        if not (16 <= phys_pc and phys_pc + 128 <= self._mapped_ram_size and not (phys_pc & 3)):
+            return
+        rw = self._ram_words
+        if size == 4:
+            w_idx = phys_pc >> 2
+            w_sw, w_addi, w_sltu, w_bnez, w_adds = (
+                rw[w_idx], rw[w_idx + 1], rw[w_idx + 2], rw[w_idx + 3], rw[w_idx + 4])
+            if (w_sw & 0xFC00FFFF) == 0xAC000000 and (w_addi & 0xFC00FFFF) == 0x24000004 \
+                    and (w_sltu & 0xFC0007FF) == 0x0000002B and (w_adds & 0xFC00FFFF) == 0x24000004:
+                r_i = (w_addi >> 21) & 0x1F
+                r_len = (w_sltu >> 16) & 0x1F
+                r_cmp = (w_sltu >> 11) & 0x1F
+                r_src = (w_adds >> 21) & 0x1F
+                if ((w_addi >> 16) & 0x1F) == r_i and ((w_sltu >> 21) & 0x1F) == r_i \
+                        and ((w_adds >> 16) & 0x1F) == r_src \
+                        and (w_bnez >> 16) == (0x1400 | (r_cmp << 5)) \
+                        and (w_bnez & 0xFFFF) in (0xFFF9, 0xFFF0):
+                    gmap = self.gpr_map
+                    i_val = self._reg_read(gmap[r_i])
+                    len_val = self._reg_read(gmap[r_len])
+                    rem = (len_val - (i_val + 4)) & ~3
+                    if 0 < rem <= 0x400000:
+                        src_addr = self._reg_read(gmap[r_src])
+                        src_phys = (src_addr + 4) & 0x1FFFFFFF
+                        dst_off = off + 4
+                        if src_phys + rem <= self._mapped_ram_size and dst_off + rem <= self.rom_size \
+                                and ((address & 0x3FFFFF) + 4 + rem) <= 0x400000:
+                            src_mv = self._ram_view[src_phys:src_phys + rem]
+                            if self.rom_image[dst_off:dst_off + rem] == b'\xFF' * rem:
+                                self.rom_image[dst_off:dst_off + rem] = src_mv
+                            else:
+                                for k in range(rem):
+                                    self.rom_image[dst_off + k] &= src_mv[k]
+                            self._rom_view[dst_off:dst_off + rem] = self.rom_image[dst_off:dst_off + rem]
+                            self._rom_sites_dirty = True
+                            self._reg_write(gmap[r_src], (src_addr + rem) & 0xFFFFFFFF)
+                            self._reg_write(gmap[r_i], (i_val + rem) & 0xFFFFFFFF)
+            return
+        if True:
+            i0 = phys_pc >> 2
+            if i0 >= 3 and (
+                rw[i0 - 3] == 0x10C00006 and rw[i0 - 2] == 0x20C6FFFF and rw[i0 - 1] == 0x90AB0000
+                and rw[i0] == 0xA08B0000 and rw[i0 + 1] == 0x24A50001 and rw[i0 + 2] == 0x1000FFFA
+                and rw[i0 + 3] == 0x24840001
+            ):
+                gmap = self.gpr_map
+                rem = self._reg_read(gmap[6])
+                if 0 < rem <= 0x400000:
+                    dst_addr = self._reg_read(gmap[4])
+                    src_addr = self._reg_read(gmap[5])
+                    src_phys = (src_addr + 1) & 0x1FFFFFFF
+                    dst_off = off + 1
+                    if src_phys + rem <= self._mapped_ram_size and dst_off + rem <= self.rom_size \
+                            and ((address & 0x3FFFFF) + 1 + rem) <= 0x400000:
+                        src_mv = self._ram_view[src_phys:src_phys + rem]
+                        if self.rom_image[dst_off:dst_off + rem] == b'\xFF' * rem:
+                            self.rom_image[dst_off:dst_off + rem] = src_mv
+                        else:
+                            for k in range(rem):
+                                self.rom_image[dst_off + k] &= src_mv[k]
+                        self._rom_view[dst_off:dst_off + rem] = self.rom_image[dst_off:dst_off + rem]
+                        self._rom_sites_dirty = True
+                        self._reg_write(gmap[4], (dst_addr + rem) & 0xFFFFFFFF)
+                        self._reg_write(gmap[5], (src_addr + rem) & 0xFFFFFFFF)
+                        self._reg_write(gmap[6], 0)
+                return
+            w_idx = (phys_pc - 8) >> 2
+            rw = self._ram_words
+            w0, w1, w2, w3, w4, w5 = rw[w_idx], rw[w_idx + 1], rw[w_idx + 2], rw[w_idx + 3], rw[w_idx + 4], rw[w_idx + 5]
+            if (w0 & 0xFC00FFFF) == 0x90000000 and (w2 & 0xFC00FFFF) == 0xA0000000 \
+                    and (w3 & 0xFC00FFFF) == 0x24000001 and (w4 & 0xFC0007FF) == 0x0000002B \
+                    and (w5 & 0xFC1FFFFF) == 0x1400FFFA:
+                r_src = (w0 >> 21) & 0x1F
+                r_val = (w0 >> 16) & 0x1F
+                r_i = (w3 >> 21) & 0x1F
+                r_len = (w4 >> 16) & 0x1F
+                r_cmp = (w4 >> 11) & 0x1F
+                if w1 == (0x24000001 | (r_src << 21) | (r_src << 16)) \
+                        and ((w2 >> 16) & 0x1F) == r_val and ((w3 >> 16) & 0x1F) == r_i \
+                        and ((w4 >> 21) & 0x1F) == r_i and ((w5 >> 21) & 0x1F) == r_cmp:
+                    gmap = self.gpr_map
+                    i_val = self._reg_read(gmap[r_i])
+                    len_val = self._reg_read(gmap[r_len])
+                    if i_val == 0:
+                        for k in range(7, 30):
+                            wk = rw[w_idx + k]
+                            if (wk & 0xFC0007FF) == 0x00000023 and ((wk >> 16) & 0x1F) == r_len:
+                                r_tot = (wk >> 21) & 0x1F
+                                if ((wk >> 11) & 0x1F) == r_tot \
+                                        and (rw[w_idx + k + 1] & 0xFFE00000) == (0x14000000 | (r_tot << 21)):
+                                    tot_val = self._reg_read(gmap[r_tot])
+                                    if len_val < tot_val <= 0x400000 - (address & 0x3FFFFF):
+                                        len_val = tot_val
+                                        self._reg_write(gmap[r_len], len_val)
+                                break
+                    rem = len_val - (i_val + 1)
+                    if 0 < rem <= 0x400000:
+                        src_addr = self._reg_read(gmap[r_src])
+                        src_phys = src_addr & 0x1FFFFFFF
+                        if src_phys + rem <= self._mapped_ram_size and off + 1 + rem <= self.rom_size \
+                                and ((address & 0x3FFFFF) + 1 + rem) <= 0x400000:
+                            src_mv = self._ram_view[src_phys:src_phys + rem]
+                            dst_off = off + 1
+                            if self.rom_image[dst_off:dst_off + rem] == b'\xFF' * rem:
+                                self.rom_image[dst_off:dst_off + rem] = src_mv
+                            else:
+                                for k in range(rem):
+                                    self.rom_image[dst_off + k] &= src_mv[k]
+                            self._rom_view[dst_off:dst_off + rem] = self.rom_image[dst_off:dst_off + rem]
+                            self._rom_sites_dirty = True
+                            self._reg_write(gmap[r_src], (src_addr + rem) & 0xFFFFFFFF)
+                            self._reg_write(gmap[r_i], (i_val + rem) & 0xFFFFFFFF)
 
     def _spi_execute(self, cmd, off, data):
         """Carry out a command that changes the part: WREN / WRDI, WRSR (the
@@ -4864,14 +4999,22 @@ class AliMipsSimulator:
         return until if until > now else None
 
     def _idle_start(self, pc):
-        """Whether pc is an idle loop (`b .` with a nop in its delay slot) with
-        interrupts enabled; its code hook is installed then."""
-        if not self.idle_skip or (self.cp0_status & 0x7) != 0x1:
+        """Whether pc is an idle loop (`b .` with a nop in its delay slot, or
+        `wait` / `wait; b .-4; nop`) with interrupts enabled; its code hook is
+        installed then."""
+        if not self.idle_skip or (self.cp0_status & 0x7) != 0x1 or (self._start_pc(pc) & 1):
             return False
+        hook_pcs = (pc,)
         if (pc & 3) == 0 and self._ram_words is not None and (pc >> 29) in (0, 4, 5):
             i = (pc & 0x1FFFFFFF) >> 2
-            if not (0 <= i < self._ram_words_len - 1 and
-                    self._ram_words[i] == 0x1000FFFF and self._ram_words[i + 1] == 0):
+            if not (0 <= i < self._ram_words_len - 1):
+                return False
+            w0, w1 = self._ram_words[i], self._ram_words[i + 1]
+            if (w0 == 0x1000FFFF and w1 == 0) or (w0 == 0x42000020 and w1 == 0x1000FFFE):
+                pass
+            elif i >= 1 and self._ram_words[i - 1] == 0x42000020 and w0 == 0x1000FFFE and w1 == 0:
+                hook_pcs = (pc - 4, pc)
+            else:
                 return False
         else:
             try:
@@ -4879,9 +5022,10 @@ class AliMipsSimulator:
                     return False
             except UcError:
                 return False
-        if pc not in self._idle_loops:
-            self._idle_loops[pc] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=pc, end=pc)
-            self._tb_flush_needed = True
+        for hp in hook_pcs:
+            if hp not in self._idle_loops:
+                self._idle_loops[hp] = self.mu.hook_add(UC_HOOK_CODE, self._hook_idle_loop, begin=hp, end=hp)
+                self._tb_flush_needed = True
         return True
 
     def _skip_idle(self, pc, max_vtime):
@@ -5166,6 +5310,13 @@ class AliMipsSimulator:
         "8c00b1af8800b0af21b080002190a00021b8c0002180e000cc00b38fd000b58f"
         "0000b48c0000f18c0000e0ac0000a0ac000060ae0500222e2300401406000324"
         "2c00a0af2800a0af1800a427c000a58fc400a68f")
+    # Same LZMA SDK 9.x LzmaDecode() in Libcore 17.x maincodes (saves $fp as well
+    # as $ra and $s7..$s0 in the 0xB0-byte frame; identical 9-argument C ABI).
+    _LZMA_DECODE_9B_SIG = bytes.fromhex(
+        "50ffbd27ac00bfafa800beafa400b7afa000b6af9c00b5af9800b4af9400b3af"
+        "9000b2af8c00b1af8800b0af21b080002198a00021f0c0002188e000cc00b78f"
+        "d000b58f0000f28c0000b48c0000a0ac0000e0ac0500422e2300401406000324"
+        "2c00a0af2800a0af1800a427c000a58fc400a68f")
     # MIPS16e build of the same LZMA SDK 4.0x LzmaDecode() in M3329 bootloaders
     # (54 halfwords / 108 bytes up to its first JAL: identical C ABI a0..a3 + sp+16..36).
     _LZMA_DECODE_M16_SIG = bytes.fromhex(
@@ -5181,7 +5332,8 @@ class AliMipsSimulator:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
         for sig, align in ((self._LZMA_DECODE_SIG, 4), (self._LZMA_DECODE_O2_SIG, 4),
-                           (self._LZMA_DECODE_9_SIG, 4), (self._LZMA_DECODE_M16_SIG, 2)):
+                           (self._LZMA_DECODE_9_SIG, 4), (self._LZMA_DECODE_9B_SIG, 4),
+                           (self._LZMA_DECODE_M16_SIG, 2)):
             i = data.find(sig)
             while i >= 0:
                 if i % align == 0:
@@ -5212,13 +5364,17 @@ class AliMipsSimulator:
         rate_scale = 1.0
         sdk9 = False
         if size == 4:
-            head = self._guest_bytes(address, 4)
-            if head == self._LZMA_DECODE_O2_SIG[:4]:
+            head = self._guest_bytes(address, 8)
+            if head[:4] == self._LZMA_DECODE_O2_SIG[:4]:
                 sig = self._LZMA_DECODE_O2_SIG
                 rate_scale = 0.3
-            elif head == self._LZMA_DECODE_9_SIG[:4]:
+            elif head == self._LZMA_DECODE_9_SIG[:8]:
                 sig = self._LZMA_DECODE_9_SIG
                 rate_scale = 0.3
+                sdk9 = True
+            elif head == self._LZMA_DECODE_9B_SIG[:8]:
+                sig = self._LZMA_DECODE_9B_SIG
+                rate_scale = 0.0
                 sdk9 = True
             else:
                 sig = self._LZMA_DECODE_SIG
@@ -5287,16 +5443,23 @@ class AliMipsSimulator:
             uc.mem_write(status_ptr, struct.pack("<I", 1 if dec.eof else 4))
         self._reg_write(self.gpr_map[2], 0)
         self._reg_write(UC_MIPS_REG_PC, ra)
-        self._tb_flush_needed = True
-        self._rescan_cp0_sites([(0x80000000 | out_phys, len(out))])
-        chunk = self._VIRGIN_CHUNK
-        c_lo = 0 if out_phys <= 0x1000 else ((out_phys + chunk - 1) & ~(chunk - 1))
-        c_hi = (out_phys + len(out)) & ~(chunk - 1)
-        for c in range(c_lo, c_hi, chunk):
-            cb = bytes(self._ram_view[c:c + chunk])
-            self._scanned_ram_chunks[(c, chunk)] = cb
-            self._scanned_ram_chunks[(c, chunk, False)] = cb
-        self.busy_pending += len(out) * (self.lzma_insns_per_byte * rate_scale) / self._insn_rate
+        in_code_range = out_phys < self._RAM_CODE_LIMIT or any(
+            (s & 0x1FFFFFFF) <= out_phys < (s & 0x1FFFFFFF) + length
+            for s, length in self.chip.code_ranges()
+        )
+        if in_code_range:
+            self._tb_flush_needed = True
+            self._rescan_cp0_sites([(0x80000000 | out_phys, len(out))])
+            self._update_short_block_hook()
+            chunk = self._VIRGIN_CHUNK
+            c_lo = 0 if out_phys <= 0x1000 else ((out_phys + chunk - 1) & ~(chunk - 1))
+            c_hi = (out_phys + len(out)) & ~(chunk - 1)
+            for c in range(c_lo, c_hi, chunk):
+                cb = bytes(self._ram_view[c:c + chunk])
+                self._scanned_ram_chunks[(c, chunk)] = cb
+                self._scanned_ram_chunks[(c, chunk, False)] = cb
+        if rate_scale > 0:
+            self.busy_pending += len(out) * (self.lzma_insns_per_byte * rate_scale) / self._insn_rate
         self.lzma_decodes.append((address, in_addr, out_addr, len(out)))
         self.log(f"[LZMA] LzmaDecode at 0x{address:08X} (from 0x{ra:08X}): 0x{in_addr:08X} -> 0x{out_addr:08X}, "
                  f"{len(out)} bytes decoded in Python (lc {lc}, lp {lp}, pb {pb})")

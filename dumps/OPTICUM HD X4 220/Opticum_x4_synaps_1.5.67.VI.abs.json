@@ -1,0 +1,58 @@
+{
+  "file": "Opticum_x4_synaps_1.5.67.VI.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD X4 220 / X403p (System ID 06020200, Synaps v1.5.67 VI)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "06020200 (bootloader version \"M3602B 1.1.6\", 4 MB SPI flash, Lemontree M3602B platform)",
+    "soc": "ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": "Airoha AV2011 DVB-S2 tuner at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Opticum HD X4 (Synaps v1.5.67) (bootloader 'M3602B 1.1.6'; maincode(AV) '060202001567'; default_lang '1.0.0')",
+    "date": "2014-08-15",
+    "size": 4194304,
+    "sha1": "8ed1eec47b4d827020919cc1bc532b2a8878b83c",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum_x4_synaps_1.5.67.VI.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2014-08-15",
+    "login": false,
+    "note": "Archive Opticum_x4_synaps_1.5.67.VI.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "    ",
+      " on "
+    ],
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_opticum_x4_synaps_1567_app_starts.py, run_dump_opticum_x4_synaps_1567_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Opticum HD X4 220 / X403p (System ID 06020200, Synaps v1.5.67 VI) firmware (2014-08-15) on a 4 MB SPI flash for ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)."
+  ]
+}

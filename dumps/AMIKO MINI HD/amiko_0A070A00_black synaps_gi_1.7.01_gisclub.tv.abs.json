@@ -1,0 +1,48 @@
+{
+  "file": "amiko_0A070A00_black synaps_gi_1.7.01_gisclub.tv.abs",
+  "device": {
+    "brand": "Amiko / Galaxy Innovations",
+    "model": "Mini HD / GI Black Synaps (System ID 0A070A00, 1.7.01 EMU build)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, external IR eye and Ethernet",
+    "board": "0A070A00 (Fulansoft / Amiko ALi M3606F platform, stb_board_type = 8)",
+    "soc": "ALi M3606F / C3603 (bootloader \"M3606F 1.1.3\", seecode \"M3606 SEE\", chip ID 0x10047 rev 0x20001)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3603",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.7.01 Black Synaps GI (maincode(AV) \"0A070A001701\"; bootloader \"M3606F 1.1.3\", 2010-09-06; seecode \"M3606 SEE\", 2016-03-14)",
+    "date": "2016-03-14",
+    "size": 8388608,
+    "sha1": "293fd8d9da124ba2bc990c7d075161fff4c7e84f",
+    "layout": "bootloader 0x000000 (M3606F 1.1.3, 2010-09-06), maincode(AV) 0x020000 (0A070A001701, 2010-08-12, LZMA -> 8.78 MB), seecode 0x320000 (M3606 SEE, 2016-3-14, LZMA -> 2.18 MB), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), countryband 0x480000 (1.0.0), logo_user 0x488000 (1.0.0), logo_menu 0x498000 (1.0.0), logo_radio 0x4B8000 (1.0.0), logo_boot 0x4D8000 (1.0.0), patch 0x52FF80 (1.0.0), defaultdb(PRC) 0x550000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_0A070A00_black%20synaps_gi_1.7.01_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko / Galaxy Innovations firmware archive)",
+    "author": "Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod)",
+    "date": "2016-03-14",
+    "login": false,
+    "note": "Archive amiko_0A070A00_black synaps_gi_1.7.01_gisclub.tv.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as the M3602 family with chip ID 0x3603 (C3603, chips/m3602.py, run_dump_amiko_0a070a00_gi_1701_app_starts.py, run_dump_amiko_0a070a00_gi_1701_capture_screen.py): the \"M3606F 1.1.3\" bootloader prints \"APP  init ok\", parks the SEE boot stub at 0xA1E8F988, unpacks seecode (\"M3606 SEE\") to 0xA7000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80000000 / 0x80000001).  The application prints \"stb_tuner_type = 1, stb_board_type =8.\" and \"sys_ic_get_chip_id=0x10047 sys_ic_get_rev_id =0x20001\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33, populates userdb(64+64) at 0x73FF80, and renders its 1280x720 ARGB8888 Black Synaps OSD through GeM36F / GMA layer 0 (9 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Amiko Mini HD / Galaxy Innovations Black Synaps (System ID 0A070A00) firmware v1.7.01 EMU (2016-03-14) on an 8 MB SPI flash for the compact ALi M3606F / C3603 Full HD DVB-S2 satellite receiver.",
+    "Uses a dual-CPU \"M3606 SEE\" architecture with SEE running at 0xA7000200, an ALi S3501 DVB-S2 demodulator at I2C 0x33, and a 44-entry 0x44xx remote control table (\"necfirst\" coding)."
+  ]
+}

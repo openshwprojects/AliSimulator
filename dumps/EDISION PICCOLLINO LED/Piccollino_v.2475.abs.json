@@ -1,0 +1,51 @@
+{
+  "file": "Piccollino_v.2475.abs",
+  "device": {
+    "brand": "Edision",
+    "model": "Piccollino LED (System ID 10040800, v.2475 build)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "M3606-01V01-DH-W (ALi M3511E / M3503 rev B 128 MB DDR3 board)",
+    "soc": "ALi M3511E / M3503 rev B (bootloader \"M3511E 1.1.1\", seecode \"M3606 SEE\", 128 MB DDR3)",
+    "family": "M3503 (chips/m3503.py)",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 / M3511E DVB-S2 (NIM_S3503_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "v.2475 (maincode(AV) \"100408002475\"; bootloader \"M3511E 1.1.1\", 2012-12-20; seecode \"M3606 SEE\", 2019-07-10)",
+    "date": "2019-07-10",
+    "size": 8388608,
+    "sha1": "c4798760faf13f347a535e1727e6450e3190e23f",
+    "layout": "bootloader 0x000000 (M3511E 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2019-7-10), maincode(AV) 0x030000 (100408002475, 2010-08-12, LZMA -> 13.69 MB), seecode 0x3A0000 (M3606 SEE, 2019-7-10, LZMA -> 3.10 MB), default_lang 0x49FD00 (1.0.0), cipluskey 0x49FF80 (1.1.0), countryband 0x4B0000 (1.0.0), img_webserver 0x4B8000 (1.0.0), html_webserver 0x518000 (1.0.0), logo_user 0x5B8000 (1.0.0), logo_menu 0x5C8000 (1.0.0), logo_radio 0x5E8000 (1.0.0), logo_boot 0x608000 (1.0.0), patch 0x62FF80 (1.0.0), defaultdb(PRC) 0x650000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Piccollino_v.2475.zip&directory=Firmware%20for%20to%20all%20receivers/Edison",
+    "site": "satedu.cba.pl (a mirror of the Edision firmware archive)",
+    "author": "Edision",
+    "date": "2019-07-10",
+    "login": false,
+    "note": "Archive Piccollino_v.2475.zip from the Edison directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as M3503 rev B with 128 MB DDR3 (chips/m3503.py, run_dump_piccollino_led_app_starts.py, run_dump_piccollino_led_capture_screen.py): the XIP bootloader (\"M3511E 1.1.1\") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\" and writes \" ON \" to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA1416804, unpacks seecode (\"M3606 SEE\") to 0x86000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x86002001).  The application prints \"---led 455 attach OK--\" and \"Starting mcas v.1.0\", updates the CH455 display to \" on \", populates userdb(64+64) at 0x73FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Edision Piccollino LED (System ID 10040800) firmware v.2475 (2019-07-10) on an 8 MB SPI flash for the ALi M3511E / M3503 rev B Full HD DVB-S2 satellite receiver with 128 MB DDR3.",
+    "Pairs dual-CPU M3503 maincode + seecode (\"M3606 SEE\" at 0x86000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (\" ON \" -> \" on \") and a 60-entry 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "file": "amiko_220_xwindowr_sab_1.6.17_gisclub.tv.abs",
+  "device": {
+    "brand": "Amiko / SAB",
+    "model": "SHD-8000 / SAB 220 XWindow (System ID 06020A00, v1.6.17 gisclub.tv build)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, 4-digit LED display and Ethernet",
+    "board": "06020A00 (Fulansoft / Lemontree ALi M3602B EuP platform)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.6.17 XWindow SAB (maincode(AV) \"06020A001617\"; bootloader \"M3602B 1.1.6\", 2009-12-29)",
+    "date": "2014-03-10",
+    "size": 4194304,
+    "sha1": "a20c6bb620940f9ee0240f1868705187e9f4b187",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (06020A001617), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_220_xwindowr_sab_1.6.17_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / SAB (gisclub.tv XWindow mod)",
+    "date": "2014-03-10",
+    "login": false,
+    "note": "Archive amiko_220_xwindowr_sab_1.6.17_gisclub.tv.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "boot"
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_amiko_220_xwindow_1617_app_starts.py, run_dump_amiko_220_xwindow_1617_capture_screen.py): the \"M3602B 1.1.6\" bootloader exchanges CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\" ON \" -> \"    \" -> \"boot\"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application prints \"---nim 3501 a-=[1]--type=[0x350100c0]----\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60, and draws its XWindow SAB OSD dialog through GeM3602."
+  },
+  "desc": [
+    "Amiko SHD-8000 / SAB 220 XWindow (v1.6.17 by gisclub.tv, System ID 06020A00) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver.",
+    "Drives a 4-digit 7-segment LED display via the Lemontree EuP MCU on GPIO 62 / 171 (\" ON \" -> \"boot\"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x99xx remote control table (\"necfirst\" coding)."
+  ]
+}

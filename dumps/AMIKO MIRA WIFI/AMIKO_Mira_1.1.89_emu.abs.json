@@ -1,0 +1,42 @@
+{
+  "file": "AMIKO_Mira_1.1.89_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mira Wi-Fi (System ID 2A000A00, v1.1.89 EMU)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with built-in Wi-Fi, Conax / MultiCAS card reader and USB PVR",
+    "board": "2A000A00 (bootloader version \"3510CA 1.1.1\", 8 MB SPI flash, single-CPU ALi M3510C / C3503C platform)",
+    "soc": "ALi M3510C / C3503C (single-CPU 64 MB DDR2 DVB-S2 SoC reading chip ID 0x3503 rev 0xC000)",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal ALi C3503C DVB-S2 (NIM_S3503_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko Mira (v1.1.89 EMU) (bootloader '3510CA 1.1.1'; maincode(AV) '67010A001189'; default_lang '1.0.0')",
+    "date": "2017-12-07",
+    "size": 8388608,
+    "sha1": "f84ebe87ce8f5288a018425a2443f69a50e53f8a",
+    "layout": "bootloader 0x000000 (3510CA 1.1.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mira_1.1.89_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2017-12-07",
+    "login": false,
+    "note": "Archive AMIKO_Mira_1.1.89_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots on C3503 (chips/c3503.py) (run_dump_mira_1189_emu_app_starts.py, run_dump_mira_1189_emu_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mira Wi-Fi (System ID 2A000A00, v1.1.89 EMU) firmware (2017-12-07) on a 8 MB SPI flash for ALi M3510C / C3503C (single-CPU 64 MB DDR2 DVB-S2 SoC reading chip ID 0x3503 rev 0xC000)."
+  ]
+}

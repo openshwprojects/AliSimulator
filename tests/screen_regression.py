@@ -188,8 +188,9 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         except Exception as e:
             raise SimulatorCrash(f"{type(e).__name__}: {e} at {time.time() - start:.0f} s, "
                                  f"{sim.ge_ops} GE commands") from e
-        if (sim.mu.reg_read(UC_MIPS_REG_PC) & ~1) == 0:
-            raise SimulatorCrash(f"jump to NULL at {time.time() - start:.0f} s, {sim.ge_ops} GE commands")
+        pc = sim.mu.reg_read(UC_MIPS_REG_PC) & ~1
+        if pc == 0 or ((pc >> 29) in (0, 4, 5) and bytes(sim.mu.mem_read(pc & ~3, 32)) == b"\x00" * 32):
+            raise SimulatorCrash(f"jump to NULL/zeroed RAM (0x{pc:08X}) at {time.time() - start:.0f} s, {sim.ge_ops} GE commands")
         note_panel()
         if wake_on and not woke and panel.get_display_text() == wake_on[0]:
             woke = True

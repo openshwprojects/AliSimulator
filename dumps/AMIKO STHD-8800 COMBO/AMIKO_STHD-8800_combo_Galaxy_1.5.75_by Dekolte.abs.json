@@ -1,0 +1,59 @@
+{
+  "file": "AMIKO_STHD-8800_combo_Galaxy_1.5.75_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "STHD-8800 Combo (System ID 06000A00, Galaxy 1.5.75 build by Dekolte)",
+    "type": "DVB-S2 + DVB-T Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, 8-character VFD and Ethernet",
+    "board": "06000A00 (Fulansoft / Lemontree ALi M3602A VFD + EuP platform)",
+    "soc": "ALi M3602A (bootloader \"M3602A 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33 + DVB-T COFDM",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + 8-grid 14-segment PT6311 VFD (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.75 Galaxy EMU by Dekolte (maincode(AV) \"06000A001575\"; bootloader \"M3602A 1.1.6\", 2009-12-29)",
+    "date": "2016-05-22",
+    "size": 4194304,
+    "sha1": "618e645801f4e413990e5a5f32d7b6badfaef239",
+    "layout": "bootloader 0x000000 (M3602A 1.1.6, 2009-12-29), maincode(AV) 0x010000 (06000A001575, 2016-5-22), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_STHD-8800_combo_Galaxy_1.5.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / Dekolte (Galaxy mod)",
+    "date": "2016-05-22",
+    "login": false,
+    "note": "Archive AMIKO_STHD-8800_combo_Galaxy_1.5.75_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "DEKOLTE "
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_sthd8800_combo_app_starts.py, run_dump_sthd8800_combo_capture_screen.py): the \"M3602A 1.1.6\" bootloader exchanges CRC-16/XMODEM 38-byte PT6311 VFD frames with the Lemontree EuP standby and 8-character 14-segment VFD MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\"  BOOT  \" -> \"        \" -> \"DEKOLTE \"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application prints \"Version:06000A00_1.5.75 EMU\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes), and draws its Galaxy OSD dialog through GeM3602 (8 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Amiko STHD-8800 Combo (Galaxy 1.5.75 by Dekolte, System ID 06000A00, 2016-05-22) 4 MB SPI firmware for the ALi M3602A DVB-S2 + DVB-T Full HD Combo receiver.",
+    "Drives an 8-character 14-segment PT6311 VFD via the Lemontree EuP MCU on GPIO 62 / 171 (\"  BOOT  \" -> \"DEKOLTE \"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x44xx remote control table (\"necfirst\" coding)."
+  ]
+}

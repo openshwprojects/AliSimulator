@@ -1,0 +1,59 @@
+{
+  "file": "AMIKO_SHD-7900-8000_Galaxy_1.5.75_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "SHD-7900 / SHD-8000 CI+CA (System ID 06020A00, Galaxy 1.5.75 build by Dekolte)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, 4-digit LED display and Ethernet",
+    "board": "06020A00 (Fulansoft / Lemontree ALi M3602B EuP platform)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.75 Galaxy EMU by Dekolte (maincode(AV) \"06020A001575\"; bootloader \"M3602B 1.1.6\", 2009-12-29)",
+    "date": "2016-05-22",
+    "size": 4194304,
+    "sha1": "8d1e767d99e5076fb4510d1773f2d7a964c19c24",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (06020A001575, 2016-5-22), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-7900-8000_Galaxy_1.5.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / Dekolte (Galaxy mod)",
+    "date": "2016-05-22",
+    "login": false,
+    "note": "Archive AMIKO_SHD-7900-8000_Galaxy_1.5.75_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_shd8000_app_starts.py, run_dump_shd8000_capture_screen.py): the \"M3602B 1.1.6\" bootloader exchanges CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\" ON \" -> \"    \" -> \"-ON-\"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application prints \"Version:06020A00_1.5.75 EMU\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes), and draws its Galaxy OSD dialog through GeM3602 (8 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Amiko SHD-7900 / SHD-8000 CI+CA (Galaxy 1.5.75 by Dekolte, System ID 06020A00, 2016-05-22) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver.",
+    "Drives a 4-digit 7-segment LED display via the Lemontree EuP MCU on GPIO 62 / 171 (\" ON \" -> \"-ON-\"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x99xx remote control table (\"necfirst\" coding)."
+  ]
+}

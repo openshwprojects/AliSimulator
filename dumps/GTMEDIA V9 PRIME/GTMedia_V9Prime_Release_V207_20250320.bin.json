@@ -1,0 +1,43 @@
+{
+  "file": "GTMedia_V9Prime_Release_V207_20250320.bin",
+  "device": {
+    "brand": "GTMedia",
+    "model": "V9 Prime (Release V207, 2025-03-20)",
+    "type": "DVB-S2X Full HD H.265/HEVC 10-bit satellite receiver with CA card slot, Ethernet and built-in 2.4G Wi-Fi",
+    "board": "bootloader chunk \"M3507---3\" (64 MB DDR2 single-CPU ALi M3507 / C3507 platform)",
+    "soc": "ALi M3507 / C3507 (chip word 0x35070000 at 0xB8000000 / 0xB8080000, SDK chip code 0x10056, 128-line interrupt controller at 0xB8081080 / 0xB8081040, OTP 0x210 product 5)",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal DVB-S2X (NIM_S3501H_0 / NIM_C3501h_0 at 0xB804C000, chip ID 0x350100C0 at +0x140)",
+    "tuner": "RDA Microelectronics RDA5815M / AV2018 DVB-S2X on SCB0 at I2C 0x0C",
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V207 (maincode \"V1.10B1*\", 2025-03-20; bootloader \"M3507---3\", 2020-07-09)",
+    "date": "2025-03-20",
+    "size": 8388608,
+    "sha1": "3d198b6fc1a45fce853add5da8b775bd9082098b",
+    "layout": "bootloader 0x000000 (M3507---3, 2020-07-09), platform 0x038000 (00000001), upg_maincode 0x040000 (00000002), upg_osd_string 0x160000 (0.0.1), Radioback 0x170000 (1.0.0), Menuback 0x188000 (1.0.0), maincode 0x1A0000 (V1.10B1*, LZMA -> 15.69 MB at 0x80100200), osd_string 0x5FD400 (1.1.0), GTMedia 0x620000 (1.0.0), seeback 0x63FF80 (1.0.0), defaultdb 0x730000 (1.0.0), userdb 0x75FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Prime_Release_V207_20250320.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMEDIA%20V9%20Prime",
+    "site": "satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)",
+    "author": "GTMedia",
+    "date": "2025-03-20",
+    "login": false,
+    "note": "Archive GTMedia_V9Prime_Release_V207_20250320.zip from the Freesat / GTMEDIA V9 Prime directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as the single-CPU C3503/C3507 family (chips/c3503.py, matched by \"c3507_phy_set\", chip ID 0x3507 at 0xB8000000 and 0xB8080000 -> SDK chip code 0x10056, run_dump_gtmedia_v9_prime_v207_app_starts.py, run_dump_gtmedia_v9_prime_v207_capture_screen.py): the XIP bootloader (\"M3507---3\") starts at 0xAFC00000 with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, polls PLL ready bit 7 of 0xB8080253, copies itself to 0x82800000, and unpacks the 15.69 MB maincode (\"V1.10B1*\") to 0x80100200 (CP0 EBase 0x80102000).  Uses the C3507's 128-line interrupt controller at 0xB8081080 (status) / 0xB8081040 (enable) with VPO/DEO on line 68, video engine on line 72, GE_M36F on line 76, IR receiver on line 12, and interrupt-driven SCB1 I2C (0xB8018700, line 21) for its CH455 front panel.  With OTP word 0x210 bits 20..24 = 5 and the internal S3501H demodulator's chip ID 0x350100C0 at 0xB804C140, the application decodes its boot logo and renders its 1280x720 32-bpp ARGB8888 \"Factory Test Page\" OSD (Model: GTMedia V9 Prime[P], SW Ver: V203.03.06.28.207, 70 colours, 157 GE commands) on GMA layer 0."
+  },
+  "desc": [
+    "GTMedia V9 Prime official firmware V207 (2025-03-20) on an 8 MB SPI flash for the Full HD H.265/HEVC 10-bit DVB-S2X satellite receiver on the single-CPU ALi M3507 / C3507 SoC with 64 MB DDR2.",
+    "First ALi M3507 / C3507 (SDK chip code 0x10056) image in the catalog: combines an XIP CacheAsRam bootloader (\"M3507---3\", relocated to 0x82800000) with a 15.69 MB single-CPU application at 0x80100200, a 4-word (128-line) interrupt controller at 0xB8081080 / 0xB8081040, interrupt-driven SCB1 I2C for the CH455 panel, and the NIM_S3501H_0 internal DVB-S2X demodulator at 0xB804C000 (reading its 0x350100C0 chip ID from +0x140)."
+  ]
+}

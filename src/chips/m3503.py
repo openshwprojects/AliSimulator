@@ -38,23 +38,26 @@ from .m3821 import CacheAsRam
 
 
 class InternalDemod:
-    """The chip's own DVB-S2 demodulator (the NIM_S3503 / NIM_S3501 drivers):
-    an S3501 core whose registers the CPU reaches at 0xB8028000 + the
-    register number instead of over I2C.  The chip ID registers 0xA3..0xA6
-    read the S3501's ID (demods.S3501.ID, 0x350100C0 as the driver assembles
-    it) and keep it; the others keep what is stored.  A task of the
-    ESR-250's application asks the NIM device for that ID over and over
-    (0x8032FC88) and hid the OSD layer (0xB8006300 bit 0) while its upper
-    half was not 0x3501, although the application had drawn its Quick Setup
-    menu."""
+    """The chip's own DVB-S2 demodulator (the NIM_S3503 / NIM_S3501 / NIM_S3501H
+    drivers): an S3501 core whose registers the CPU reaches at 0xB8028000 (or
+    0xB804C000 on C3503/C3507) + the register number instead of over I2C.  The
+    chip ID registers 0xA3..0xA6 and 0x140..0x143 read the S3501's ID
+    (demods.S3501.ID, 0x350100C0 as the driver assembles it) and keep it; the
+    others keep what is stored.  A task of the ESR-250's and C3507's
+    applications asks the NIM device for that ID over and over and hid the OSD
+    layer (0xB8006300 bit 0) while its upper half was not 0x3501, although the
+    application had drawn its menu."""
     BASE = 0x28000
+    ID_140 = {0x140: 0xC0, 0x141: 0x00, 0x142: 0x01, 0x143: 0x35}
 
     def __init__(self, sim, base=BASE):
         self.sim = sim
         self.base = base
         self.signal = False
         sim.poke(0xB8000000 + self.base + 0xA3, bytes(S3501.ID[r] for r in sorted(S3501.ID)))
+        sim.poke(0xB8000000 + self.base + 0x140, bytes(self.ID_140[r] for r in sorted(self.ID_140)))
         sim._mmio_on('w', self._write, self.base + 0xA0, self.base + 0xA6)
+        sim._mmio_on('w', self._write, self.base + 0x140, self.base + 0x143)
         for r in S3501.LOCK_REGS:
             sim._mmio_on('r', self._read_status, self.base + r, self.base + r)
 
@@ -85,12 +88,14 @@ class InternalDemod:
                     self.sim._mmio_view[off] = S3501.LOCK_REGS[reg]
 
     def _write(self, uc, access, address, size, value, user_data):
-        reg = address & 0xFF
-        return sum(S3501.ID.get(reg + i, (value >> (8 * i)) & 0xFF) << (8 * i) for i in range(size))
+        reg = (address - self.base) & 0xFFF
+        ids = S3501.ID | self.ID_140
+        return sum(ids.get(reg + i, (value >> (8 * i)) & 0xFF) << (8 * i) for i in range(size))
 
     def remove(self):
         """The ID registers back to zero (the next family's chip has no such demodulator)."""
         self.sim.poke(0xB8000000 + self.base + 0xA3, bytes(len(S3501.ID)))
+        self.sim.poke(0xB8000000 + self.base + 0x140, bytes(len(self.ID_140)))
         for r in S3501.LOCK_REGS:
             self.sim._mmio_view[self.base + r] = 0
 

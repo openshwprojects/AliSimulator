@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_MicroHD_SE_Edision_byDavor2475.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Micro HD SE (System ID 10010A88, Edision v2.4.75 by Davor)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, external IR/LED eye and USB PVR",
+    "board": "10010A88 (bootloader version \"M3511B 1.1.1\", 128 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0x86000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 DVB-S2 (NIM_S3503_0 at 0xB8028000)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Edision 2.4.75 by Davor (maincode(AV) \"10010A882458\"; bootloader \"M3511B 1.1.1\"; seecode \"M3606 SEE\")",
+    "date": "2017-10-15",
+    "size": 8388608,
+    "sha1": "a12fc8c0acf5c7583c77532fab35e89d58498452",
+    "layout": "bootloader 0x000000 (M3511B 1.1.1, 2012-12-20)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Edision_byDavor2475.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Davor",
+    "date": "2017-10-15",
+    "login": false,
+    "note": "Archive AMIKO_MicroHD_SE_Edision_byDavor2475.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_microhd_se_edision_2475_app_starts.py, run_dump_microhd_se_edision_2475_capture_screen.py): the XIP bootloader (\"M3511B 1.1.1\") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\", writes \" ON \" to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA1416804, unpacks seecode (\"M3606 SEE\") to 0x86000200 and maincode(AV) (\"10010A882458\") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to \" on \", initialises its userdb(64+64) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Micro HD SE (System ID 10010A88, Edision v2.4.75 by Davor) firmware (2017-10-15) on a 8 MB SPI flash for the ALi M3511B / M3503 rev B receiver with 128 MB DDR3.",
+    "Uses an XIP CacheAsRam bootloader (\"M3511B 1.1.1\"), dual-CPU \"M3606 SEE\" firmware at 0x86000200, and a CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA) (\" ON \" -> \" on \")."
+  ]
+}

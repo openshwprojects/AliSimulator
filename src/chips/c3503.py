@@ -78,30 +78,54 @@ class C3503(C3505):
             return False
         if any(name == "seecode" for _o, name, _v in chunk_chain(image)):
             return False            # (the dual-CPU C3505 images)
-        return b"get_clock_3503D" in maincode(image)
+        mc = maincode(image)
+        return b"get_clock_3503D" in mc or C3503C_GUARD in mc or b"c3507_phy_set" in mc
+
+    def default_chip_id(self):
+        mc = maincode(bytes(self.sim.rom_image)) if self.sim.rom_image else b""
+        return 0x3507 if b"c3507_phy_set" in mc else 0x3503
 
     def write_chip_id(self):
-        is_c3503c = C3503C_GUARD in maincode(bytes(self.sim.rom_image))
-        self.chip_variant = 0xC000 if is_c3503c else 0xD000
+        mc = maincode(bytes(self.sim.rom_image)) if self.sim.rom_image else b""
+        is_c3507 = b"c3507_phy_set" in mc
+        is_c3503c = C3503C_GUARD in mc
+        self.chip_variant = 0x0000 if is_c3507 else (0xC000 if is_c3503c else 0xD000)
         super().write_chip_id()
+        if is_c3507:
+            self.sim.poke(0xB8080000, struct.pack("<HH", self.chip_variant, self.chip_id))
+            self.sim.set_ic_layout(0x81080, 0x81040)
+        self.sim._IC_GE = 76 if is_c3507 else 4
+        self.sim.irc_line = 12 if is_c3507 else 19
+        if hasattr(self, "video_output"):
+            self.video_output.line = 68 if is_c3507 else 2
+            self.video_engine.line = 72 if is_c3507 else 0
         if hasattr(self, "otp"):
             import dump_catalog
             contents = dump_catalog.otp(self.sim.dump_path) if getattr(self.sim, "dump_path", None) else None
             self.otp.data[:] = bytes(self.otp.SIZE)
             for offset, blob in (contents or {}).items():
                 self.otp.data[offset:offset + len(blob)] = blob[:self.otp.SIZE - offset]
-            if is_c3503c and self.otp.data[0x210:0x214] == bytes(4):
+            if (is_c3503c or is_c3507) and self.otp.data[0x210:0x214] == bytes(4):
                 self.otp.data[0x210:0x214] = C3503C_OTP_PRODUCT
 
     def install(self):
         super().install()
-        if self.chip_variant == 0xC000 and self.otp.data[0x210:0x214] == bytes(4):
+        if (self.chip_variant == 0xC000 or self.chip_id == 0x3507) and self.otp.data[0x210:0x214] == bytes(4):
             self.otp.data[0x210:0x214] = C3503C_OTP_PRODUCT
         # 0xB8000300: besides the ready bit 8 (C3505.ready300) the upper half holds the count of
         # the DDR PHY's ring oscillator, which the Ariva 53's bootloader divides by ("RingOSDelay(ns)
         # = 1024*37.037/count"): zero there was a divide-by-zero trap (TEQ, code 7).  128 counts:
-        # a ~300 ns ring delay.
-        self.ring_count = ReadyBits(self.sim, {0x302: 0x80})
+        # a ~300 ns ring delay.  0xB8080253 bit 7 is the M3507/C3507 bootloader PLL ready bit.
+        self.ring_count = ReadyBits(self.sim, {0x302: 0x80, 0x80201: 0x01, 0x80253: 0x80})
+        if self.chip_id == 0x3507:
+            from video_m36 import DEO_FIELD_BIT, VPO_FIELD_BIT, VideoOutput
+            self.sim.set_ic_layout(0x81080, 0x81040)
+            self.sim._IC_GE = 76            # OS IRQ 0x54 (84) - 8 = 76 on C3507 (0x10056)
+            self.sim.irc_line = 12          # OS IRQ 0x14 (20) - 8 = 12 on C3507 (0x10056)
+            if self.video_output.service in self.sim.slice_services:
+                self.sim.slice_services.remove(self.video_output.service)
+            self.video_output = VideoOutput(self.sim, line=68, field_bit=VPO_FIELD_BIT | DEO_FIELD_BIT)
+            self.video_engine.line = 72     # OS IRQ 0x50 (80) - 8 = 72 on C3507 (0x10056)
         # the demodulator where this chip has it (the C3505's at 0xB8028000 removed)
         self.nim.remove()
         self.nim = InternalDemod(self.sim, base=DEMOD_BASE)
@@ -109,5 +133,19 @@ class C3503(C3505):
         self.see.run_program = False
 
     def start(self):
-        super().start()
+        if self.default_chip_id() == 0x3507:
+            self._configure_memory()
+            from .m3821 import M3821
+            M3821.start(self)
+        else:
+            super().start()
         self.sim.mu.reg_write(UC_MIPS_REG_SP, BOOTROM_STACK)
+
+    def code_ranges(self):
+        return super().code_ranges() + ([(0x80100000, 0x100000)] if self.default_chip_id() == 0x3507 else [])
+
+    def uninstall(self):
+        self.sim._IC_GE = 4
+        self.sim.irc_line = 19
+        self.sim.set_ic_layout(0x30, 0x38)
+        super().uninstall()

@@ -1,0 +1,47 @@
+{
+  "file": "AMIKO_MiniHD_Xwindow_1.6.95_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD (System ID 0A070A00, XWindow v1.6.95 by Dekolte)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0A070A00 (bootloader version \"M3606F 1.1.3\", 8 MB SPI flash, ALi M3606 platform reading chip ID 0x3603)",
+    "soc": "ALi M3606F / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko Mini HD (XWindow v1.6.95 by Dekolte) (bootloader 'M3606F 1.1.3'; maincode(AV) '0A070A001695'; seecode 'M3606 SEE')",
+    "date": "2015-01-20",
+    "size": 8388608,
+    "sha1": "233827d7ea9e0c92065c0d88126c16c276a91f61",
+    "layout": "bootloader 0x000000 (M3606F 1.1.3)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Xwindow_1.6.95_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2015-01-20",
+    "login": false,
+    "note": "Archive AMIKO_MiniHD_Xwindow_1.6.95_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_minihd_xwindow_1695_app_starts.py, run_dump_minihd_xwindow_1695_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mini HD (System ID 0A070A00, XWindow v1.6.95 by Dekolte) firmware (2015-01-20) on a 8 MB SPI flash for ALi M3606F / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)."
+  ]
+}

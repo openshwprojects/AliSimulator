@@ -1,0 +1,55 @@
+{
+  "file": "Ferguson_A54_V1.3B1_26092019_PATCH.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 54",
+    "type": "DVB-S2 Full HD H.265/HEVC compact satellite receiver",
+    "board": "bootloader chunk \"HASH1\", version \"39091-01047\"",
+    "soc": "ALi C3503D (chip word 0x3503D000, SDK chip code 0x10051)",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0 at 0xB804C000)",
+    "tuner": "ALi M3031 at I2C 0x20",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible, on external IR/LED sensor)",
+      "scl": 24,
+      "sda": 23
+    },
+    "irCoding": "ext00",
+    "tunerModel": {
+      "chip": "m3031",
+      "address": 32
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.3B1_PATCH (maincode \"V1.12B0*\" 2019-9-26; << SDK4.0ba.4.0_20101217 >>; Libcore 17.15.0@SDK4.0ia.17.15_20171115, Application 1.0.0@SDK4.0ia.17.14b_20171018bytest)",
+    "date": "2019-09-26",
+    "size": 8388608,
+    "sha1": "e2298eabade1edb21ccae11638b50b47e68be255",
+    "layout": "HASH1 0x000000 (39091-01047), HDCPKey 0x02FE00 (00000001), ota_loader 0x030000 (1.0.0), maincode 0x130000 (V1.12B0*, LZMA -> 9.9 MB), osd_string 0x59C200 (1.1.0), Ariva54 0x5B0000 (1.0.0), seeback 0x5CFF80 (1.0.0), defaultdb 0x6C0000 (1.0.0), userdb 0x6FFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A54_20190926_V1.3B1_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%2054",
+    "site": "satedu.cba.pl",
+    "author": "Ferguson / patch",
+    "date": "2019-09-26",
+    "login": false,
+    "note": "Archive A54_20190926_V1.3B1_PATCH.zip from satedu.cba.pl."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " On ",
+      " on ",
+      "nenu"
+    ],
+    "note": "Boots as the single-CPU C3503 family (chips/c3503.py, chip word 0x3503D000 -> SDK chip code 0x10051): its boot-ROM bootloader at offset 0x800 runs in the boot SRAM at 0x9FE00800 ($sp = 0x9FE07F00), unpacks the 9.9 MB maincode into RAM and starts it at 0x80000200.  The internal S3501-class DVB-S2 demodulator answers at 0xB804C000 and the M3031 tuner answers at I2C 0x20.  Drives its external FD650K 4-digit LED panel on GPIO 24 (SCL) / 23 (SDA) through \" On \", \" on \", \"nenu\" and renders its 1280x720 \"System Setup\" OSD menu (92 unique colours) through GMA layer 0 at 0xB8006300."
+  },
+  "desc": [
+    "Ferguson Ariva 54 patched firmware V1.3B1_PATCH (2019-09-26) for the compact Full HD DVB-S2 satellite receiver on the single-CPU ALi C3503D SoC.",
+    "EMU/patch build of V1.3B1 (maincode chunk header tagged V1.12B0*, unpacked size 10,379,776 bytes vs 10,277,428 bytes)."
+  ]
+}

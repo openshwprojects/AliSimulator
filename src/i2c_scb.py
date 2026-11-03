@@ -71,9 +71,11 @@ class I2cMaster:
     """One SCB block; the simulator makes one per base in its I2C_SCB_BASES."""
     SIZE = 0x28
     LOG_FIRST, LOG_EVERY = 64, 256          # transactions logged: the first ones, then one in N
+    IC_LINES = {0x18200: 20, 0x18700: 21, 0x18B00: 25, 0x18D00: 26}
 
     def __init__(self, sim, base, name):
         self.sim, self.base, self.name = sim, base, name
+        self.ic_line = self.IC_LINES.get(base)
         self.transactions = 0
         self.reset()
         sim._mmio_on('w', self._write, base, base + self.SIZE - 1)
@@ -86,25 +88,44 @@ class I2cMaster:
     def reset(self):
         self.tx = bytearray()               # queued for the next write
         self.rx = collections.deque()       # received, popped at +0x10
+        self.control = 0                    # +0 (bit 0 start self-clears)
         self.status = 0                     # +1
+        self.ier = 0                        # +2
         self.flags = 0                      # +3
         self.slave = 0                      # +4
         self.sub = bytearray(4)             # +5, +0x25..+0x27
         self.sub_extra = 0                  # +0x24
         self.length = 0                     # +C bits 4..0 | +0x23 << 5
         self.length_hi = 0
+        self.ier1 = 0                       # +0x20
+        self.isr1 = 0                       # +0x21
+        self._irq_active = False
+
+    def _sync_irq(self):
+        if self.ic_line is not None:
+            active = bool((self.flags & self.ier) or (self.isr1 & self.ier1))
+            if active != self._irq_active:
+                self._irq_active = active
+                if hasattr(self.sim, "_ic_set_line"):
+                    self.sim._ic_set_line(self.ic_line, active)
 
     def _write(self, uc, access, address, size, value, user_data):
         self.sim._device_access(uc)
         off = (address & 0xFFFFFF) - self.base
         for i in range(size):
             b, o = (value >> (8 * i)) & 0xFF, off + i
-            if o == 0x00 and b & 0x01:
-                self._transfer(b)
+            if o == 0x00:
+                self.control = b & ~0x01
+                if b & 0x01:
+                    self._transfer(b)
             elif o == 0x01:
                 self.status = 0 if b == 0 else self.status & ~b
+            elif o == 0x02:
+                self.ier = b
+                self._sync_irq()
             elif o == 0x03:
                 self.flags &= ~b
+                self._sync_irq()
             elif o == 0x04:
                 self.slave = b
             elif o == 0x05:
@@ -116,12 +137,39 @@ class I2cMaster:
                     self.rx.clear()
             elif o == 0x10:
                 self.tx.append(b)
+            elif o == 0x20:
+                self.ier1 = b
+                self._sync_irq()
+            elif o == 0x21:
+                self.isr1 &= ~b
+                self._sync_irq()
             elif o == 0x23:
                 self.length_hi = b
             elif o == 0x24:
                 self.sub_extra = b & 3
             elif 0x25 <= o <= 0x27:
                 self.sub[o - 0x24] = b
+
+    def _read_byte(self, o):
+        if o == 0x00:
+            return self.control
+        if o == 0x01:
+            return self.status | (0x01 if (self.ier or self.ier1) and not self.rx else 0x00)
+        if o == 0x02:
+            return self.ier
+        if o == 0x03:
+            return self.flags
+        if o == 0x0C:
+            return 0x80 | min(len(self.rx), 0x1F)
+        if o == 0x10:
+            return self.rx.popleft() if self.rx else 0xFF
+        if o == 0x14:
+            return 0
+        if o == 0x20:
+            return self.ier1
+        if o == 0x21:
+            return self.isr1
+        return None
 
     def _read(self, uc, access, address, size, value, user_data):
         self.sim._device_access(uc)
@@ -130,31 +178,15 @@ class I2cMaster:
         view = getattr(self.sim, "_mmio_view", None)
         if view is not None:
             for i in range(size):
-                o = off + i
-                if o == 0x01:
-                    view[base_off + i] = self.status
-                elif o == 0x03:
-                    view[base_off + i] = self.flags
-                elif o == 0x0C:
-                    view[base_off + i] = 0x80 | min(len(self.rx), 0x1F)
-                elif o == 0x10:
-                    view[base_off + i] = self.rx.popleft() if self.rx else 0xFF
-                elif o == 0x14:
-                    view[base_off + i] = 0
+                val = self._read_byte(off + i)
+                if val is not None:
+                    view[base_off + i] = val
         else:
             buf = bytearray(uc.mem_read(address, size))
             for i in range(size):
-                o = off + i
-                if o == 0x01:
-                    buf[i] = self.status
-                elif o == 0x03:
-                    buf[i] = self.flags
-                elif o == 0x0C:
-                    buf[i] = 0x80 | min(len(self.rx), 0x1F)
-                elif o == 0x10:
-                    buf[i] = self.rx.popleft() if self.rx else 0xFF
-                elif o == 0x14:
-                    buf[i] = 0
+                val = self._read_byte(off + i)
+                if val is not None:
+                    buf[i] = val
             uc.mem_write(address, bytes(buf))
 
     def _transfer(self, control):
@@ -181,6 +213,8 @@ class I2cMaster:
             got = (got or b"")[:n] + bytes(max(0, n - len(got or b"")))
             self.rx.extend(got)
         self.flags = 0x01 if ack else 0x02          # (+1 stays clear: the transfer is over)
+        self.isr1 = 0x01 if ack else 0x00
+        self._sync_irq()
         self.transactions += 1
         if self.transactions <= self.LOG_FIRST or self.transactions % self.LOG_EVERY == 0:
             what = "W" if not (read or combined) else ("WR" if combined else "R")

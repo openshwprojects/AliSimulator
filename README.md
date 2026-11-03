@@ -8,15 +8,15 @@ Quick start: `pip install unicorn capstone numpy pillow`, then `python src/tv_gu
 
 | Chip | Module | Chip ID | Receivers | Boxes in `dumps/` | Images | Second CPU (SEE) |
 |---|---|---|---|---|---|---|
-| ALi M3801 / M3612 (the silicon reports itself as S3811) | `src/chips/m3801.py` | 0x3811 | DVB-T HD (Underline 3in1: DVB-S2 + DVB-T2/C combo) | Comsat TE 1050 HD, Opticum STB HD N2, Globo STB HD N3, Opticum HD T90, Cabletech URZ0083Q / URZ0194S / URZ0195, Strong SRT 8115, Strong Prima VIII, Ferguson Ariva T650i, Edision Optimuss Underline 3in1 | 13 (+ the SDK test program `ali_sdk.bin`) | no |
-| ALi M3601E / M3601S / M3602 / M3606 (the M36xx family) | `src/chips/m3602.py` | 0x3602 (Ariva T50, Opticum HD X4 220 / HD X7 / X402p-403p, Yumatu Full HD IQ), 0x3603 (the others, from the sidecar) | DVB-T and DVB-S2 HD | Cabletech URZ0083 / URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501, Ferguson Ariva T50 / Ariva 52E, Opticum HD S50 / HD S60 / HD X4 220 / HD X7 / HD X402p-403p / HD X110p / X110TS, Yumatu Full HD IQ, Openbox S16 HD PVR / S16 EU 3606C, Amiko Mini HD, Edision Argus Miniplus Highspeed / Argus VIP3 / Optimuss Underline | 57 | M3606 / S3606H: yes (the `seecode` chunk) |
-| ALi M3503 / M3510 / M3511 / M3515 / M3516A | `src/chips/m3503.py` | 0x3503 (0x35030001 rev B on M3510B / M3511 / M3515 / M3516A) | DVB-S2 HD (XS65 Combo / HD8260+ / X-Finder 2: + DVB-T2/C; XS65 Combo / XS65 Twin / HD8260+ / X-Finder 2: 256 MB DDR3) | Globo HD-XS2 / Opticum Blue XS65 / XS65 Combo / XS65 Twin, Echosonic Mini ESR-250, Amiko Impulse SAT / HD8150 / HD8260+ / X-Finder 2 | 11 | ESR-250: no; the others: yes |
-| ALi C3503C / C3503D (M3510D) | `src/chips/c3503.py` | 0x3503 (0x3503C000 on C3503C, 0x3503D000 on C3503D) | DVB-S2 HD | Ferguson Ariva 53 / Ariva 54, Edision Picco S2 | 3 | no |
-| ALi C3505 (M3521A / M3526A / M3529A / M3529F / M3626A / M3712A / M3716A) | `src/chips/c3505.py` | 0x3505 | DVB-S2, DVB-T2/C and DVB-C HD with HEVC (255 Combo / 255 Combo S / Mini Combo Extra / HD8265+ / HD8275+ / X-Finder 3: 256 MB DDR3) | Ferguson Ariva 104 / 154 Combo / 204 / 254 Combo / 255 Combo / 255 Combo S / T760i, Amiko HD8140C SE / HD8142 Twin-C / HD8155 / HD8265+ / HD8275+ / Impulse H.265 T2/C / Mini Combo Extra / X-Finder 3 | 37 | yes |
-| ALi M3821 / M3821A / M3822P | `src/chips/m3821.py` | 0x3821 | DVB-T2/C HD with HEVC | Ferguson Ariva T750i, Opticum Blue R265 Lite, Amiko T58, Amiko Eco TC-200 | 6 | T750i, Eco TC-200: yes; R265 Lite, Amiko T58: no |
-| ALi M3329 / M3329C / M3329E (M3327 platform) | `src/chips/m3329.py` | 0x3329 (0x3101 on M3329C / M3101C) | DVB-S SD (2005-2010) | satellite receiver board s15125, Opticum X80 Premium / 7300 PVR CI2CX / 4000A (Globo 7010A), BigSat DSR 6500 Lux, Echolink EL-700 FTA | 6 | no |
+| ALi M3801 / M3612 (the silicon reports itself as S3811) | `src/chips/m3801.py` | 0x3811 | DVB-T HD, DVB-C HD and DVB-S2 HD (Underline 3in1, Mini HD Combo: DVB-S2 + DVB-T2/C combo; Mini HD T2/C: DVB-T2/C; HD8140, Micro HD, SHD-8140: DVB-S2) | Comsat TE 1050 HD, Opticum STB HD N2, Globo STB HD N3, Opticum HD T90, Cabletech URZ0083Q / URZ0194S / URZ0195, Strong SRT 8115, Strong Prima VIII, Ferguson Ariva T650i, Edision Optimuss Underline 3in1, Amiko HD8140 / Micro HD / Mini HD Combo / Mini HD T2/C / SHD-8140 | 18 (+ the SDK test program `ali_sdk.bin`) | no |
+| ALi M3601A / M3601E / M3601S / M3602 / M3606 (the M36xx family) | `src/chips/m3602.py` | 0x3602 (Ariva T50, Opticum HD X4 220 / HD X7 / X402p-403p, Yumatu Full HD IQ, SAB Titan I HD, Golden Media Uni-Box 9060/9080, Dynavision Davinci, Proton HD, ILTV HD, Amiko STHD-8800 / SHD-8000), 0x3603 (the others, from the sidecar) | DVB-T, DVB-C and DVB-S2 HD | Cabletech URZ0083 / URZ0086, Kruger&Matz KM0183 / KM0186, Thomson THT501, Ferguson Ariva T50 / Ariva 52E, Opticum HD S50 / HD S60 / HD X4 220 / HD X7 / HD X402p-403p / HD X110p / X110TS, Yumatu Full HD IQ, SAB Titan I HD, Golden Media Uni-Box 9060/9080, Dynavision Davinci, Proton HD, ILTV HD, Openbox S16 HD PVR / S16 EU 3606C, Amiko Mini HD / HD8100 / HD8200 / HD8240 / HD8300 / SHD-8000 / SHD-8110 / SHD-8360 / STHD-8800 / STHD-8820 / HD8840, Edision Argus Miniplus Highspeed / Argus VIP3 / Optimuss Underline | 73 | M3601A / M3606 / S3606H: yes (the `seecode` chunk) |
+| ALi M3503 / M3510 / M3511 / M3515 / M3516A / M3516C / M3516F | `src/chips/m3503.py` | 0x3503 (0x35030001 rev B on M3510B / M3511 / M3515 / M3516) | DVB-S2 HD (XS65 Combo / HD8260+ / HD8270+ / CHD8270+ / Mini Combo HD SE / Piccollo 3in1 Plus CI / Synaps STC-3220 / X-Finder 2 / X-Finder+: + DVB-T2/C, 256 MB DDR3) | Globo HD-XS2 / Opticum Blue XS65 / XS65 Combo / XS65 Twin, Echosonic Mini ESR-250, Amiko Impulse SAT / Micro HD SE / Mini HD RE / Mini Combo HD SE / HD8150 / HD8260+ / HD8270+ / CHD8270+ / X-Finder 2 / X-Finder+, Edision Piccollino LED / Piccollo 3in1 Plus CI, Synaps STC-3220 | 20 | ESR-250: no; the others: yes |
+| ALi C3503C / C3503D (M3510C / M3510D) | `src/chips/c3503.py` | 0x3503 (0x3503C000 on C3503C, 0x3503D000 on C3503D) | DVB-S2 HD | Ferguson Ariva 53 / Ariva 54, Edision Picco S2, Amiko Mira WiFi / Mira2 WiFi | 5 | no |
+| ALi C3505 (M3521A / M3526A / M3529A / M3529F / M3626A / M3712A / M3716A) | `src/chips/c3505.py` | 0x3505 | DVB-S2, DVB-T2/C and DVB-C HD with HEVC (255 Combo / 255 Combo S / Mini Combo Extra / HD8255+ / HD8265+ / HD8275+ / Piccollino S2+T2/C / Piccollo S2+T2/C / X-Finder 3: 256 MB DDR3) | Ferguson Ariva 104 / 154 Combo / 204 / 254 Combo / 255 Combo / 255 Combo S / T760i, Amiko HD8140C SE / HD8142 Twin-C / HD8155 / HD8255+ / HD8265+ / HD8275+ / Mini HD265 / Impulse H.265 T2/C / Mini Combo Extra / X-Finder 3, Edision Piccollino S2 / Piccollino S2+T2/C / Piccollo S2+T2/C | 42 | yes |
+| ALi M3821 / M3821A / M3822P | `src/chips/m3821.py` | 0x3821 | DVB-T2/C HD with HEVC | Ferguson Ariva T750i, Opticum Blue R265 Lite, Amiko T58 / Eco TC-200 / Impulse T2/C | 7 | T750i, Eco TC-200, Impulse T2/C: yes; R265 Lite, Amiko T58: no |
+| ALi M3329 / M3329C / M3329E (M3327 platform) | `src/chips/m3329.py` | 0x3329 (0x3101 on M3329C / M3101C) | DVB-S SD (2005-2010) | satellite receiver board s15125, Opticum X80 Premium / 7300 PVR CI2CX / 4000A (Globo 7010A), BigSat DSR 6500 Lux / DSR 7035 Plus, Echolink EL-700 FTA | 7 | no |
 
-Every family boots its bootloader and application, draws its first OSD screen and answers the remote in the test suite; the per-box details are in the last table. Two images stop at their bootloader because their main code is encrypted for an external board security chip that is not modelled: the Ferguson Ariva 52E (I2C 0x62, `run_dump_a52e_security_ic.py`) and the Echolink EL-700 FTA (an 8051 security MCU over UART2 at 0xB8001400 supplying XTEA keys, `run_dump_el700_security_mcu.py`). The M3329 boards boot from either parallel NOR or SPI flash and draw their OSD with the CPU (`OSD_M3327C`, or `GeM3602` at 0xB800E000 on the M3329E 7300 PVR); the T750i and newer C3505 / M3821A firmwares drive the display engine through register lists in RAM; the Ariva T50 draws with the M3602's own graphics engine (`src/ge_m3602.py`); everything else draws through the GE at 0xB800A000 (`src/ge_m36f.py`) and the GMA display layers (`src/gma_capture.py`).
+Every family boots its bootloader and application, draws its first OSD screen and answers the remote in the test suite; the per-box details are in the last table. Two MIPS images stop at their bootloader because their main code is encrypted for an external board security chip that is not modelled: the Ferguson Ariva 52E (I2C 0x62, `run_dump_a52e_security_ic.py`) and the Echolink EL-700 FTA (an 8051 security MCU over UART2 at 0xB8001400 supplying XTEA keys, `run_dump_el700_security_mcu.py`); one additional catalogued image, the Amiko HD9265+ (`ALi M3759A` / C3702, `boots: false`), is an ARMv7-A Cortex-A9 firmware outside the MIPS32/MIPS16e simulator scope. The M3329 boards boot from either parallel NOR or SPI flash and draw their OSD with the CPU (`OSD_M3327C`, or `GeM3602` at 0xB800E000 on the M3329E 7300 PVR); the T750i and newer C3505 / M3821A firmwares drive the display engine through register lists in RAM; the Ariva T50 draws with the M3602's own graphics engine (`src/ge_m3602.py`); everything else draws through the GE at 0xB800A000 (`src/ge_m36f.py`) and the GMA display layers (`src/gma_capture.py`).
 
 ## Front-panel display chips
 
@@ -58,32 +58,61 @@ With "Signal + TS" on, the tuner reports a lock and the demultiplexer model (`sr
 
 ## Tested devices
 
-One row per box (68 boxes, 133 images; the SDK test program `ali_sdk.bin` is not listed). "Boots", "App runs" and "OSD drawn" are what the sidecar records for the box's images; "Remote", "UART console" and "Signal + TS" mean a test in `tests/` covers it on that box (a `-` there means not tested, not necessarily not working).
+One row per box (107 boxes, 173 images; the SDK test program `ali_sdk.bin` is not listed). "Boots", "App runs" and "OSD drawn" are what the sidecar records for the box's images; "Remote", "UART console" and "Signal + TS" mean a test in `tests/` covers it on that box (a `-` there means not tested, not necessarily not working).
 
 | Box | SoC | Front panel (GPIO) | Tuner | Images | Boots | App runs | OSD drawn | Remote | UART console | Signal + TS |
 |---|---|---|---|---|---|---|---|---|---|---|
+| Amiko CHD8270+ | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | DVB-T2/C + DVB-C | 1 | yes | yes | yes | - | - | - |
 | Amiko Eco TC-200 | M3821A | CH455 (SCL 128, SDA 129) | internal DVB-T2/C | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8100 Series | M3601A / C3603 | CH455 (SCL 9, SDA 8) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8140 | M3612 / M3801 | CH455 (SCL 31, SDA 9) | DVB-T/C | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8140C SE | M3712A / C3505 | CH455 (SCL 107, SDA 108) | MxL603 | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8142 Twin-C | M3716A / C3505 | CH455 (SCL 107, SDA 108) | R858 | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8150 | M3511D / M3503 | CH455 (SCL 135, SDA 134) | AV2026 | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8155 | C3505 | CH455 (SCL 107, SDA 110) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8200 Series | M3606B / C3603 | Lemontree EuP MCU (SCL 44, SDA 43) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8240 / GI Black Synaps | M3606B / C3603 | Lemontree EuP MCU (SCL 44, SDA 43) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8255+ | M3529A / C3505 (256 MB) | CH455 (SCL 107, SDA 108) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8260+ | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | AV2012 + MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8265+ | C3505 (256 MB) | CH455 (SCL 107, SDA 108) | AV2012 + MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8270+ | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
 | Amiko HD8275+ | M3529A / C3505 (256 MB) | CH455 (SCL 107, SDA 108) | AV2012 + MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8300 Series | M3606A / C3603 | Lemontree EuP MCU (SCL 103, SDA 102) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko HD8840 Combo | M3606C / C3603 | Lemontree EuP MCU (SCL 103, SDA 102) | AV2011 (S3501) + DVB-T/C | 1 | yes | yes | yes | - | - | - |
+| Amiko HD9265+ | M3759A / C3702 (ARMv7-A) | - | DVB-S2 + DVB-T2/C | 1 | no (ARMv7-A Cortex-A9 SoC) | no | no | - | - | - |
 | Amiko Impulse H.265 T2/C | M3626A / C3505 | CH455 (SCL 107, SDA 110) | MxL608 (AVL6762) | 1 | yes | yes | yes | - | - | - |
 | Amiko Impulse SAT | M3510B / M3503 | CH455 (SCL 135, SDA 134) | AV2026 | 1 | yes | yes | yes | - | - | - |
+| Amiko Impulse T2/C | M3821A | CH455 (SCL 128, SDA 129) | internal DVB-T2/C | 1 | yes | yes | yes | - | - | - |
+| Amiko Micro HD | M3612 / M3801 | CH455 (SCL 31, SDA 9) | S3501 | 1 | yes | yes | yes | - | - | - |
+| Amiko Micro HD SE | M3511B / M3503 | CH455 (SCL 135, SDA 134) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
 | Amiko Mini Combo Extra | M3526A / C3505 (256 MB) | CH455 (SCL 107, SDA 110) | internal DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
-| Amiko Mini HD | M3606 / C3603 | - | - | 1 | yes | yes | yes | - | - | - |
+| Amiko Mini Combo HD SE | M3516C / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
+| Amiko Mini HD | M3606 / M3606F / C3603 | - | S3501 | 2 | yes | yes | yes | - | - | - |
+| Amiko Mini HD Combo | M3612 / M3801 | CH455 (SCL 31, SDA 9) | AV2012 + R836 (AVL6862) | 1 | yes | yes | yes | - | - | - |
+| Amiko Mini HD RE | M3511A / M3503 | CH455 (SCL 135, SDA 134) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko Mini HD T2/C | M3612 / M3801 | CH455 (SCL 31, SDA 9) | R836 (AVL6862) | 1 | yes | yes | yes | - | - | - |
+| Amiko Mini HD265 | M3521A / C3505 | CH455 (SCL 107, SDA 110) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko Mira WiFi | M3510C / C3503C | - | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko Mira2 WiFi | M3510D / C3503D | CH455 (SCL 24, SDA 23) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Amiko SHD-7900 / SHD-8000 | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko SHD-8110 | M3601A / C3603 | - | S3501 | 1 | yes | yes | yes | - | - | - |
+| Amiko SHD-8140 | M3612 / M3801 | CH455 (SCL 31, SDA 9) | AV2012 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko SHD-8360 | M3606G / C3603 | Lemontree EuP MCU (SCL 103, SDA 102) | AV2012 (S3501) | 1 | yes | yes | yes | - | - | - |
+| Amiko STHD-8800 Combo | M3602A | Lemontree EuP MCU + VFD (SCL 62, SDA 171) | AV2011 (S3501) + DVB-T | 1 | yes | yes | yes | - | - | - |
+| Amiko STHD-8820 Combo | M3606A / C3603 | Lemontree EuP MCU (SCL 103, SDA 102) | AV2011 (S3501) + DVB-T/C | 1 | yes | yes | yes | - | - | - |
 | Amiko T58 | M3821 | CH455 (SCL 128, SDA 129) | R836 | 1 | yes | yes | yes | yes | - | - |
 | Amiko X-Finder 2 | M3516A / M3503 (256 MB, 16 MB flash) | Lemontree meter MCU (SCL 135, SDA 134) | AV2011 / AV2012 + AVL6762 | 1 | yes | yes | yes | - | - | - |
 | Amiko X-Finder 3 | M3529F / C3505 (256 MB) | CH455 keypad (SCL 107, SDA 108) | AV2011 + MxL603 (AVL6762) | 1 | yes | yes | yes | - | - | - |
+| Amiko X-Finder+ | M3516F / M3503 (256 MB, 16 MB flash) | CH455 keypad/LEDs (SCL 135, SDA 134) | AV2011 + AVL6862 | 1 | yes | yes | yes | - | - | - |
 | BigSat DSR 6500 Lux | M3329C | 74HC164 + 4-digit LED (CLK 16, DATA 17, DIG 18..21) | internal DVB-S | 1 | yes | yes | yes | - | - | - |
+| BigSat DSR 7035 Plus | M3329C | CH455 (SCL 12, SDA 13) | internal DVB-S | 1 | yes | yes | yes | - | - | - |
 | Cabletech URZ0083 | M3601E | - | - | 8 | yes | yes | yes | yes | - | - |
 | Cabletech URZ0083Q | M3801 | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | MxL603 | 1 | yes | yes | yes | yes | - | - |
 | Cabletech URZ0086 | M3606 | - | MxL101SF | 5 | yes | yes | yes | yes | - | - |
 | Cabletech URZ0194S | M3801 | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | MxL603 | 1 | yes | yes | yes | yes | - | - |
 | Cabletech URZ0195 | M3801 | uPD16312-class 3-wire (CLK 31, DIO 9, STB 14) | MxL5007T / MxL603 | 2 | yes | yes | yes | yes | - | - |
 | Comsat TE 1050 HD | M3801 | no driver, 2 buttons (GPIO 31 / 9) | MxL603 | 1 | yes | yes | yes | yes | - | yes |
+| Dynavision Davinci / Sparkle Plus HD | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
 | Echolink EL-700 FTA | M3329C | SMTM51 MCU on UART2 (0xB8001400) | - | 1 | yes (bootloader only: main code is XTEA-encrypted for the board's security MCU) | no | no | - | - | - |
 | Echosonic Mini ESR-250 | M3510A | TM1650-compatible (SCL 135, SDA 134) | RDA5815 | 1 | yes | yes | yes | yes | - | - |
 | Edision Argus Miniplus Highspeed | M3606 / C3603 | - | - | 1 | yes | yes | yes | - | - | - |
@@ -91,6 +120,11 @@ One row per box (68 boxes, 133 images; the SDK test program `ali_sdk.bin` is not
 | Edision Optimuss Underline | M3606 / C3603 | - | - | 1 | yes | yes | yes | - | - | - |
 | Edision Optimuss Underline 3in1 | M3612 / M3801 | CH455 (SCL 31, SDA 9) | AV2012 + R836 (AVL6862) | 1 | yes | yes | yes | - | - | - |
 | Edision Picco S2 | M3510D / C3503D | CH455 (SCL 24, SDA 23) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Edision Piccollino LED | M3511E / M3503 | CH455 (SCL 135, SDA 134) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Edision Piccollino S2 | M3521A / C3505 | CH455 (SCL 107, SDA 110) | internal DVB-S2 | 1 | yes | yes | yes | - | - | - |
+| Edision Piccollino S2+T2/C | M3526A / C3505 (256 MB) | CH455 (SCL 107, SDA 110) | internal DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
+| Edision Piccollo 3in1 Plus CI | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
+| Edision Piccollo S2+T2/C | M3529A / C3505 (256 MB) | CH455 (SCL 107, SDA 108) | DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
 | Ferguson Ariva 104 | C3505 | FD650K (SCL 107, SDA 110) | M3031 | 3 | yes | yes | yes | yes | - | - |
 | Ferguson Ariva 154 Combo | C3505 | FD650K (SCL 107, SDA 108) | M3031 + R836 | 7 | yes | yes | yes | - | - | - |
 | Ferguson Ariva 204 | C3505 | FD650K (SCL 107, SDA 108) | M3031 | 4 | yes | yes | yes | - | - | - |
@@ -106,6 +140,8 @@ One row per box (68 boxes, 133 images; the SDK test program `ali_sdk.bin` is not
 | Ferguson Ariva T760i | C3505 | FD650K (SCL 107, SDA 110) | - | 4 | yes | yes | yes | yes | - | - |
 | Globo HD-XS2 / Opticum Blue XS65 | M3503 | TM1650-compatible (SCL 135, SDA 134) | AV2011 | 4 | yes | yes | yes | yes | yes | - |
 | Globo STB HD N3 | M3801 | TM1650 (SCL 31, SDA 9) | R820T | 1 | yes | yes | yes | yes | yes | yes |
+| Golden Media Uni-Box 9060 / 9080 HD | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| ILTV HD | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
 | Kruger&Matz KM0183 | M3601E | - | - | 3 | yes | yes | yes | - | - | - |
 | Kruger&Matz KM0186 | M3606 | - | MxL101SF | 3 | yes | yes | yes | - | - | - |
 | Openbox S16 HD PVR | M3601S | TM1650-compatible (SCL 62, SDA 63) | - | 1 | yes | yes | yes | yes | - | - |
@@ -125,8 +161,11 @@ One row per box (68 boxes, 133 images; the SDK test program `ali_sdk.bin` is not
 | Opticum X80 Premium | M3329C | CH455 (SCL 30, SDA 31) | internal DVB-S | 1 | yes | yes | yes | yes | - | - |
 | Opticum XS65 Combo | M3515 / M3503 (256 MB) | FD650K (SCL 135, SDA 134) | AV2011 | 1 | yes | yes | yes | yes | - | - |
 | Opticum XS65 Twin | M3511 / M3503 (256 MB) | FD650K (SCL 135, SDA 134) | AV2011 (2x DVB-S2, S3501) | 1 | yes | yes | yes | yes | - | - |
+| Proton HD | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
+| SAB Titan I HD 3602 | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |
 | Satellite board s15125 (2005) | M3329 | TM1650-compatible (SCL 15, SDA 16) | - | 1 | yes | yes | yes | yes | - | - |
 | Strong Prima VIII | M3801 | no driver, 2 buttons (GPIO 31 / 9) | MxL603 / Si2144 | 2 | yes | yes | yes | yes | - | - |
 | Strong SRT 8115 | M3801 | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | MxL603 | 1 | yes | yes | yes | yes | - | - |
+| Synaps STC-3220 Combo | M3516A / M3503 (256 MB, 16 MB flash) | CH455 (SCL 135, SDA 134) | DVB-S2 + DVB-T2/C | 1 | yes | yes | yes | - | - | - |
 | Thomson THT501 | M36xx | - | MxL101SF | 3 | yes | yes | yes | yes | - | - |
 | Yumatu Full HD IQ / HD X4 | M3602B | Lemontree EuP MCU (SCL 62, SDA 171) | AV2011 (S3501) | 1 | yes | yes | yes | - | - | - |

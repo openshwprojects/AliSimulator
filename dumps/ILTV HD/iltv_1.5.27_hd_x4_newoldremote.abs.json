@@ -1,0 +1,59 @@
+{
+  "file": "iltv_1.5.27_hd_x4_newoldremote.abs",
+  "device": {
+    "brand": "ILTV / Opticum",
+    "model": "ILTV HD (v1.5.27 build for Opticum HD X402p/X403p)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet",
+    "board": "06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.27 ILTV HD (maincode(AV) \"060202001527\"; bootloader \"M3602B 1.1.6\", 2009-12-29)",
+    "date": "2012-03-18",
+    "size": 4194304,
+    "sha1": "a7a245fe92ccfe4f67f542cc50a42dab5bc6d8a1",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001527, 2012-03-18), default_lang 0x25FD80 (1.0.0), countryband 0x260000 (1.0.0), logo_user 0x268000 (1.0.0), logo_menu 0x270000 (1.0.0), logo_radio 0x278000 (1.0.0), logo_boot 0x280000 (1.0.0), patch 0x29FF80 (1.0.0), defaultdb(PRC) 0x2C0000 (1.0.2), userdb(64+64) 0x2EFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)",
+    "author": "ILTV / Fulansoft (Opticum X4 port)",
+    "date": "2012-03-18",
+    "login": false,
+    "note": "Archive iltv_1.5.27_hd_x4_newoldremote.zip from Opticum/Opticum HD X402-X403-X4-X7 on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_iltv_hd_app_starts.py, run_dump_iltv_hd_capture_screen.py): the \"M3602B 1.1.6\" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\" ON \" -> \"    \" -> \" on \"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its ILTV OSD dialog through GeM3602 (7 GE commands, 4 colours)."
+  },
+  "desc": [
+    "ILTV HD (v1.5.27, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).",
+    "Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (\" ON \" -> \" on \"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x80xx remote control table (\"necfirst\" coding)."
+  ]
+}

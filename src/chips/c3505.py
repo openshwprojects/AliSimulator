@@ -68,6 +68,13 @@ class C3505(UpperRamMixin, M3821):
 
     def start(self):
         self._configure_memory()
+        if self.sim.rom_image and maincode(self.sim.rom_image):
+            for offset, name, _ver in chunk_chain(self.sim.rom_image):
+                cid, _len, _nxt, crc = struct.unpack_from(">IIII", self.sim.rom_image, offset)
+                if (name.lower().startswith("maincode") or (cid >> 16) == 0x01FE) and crc != 0x4E435243:
+                    self.sim.rom_image[offset + 0x0C:offset + 0x10] = b"NCRC"
+                    self.sim._rom_write(offset + 0x0C, b"NCRC")
+                    break
         super().start()
 
     def set_signal(self, on=True):

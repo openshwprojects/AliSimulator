@@ -1,0 +1,58 @@
+{
+  "file": "globo_x7_rc2_synaps_dynavision_1.5.28_gisclub.tv.abs",
+  "device": {
+    "brand": "Globo / Opticum",
+    "model": "HD X7 Combo (System ID 06000200, Dynavision Synaps RC2 1.5.28 build)",
+    "type": "DVB-S2 + DVB-T / Twin Full HD satellite & terrestrial combo receiver with VFD, 2x CA, 2x CI",
+    "board": "06000200 (Globo / Opticum M3602A \"Lemontree\" VFD platform with EuP standby MCU)",
+    "soc": "ALi M3602A (bootloader \"M3602A 1.1.6\"; Libcore SDK4.0aa.5.5_20110905 / SDK4.0aa.5.12_GLS_S2_20120627)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 / SCB1 at I2C 0x33 (+ COFDM DVB-T probe at I2C 0x11)",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0 / SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + PT6311 8-char VFD (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.28 Dynavision Synaps RC2 (maincode(AV) \"060002001528\", 2012-03-18; bootloader \"M3602A 1.1.6\", 2009-12-29)",
+    "date": "2012-03-18",
+    "size": 4194304,
+    "sha1": "1918e94c1120c5775adc9753d95e39f8cbaaec85",
+    "layout": "bootloader 0x000000 (M3602A 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060002001528, 2012-03-18, LZMA -> 7.11 MB at 0x80008000), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x7_rc2_synaps_dynavision_1.5.28_gisclub.tv.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": "Globo / Dynavision (gisclub.tv Synaps RC2 mod)",
+    "date": "2012-03-18",
+    "login": false,
+    "note": "Archive globo_x7_rc2_synaps_dynavision_1.5.28_gisclub.tv.zip from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "GISCLUB "
+    ],
+    "note": "Boots as an M3602A board (chips/m3602.py, lemontree_decoder.py, run_dump_globo_x7_dynavision_1528_app_starts.py, run_dump_globo_x7_dynavision_1528_capture_screen.py): the \"M3602A 1.1.6\" bootloader prints \"APP  init ok\", exchanges CRC-16/XMODEM transactions and 38-byte PT6311 8-character 14-segment VFD frames with the external Lemontree EuP standby and VFD microcontroller at I2C 0x28 over bit-banged GPIO 62 (SCL) / 171 (SDA), unpacks the 7.11 MB maincode(AV) to 0x80008000 and enters the application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 on SCB0 and SCB1, and renders its Dynavision Synaps RC2 OSD dialog through GeM3602."
+  },
+  "desc": [
+    "Globo / Opticum HD X7 Combo (System ID 06000200) firmware 1.5.28 with the Dynavision Synaps RC2 GUI (2012-03-18) on a 4 MB SPI flash for the ALi M3602A Full HD combo/twin receiver with 2x CA and 2x CI.",
+    "Drives an 8-character 14-segment PT6311 VFD display through the external Lemontree EuP standby microcontroller at I2C 0x28 on GPIO 62 / 171 using 38-byte op-0x33 CRC-16/XMODEM frames, alongside ALi S3501 DVB-S2 demodulator(s) at I2C 0x33 and Airoha AV2011 tuner(s) at I2C 0x60."
+  ]
+}

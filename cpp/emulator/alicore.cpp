@@ -586,7 +586,7 @@ bool Core::plain_device_store(uint32_t off, uint32_t size) const {
   auto overlaps = [&](uint64_t first, uint64_t count) {
     return (uint64_t)off < first + count && first < end;
   };
-  if (overlaps(ic_status_off_, 8) || overlaps(ic_enable_off_, 8) ||
+  if (overlaps(ic_status_off_, 16) || overlaps(ic_enable_off_, 16) ||
       overlaps((uint64_t)ic_base_ + 0xF, 1) ||
       (doorbell_off_ >= 0 && overlaps((uint32_t)doorbell_off_, 1))) return false;
   for (uint32_t i = 0; i < size; i++)
@@ -1032,6 +1032,11 @@ bool Core::ic_ip3() const {
     uint64_t en = 0;
     if (ic_enable_off_ + 8 <= dev_size_) memcpy(&en, dev_buf_ + ic_enable_off_, 8);
     if (ic_lines_ & en) return true;
+  }
+  if (ic_lines_hi_) {
+    uint64_t en = 0;
+    if (ic_enable_off_ + 16 <= dev_size_) memcpy(&en, dev_buf_ + ic_enable_off_ + 8, 8);
+    if (ic_lines_hi_ & en) return true;
   }
   if (doorbell_off_ >= 0 && (uint32_t)doorbell_off_ < dev_size_ && ic_base_ + 0xF < dev_size_) {
     uint32_t ring = (uint32_t)dev_buf_[doorbell_off_] << doorbell_shift_;

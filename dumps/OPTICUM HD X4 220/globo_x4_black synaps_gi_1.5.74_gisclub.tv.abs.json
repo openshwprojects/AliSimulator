@@ -1,0 +1,58 @@
+{
+  "file": "globo_x4_black synaps_gi_1.5.74_gisclub.tv.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "Globo / Opticum HD X4 220 (System ID 06020200, GI Black Synaps v1.5.74 gisclub.tv)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "06020200 (bootloader version \"M3602B 1.1.6\", 4 MB SPI flash, Lemontree M3602B platform)",
+    "soc": "ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": "Airoha AV2011 DVB-S2 tuner at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Globo HD X4 (GI Black Synaps v1.5.74) (bootloader 'M3602B 1.1.6'; maincode(AV) '060202001574'; default_lang '1.0.0')",
+    "date": "2015-03-01",
+    "size": 4194304,
+    "sha1": "0cfd013196692003963b8dc5836fdc05de9a698f",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x4_black%20synaps_gi_1.5.74_gisclub.tv.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2015-03-01",
+    "login": false,
+    "note": "Archive globo_x4_black synaps_gi_1.5.74_gisclub.tv.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "    ",
+      "boot"
+    ],
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_globo_x4_black_synaps_gi_1574_app_starts.py, run_dump_globo_x4_black_synaps_gi_1574_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Opticum Globo / Opticum HD X4 220 (System ID 06020200, GI Black Synaps v1.5.74 gisclub.tv) firmware (2015-03-01) on a 4 MB SPI flash for ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)."
+  ]
+}

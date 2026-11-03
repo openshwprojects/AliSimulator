@@ -1,0 +1,57 @@
+{
+  "file": "AMIKO_MiniHD_Combo_Edision_1.4.86_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD Combo (System ID 0E060A00, Edision v1.4.86 by Dekolte)",
+    "type": "Compact DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0E060A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU combo variant of the M3801 / S3811 family; chip ID 0x3811)",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "Availink AVL6862 combo DVB-S2 + DVB-T2/C demodulator on SCB0 at I2C 0x14 (\"Demod is 6862!!!\")",
+    "tuner": "Airoha AV2012 DVB-S2 tuner at I2C 0x61",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst",
+    "demodModel": {
+      "chip": "avl6862a",
+      "address": 20
+    },
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko Mini HD Combo (Edision v1.4.86 by Dekolte) (bootloader 'M3612 1.0.4'; maincode(AV) '0E060A001486'; HDCPKey 'Demo M3612')",
+    "date": "2014-12-01",
+    "size": 8388608,
+    "sha1": "1368c5663aa8385d7c01c97566cdad4d9cb459e1",
+    "layout": "bootloader 0x000000 (M3612 1.0.4)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.86_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2014-12-01",
+    "login": false,
+    "note": "Archive AMIKO_MiniHD_Combo_Edision_1.4.86_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots on M3801 (chips/m3801.py) (run_dump_minihd_combo_edision_1486_app_starts.py, run_dump_minihd_combo_edision_1486_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mini HD Combo (System ID 0E060A00, Edision v1.4.86 by Dekolte) firmware (2014-12-01) on a 8 MB SPI flash for ALi M3612 / S3811 (single-CPU combo variant of the M3801 / S3811 family; chip ID 0x3811)."
+  ]
+}

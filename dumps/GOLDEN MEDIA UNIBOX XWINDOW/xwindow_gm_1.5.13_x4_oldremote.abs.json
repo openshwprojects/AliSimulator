@@ -1,0 +1,58 @@
+{
+  "file": "xwindow_gm_1.5.13_x4_oldremote.abs",
+  "device": {
+    "brand": "Golden Media",
+    "model": "Uni-Box 9060 / 9080 CRCI HD PVR Class (System ID 06020200, XWindow GUI 1.5.13)",
+    "type": "DVB-S2 Full HD satellite receiver with CA card reader, CI slot, Ethernet and USB PVR",
+    "board": "06020200 (Globo / Opticum / Golden Media M3602B \"220\" platform with Lemontree EuP front-panel MCU)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB1 / SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.13 XWindow GM (maincode(AV) \"060202001513\", 2012-03-18; bootloader \"M3602B 1.1.6\", 2009-12-29)",
+    "date": "2012-03-18",
+    "size": 4194304,
+    "sha1": "81c92daad910f9c6d13d20a2e0dc37dec9480c99",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001513, 2012-03-18), default_lang 0x29FD80 (1.0.0, 2007-12-05), countryband 0x2A0000 (1.0.0, 2008-09-23), logo_user 0x2A8000 (1.0.0, 2006-03-03), logo_menu 0x2A8080 (1.0.0, 2006-03-01), logo_radio 0x2A8100 (1.0.0, 2006-03-01), logo_boot 0x2B0000 (1.0.0, 2006-03-01), patch 0x2CFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2F0000 (1.0.2, 2005-2-28), userdb(64+64) 0x31FF80 (1.0.2, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=xwindow_gm_1.5.13_x4_oldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": "Golden Media / Opticum (XWindow GUI build)",
+    "date": "2012-03-18",
+    "login": false,
+    "note": "Archive xwindow_gm_1.5.13_x4_oldremote.zip from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as an M3602B board (chips/m3602.py, lemontree_decoder.py, run_dump_gm_unibox_xwindow_app_starts.py, run_dump_gm_unibox_xwindow_capture_screen.py): the \"M3602B 1.1.6\" bootloader communicates with the external Lemontree front-panel and EuP standby microcontroller at I2C 0x28 on bit-banged SCL = GPIO 62 / SDA = GPIO 171 using 8-byte CRC-16/XMODEM frames (updating the 4-digit 7-segment display \" ON \" -> \"    \" -> \" on \"), prints \"APP  init ok\", unpacks maincode(AV) to 0x80008000, and starts the single-CPU application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60, and without the board's anti-clone security IC renders its XWindow OSD dialog through GeM3602 (8 GE commands, 19 colours)."
+  },
+  "desc": [
+    "Golden Media Uni-Box 9060 / 9080 CRCI HD PVR Class / Opticum HD X4-series (System ID 06020200) firmware 1.5.13 with the XWindow GUI and old remote table (2012-03-18) on a 4 MB SPI flash for the ALi M3602B Full HD DVB-S2 satellite receiver.",
+    "Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol, \" ON \" -> \" on \"), an ALi S3501 DVB-S2 demodulator at I2C 0x33, an Airoha AV2011 tuner at I2C 0x60, and a 38-entry 0x80xx remote control table (\"necfirst\" coding)."
+  ]
+}

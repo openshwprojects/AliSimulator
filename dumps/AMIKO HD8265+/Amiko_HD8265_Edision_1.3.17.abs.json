@@ -1,0 +1,61 @@
+{
+  "file": "Amiko_HD8265_Edision_1.3.17.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8265+ (System ID 6C000A00, Edision v1.3.17)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI slot, CA card reader, Ethernet and USB Wi-Fi",
+    "board": "6C000A00 (bootloader version \"M3529A 1.1.1\", 256 MB DDR3 C3505 combo platform)",
+    "soc": "ALi M3529A / C3505 with 256 MB DDR3 (maincode \"ALI_C3505:0x%x\", seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14",
+    "tuner": "Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst",
+    "demodModel": {
+      "chip": "avl6762",
+      "address": 20
+    },
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "mxl608",
+        "address": 96
+      }
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko HD8265+ (Edision v1.3.17) (bootloader 'M3529A 1.1.2'; maincode(AV) '6C000A001317'; seecode 'M3606 SEE')",
+    "date": "2018-02-28",
+    "size": 8388608,
+    "sha1": "661d6e481c8073953386891f905158c458850e2f",
+    "layout": "bootloader 0x000000 (M3529A 1.1.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8265_Edision_1.3.17.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2018-02-28",
+    "login": false,
+    "note": "Archive Amiko_HD8265_Edision_1.3.17.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots on C3505 (chips/c3505.py) (run_dump_hd8265_edision_1317_app_starts.py, run_dump_hd8265_edision_1317_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko HD8265+ (System ID 6C000A00, Edision v1.3.17) firmware (2018-02-28) on a 8 MB SPI flash for ALi M3529A / C3505 with 256 MB DDR3 (maincode \"ALI_C3505:0x%x\", seecode \"M3606 SEE\" at 0xAE000200)."
+  ]
+}

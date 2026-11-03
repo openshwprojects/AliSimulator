@@ -1,0 +1,43 @@
+{
+  "file": "AMIKO_Mini_4K_S2X_1.0.38_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini 4K UHD S2X (System ID 80000A00, v1.0.38 EMU build)",
+    "type": "DVB-S2X 4K UHD H.265/HEVC satellite receiver with Conax CA card reader, Ethernet and USB PVR",
+    "board": "80000A00 (bootloader version \"M2661A 1.0.1\", 8 MB SPI flash, ALi S3922 / C3702 / CAP210 ARMv7-A platform)",
+    "soc": "ALi M2661A / S3922 (ARMv7-A CPU, get_clock_3922 / get_clock_cap210 / get_clock_3702, DECV_HEVC_0/1, NIM_C3501h_0 / NIM_S3505_1)",
+    "family": "M3801 (chips/m3801.py, NCRC chunk container only; CPU is ARMv7-A rather than MIPS32)",
+    "demod": "internal DVB-S2X (NIM_C3501h_0 / NIM_S3505_1)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.38 emu (maincode(AV) \"80000A001038\"; bootloader \"M2661A 1.0.1\"; SDK4.0la.21.4a_20191226byAdmin)",
+    "date": "2020-04-20",
+    "size": 8388608,
+    "sha1": "5da02d5348155e0bd772cfe4c13db6bac06ff254",
+    "layout": "bootloader 0x000000 (M2661A 1.0.1), maincode(AV) 0x078000 (80000A001038, LZMA -> 16.06 MB), default_lang 0x53FD00, cipluskey 0x53FF80, countryband 0x54FF80, img_webserver 0x557F80, html_webserver 0x5B7F80, logo_user 0x657F80, logo_menu 0x667F80, logo_radio 0x687F80, logo_boot 0x6A7F80, patch 0x6CFF80, defaultdb(PRC) 0x6F0000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_4K_S2X_1.0.38_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2020-04-20",
+    "login": false,
+    "note": "Archive AMIKO_Mini_4K_S2X_1.0.38_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": [],
+    "note": "Does not boot on the MIPS32 simulator (run_dump_mini_4k_s2x_arm_layout.py): although the 8 MB image uses ALi's standard NCRC chunk chain (magic 0x23010010 at 0x000000, HEAD descriptor at 0x258, LZMA-compressed maincode(AV) at 0x078000 decompressing to 16.06 MB), the ALi M2661A / S3922 (\"ALI_S3922\", \"get_clock_3922\", \"get_clock_cap210\") is an ARMv7-A 4K UHD SoC rather than MIPS32.  Its boot-ROM payload at 0x800 starts with an 8-word ARMv7 exception vector table (0xEA000006, 0xEAFFFFFE, 0xEA00004D, ...) followed at 0x820 by mrc p15, #0, r0, c1, c0, #0 (0xEE110F10, reading CP15 SCTLR)."
+  },
+  "desc": [
+    "Amiko Mini 4K UHD S2X (System ID 80000A00) firmware v1.0.38 EMU for the 4K UHD H.265/HEVC DVB-S2X satellite receiver on the ALi M2661A / S3922 ARMv7-A SoC with 8 MB SPI flash.",
+    "Packages an ARMv7-A bootloader (\"M2661A 1.0.1\") and ALi SDK 4.0la maincode(AV) inside ALi's traditional NCRC flash chunk container."
+  ]
+}

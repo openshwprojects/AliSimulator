@@ -180,6 +180,7 @@ class Core {
   // shift; offset < 0 = none)
   void set_ic(uint32_t status_off, uint32_t enable_off, uint32_t ic_base);
   void set_ic_lines(uint64_t lines) { ic_lines_ = lines; poke_events(); }
+  void set_ic_lines_hi(uint64_t lines) { ic_lines_hi_ = lines; poke_events(); }
   void set_doorbell(int32_t offset, int32_t shift) { doorbell_off_ = offset; doorbell_shift_ = shift; poke_events(); }
   bool ic_ip3() const;
 
@@ -228,7 +229,7 @@ class Core {
   bool llbit = false;
 
   // interrupts
-  uint64_t ic_lines_ = 0;
+  uint64_t ic_lines_ = 0, ic_lines_hi_ = 0;
   uint32_t ic_status_off_ = 0x30, ic_enable_off_ = 0x38, ic_base_ = 0x30;
   int32_t doorbell_off_ = -1, doorbell_shift_ = 0;
   bool uart_ip3 = false;

@@ -1,0 +1,47 @@
+{
+  "file": "AMIKO_SHD-8110_Synaps_1.7.03_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "SHD-8110 (System ID 0B000A00, Synaps v1.7.03 by Dekolte)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, SCART, Ethernet and USB PVR",
+    "board": "0B000A00 (bootloader version \"M3601A 1.1.3\", 8 MB SPI flash, ALi M3606 platform reading chip ID 0x3603)",
+    "soc": "ALi M3601A / M3606 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko SHD-8110 (Synaps v1.7.03 by Dekolte) (bootloader 'M3601A 1.1.3'; maincode(AV) '0B000A001703'; seecode 'M3606 SEE')",
+    "date": "2015-03-10",
+    "size": 8388608,
+    "sha1": "b2e4668c6f72fdd0ef896a85ccc27682cadab8f6",
+    "layout": "bootloader 0x000000 (M3601A 1.1.3)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8110_Synaps_1.7.03_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2015-03-10",
+    "login": false,
+    "note": "Archive AMIKO_SHD-8110_Synaps_1.7.03_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_shd_8110_synaps_1703_app_starts.py, run_dump_shd_8110_synaps_1703_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko SHD-8110 (System ID 0B000A00, Synaps v1.7.03 by Dekolte) firmware (2015-03-10) on a 8 MB SPI flash for ALi M3601A / M3606 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)."
+  ]
+}

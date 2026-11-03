@@ -1,0 +1,47 @@
+{
+  "file": "AMIKO_MiniHD_1.7.10_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD (System ID 0A070A00, v1.7.10 EMU)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0A070A00 (bootloader version \"M3606F 1.1.3\", 8 MB SPI flash, ALi M3606 platform reading chip ID 0x3603)",
+    "soc": "ALi M3606F / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko Mini HD (v1.7.10 EMU) (bootloader 'M3606F 1.1.3'; maincode(AV) '0A070A001710'; seecode 'M3606 SEE')",
+    "date": "2015-02-15",
+    "size": 8388608,
+    "sha1": "285cef7c84f38bb177c6c2ef08212ab7f57ab003",
+    "layout": "bootloader 0x000000 (M3606F 1.1.3)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_1.7.10_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2015-02-15",
+    "login": false,
+    "note": "Archive AMIKO_MiniHD_1.7.10_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_minihd_1710_emu_app_starts.py, run_dump_minihd_1710_emu_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mini HD (System ID 0A070A00, v1.7.10 EMU) firmware (2015-02-15) on a 8 MB SPI flash for ALi M3606F / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)."
+  ]
+}

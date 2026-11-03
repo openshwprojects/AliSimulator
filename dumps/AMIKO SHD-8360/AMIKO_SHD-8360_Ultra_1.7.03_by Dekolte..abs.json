@@ -1,0 +1,58 @@
+{
+  "file": "AMIKO_SHD-8360_Ultra_1.7.03_by Dekolte..abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "SHD-8360 (System ID 0A0A0A00, Ultra v1.7.03 by Dekolte)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "0A0A0A00 (bootloader version \"M3606G 1.1.3\", 8 MB SPI flash, ALi M3606 platform reading chip ID 0x3603)",
+    "soc": "ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": "Airoha AV2012 DVB-S2 tuner at I2C 0x65",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU (I2C 0x28)",
+      "scl": 103,
+      "sda": 102
+    },
+    "irCoding": "necfirst",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 101
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko SHD-8360 (Ultra v1.7.03 by Dekolte) (bootloader 'M3606G 1.1.3'; maincode(AV) '0A0A0A001703'; seecode 'M3606 SEE')",
+    "date": "2015-03-10",
+    "size": 8388608,
+    "sha1": "17abf76591d45abae7010e4c0c400ff6c038457e",
+    "layout": "bootloader 0x000000 (M3606G 1.1.3)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8360_Ultra_1.7.03_by%20Dekolte..rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2015-03-10",
+    "login": false,
+    "note": "Archive AMIKO_SHD-8360_Ultra_1.7.03_by Dekolte..rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "dE O"
+    ],
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_shd_8360_ultra_1703_app_starts.py, run_dump_shd_8360_ultra_1703_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko SHD-8360 (System ID 0A0A0A00, Ultra v1.7.03 by Dekolte) firmware (2015-03-10) on a 8 MB SPI flash for ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode \"M3606 SEE\" at 0xA7000200)."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "file": "AMIKO_SHD-8360_1.6.96_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "SHD-8360 CI+CA (System ID 0A0A0A00, v1.6.96 EMU build)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, VFD and Ethernet",
+    "board": "0A0A0A00 (Fulansoft / Amiko ALi M3606G Lemontree EuP platform, stb_board_type = 9)",
+    "soc": "ALi M3606G / C3603 (bootloader \"M3606G 1.1.3\", seecode \"M3606 SEE\", chip ID 0x10047 rev 0x20001)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3603",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2012 DVB-S2 on SCB0 at I2C 0x65",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 101
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + front-panel display (I2C 0x28)",
+      "scl": 103,
+      "sda": 102
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.6.96 EMU (maincode(AV) \"0A0A0A001696\"; bootloader \"M3606G 1.1.3\", 2010-09-06; seecode \"M3606 SEE\", 2016-01-05)",
+    "date": "2016-01-05",
+    "size": 8388608,
+    "sha1": "23fe0cedb127dd0413dfa43421c46f710225c402",
+    "layout": "bootloader 0x000000 (M3606G 1.1.3, 2010-09-06), maincode(AV) 0x020000 (0A0A0A001696, 2010-08-12), seecode 0x320000 (M3606 SEE, 2016-1-5), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), countryband 0x480000 (1.0.0), logo_user 0x488000 (1.0.0), logo_menu 0x498000 (1.0.0), logo_radio 0x4B8000 (1.0.0), logo_boot 0x4D8000 (1.0.0), patch 0x4FFF80 (1.0.0), defaultdb(PRC) 0x520000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8360_1.6.96_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko",
+    "date": "2016-01-05",
+    "login": false,
+    "note": "Archive AMIKO_SHD-8360_1.6.96_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as an M3602-family board with chip ID 0x3603 (C3603, chips/m3602.py, lemontree_decoder.py, run_dump_shd8360_app_starts.py, run_dump_shd8360_capture_screen.py): under 0x3603 the \"M3606G 1.1.3\" bootloader maps the 8 MB flash in the 16 MB window at 0xAF000000, prints \"APP  init ok\", parks the SEE boot stub at 0xA1E8F9B8, exchanges CRC-16/XMODEM frames (\" ON \" -> \"    \") with the Lemontree EuP standby and front-panel MCU at I2C 0x28 on bit-banged GPIO 103 (SCL) / 102 (SDA), and unpacks maincode(AV) to 0x80000200.  The application starts \"M3606 SEE\" at 0xA7000200 (EBase 0x80000000 / 0x80000001), updates the Lemontree panel to \" on \", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2012 tuner at I2C 0x65 (\"stb_tuner_type = 1, stb_board_type =9.\"), and renders its 1280x720 OSD dialog (9 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Amiko SHD-8360 CI+CA (System ID 0A0A0A00) firmware v1.6.96 EMU (2016-01-05) on an 8 MB SPI flash for the ALi M3606G / C3603 Full HD DVB-S2 satellite receiver with CA, CI and Ethernet.",
+    "Pairs dual-CPU M3606 maincode + seecode (\"M3606 SEE\" at 0xA7000200) with a Lemontree EuP standby and front-panel MCU at I2C 0x28 on bit-banged GPIO 103 / 102 (\" ON \" -> \" on \"), ALi S3501 DVB-S2 demodulator at I2C 0x33, and Airoha AV2012 tuner at I2C 0x65."
+  ]
+}

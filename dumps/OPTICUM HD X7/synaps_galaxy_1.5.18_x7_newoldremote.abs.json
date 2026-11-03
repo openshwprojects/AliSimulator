@@ -1,0 +1,58 @@
+{
+  "file": "synaps_galaxy_1.5.18_x7_newoldremote.abs",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "HD X7 Combo (System ID 06000200, Synaps Galaxy 1.5.18 new+old remote build)",
+    "type": "DVB-S2 + DVB-T Full HD combo receiver with 2x CA card readers, 2x CI slots, Ethernet, and USB PVR",
+    "board": "06000200 (Globo / Opticum M3602A \"X7\" platform with Lemontree EuP & PT6311 VFD front-panel MCU)",
+    "soc": "ALi M3602A (bootloader \"M3602A 1.1.6\"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.5_20110905)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 / SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0 / SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "Lemontree EuP MCU + PT6311 8-char VFD (I2C 0x28)",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.18 (maincode(AV) \"060002001518\", 2012-03-18; bootloader \"M3602A 1.1.6\", 2010-02-02; SDK4.0aa.5.5_20110905)",
+    "date": "2012-10-16",
+    "size": 4194304,
+    "sha1": "554f2752bf0367d10c6371a81bd235233aaa7335",
+    "layout": "bootloader 0x000000 (M3602A 1.1.6, 2010-2-2), maincode(AV) 0x010000 (060002001518, LZMA -> 7.05 MB at 0x80008000), default_lang 0x257D80 (1.0.0), countryband 0x258000 (1.0.0), logo_user 0x260000 (1.0.0), logo_menu 0x268000 (1.0.0), logo_radio 0x288000 (1.0.0), logo_boot 0x290000 (1.0.0), patch 0x2AFF80 (1.0.0), defaultdb(PRC) 0x2D0000 (1.0.2), userdb(64+64) 0x2FFF80 (1.0.2)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_galaxy_1.5.18_x7_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)",
+    "author": "Globo / Opticum / Synaps",
+    "date": "2012-10-16",
+    "login": false,
+    "note": "Archive synaps_galaxy_1.5.18_x7_newoldremote.zip from the Opticum / Opticum HD X402-X403-X4-X7 directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "   ON   "
+    ],
+    "note": "Boots as an M3602A board (chips/m3602.py, lemontree_decoder.py, run_dump_synaps_galaxy_x7_1518_app_starts.py, run_dump_synaps_galaxy_x7_1518_capture_screen.py): the \"M3602A 1.1.6\" bootloader communicates with the external Lemontree EuP standby and PT6311 8-character 14-segment VFD microcontroller at I2C 0x28 on bit-banged SCL = GPIO 62 / SDA = GPIO 171 using 8-byte CRC-16/XMODEM frames (updating the 8-character VFD \"  BOOT  \" -> \"        \" -> \"   ON   \"), prints \"APP  init ok\", unpacks maincode(AV) (7.05 MB) to 0x80008000, and starts the single-CPU application.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 on SCB0 / SCB1, initialises hs_config_init over SPI, and renders its Synaps Galaxy OSD dialog through GeM3602."
+  },
+  "desc": [
+    "Opticum / Globo HD X7 Combo (System ID 06000200) firmware 1.5.18 with the Synaps Galaxy GUI and dual remote table (new + old remote, 2012-10-16) on a 4 MB SPI flash for the ALi M3602A Full HD DVB-S2 + DVB-T combo receiver.",
+    "Uses the external Lemontree EuP standby and PT6311 8-character 14-segment VFD front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol), an ALi S3501 DVB-S2 demodulator at I2C 0x33, and an Airoha AV2011 tuner at I2C 0x60."
+  ]
+}

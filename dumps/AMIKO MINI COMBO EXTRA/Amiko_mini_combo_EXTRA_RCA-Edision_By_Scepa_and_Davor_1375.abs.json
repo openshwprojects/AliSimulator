@@ -1,0 +1,49 @@
+{
+  "file": "Amiko_mini_combo_EXTRA_RCA-Edision_By_Scepa_and_Davor_1375.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini Combo Extra RCA (System ID 6A000A00, Edision v1.3.75 by Scepa & Davor)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "6A000A00 (bootloader version \"M3526C 1.1.1\", 256 MB DDR3 C3505 platform)",
+    "soc": "ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal ALi C3505 DVB-S2 (NIM_C3505_0) + DVB-T2/C front end (NIM_COFDM_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Amiko Mini Combo Extra RCA (Edision v1375 by Scepa & Davor) (bootloader 'M3526C 1.1.1'; maincode(AV) '6A000A001375'; seecode 'M3606 SEE')",
+    "date": "2019-07-08",
+    "size": 8388608,
+    "sha1": "f909f908824ce77b4a9e03bd5a4806acc519da70",
+    "layout": "bootloader 0x000000 (M3526C 1.1.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_mini_combo_EXTRA_RCA-Edision_By_Scepa_and_Davor_1375.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2019-07-08",
+    "login": false,
+    "note": "Archive Amiko_mini_combo_EXTRA_RCA-Edision_By_Scepa_and_Davor_1375.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots on C3505 (chips/c3505.py) (run_dump_mini_combo_extra_rca_edision_1375_app_starts.py, run_dump_mini_combo_extra_rca_edision_1375_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mini Combo Extra RCA (System ID 6A000A00, Edision v1.3.75 by Scepa & Davor) firmware (2019-07-08) on a 8 MB SPI flash for ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; seecode \"M3606 SEE\" at 0xAE000200)."
+  ]
+}

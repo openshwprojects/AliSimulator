@@ -1,0 +1,48 @@
+{
+  "file": "OPTIMUSS-underline_-_AMIKO_MiniHD_1.6.92_emu.abs",
+  "device": {
+    "brand": "Edision / Amiko",
+    "model": "Optimuss Underline / Amiko Mini HD (System ID 0A070800, 1.6.92 EMU cross-flash)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, external IR eye and Ethernet",
+    "board": "0A070800 (Edision / Amiko ALi M3606F platform, stb_board_type = 8)",
+    "soc": "ALi M3606F / C3603 (bootloader \"M3606F 1.1.3\", seecode \"M3606 SEE\", chip ID 0x10047 rev 0x20001; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3603",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.6.92 EMU (maincode(AV) \"0A0708001692\"; bootloader \"M3606F 1.1.3\", 2010-09-06; seecode \"M3606 SEE\", 2015-10-19; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620)",
+    "date": "2015-10-19",
+    "size": 8388608,
+    "sha1": "06030c3b7a1c47db0e4753af4e184a1614fd7efd",
+    "layout": "bootloader 0x000000 (M3606F 1.1.3, 2010-09-06), maincode(AV) 0x020000 (0A0708001692, 2010-08-12), seecode 0x320000 (M3606 SEE, 2015-10-19), default_lang 0x46FD00 (1.0.0, 2007-12-05), cipluskey 0x46FF80 (1.1.0, 2010-04-20), countryband 0x480000 (1.0.0, 2008-09-23), logo_user 0x488000 (1.0.0, 2006-03-03), logo_menu 0x498000 (1.0.0, 2006-03-01), logo_radio 0x4B8000 (1.0.0, 2006-03-01), logo_boot 0x4D8000 (1.0.0, 2006-03-01), patch 0x4FFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x520000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPTIMUSS-underline_-_AMIKO_MiniHD_1.6.92_emu.rar&directory=Firmware%20for%20to%20all%20receivers/Edison",
+    "site": "satedu.cba.pl (a mirror of the Edision firmware archive)",
+    "author": "Edision / Amiko",
+    "date": "2015-10-19",
+    "login": false,
+    "note": "Archive OPTIMUSS-underline_-_AMIKO_MiniHD_1.6.92_emu.rar from the Edison directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots as the M3602 family with chip ID 0x3603 (C3603, chips/m3602.py, run_dump_optimuss_underline_1692_app_starts.py, run_dump_optimuss_underline_1692_capture_screen.py): the \"M3606F 1.1.3\" bootloader prints \"APP  init ok\", parks the SEE boot stub at 0xA1E8F988, unpacks seecode (\"M3606 SEE\") to 0xA7000200 and maincode(AV) (9.20 MB) to 0x80000200, and starts both cores (EBase 0x80000000 / 0x80000001).  The application prints \"stb_tuner_type = 1, stb_board_type =8.\" and \"sys_ic_get_chip_id=0x10047 sys_ic_get_rev_id =0x20001\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33, populates userdb(64+64) at 0x73FF80, and renders its 1280x720 ARGB8888 OSD through GeM36F / GMA layer 0 (9 GE commands, 30 colours)."
+  },
+  "desc": [
+    "Edision Optimuss Underline / Amiko Mini HD cross-flash firmware 1.6.92 EMU (System ID 0A070800, 2015-10-19) on an 8 MB SPI flash for the compact ALi M3606F / C3603 Full HD DVB-S2 satellite receiver.",
+    "Pairs the Amiko Mini HD 1.6.92 Synaps GUI and application (9.20 MB unpacked) with the Edision Optimuss Underline 0A070800 chunk ID, dual-CPU \"M3606 SEE\" at 0xA7000200, and ALi S3501 DVB-S2 demodulator at I2C 0x33."
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "file": "AMIKO_HD8140_T2C_Synaps_1.5.40_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8140 T2/C (System ID 0E090A00, Synaps 1.5.40 build by Dekolte)",
+    "type": "Full HD DVB-T2 / DVB-C terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0E090A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader \"M3612 1.0.4\")",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "external Availink AVL6862 DVB-S2 + DVB-T2/C demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)",
+    "demodModel": {
+      "chip": "avl6862a",
+      "address": 20
+    },
+    "tuner": "Sharp VZ7903 / Airoha AV2012 at I2C 0x61 + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "r836",
+        "address": 58
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.40 Synaps by Dekolte (maincode(AV) \"0E090A001540\"; bootloader \"M3612 1.0.4\", 2012-07-10)",
+    "date": "2015-05-18",
+    "size": 8388608,
+    "sha1": "1d2c3bd4c2f854306539821274debd4f58dd9453",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E090A001540, LZMA -> 12.49 MB), HDCPKey 0x3CFB00 (Demo M3612), default_lang 0x3CFD00 (1.0.0), cipluskey 0x3CFF80 (1.1.0), countryband 0x3E0000 (1.0.0), logo_user 0x3E8000 (1.0.0), logo_menu 0x3F8000 (1.0.0), logo_radio 0x418000 (1.0.0), logo_boot 0x438000 (1.0.0), patch 0x48FF80 (1.0.0), defaultdb(PRC) 0x4B0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8140_T2C_Synaps_1.5.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / Dekolte (Synaps mod)",
+    "date": "2015-05-18",
+    "login": false,
+    "note": "Archive AMIKO_HD8140_T2C_Synaps_1.5.40_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_hd8140_t2c_synaps_1540_app_starts.py, run_dump_hd8140_t2c_synaps_1540_capture_screen.py): the MIPS16e bootloader \"M3612 1.0.4\" copies itself to 0x81E80000, writes \" ON \" to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 12.49 MB maincode(AV) (\"0E090A001540\") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955 at 0x040000, ChipID 0x0000000F at 0x108000 -> \"Demod is 6862!!!\", demods.AVL6862A), configures both the Sharp VZ7903 / AV2012 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display, initialises userdb(64+64) from defaultdb(PRC), and renders its 32-bpp ARGB8888 Synaps OSD through GeM36F."
+  },
+  "desc": [
+    "Amiko HD8140 T2/C (System ID 0E090A00) Synaps firmware v1.5.40 by Dekolte on an 8 MB SPI flash for the Full HD DVB-T2/C terrestrial and cable receiver.",
+    "Built on the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 demodulator at I2C 0x14 (ChipID 0x0F), Rafael Micro R836 DVB-T2/C tuner at 0x3A (plus AV2012 probe at 0x61), and a CH455 front-panel display on GPIO 31 / 9."
+  ]
+}

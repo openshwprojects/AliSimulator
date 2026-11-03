@@ -1,0 +1,58 @@
+{
+  "file": "AMIKO_SHD-8140_1.5.73_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "SHD-8140 (System ID 0E020A00, v1.5.73 EMU build)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet, USB PVR and 4-digit LED display",
+    "board": "0E020A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811)",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2012 DVB-S2 on SCB0 at I2C 0x65",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 101
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.73 EMU (maincode(AV) \"0E020A001573\", 2012-07-10; bootloader \"M3612 1.0.4\", 2012-07-10)",
+    "date": "2012-07-10",
+    "size": 8388608,
+    "sha1": "52513536e022b34ba387fe59d483314d12a07836",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E020A001573, 2012-07-10, LZMA -> 12.25 MB), HDCPKey 0x3CFB00 (Demo M3612, 2012-07-10), default_lang 0x3CFD00 (1.0.0, 2012-07-10), cipluskey 0x3CFF80 (1.1.0, 2012-07-10), countryband 0x3E0000 (1.0.0, 2012-07-10), logo_user 0x3E8000 (1.0.0, 2012-07-10), logo_menu 0x3F8000 (1.0.0, 2012-07-10), logo_radio 0x418000 (1.0.0, 2012-07-10), logo_boot 0x438000 (1.0.0, 2012-07-10), patch 0x48FF80 (1.0.0, 2012-07-10), defaultdb(PRC) 0x4B0000 (1.0.1, 2012-07-10), userdb(64+64) 0x73FF80 (1.0.1, 2012-07-10)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8140_1.5.73_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko (1.5.73 EMU)",
+    "date": "2012-07-10",
+    "login": false,
+    "note": "Archive AMIKO_SHD-8140_1.5.73_emu.zip from the Amiko/Amiko HD directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, run_dump_shd8140_app_starts.py, run_dump_shd8140_capture_screen.py): the \"M3612 1.0.4\" bootloader prints \"APP  init ok / bl_panel_init! / -->>ch455!!\", writes \" ON \" to the CH455 panel on GPIO 31 / 9, verifies and unpacks maincode(AV) (\"0E020A001573\") to 0x80000200, and enters the application (CP0 EBase 0x80002000).  With the ALi S3501 DVB-S2 demodulator attached at I2C 0x33 on SCB0 (and Airoha AV2012 tuner at 0x65), nim S3501 attach succeeds, the application updates the CH455 front panel to \" on \", populates userdb(64+64) at 0x73FF80, and enables GMA layer 0 to display its 30-colour 1280x720 ARGB8888 OSD dialog (9 GE commands)."
+  },
+  "desc": [
+    "Amiko SHD-8140 (System ID 0E020A00) firmware v1.5.73 EMU (2012-07-10) on an 8 MB SPI flash for the single-CPU ALi M3612 (S3811 DVB-S2 variant) Full HD satellite receiver.",
+    "Pairs the single-CPU M3801/S3811 SoC architecture with an external ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2012 tuner at I2C 0x65 on SCB0, a CH455 4-digit LED panel on GPIO 31 / 9 (\" ON \" -> \" on \"), and the 60-key 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

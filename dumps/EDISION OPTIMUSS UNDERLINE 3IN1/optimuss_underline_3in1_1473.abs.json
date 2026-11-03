@@ -1,0 +1,62 @@
+{
+  "file": "optimuss_underline_3in1_1473.abs",
+  "device": {
+    "brand": "Edision",
+    "model": "Optimuss Underline 3in1 (v1.4.73 EMU)",
+    "type": "DVB-S2 + DVB-T2/C Full HD compact 3-in-1 combo receiver with CA card reader and Ethernet",
+    "board": "Demo M3612 (System ID 0E060800)",
+    "soc": "ALi M3612 (single-CPU S3811-class SoC reading chip ID 0x3811, ALI_S3811; bootloader \"M3612 1.0.4\"; Libcore 13.4.0@SDK4.0bd.13.4_20140912)",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "external Availink AVL6862 DVB-S2 + DVB-T2/C combo demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)",
+    "demodModel": {
+      "chip": "avl6862a",
+      "address": 20
+    },
+    "tuner": "Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "r836",
+        "address": 58
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.4.73 emu (System ID 0E060800, maincode(AV) \"0E0608001473\"; bootloader \"M3612 1.0.4\"; Libcore 13.4.0@SDK4.0bd.13.4_20140912)",
+    "date": "2015-01-12",
+    "size": 8388608,
+    "sha1": "12d71c89cabdb6c55b0fcda99eea129bab20ad62",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E0608001473, 2012-07-10), HDCPKey 0x43FB00 (Demo M3612, 2012-07-10), default_lang 0x43FD00 (1.0.0, 2012-07-10), cipluskey 0x43FF80 (1.1.0, 2012-07-10), countryband 0x450000 (1.0.0, 2012-07-10), logo_user 0x458000 (1.0.0, 2012-07-10), logo_menu 0x468000 (1.0.0, 2012-07-10), logo_radio 0x488000 (1.0.0, 2012-07-10), logo_boot 0x4A8000 (1.0.0, 2012-07-10), patch 0x4FFF80 (1.0.0, 2012-07-10), defaultdb(PRC) 0x520000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Optimus%20Underline%203in1%20EMU%20NEU.rar&directory=Firmware%20for%20to%20all%20receivers/Edison",
+    "site": "satedu.cba.pl (a mirror of the Edision firmware archive)",
+    "author": "Edision / Kunibert",
+    "date": "2015-01-12",
+    "login": false,
+    "note": "Archive Optimus Underline 3in1 EMU NEU.rar from the Edison directory on satedu.cba.pl; fetched 2026-11-02."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_underline_3in1_1473_app_starts.py, run_dump_underline_3in1_1473_capture_screen.py): the MIPS16e bootloader \"M3612 1.0.4\" copies itself to 0x81E80000, writes \" ON \" to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 13.05 MB maincode(AV) to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 combo demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955 at 0x040000, ChipID 0x0000000F at 0x108000 -> \"Demod is 6862!!!\", demods.AVL6862A), configures both the Sharp VZ7903 / AV2012 DVB-S2 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display to \" on \", initialises userdb(64+64) from defaultdb(PRC), and renders its 32-bpp ARGB8888 OSD through GeM36F (8 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Edision Optimuss Underline 3in1 firmware 1.4.73 emu (System ID 0E060800, 2015-01-12) for the compact Full HD DVB-S2 + DVB-T2/C combo receiver on an 8 MB SPI flash.",
+    "Uses the single-CPU ALi M3612 SoC (silicon ID 0x3811, SDK4.0bd.13.4_20140912) paired with an external Availink AVL6862 DVB-S2/T2/C combo demodulator (ChipID 0x0F), Sharp VZ7903 (AV2012) satellite tuner, Rafael Micro R836 terrestrial/cable tuner, and a CH455 front-panel display on GPIO 31 / 9."
+  ]
+}
