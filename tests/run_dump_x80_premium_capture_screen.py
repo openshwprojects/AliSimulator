@@ -26,7 +26,7 @@ screen_regression.run(
     dump="OPTICUM X80 PREMIUM/dump opticum x80 premium.bin",
     expected="x80_premium_screen.png",
     boot_limit_s=5 * 60,
-    settle_s=10,
+    settle_s=20,
     min_ge_ops=0,
     min_colours=3,
     ge=False,

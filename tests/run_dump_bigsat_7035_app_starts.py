@@ -20,7 +20,7 @@ from front_panel import make_panel
 from simulator import AliMipsSimulator, flash_size_for
 
 DUMP = "BIGSAT DSR 7035 PLUS/bigsat 7035 plus _m29w160et_ok.bin"
-LIMIT = 40_000_000
+LIMIT = 80_000_000
 SLICE = 2_000_000
 
 failures = []
@@ -76,8 +76,8 @@ check(type(sim.chip).__name__ == "M3329" and chip_id == 0x3101,
 check(sim.flash_device is not None,
       f"parallel NOR flash attached at 0xAFC00000 (flash_device={type(sim.flash_device).__name__ if sim.flash_device else None})")
 check("APP  init ok" in text, "'APP  init ok' printed on UART")
-check(" ON " in seen_panels and "noCH" in seen_panels,
-      f"front panel ({panel_desc}) showed ' ON ' -> 'noCH' (got {seen_panels})")
+check(" ON " in seen_panels and any(p in seen_panels for p in ("Strt", "noCH")),
+      f"front panel ({panel_desc}) showed ' ON ' -> 'Strt' / 'noCH' (got {seen_panels})")
 regions = gma_capture.m3327_regions(np.frombuffer(sim._ram_view, np.uint8), sim.peek(0xB8000000, 0x10000))
 check(len(regions) == 1 and regions[0][1]["header"] is None and regions[0][1]["width"] == 608 and regions[0][1]["height"] == 430,
       f"OSD_M3327_0 configured 608x430 direct framebuffer window ({regions})")

@@ -1,0 +1,42 @@
+{
+  "file": "AMIKO_Mira_1.1.82_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mira Wi-Fi (System ID 67010A00, v1.1.82 EMU)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with built-in Wi-Fi, Conax / MultiCAS card reader and USB PVR",
+    "board": "67010A00 (bootloader version \"3510CA 1.1.1\", 8 MB SPI flash, single-CPU ALi M3510C / C3503C platform)",
+    "soc": "ALi M3510C / C3503C (single-CPU 64 MB DDR2 DVB-S2 SoC reading chip ID 0x3503 rev 0xC000)",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal ALi C3503C DVB-S2 (NIM_S3503_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.1.82 EMU (maincode(AV) \"67010A001182\"; bootloader \"3510CA 1.1.1\")",
+    "date": "2012-12-20",
+    "size": 8388608,
+    "sha1": "f7cdda3a29c8d2aa3fdddbbe8eccc9f60a0f5849",
+    "layout": "bootloader 0x000000 (3510CA 1.1.1, 2012-12-20), maincode(AV) 0x02F000 (67010A001182, 2010-08-12, LZMA -> 13.23 MB), default_lang 0x4EFD00 (1.0.0), cipluskey 0x4EFF80 (1.1.0), countryband 0x4FFF80 (1.0.0), img_webserver 0x507F80 (1.0.0), patch 0x567F80 (1.0.0), logo_user 0x607F80 (1.0.0), logo_menu 0x617F80 (1.0.0), logo_radio 0x637F80 (1.0.0), logo_boot 0x657F80 (1.0.0), patch 0x67FF80 (1.0.0), defaultdb(PRC) 0x6A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mira_1.1.82_emu.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2012-12-20",
+    "login": false,
+    "note": "Archive AMIKO_Mira_1.1.82_emu.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots on C3503 (chips/c3503.py) (run_dump_mira_1182_app_starts.py, run_dump_mira_1182_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mira Wi-Fi (System ID 67010A00, v1.1.82 EMU) firmware (2012-12-20) on an 8 MB SPI flash for ALi M3510C / C3503C (single-CPU 64 MB DDR2 DVB-S2 SoC reading chip ID 0x3503 rev 0xC000)."
+  ]
+}

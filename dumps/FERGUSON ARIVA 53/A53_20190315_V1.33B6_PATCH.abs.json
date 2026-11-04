@@ -1,0 +1,47 @@
+{
+  "file": "A53_20190315_V1.33B6_PATCH.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 53 (V1.33B6 PATCH build)",
+    "type": "DVB-S2 Full HD compact satellite receiver",
+    "board": "bootloader chunk \"HAS71\", version \"39072-01047\"",
+    "soc": "ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5)",
+    "family": "C3503 (chips/c3503.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0 at 0xB804C000)",
+    "tuner": "ALi M3031 at I2C 0x20",
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "ext00",
+    "tunerModel": {
+      "chip": "m3031",
+      "address": 32
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.33B6_PATCH (maincode \"V1.33B6*\" 20190315-100339; << SDK4.0ba.4.0_20101217 >>; Libcore 17.14.c@SDK4.0ia.17.14c_20171113, Application 1.0.0@SDK4.0ia.17.14b_20171018bytest)",
+    "date": "2019-03-15",
+    "size": 8388608,
+    "sha1": "dbe10077d872d3d2aeaf80fa892384bee9c78101",
+    "layout": "HAS71 0x000000 (39072-01047), HDCPKey 0x02FE00 (00000001), ota_loader 0x030000 (1.0.0), maincode 0x130000 (V1.33B6*, LZMA -> 9.85 MB), osd_string 0x58CE00 (1.1.0), Ariva53 0x5B0000 (1.0.0), seeback 0x5CFF80 (1.0.0), defaultdb 0x6C0000 (1.0.0), userdb 0x6FFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A53_20190315_V1.33B6_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%2053",
+    "site": "satedu.cba.pl",
+    "author": "Ferguson / patch",
+    "date": "2019-03-15",
+    "login": false,
+    "note": "Archive A53_20190315_V1.33B6_PATCH.zip from satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots as the single-CPU C3503 family (chips/c3503.py, chip word 0x3503C000 -> SDK chip code 0x10050, run_dump_a53_v133b6_patch_app_starts.py, run_dump_a53_v133b6_patch_capture_screen.py): its boot-ROM bootloader inherits $sp = 0x9FE07F00 from the boot ROM, calibrates DDR delay from the ring-oscillator count in the upper half of 0xB8000300 (\"RingOSDelay=296.29600(ns)\"), prints \"CRC Check Result : Pass\", and unpacks the 9.85 MB maincode (0x9d87cc bytes) to 0x80000200.  The internal DVB-S2 demodulator answers at 0xB804C000 and the M3031 tuner at I2C 0x20 (\"M3031\" on UART).  Renders its 1280x720 \"System Setup\" OSD menu through GMA layer 0 at 0xB8006300."
+  },
+  "desc": [
+    "Ferguson Ariva 53 patched firmware V1.33B6_PATCH (2019-03-15) for the compact Full HD DVB-S2 satellite receiver on the single-CPU ALi C3503C SoC.",
+    "EMU/patch build of V1.33B6 (maincode timestamp 20190315-100339, unpacked size 10,323,916 bytes)."
+  ]
+}

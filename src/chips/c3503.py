@@ -96,6 +96,10 @@ class C3503(C3505):
             self.sim.set_ic_layout(0x81080, 0x81040)
         self.sim._IC_GE = 76 if is_c3507 else 4
         self.sim.irc_line = 12 if is_c3507 else 19
+        import i2c_scb
+        ic_map = i2c_scb.I2cMaster.C3507_IC_LINES if is_c3507 else i2c_scb.I2cMaster.IC_LINES
+        for m in getattr(self.sim, "i2c_masters", ()):
+            m.ic_line = ic_map.get(m.base)
         if hasattr(self, "video_output"):
             self.video_output.line = 68 if is_c3507 else 2
             self.video_engine.line = 72 if is_c3507 else 0
@@ -118,10 +122,13 @@ class C3503(C3505):
         # a ~300 ns ring delay.  0xB8080253 bit 7 is the M3507/C3507 bootloader PLL ready bit.
         self.ring_count = ReadyBits(self.sim, {0x302: 0x80, 0x80201: 0x01, 0x80253: 0x80})
         if self.chip_id == 0x3507:
+            import i2c_scb
             from video_m36 import DEO_FIELD_BIT, VPO_FIELD_BIT, VideoOutput
             self.sim.set_ic_layout(0x81080, 0x81040)
             self.sim._IC_GE = 76            # OS IRQ 0x54 (84) - 8 = 76 on C3507 (0x10056)
             self.sim.irc_line = 12          # OS IRQ 0x14 (20) - 8 = 12 on C3507 (0x10056)
+            for m in getattr(self.sim, "i2c_masters", ()):
+                m.ic_line = i2c_scb.I2cMaster.C3507_IC_LINES.get(m.base)
             if self.video_output.service in self.sim.slice_services:
                 self.sim.slice_services.remove(self.video_output.service)
             self.video_output = VideoOutput(self.sim, line=68, field_bit=VPO_FIELD_BIT | DEO_FIELD_BIT)
@@ -147,5 +154,7 @@ class C3503(C3505):
     def uninstall(self):
         self.sim._IC_GE = 4
         self.sim.irc_line = 19
+        for m in getattr(self.sim, "i2c_masters", ()):
+            m.ic_line = m.IC_LINES.get(m.base)
         self.sim.set_ic_layout(0x30, 0x38)
         super().uninstall()

@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_HD8155_1.3.49_conax.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8155 (System ID 6B000A00, v1.3.49 Conax)",
+    "type": "DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi",
+    "board": "6B000A00 (bootloader version \"M3521A 1.1.1\", 128 MB DDR3 C3505 platform)",
+    "soc": "ALi M3521A / C3505 with 128 MB DDR3 (maincode \"ALI_C3505:0x%x\", seecode \"M3606 SEE\" at 0xA6000200)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.3.49 Conax (maincode(AV) \"6B000A001349\"; bootloader \"M3521A 1.1.1\")",
+    "date": "2018-11-7",
+    "size": 8388608,
+    "sha1": "dc02a7e79365157959f389c31ab34e1065b0b8f9",
+    "layout": "bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x060000 (6B000A001349, 2010-08-12, LZMA -> 11.05 MB), seecode 0x3F0000 (M3606 SEE, 2018-11-7), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.49_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2018-11-7",
+    "login": false,
+    "note": "Archive AMIKO_HD8155_1.3.49_conax.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1349_conax_app_starts.py, run_dump_hd8155_1349_conax_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) (\"6B000A001349\", 11.05 MB) to 0x80000200 and seecode (\"M3606 SEE\") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (\" ON \" -> \" on \"), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900."
+  },
+  "desc": [
+    "Amiko HD8155 (System ID 6B000A00) firmware 1.3.49 Conax (2018-11-7) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.",
+    "Uses a \"maincode(AV)\" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

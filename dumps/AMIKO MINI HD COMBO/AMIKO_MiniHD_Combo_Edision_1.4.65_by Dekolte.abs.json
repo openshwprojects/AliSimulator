@@ -1,0 +1,62 @@
+{
+  "file": "AMIKO_MiniHD_Combo_Edision_1.4.65_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD Combo (System ID 0E060A00, Edision v1.4.65 by Dekolte)",
+    "type": "Compact DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0E060A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader \"M3612 1.0.4\")",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "external Availink AVL6862 DVB-S2 + DVB-T2/C combo demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)",
+    "demodModel": {
+      "chip": "avl6862a",
+      "address": 20
+    },
+    "tuner": "Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "r836",
+        "address": 58
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Edision 1.4.65 by Dekolte (maincode(AV) \"0E060A001465\"; bootloader \"M3612 1.0.4\")",
+    "date": "2012-07-10",
+    "size": 8388608,
+    "sha1": "b1b77f8f0747b68a3613da60f857652b1cd8e199",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E060A001465, 2012-07-10, LZMA -> 13.03 MB), HDCPKey 0x43FB00 (Demo M3612), default_lang 0x43FD00 (1.0.0), cipluskey 0x43FF80 (1.1.0), countryband 0x450000 (1.0.0), logo_user 0x458000 (1.0.0), logo_menu 0x468000 (1.0.0), logo_radio 0x488000 (1.0.0), logo_boot 0x4A8000 (1.0.0), patch 0x4FFF80 (1.0.0), defaultdb(PRC) 0x520000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2012-07-10",
+    "login": false,
+    "note": "Archive AMIKO_MiniHD_Combo_Edision_1.4.65_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_minihd_combo_edision_1465_app_starts.py, run_dump_minihd_combo_edision_1465_capture_screen.py): the MIPS16e bootloader \"M3612 1.0.4\" copies itself to 0x81E80000, writes \" ON \" to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 13.03 MB maincode(AV) (\"0E060A001465\") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 combo demodulator on SCB0 at I2C 0x14 (\"Demod is 6862!!!\", demods.AVL6862A), configures its Sharp VZ7903 / AV2012 DVB-S2 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display to \"-ON-\", and renders its 32-bpp ARGB8888 OSD through GeM36F."
+  },
+  "desc": [
+    "Amiko Mini HD Combo (System ID 0E060A00) firmware Edision 1.4.65 by Dekolte (2012-07-10) on an 8 MB SPI flash for the compact Full HD DVB-S2 + DVB-T2/C combo receiver.",
+    "Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 DVB-S2/T2/C combo demodulator at I2C 0x14, Airoha AV2012 satellite tuner at 0x61, Rafael Micro R836 terrestrial/cable tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9 (\" ON \" -> \"-ON-\")."
+  ]
+}

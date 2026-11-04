@@ -147,15 +147,35 @@ class Doorbells:
         return (block + 6, 0) if chip_id in OLD_DOORBELL_CHIPS else (block + 7, 4)
 
     def wire(self, core):
-        """Among a core's device register handlers: stores that cover a +0x37 byte."""
+        """Among a core's device register handlers: stores that cover a +0x37 byte,
+        and (on Unicorn) mailbox stores so a slice stop that rewinds a store does
+        not re-execute it over the other CPU's update."""
+        def on_db(uc, access, address, size, value, user_data, _core=core):
+            return self._write(uc, access, address, size, value, user_data, _core)
         for block in (MAIN_IC, SEE_IC):
-            core._mmio_on('w', self._write, block + 4, block + 7)
+            core._mmio_on('w', on_db, block + 4, block + 7)
+        if core.engine == "unicorn":
+            def on_mbx(uc, access, address, size, value, user_data, _core=core):
+                if _core._dev_replay_of(uc, 'mailbox', address, value) is not None:
+                    return int.from_bytes(uc.mem_read(address, size), 'little')
+                _core._dev_note(uc, 'mailbox', address, value)
+                return None
+            core._mmio_on('w', on_mbx, 0x204, 0x207)
+            core._mmio_on('w', on_mbx, 0x40200, 0x40207)
+            if core._shared is not None:
+                core._mmio_on('w', on_mbx, 0x200, 0x203)
 
-    def _write(self, uc, access, address, size, value, user_data):
+    def _write(self, uc, access, address, size, value, user_data, core=None):
+        if core is not None and core._dev_replay_of(uc, 'doorbell', address, value) is not None:
+            return int.from_bytes(uc.mem_read(address, size), 'little')
         offset = address & 0xFFFFFF
         reg = (offset & ~3) + 3                     # the +0x37 byte
         if offset + size <= reg:
+            if core is not None:
+                core._dev_note(uc, 'doorbell', address, value)
             return None                             # (the store ends before it)
+        if core is not None:
+            core._dev_note(uc, 'doorbell', address, value)
         shift = 8 * (reg - offset)
         b = (value >> shift) & 0xFF
         receiver, other = ("main", SEE_IC) if reg - 7 == MAIN_IC else ("SEE", MAIN_IC)
@@ -384,6 +404,11 @@ class SeeStart:
 
     def _write_start(self, uc, access, address, size, value, user_data):
         if self.sim._dev_replay_of(uc, 'see_start', address, value) is not None:
+            return
+        if self.state == "running" and self.core is not None and self.sim.engine == "unicorn":
+            if self.sim._dev_replay_of(uc, 'mailbox', address, value) is not None:
+                return int.from_bytes(uc.mem_read(address, size), 'little')
+            self.sim._dev_note(uc, 'mailbox', address, value)
             return
         self._access(uc, access, address, size, value, user_data)
         target = self._after(self._word(START), address, START, size, value)

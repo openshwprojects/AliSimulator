@@ -202,6 +202,15 @@ class Core {
   // ---- state (public: the C API and the host's properties read them) ----
   uint32_t gpr[32];
   uint32_t hi = 0, lo = 0;
+  uint32_t ac_hi[3] = {0, 0, 0}, ac_lo[3] = {0, 0, 0}, dspc = 0;
+  uint64_t get_ac(uint32_t a) const {
+    uint32_t h = a ? ac_hi[a - 1] : hi, l = a ? ac_lo[a - 1] : lo;
+    return ((uint64_t)h << 32) | l;
+  }
+  void set_ac(uint32_t a, uint64_t v) {
+    if (a) { ac_lo[a - 1] = (uint32_t)v; ac_hi[a - 1] = (uint32_t)(v >> 32); }
+    else { lo = (uint32_t)v; hi = (uint32_t)(v >> 32); }
+  }
   uint32_t pc = 0;
   bool m16 = false;          // ISA mode of the instruction at pc
   bool ds_active = false;    // the instruction at pc is a branch delay slot

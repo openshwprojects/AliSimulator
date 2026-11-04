@@ -71,7 +71,8 @@ class I2cMaster:
     """One SCB block; the simulator makes one per base in its I2C_SCB_BASES."""
     SIZE = 0x28
     LOG_FIRST, LOG_EVERY = 64, 256          # transactions logged: the first ones, then one in N
-    IC_LINES = {0x18200: 20, 0x18700: 21, 0x18B00: 25, 0x18D00: 26}
+    IC_LINES = {0x18200: 18, 0x18700: 25, 0x18B00: 26, 0x18D00: 43}
+    C3507_IC_LINES = {0x18200: 20, 0x18700: 21, 0x18B00: 25, 0x18D00: 26}
 
     def __init__(self, sim, base, name):
         self.sim, self.base, self.name = sim, base, name

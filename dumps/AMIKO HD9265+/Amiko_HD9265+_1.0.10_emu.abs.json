@@ -1,0 +1,43 @@
+{
+  "file": "Amiko_HD9265+_1.0.10_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD9265+ (System ID 8E000A00, v1.0.10 EMU build)",
+    "type": "DVB-S2X + DVB-T2/C Full HD H.265/HEVC combo receiver with CI+ slot, Conax CA card reader, Gigabit Ethernet and USB Wi-Fi",
+    "board": "8E000A00 (bootloader version \"M3759A 1.0.1\", 8 MB SPI flash, ALi C3702 / CAP210 ARMv7-A platform)",
+    "soc": "ALi M3759A / C3702 (ARMv7-A Cortex-A9 CPU, get_clock_cap210 / get_clock_3702, DECV_HEVC_0/1, NIM_C3501h_0 + Availink AVL6862)",
+    "family": "M3801 (chips/m3801.py, NCRC chunk container only; CPU is ARMv7-A rather than MIPS32)",
+    "demod": "internal DVB-S2X (NIM_C3501h_0) + external Availink AVL6862 DVB-T2/C",
+    "tuner": "Airoha AV20xx (Av20xxTuner_type)",
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.0.10 EMU (maincode(AV) \"8E000A001010\"; bootloader \"M3759A 1.0.1\", 2019-08-24)",
+    "date": "2019-08-24",
+    "size": 8388608,
+    "sha1": "003fc0027db4442d519e875debdfff184e158c07",
+    "layout": "bootloader 0x000000 (M3759A 1.0.1, 2019-08-24), maincode(AV) 0x078000 (8E000A001010, 2010-08-12, LZMA -> 15.31 MB), default_lang 0x53FD00 (1.0.0), cipluskey 0x53FF80 (1.1.0), countryband 0x54FF80 (1.0.0), img_webserver 0x557F80 (1.0.0), patch 0x5B7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD9265_1.0.10_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko",
+    "date": "2019-08-24",
+    "login": false,
+    "note": "Archive Amiko_HD9265_1.0.10_emu.zip from the Amiko directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": [],
+    "note": "Does not boot on the MIPS32 simulator (run_dump_hd9265_1010_emu_arm_layout.py): although the 8 MB image uses ALi's standard NCRC chunk chain (magic 0x23010010 at 0x000000, HEAD descriptor at 0x250, LZMA-compressed maincode(AV) \"8E000A001010\" at 0x078000 decompressing to 15.31 MB), the ALi M3759A / C3702 (\"get_clock_cap210\", \"get_clock_3702\") is an ARMv7-A (Cortex-A9) SoC rather than MIPS32.  Its boot-ROM payload at 0x800 starts with an 8-word ARMv7 exception vector table (b #0x820; b #0x804; b #0x944; ...) followed at 0x820 by mrc p15, #0, r0, c1, c0, #0 (reading CP15 SCTLR)."
+  },
+  "desc": [
+    "Amiko HD9265+ (System ID 8E000A00) firmware v1.0.10 EMU (2019-08-24) for the Full HD H.265/HEVC DVB-S2X + DVB-T2/C CI+ combo receiver on the ALi M3759A / C3702 SoC with 8 MB SPI flash.",
+    "Illustrates ALi's transition from MIPS32 (C3503 / C3505) to ARMv7-A (C3702 / CAP210, M3759A) while retaining the identical NCRC chunk header layout, LZMA stream format, and ALi TDS driver naming (CH455_0, NIM_C3501h_0, DECV_HEVC_0)."
+  ]
+}

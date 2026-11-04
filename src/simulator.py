@@ -75,7 +75,7 @@ def flash_size_for(path):
 def default_engine():
     """The engine a simulator gets when none is asked for: ALISIM_ENGINE from the
     environment ('unicorn', the default, or 'cpp': the C++ core, simulator_cpp.py)."""
-    return os.environ.get("ALISIM_ENGINE", "unicorn").strip().lower() or "unicorn"
+    return (os.environ.get("ALISIM_ENGINE") or os.environ.get("ALI_EMU_BACKEND") or "unicorn").strip().lower() or "unicorn"
 
 
 class AliMipsSimulator:
@@ -426,7 +426,7 @@ class AliMipsSimulator:
     def _new_mips_uc():
         import faulthandler
         mu = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 + UC_MODE_LITTLE_ENDIAN)
-        mu.ctl_set_cpu_model(UC_CPU_MIPS32_24KF)
+        mu.ctl_set_cpu_model(UC_CPU_MIPS32_74KF)
         fh = faulthandler.is_enabled()
         if fh:
             faulthandler.disable()

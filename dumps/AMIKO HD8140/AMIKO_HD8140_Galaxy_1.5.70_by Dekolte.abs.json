@@ -1,0 +1,58 @@
+{
+  "file": "AMIKO_HD8140_Galaxy_1.5.70_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8140 (System ID 0E020A00, Galaxy 1.5.70 build by Dekolte)",
+    "type": "Full HD DVB-S2 satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0E020A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader \"M3612 1.0.4\")",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "ALi S3501 DVB-S2 demodulator on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2012 DVB-S2 tuner on SCB0 at I2C 0x65",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 101
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.70 Galaxy by Dekolte (maincode(AV) \"0E020A001570\"; bootloader \"M3612 1.0.4\", 2012-07-10)",
+    "date": "2012-07-10",
+    "size": 8388608,
+    "sha1": "13310ffdc8c11b095138c9ea96fada86fe56dcd3",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E020A001570, 2012-07-10, LZMA -> 11.55 MB), HDCPKey 0x3BFB00 (Demo M3612), default_lang 0x3BFD00 (1.0.0), cipluskey 0x3BFF80 (1.1.0), countryband 0x3D0000 (1.0.0), logo_user 0x3D8000 (1.0.0), logo_menu 0x3E8000 (1.0.0), logo_radio 0x408000 (1.0.0), logo_boot 0x428000 (1.0.0), patch 0x47FF80 (1.0.0), defaultdb(PRC) 0x4A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8140_Galaxy_1.5.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / Dekolte (Galaxy mod)",
+    "date": "2012-07-10",
+    "login": false,
+    "note": "Archive AMIKO_HD8140_Galaxy_1.5.70_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_hd8140_galaxy_1570_app_starts.py, run_dump_hd8140_galaxy_1570_capture_screen.py): the MIPS16e bootloader \"M3612 1.0.4\" copies itself to 0x81E80000, writes \" ON \" to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 11.55 MB maincode(AV) (\"0E020A001570\") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2012 tuner at I2C 0x65 on SCB0, updates the CH455 display to \"-ON-\", initialises userdb(64+64) from defaultdb(PRC), and renders its 32-bpp ARGB8888 Galaxy OSD through GeM36F."
+  },
+  "desc": [
+    "Amiko HD8140 (System ID 0E020A00) firmware 1.5.70 Galaxy by Dekolte (2012-07-10) on an 8 MB SPI flash for the Full HD DVB-S2 satellite receiver.",
+    "Built on the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an ALi S3501 DVB-S2 demodulator at I2C 0x33, Airoha AV2012 tuner at I2C 0x65, and a CH455 front-panel display on GPIO 31 / 9."
+  ]
+}

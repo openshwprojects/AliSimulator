@@ -69,7 +69,8 @@ def run_to_app_banner(fname, expected_len, limit_s=180.0, settle_s=3.0, init_lim
             if polls[VCAP]:
                 res['init_s'] = time.time() - t0
             if not res['null']:
-                run_while(lambda: True, settle_s)       # the application keeps running
+                v0 = sim._vtime()
+                run_while(lambda: sim._vtime() - v0 < settle_s, settle_s)       # the application keeps running
     except Exception as e:                               # a crash is a test failure, not an abort
         res['error'] = f"{type(e).__name__}: {e}"
     res['uart'] = bytes(uart)

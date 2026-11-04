@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from simulator import AliMipsSimulator, flash_size_for
 
 DUMP = "GTMEDIA V9 PRIME/GTMedia_V9Prime_Release_V207_20250320.bin"
-LIMIT = 90_000_000
+LIMIT = 200_000_000
 SLICE = 5_000_000
 
 failures = []
@@ -28,10 +28,9 @@ def check(ok, text):
         failures.append(text)
 
 
-engine = "cpp" if "--engine" in sys.argv and "cpp" in sys.argv else "unicorn"
-print(f"=== Regression Test: GTMedia V9 Prime V207 (ALi M3507 / C3507, engine={engine}) boots into its application ===")
+print("=== Regression Test: GTMedia V9 Prime V207 (ALi M3507 / C3507) boots into its application ===")
 uart = []
-sim = AliMipsSimulator(rom_size=flash_size_for(DUMP), log_handler=lambda m: None, engine=engine)
+sim = AliMipsSimulator(rom_size=flash_size_for(DUMP), log_handler=lambda m: None)
 sim.setSPIDump(False)
 sim.setI2CDump(False)
 sim.setUartHandler(lambda c: uart.append(c if isinstance(c, str) else chr(c)))

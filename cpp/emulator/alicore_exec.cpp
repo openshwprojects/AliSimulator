@@ -91,18 +91,18 @@ ALI_INLINE void Core::exec32(uint32_t insn) {
         case 0x0C: exception(EXC_SYS);                                                  // SYSCALL
         case 0x0D: exception(EXC_BP);                                                   // BREAK
         case 0x0F: return;                                                              // SYNC
-        case 0x10: SETR(RD, hi); return;                                                // MFHI
-        case 0x11: hi = R[RS]; return;                                                  // MTHI
-        case 0x12: SETR(RD, lo); return;                                                // MFLO
-        case 0x13: lo = R[RS]; return;                                                  // MTLO
+        case 0x10: { uint32_t a = RS & 3; SETR(RD, a ? ac_hi[a - 1] : hi); return; }    // MFHI
+        case 0x11: { uint32_t a = RD & 3; if (a) ac_hi[a - 1] = R[RS]; else hi = R[RS]; return; }  // MTHI
+        case 0x12: { uint32_t a = RS & 3; SETR(RD, a ? ac_lo[a - 1] : lo); return; }    // MFLO
+        case 0x13: { uint32_t a = RD & 3; if (a) ac_lo[a - 1] = R[RS]; else lo = R[RS]; return; }  // MTLO
         case 0x18: {                                                                    // MULT
           int64_t p = (int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT];
-          lo = (uint32_t)p; hi = (uint32_t)((uint64_t)p >> 32);
+          set_ac(RD & 3, (uint64_t)p);
           return;
         }
         case 0x19: {                                                                    // MULTU
           uint64_t p = (uint64_t)R[RS] * (uint64_t)R[RT];
-          lo = (uint32_t)p; hi = (uint32_t)(p >> 32);
+          set_ac(RD & 3, p);
           return;
         }
         case 0x1A: {                                                                    // DIV
@@ -267,24 +267,24 @@ ALI_INLINE void Core::exec32(uint32_t insn) {
     case 0x1C: {   // SPECIAL2
       switch (insn & 0x3F) {
         case 0x00: {                                                                     // MADD
-          int64_t acc = (int64_t)(((uint64_t)hi << 32) | lo) + (int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT];
-          lo = (uint32_t)acc; hi = (uint32_t)((uint64_t)acc >> 32);
+          uint32_t a = RD & 3;
+          set_ac(a, (uint64_t)((int64_t)get_ac(a) + (int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT]));
           return;
         }
         case 0x01: {                                                                     // MADDU
-          uint64_t acc = (((uint64_t)hi << 32) | lo) + (uint64_t)R[RS] * (uint64_t)R[RT];
-          lo = (uint32_t)acc; hi = (uint32_t)(acc >> 32);
+          uint32_t a = RD & 3;
+          set_ac(a, get_ac(a) + (uint64_t)R[RS] * (uint64_t)R[RT]);
           return;
         }
         case 0x02: SETR(RD, (uint32_t)((int32_t)R[RS] * (int32_t)R[RT])); return;       // MUL
         case 0x04: {                                                                     // MSUB
-          int64_t acc = (int64_t)(((uint64_t)hi << 32) | lo) - (int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT];
-          lo = (uint32_t)acc; hi = (uint32_t)((uint64_t)acc >> 32);
+          uint32_t a = RD & 3;
+          set_ac(a, (uint64_t)((int64_t)get_ac(a) - (int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT]));
           return;
         }
         case 0x05: {                                                                     // MSUBU
-          uint64_t acc = (((uint64_t)hi << 32) | lo) - (uint64_t)R[RS] * (uint64_t)R[RT];
-          lo = (uint32_t)acc; hi = (uint32_t)(acc >> 32);
+          uint32_t a = RD & 3;
+          set_ac(a, get_ac(a) - (uint64_t)R[RS] * (uint64_t)R[RT]);
           return;
         }
         case 0x20: SETR(RD, clz32(R[RS])); return;                                      // CLZ
@@ -314,12 +314,121 @@ ALI_INLINE void Core::exec32(uint32_t insn) {
           SETR(RT, (R[RT] & ~mask) | ((R[RS] << lsb) & mask));
           return;
         }
+        case 0x0A: {                                                                     // LX (MIPS DSP)
+          uint32_t a = R[RS] + R[RT];
+          switch (SA) {
+            case 0x00: SETR(RD, load<uint32_t>(a)); return;                              // LWX
+            case 0x04: SETR(RD, (uint32_t)(int32_t)(int16_t)load<uint16_t>(a)); return;  // LHX
+            case 0x06: SETR(RD, load<uint8_t>(a)); return;                               // LBUX
+          }
+          exception(EXC_RI);
+        }
+        case 0x10: {                                                                     // ADDQ / SUBQ (MIPS DSP)
+          switch (SA) {
+            case 0x10: {                                                                 // ADDSC
+              uint64_t s = (uint64_t)R[RS] + (uint64_t)R[RT];
+              dspc = (dspc & ~(1u << 13)) | ((uint32_t)((s >> 32) & 1) << 13);
+              SETR(RD, (uint32_t)s);
+              return;
+            }
+            case 0x11: {                                                                 // ADDWC
+              int64_t s = (int64_t)(int32_t)R[RS] + (int64_t)(int32_t)R[RT] + ((dspc >> 13) & 1);
+              if (s < INT32_MIN || s > INT32_MAX) dspc |= 1u << 20;
+              SETR(RD, (uint32_t)s);
+              return;
+            }
+            case 0x16: {                                                                 // ADDQ_S.W
+              int64_t s = (int64_t)(int32_t)R[RS] + (int64_t)(int32_t)R[RT];
+              if (s > INT32_MAX) { s = INT32_MAX; dspc |= 1u << 20; }
+              else if (s < INT32_MIN) { s = INT32_MIN; dspc |= 1u << 20; }
+              SETR(RD, (uint32_t)(int32_t)s);
+              return;
+            }
+            case 0x17: {                                                                 // SUBQ_S.W
+              int64_t s = (int64_t)(int32_t)R[RS] - (int64_t)(int32_t)R[RT];
+              if (s > INT32_MAX) { s = INT32_MAX; dspc |= 1u << 20; }
+              else if (s < INT32_MIN) { s = INT32_MIN; dspc |= 1u << 20; }
+              SETR(RD, (uint32_t)(int32_t)s);
+              return;
+            }
+          }
+          exception(EXC_RI);
+        }
+        case 0x11: {                                                                     // PRECRQ (MIPS DSP)
+          if (SA == 0x15) {                                                              // PRECRQ_RS.PH.W
+            auto rnd_sat16 = [&](uint32_t w) -> uint32_t {
+              int64_t t = (int64_t)(int32_t)w + 0x8000;
+              if (t > 0x7FFFFFFFll) { t = 0x7FFFFFFFll; dspc |= 1u << 22; }
+              return ((uint32_t)(int32_t)t >> 16) & 0xFFFFu;
+            };
+            uint32_t hi16 = rnd_sat16(R[RS]), lo16 = rnd_sat16(R[RT]);
+            SETR(RD, (hi16 << 16) | lo16);
+            return;
+          }
+          exception(EXC_RI);
+        }
+        case 0x13: {                                                                     // SHLL (MIPS DSP)
+          if (SA == 0x14) {                                                              // SHLL_S.W
+            uint32_t sa = RS;
+            int32_t v = (int32_t)R[RT];
+            if (!sa) { SETR(RD, (uint32_t)v); return; }
+            int64_t s = (int64_t)v << sa;
+            if (s > INT32_MAX) { s = INT32_MAX; dspc |= 1u << 22; }
+            else if (s < INT32_MIN) { s = INT32_MIN; dspc |= 1u << 22; }
+            SETR(RD, (uint32_t)(int32_t)s);
+            return;
+          }
+          exception(EXC_RI);
+        }
         case 0x20: {                                                                     // BSHFL
           uint32_t v = R[RT];
           switch (SA) {
             case 0x02: SETR(RD, ((v & 0x00FF00FFu) << 8) | ((v >> 8) & 0x00FF00FFu)); return;   // WSBH
             case 0x10: SETR(RD, (uint32_t)sext8(v)); return;                            // SEB
             case 0x18: SETR(RD, (uint32_t)sext16(v)); return;                           // SEH
+          }
+          exception(EXC_RI);
+        }
+        case 0x30: {                                                                     // DPAQ / DPSQ (MIPS DSP)
+          if (SA == 0x0C || SA == 0x0D) {                                                // DPAQ_SA.L.W / DPSQ_SA.L.W
+            uint32_t a = RD & 3;
+            int64_t prod;
+            if (R[RS] == 0x80000000u && R[RT] == 0x80000000u) {
+              prod = INT64_MAX;
+              dspc |= 1u << (16 + a);
+            } else {
+              prod = ((int64_t)(int32_t)R[RS] * (int64_t)(int32_t)R[RT]) << 1;
+            }
+            int64_t acc = (int64_t)get_ac(a);
+            int64_t res;
+            if (SA == 0x0C) {
+              if (prod > 0 && acc > INT64_MAX - prod) { res = INT64_MAX; dspc |= 1u << (16 + a); }
+              else if (prod < 0 && acc < INT64_MIN - prod) { res = INT64_MIN; dspc |= 1u << (16 + a); }
+              else res = acc + prod;
+            } else {
+              if (prod < 0 && acc > INT64_MAX + prod) { res = INT64_MAX; dspc |= 1u << (16 + a); }
+              else if (prod > 0 && acc < INT64_MIN + prod) { res = INT64_MIN; dspc |= 1u << (16 + a); }
+              else res = acc - prod;
+            }
+            set_ac(a, (uint64_t)res);
+            return;
+          }
+          exception(EXC_RI);
+        }
+        case 0x38: {                                                                     // EXTR.W / RDDSP / WRDSP (MIPS DSP)
+          uint32_t a = RD & 3;
+          switch (SA) {
+            case 0x00: case 0x01: case 0x04: case 0x05: case 0x06: case 0x07: {
+              uint32_t sh = (SA & 1) ? (R[RS] & 31) : RS;
+              int64_t acc = (int64_t)get_ac(a);
+              int64_t res = (SA >= 4 && sh) ? ((acc + (1ll << (sh - 1))) >> sh) : (acc >> sh);
+              if (res > INT32_MAX) { dspc |= 1u << 23; if (SA >= 6) res = INT32_MAX; }
+              else if (res < INT32_MIN) { dspc |= 1u << 23; if (SA >= 6) res = INT32_MIN; }
+              SETR(RT, (uint32_t)(int32_t)res);
+              return;
+            }
+            case 0x12: SETR(RD, dspc); return;                                           // RDDSP
+            case 0x13: dspc = R[RS]; return;                                             // WRDSP
           }
           exception(EXC_RI);
         }
@@ -752,12 +861,12 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
         case 0x0A: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_MOVZ, rd, rs, rt, 0); return K_OP;
         case 0x0B: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_MOVN, rd, rs, rt, 0); return K_OP;
         case 0x0F: uop(u, U_NOP, 0, 0, 0, 0); return K_OP;                           // SYNC
-        case 0x10: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_MFHI, rd, 0, 0, 0); return K_OP;
-        case 0x11: uop(u, U_MTHI, 0, rs, 0, 0); return K_OP;
-        case 0x12: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_MFLO, rd, 0, 0, 0); return K_OP;
-        case 0x13: uop(u, U_MTLO, 0, rs, 0, 0); return K_OP;
-        case 0x18: uop(u, U_MULT, 0, rs, rt, 0); return K_OP;
-        case 0x19: uop(u, U_MULTU, 0, rs, rt, 0); return K_OP;
+        case 0x10: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else if (rs) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MFHI, rd, 0, 0, 0); return K_OP;
+        case 0x11: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MTHI, 0, rs, 0, 0); return K_OP;
+        case 0x12: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else if (rs) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MFLO, rd, 0, 0, 0); return K_OP;
+        case 0x13: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MTLO, 0, rs, 0, 0); return K_OP;
+        case 0x18: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MULT, 0, rs, rt, 0); return K_OP;
+        case 0x19: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MULTU, 0, rs, rt, 0); return K_OP;
         case 0x1A: uop(u, U_DIV, 0, rs, rt, 0); return K_OP;
         case 0x1B: uop(u, U_DIVU, 0, rs, rt, 0); return K_OP;
         case 0x20: case 0x22: uop(u, U_GEN32, 0, 0, 0, insn); return K_OP;            // ADD / SUB (overflow)
@@ -806,11 +915,11 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
     case 0x17: uop(u, U_BGTZL, 0, rs, 0, btarget); return K_DS;
     case 0x1C:
       switch (insn & 0x3F) {
-        case 0x00: uop(u, U_MADD, 0, rs, rt, 0); return K_OP;
-        case 0x01: uop(u, U_MADDU, 0, rs, rt, 0); return K_OP;
+        case 0x00: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MADD, 0, rs, rt, 0); return K_OP;
+        case 0x01: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MADDU, 0, rs, rt, 0); return K_OP;
         case 0x02: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_MUL, rd, rs, rt, 0); return K_OP;
-        case 0x04: uop(u, U_MSUB, 0, rs, rt, 0); return K_OP;
-        case 0x05: uop(u, U_MSUBU, 0, rs, rt, 0); return K_OP;
+        case 0x04: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MSUB, 0, rs, rt, 0); return K_OP;
+        case 0x05: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MSUBU, 0, rs, rt, 0); return K_OP;
         case 0x20: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_CLZ, rd, rs, 0, 0); return K_OP;
         case 0x21: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_CLO, rd, rs, 0, 0); return K_OP;
       }
@@ -826,6 +935,8 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
           if (rd < sa) return K_BARRIER;
           if (!rt) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_INS, rt, rs, 0, sa | ((rd - sa + 1) << 8));
           return K_OP;
+        case 0x0A: case 0x10: case 0x11: case 0x13: case 0x30: case 0x38:
+          uop(u, U_GEN32, 0, 0, 0, insn); return K_OP;                                // MIPS DSP
         case 0x20:
           switch (sa) {
             case 0x02: if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_WSBH, rd, 0, rt, 0); return K_OP;

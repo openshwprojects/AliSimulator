@@ -133,6 +133,12 @@ PANELS = [
     ("A254", _fd650k(107, 108)),
     ("254Combo", _fd650k(107, 108)),
     ("A255", _fd650k(107, 108)),
+    # GTMedia V9 Super (128 MB M3505 / C3505): FD650_0 ("PAN_FD650_0") on GPIO bank 3, SCL = GPIO 107,
+    # SDA = GPIO 110, digits 0x6E, 0x6C, 0x6A, 0x68 from the left and segments a..g, DP on bits
+    # 0, 6, 4, 2, 1, 7, 5, 3 (read off its font table at mc+0x7F5A06: '0'=0xD7, '1'=0x50, 'b'=0xB6,
+    # 'o'=0x36, 't'=0xA6 -> "boot")
+    ("GTMedia_V9Super", dict(chip="tm1650", scl=107, sda=110, digit_order=(3, 2, 1, 0),
+                             seg_map=(0, 6, 4, 2, 1, 7, 5, 3), labels=_FERGUSON_KEYS)),
     # Ferguson Ariva 54 (the C3503D, chips/c3503.py): the same FD650K and layout on GPIO bank 0
     # (0xB8000054), SCL = GPIO 24, SDA = GPIO 23 (" On ", " on ", "nenu" on its external IR/LED
     # eye; the Ariva 53's board_cfg leaves its panel I2C attach pointer NULL -- no display)
@@ -212,7 +218,7 @@ PANELS = [
     ("xwindow_gm", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("synaps_dynavision", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("lemontree_proton", dict(chip="lemontree", scl=62, sda=171, labels={})),
-    ("iltv_1.5.27_hd", dict(chip="lemontree", scl=62, sda=171, labels={})),
+    ("iltv_1.5.", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("AMIKO_STHD-8800", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("AMIKO_SHD-7900-8000", dict(chip="lemontree", scl=62, sda=171, labels={})),
     ("amiko_220_", dict(chip="lemontree", scl=62, sda=171, labels={})),

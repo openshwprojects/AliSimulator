@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_MiniHD_SE_2.3.60_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini HD SE (System ID 10000A00, v2.3.60 EMU)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "10000A00 (bootloader version \"M3511A 1.1.1\", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0xA6000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 / M3511A DVB-S2 (NIM_S3503_0 at 0xB8028000)",
+    "tuner": "Airoha AV2026 DVB-S2 tuner",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "2.3.60 EMU (maincode(AV) \"10000A002360\"; bootloader \"M3511A 1.1.1\"; seecode \"M3606 SEE\")",
+    "date": "2016-4-26",
+    "size": 8388608,
+    "sha1": "a7d24ab7d0e69beb9f65b3f11b81c0d8ca48d4d6",
+    "layout": "bootloader 0x000000 (M3511A 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10000A002360, 2010-08-12, LZMA -> 12.48 MB), seecode 0x3B0000 (M3606 SEE, 2016-4-26), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_SE_2.3.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2016-4-26",
+    "login": false,
+    "note": "Archive AMIKO_MiniHD_SE_2.3.60_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_minihd_se_2360_app_starts.py, run_dump_minihd_se_2360_capture_screen.py): the XIP bootloader (\"M3511A 1.1.1\") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\", writes \" ON \" to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode (\"M3606 SEE\") to 0xA6000200 and maincode(AV) (\"10000A002360\", 12.48 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to \" on \", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Mini HD SE (System ID 10000A00) firmware 2.3.60 EMU (2016-4-26) for the Full HD DVB-S2 satellite receiver on the ALi M3511A / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.",
+    "Uses an XIP CacheAsRam bootloader (\"M3511A 1.1.1\"), dual-CPU \"M3606 SEE\" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA)."
+  ]
+}

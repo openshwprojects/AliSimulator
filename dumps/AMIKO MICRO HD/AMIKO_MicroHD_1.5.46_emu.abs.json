@@ -1,0 +1,54 @@
+{
+  "file": "AMIKO_MicroHD_1.5.46_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Micro HD (System ID 0E000A00, v1.5.46 EMU)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "0E000A00 (bootloader version \"M3612 1.0.4\", HDCPKey \"Demo M3612\", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)",
+    "soc": "ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811)",
+    "family": "M3801 (chips/m3801.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 31,
+      "sda": 9
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.5.46 EMU (maincode(AV) \"0E000A001546\"; bootloader \"M3612 1.0.4\")",
+    "date": "2012-07-10",
+    "size": 8388608,
+    "sha1": "ae1a0fc8c21356d7a21ff1aa0c4ed53e9ad193f5",
+    "layout": "bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E000A001546, 2012-07-10, LZMA -> 12.15 MB), HDCPKey 0x3BFB00 (Demo M3612), default_lang 0x3BFD00 (1.0.0), cipluskey 0x3BFF80 (1.1.0), countryband 0x3D0000 (1.0.0), logo_user 0x3D8000 (1.0.0), logo_menu 0x3E8000 (1.0.0), logo_radio 0x408000 (1.0.0), logo_boot 0x428000 (1.0.0), patch 0x47FF80 (1.0.0), defaultdb(PRC) 0x4A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_1.5.46_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2012-07-10",
+    "login": false,
+    "note": "Archive AMIKO_MicroHD_1.5.46_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as the single-CPU M3801 family (chips/m3801.py, run_dump_microhd_1546_app_starts.py, run_dump_microhd_1546_capture_screen.py): the \"M3612 1.0.4\" bootloader prints \"APP  init ok / bl_panel_init! / -->>ch455!!\", writes \" ON \" to the CH455 panel on GPIO 31 / 9, verifies and unpacks maincode(AV) (\"0E000A001546\") to 0x80000200, and enters the application (CP0 EBase 0x80002000).  With the ALi S3501 DVB-S2 demodulator attached at I2C 0x33 on SCB0, the application updates the CH455 front panel to \" on \" and enables GMA layer 0 to display its 1280x720 OSD dialog."
+  },
+  "desc": [
+    "Amiko Micro HD (System ID 0E000A00) firmware 1.5.46 EMU (2012-07-10) on an 8 MB SPI flash for the single-CPU ALi M3612 (S3811 DVB-S2 variant) Full HD satellite receiver.",
+    "Pairs the single-CPU M3801/S3811 SoC architecture with an external ALi S3501 DVB-S2 demodulator at I2C 0x33 on SCB0 and a CH455 4-digit LED panel on GPIO 31 / 9 (\" ON \" -> \" on \")."
+  ]
+}

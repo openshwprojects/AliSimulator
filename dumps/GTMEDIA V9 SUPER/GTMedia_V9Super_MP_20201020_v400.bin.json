@@ -1,0 +1,51 @@
+{
+  "file": "GTMedia_V9Super_MP_20201020_v400.bin",
+  "device": {
+    "brand": "GTMedia",
+    "model": "V9 Super (MP V400, 2020-10-20)",
+    "type": "DVB-S2 Full HD H.265/HEVC satellite receiver with built-in Wi-Fi, Ethernet and USB PVR",
+    "board": "FREESAT1 / V9SUPER (bootloader version \"M3505---0.1.0\", 8 MB SPI flash, 128 MB DDR3)",
+    "soc": "ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode \"M3505 SEE\" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_C3505_0 at 0xB804C000)",
+    "tuner": "Airoha AV2011 DVB-S2",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650 (TM1650-compatible, PAN_FD650_0)",
+      "scl": 107,
+      "sda": 110
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V210.400 MP (Main Code \"M3505\", 2020-10-20; bootloader \"M3505---0.1.0\", 2017-11-17; seecode \"M3505 SEE\"; Libcore 17.8.0@SDK4.0ia.17.8_20161212, Application 1.0.0@SDK4.0ia.17.8_20161212)",
+    "date": "2020-10-20",
+    "size": 8388608,
+    "sha1": "c9fdd3743b2bf9c61fc12a987e02e302f0cf9adb",
+    "layout": "bootloader 0x000000 (M3505---0.1.0, 2017-11-17), platform 0x06FE00 (00000001, FREESAT1 / V9SUPERXXXXXXXXX), upg_maincode 0x070000 (00000001), upg_osd_string 0x0DE000 (0.0.1), upg_seecode 0x0E0000 (00000001), seecode 0x120000 (M3505 SEE, 2020-10-20), Logo 0x260000 (1.0.0), osd_string 0x280000 (1.1.0), Main Code 0x2B0000 (M3505, 2020-10-20, LZMA -> 8.89 MB at 0x80000200), tempdata 0x5A8000 (1.0.0), Softcam Key 0x5B0000 (1.0.0), Web TV 0x5D0000 (1.0.0), Preset DataBase 0x650000 (1.1.0), User Database 0x68FF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super",
+    "site": "satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)",
+    "author": "GTMedia",
+    "date": "2020-10-20",
+    "login": false,
+    "note": "Archive GTMedia_V9Super_MP_20201020_V400.zip from the Freesat / Freesat V9 Super directory on satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "boot",
+      " on ",
+      "Strt"
+    ],
+    "note": "Boots on C3505 (chips/c3505.py, front_panel.py, run_dump_gtmedia_v9_super_v400_app_starts.py, run_dump_gtmedia_v9_super_v400_capture_screen.py): the \"M3505---0.1.0\" boot-ROM bootloader at 0x800 runs at 0x9FE00800, copies its payload to 0x8100EF00, writes \"boot\" (0xB6, 0x36, 0x36, 0xA6) to the FD650 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), unpacks the 8.89 MB Main Code to 0x80000200 and M3505 SEE to 0xA6000200, and starts the dual-CPU application (which updates the FD650 panel through \" on \" to \"Strt\").  Because the MP (Mass Production) image carries an unprogrammed serial placeholder in its platform chunk at 0x06FE00, the application opens its 1280x720 \"Factory Test Page\" OSD (\"Model: GTMedia V9 Super[P]\", \"SW Ver: V210.400\", \"HW Ver: Oct 20 2020\") through the GE and display-engine list DMA."
+  },
+  "desc": [
+    "GTMedia V9 Super mass-production firmware V400 (V210.400, 2020-10-20) on an 8 MB SPI flash image for the Full HD H.265/HEVC DVB-S2 satellite receiver on the dual-CPU ALi M3505 / C3505 SoC with 128 MB DDR3.",
+    "Drives an FD650 4-digit 7-segment display (\"PAN_FD650_0\") on GPIO 107 (SCL) / 110 (SDA) with custom segment wiring and boots into its 1280x720 \"Factory Test Page\" OSD when the platform serial number is unprogrammed."
+  ]
+}

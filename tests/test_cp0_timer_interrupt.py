@@ -290,10 +290,12 @@ def scenario_continuity(mode, fails):
     main = prologue(period(mode), 0x40000000, 0x10008001) + idle_loop()
     sim = make_sim(mode, main, handler())
     for _ in range(4):
-        run_until(sim, mode, 3_000, wall=0.3)
+        c0 = sim.instruction_count
+        run_until(sim, mode, 3_000, lambda s, c0=c0: s.instruction_count - c0 >= 600_000, wall=0.3)
         for _ in range(3):
             sim.step()
-    run_until(sim, mode, 3_000, wall=0.3)
+    c0 = sim.instruction_count
+    run_until(sim, mode, 3_000, lambda s, c0=c0: s.instruction_count - c0 >= 600_000, wall=0.3)
     check(ticks(sim) == 0 and not sim._ti,
           "step()/run() alternation causes no spurious timer interrupt", fails)
 

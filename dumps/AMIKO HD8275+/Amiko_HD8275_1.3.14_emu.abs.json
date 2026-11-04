@@ -1,0 +1,62 @@
+{
+  "file": "Amiko_HD8275_1.3.14_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8275+ (System ID 6C000A00, v1.3.14 EMU build)",
+    "type": "DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI slot, CA card reader, Ethernet and USB Wi-Fi",
+    "board": "6C000A00 (bootloader version \"M3529A 1.1.2\", 256 MB DDR3 C3505 combo platform)",
+    "soc": "ALi M3529A / C3505 with 256 MB DDR3 (maincode \"ALI_C3505:0x%x\", seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "C3505 (chips/c3505.py)",
+    "demod": "internal DVB-S2 (NIM_S3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14",
+    "demodModel": {
+      "chip": "avl6762",
+      "address": 20
+    },
+    "tuner": "Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)",
+    "tunerModel": {
+      "chip": "av2012",
+      "address": 97,
+      "secondary": {
+        "chip": "mxl608",
+        "address": 96
+      }
+    },
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 107,
+      "sda": 108
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.3.14 EMU (maincode(AV) \"6C000A001314\"; bootloader \"M3529A 1.1.2\")",
+    "date": "2018-4-3",
+    "size": 8388608,
+    "sha1": "8f7e17bac32013883706987bf2223b6983c19f22",
+    "layout": "bootloader 0x000000 (M3529A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6C000A001314, 2010-08-12, LZMA -> 11.68 MB), seecode 0x3F0000 (M3606 SEE, 2018-4-3), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.3.14_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2018-4-3",
+    "login": false,
+    "note": "Archive Amiko_HD8275_1.3.14_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8275_1314_app_starts.py, run_dump_hd8275_1314_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) to 0x80000200 and seecode (\"M3606 SEE\") to 0xAE000200 (224 MB physical DDR), sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application initialises its external Availink AVL6762 DVB-T2/C demodulator at I2C 0x14 on SCB3, Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB1 and MaxLinear MxL608 DVB-T2/C tuner at I2C 0x60 on SCB3, drives the CH455 front panel on GPIO 107 / 108 (\" ON \", \" on \"), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900."
+  },
+  "desc": [
+    "Amiko HD8275+ (System ID 6C000A00) firmware 1.3.14 EMU (2018-4-3) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3529A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.",
+    "Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108."
+  ]
+}

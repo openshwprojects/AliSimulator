@@ -1,0 +1,43 @@
+{
+  "file": "GTMedia_V8UHD_V248_20231110.bin",
+  "device": {
+    "brand": "GTMedia",
+    "model": "V8 UHD (V248, 2023-11-10)",
+    "type": "DVB-S2X + DVB-T2/C 4K UHD H.265/HEVC combo receiver with CA card slot, built-in Wi-Fi, Ethernet and USB PVR",
+    "board": "M3922 (bootloader version \"M3922---0.1.0\", 8 MB SPI flash, ALi M3922 / S3922 / CAP210 ARMv7-A platform)",
+    "soc": "ALi M3922 / S3922 (ARMv7-A CPU, get_clock_3922 / get_clock_cap210, DECV_HEVC_0, DECV_AVC_0, NIM_C3501h_0/1 + NIM_CXD2856_0 / NIM_COFDM_0)",
+    "family": "M3801 (chips/m3801.py, NCRC chunk container only; CPU is ARMv7-A rather than MIPS32)",
+    "demod": "internal DVB-S2X (NIM_C3501h_0/1) + Sony CXD2856 / COFDM DVB-T2/C (NIM_CXD2856_0 / NIM_COFDM_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V248 (maincode \"M3922\", 2023-11-10; bootloader \"M3922---0.1.0\", 2015-09-24; Libcore 21.4.b@SDK4.0la.21.4b_20201102, Application 1.0.0@SDK4.0la.21.2a_20181130)",
+    "date": "2023-11-10",
+    "size": 8388608,
+    "sha1": "789b8327d577c279d8901b6ac2e44063651f0be5",
+    "layout": "bootloader 0x000000 (M3922---0.1.0), platform 0x06FE00 (00000001), upg_maincode 0x070000 (00000001), upg_osd_string 0x15A000 (0.0.1), Radioback 0x160000 (1.0.0), Menuback 0x180000 (1.0.0), osd_string 0x1A0000 (1.1.0), maincode 0x1D0000 (M3922, 2023-11-10, LZMA -> 16.70 MB), db5 0x620000 (1.1.0), tempdata 0x621000 (1.0.0), Code Key 0x630000 (1.0.0), script 0x650000 (1.1.0), Web TV 0x670000 (1.0.0), Preset DataBase 0x690000 (1.1.0), User Database 0x6BFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V8UHD_V248_20231110.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMedia%20V8UHD",
+    "site": "satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)",
+    "author": "GTMedia",
+    "date": "2023-11-10",
+    "login": false,
+    "note": "Archive GTMedia_V8UHD_V248_20231110.zip from the Freesat / GTMedia V8UHD directory on satedu.cba.pl; fetched 2026-11-03."
+  },
+  "simulator": {
+    "boots": false,
+    "application": false,
+    "display": false,
+    "panelText": [],
+    "note": "Does not boot on the MIPS32 simulator (run_dump_gtmedia_v8_uhd_v248_arm_layout.py): although the 8 MB image uses ALi's standard NCRC chunk chain (magic 0x23010010 at 0x000000, HEAD descriptor at 0x258, LZMA-compressed maincode \"M3922\" at 0x1D0000 decompressing to 16.70 MB), the ALi M3922 / S3922 (\"ALI_S3922\", \"get_clock_3922\", \"get_clock_cap210\") is an ARMv7-A 4K UHD SoC rather than MIPS32.  Its boot-ROM payload at 0x800 starts with an 8-word ARMv7 exception vector table (0xEA000006, 0xEAFFFFFE, 0xEA00004D, ...) followed at 0x820 by mrc p15, #0, r0, c1, c0, #0 (0xEE110F10, reading CP15 SCTLR)."
+  },
+  "desc": [
+    "GTMedia V8 UHD firmware V248 (2023-11-10) for the 4K UHD H.265/HEVC DVB-S2X + DVB-T2/C combo receiver on the ALi M3922 / S3922 ARMv7-A SoC with 8 MB SPI flash.",
+    "Packages an ARMv7-A bootloader (\"M3922---0.1.0\") and ALi SDK 4.0la maincode (\"M3922\") inside ALi's traditional NCRC flash chunk container."
+  ]
+}
