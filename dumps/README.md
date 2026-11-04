@@ -11,9 +11,17 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.45_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.45 EMU) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.45_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.47_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.47 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.47_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.49_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.49 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.49_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.3.51_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.51 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.3.61_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.61 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.61_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.3.62_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.62 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.63_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.63 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.63_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.4.11_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.11 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.4.12_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.12 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.12_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.4.22_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.22 EMU) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.22_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.4.31_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.31 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.4.33_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.33 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.33_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.4.37_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.37 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.37_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO CHD8270+/AMIKO_CHD8270_2.4.40_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.40 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.4.43_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.43 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.4.50_emu.abs` | Amiko CHD8270+ (System ID 14000A88, v2.4.50 EMU) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.50_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO ECO TC-200/AMIKO_ECO_TC-200_2.3.09_emu.abs` | Amiko Eco TC-200 (System ID 22000A88) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xA6000200; Libcore 13.15.0@SDK4.0ga.13.15_20160727) | - | CH455 (TM1650-compatible) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_ECO_TC-200_2.3.09_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -39,11 +47,26 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8150/AMIKO_HD8150_2.3.40_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.40 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF373/RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8150/AMIKO_HD8150_2.3.40_Synaps_2.3.40_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Synaps GUI 2.3.40) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200; SDK4.0fa.13.11_20150910 / SDK4.0fa.13.6_20141203byD09WXW) | Airoha AV2026 DVB-S2 tuner + ASC RF373/RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.40_Synaps_2.3.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8150/AMIKO_HD8150_2.3.45_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.45 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.45_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.3.51_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.51 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.3.60_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.60 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.3.62_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.62 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.3.65_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.3.65 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.65_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.4.16_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.16 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.16_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8150/AMIKO_HD8150_2.4.19_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.19 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.19_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.4.31_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.31 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.4.33_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.33 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.33_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8150/AMIKO_HD8150_2.4.43_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.43 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.4.50_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.50 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.50_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8150/AMIKO_HD8150_2.4.54_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.54 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8150/AMIKO_HD8150_2.4.58_emu.abs` | Amiko HD8150 (System ID 10030A00, v2.4.58 EMU) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.58_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.3.65_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy GUI 2.3.65 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF373/RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.3.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.3.72_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.3.72 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.3.72_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.3.91_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.3.91 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.3.91_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.16_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.16 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.16_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.25_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.25 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.40_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.40 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.50_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.50 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.70_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.70 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.75_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy v2.4.75 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.76_by Dekolte.abs` | Amiko HD8150 (System ID 10030A00, Galaxy GUI 2.4.76 by Dekolte) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF373/RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.76_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.76_R1E.abs` | Amiko HD8150 (System ID 10030A00, Galaxy GUI 2.4.76 R1E) | ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.76_R1E.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
@@ -57,10 +80,17 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8155/AMIKO 8155 Edision_v.1440.abs` | Amiko HD8155 (System ID 6B000A00, Edision GUI v.1440 build) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%208155%20Edision_v.1440.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO HD8155/AMIKO 8155 Edision_v.1453.abs` | Amiko HD8155 (System ID 6B000A00, Edision GUI v.1453 build) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%208155%20Edision_v.1453.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO HD8155/AMIKO_HD8155_1.1.60_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.1.60 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.1.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.14_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.14 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.14_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.15_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.15 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_1.3.49_conax.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.49 Conax) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.49_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_1.3.49_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.49 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.49_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_1.3.49_mcas.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.49 MCAS) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.49_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.55_mcas.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.55 MCAS) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.55_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.63_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.63 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.63_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.75_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.75 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.75_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.3.87_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.3.87 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.87_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_1.4.07_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.4.07 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.4.07_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8155/AMIKO_HD8155_1.4.30_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.4.30 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.4.30_emu.abs.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_1.5.27_emu.abs` | Amiko HD8155 (System ID 6B000A00, v1.5.27 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.5.27_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8155/AMIKO_HD8155_Wifi_1.5.52_emu.abs` | Amiko HD8155 Wi-Fi (System ID 6B000A00, v1.5.52 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_Wifi_1.5.52_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8200 SERIES/AMIKO_HD8200_Galaxy_1.7.01_by Dekolte.abs` | Amiko HD8200 Series (System ID 0A040A00, Galaxy 1.7.01 by Dekolte build) | ALi M3606B / C3603 (bootloader "M3606B 1.1.3", seecode "M3606 SEE", chip ID 0x10047 rev 0x20001) | Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60 | Lemontree EuP MCU + front-panel display (I2C 0x28) (SCL 44, SDA 43) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8200_Galaxy_1.7.01_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
@@ -88,11 +118,34 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8260+/amiko_14000A00_gi_2.3.49_gisclub.tv..abs` | Amiko / Galaxy Innovations HD8260+ / GI 14000A00 (System ID 14000A00, v2.3.49 gisclub.tv build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_14000A00_gi_2.3.49_gisclub.tv..rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Galaxy Innovations (gisclub.tv) |
 | `AMIKO HD8260+/amiko_8260_plus_edision_2486_by_Davor.abs` | Amiko HD8260+ (System ID 14000A88, Edision v2.4.86 by Davor) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_8260_plus_edision_emu_v2486_by_Davor.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO HD8260+/Amiko_HD8260+32byf2f2.abs` | Amiko HD8260+ (System ID 14000A00, PowerVu mod by f2f2) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD826032byf2f2_powervu_update20160123.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
+| `AMIKO HD8260+/AMIKO_HD8260_2.3.41_emu.abs` | Amiko HD8260+ (System ID 14000A00, v2.3.41 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.3.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8260+/AMIKO_HD8260_2.3.65_emu.abs` | Amiko HD8260+ (System ID 14000A00, v2.3.65 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.3.65_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8260+/AMIKO_HD8260_2.4.13_emu.abs` | Amiko HD8260+ (System ID 14000A88, v2.4.13 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.4.13_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8260+/AMIKO_HD8260_2.4.54_emu.abs` | Amiko HD8260+ (System ID 14000A88, v2.4.54 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8260+/AMIKO_HD8260_Edision_2.2.32_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.2.32 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.2.32_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.2.50_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.2.50 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.2.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.52_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.3.52 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.52_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.56_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.3.56 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.56_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.60_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.3.60 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.60_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.70_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.3.70 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.90_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.3.90 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.90_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.05_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.4.05 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.05_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.13_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.4.13 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.13_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.51_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.4.51 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.51_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.75_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.4.75 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.76_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Edision 2.4.76 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.76_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.46_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.46 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.46_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.50_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.50 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.63_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.63 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.63_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.65_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.65 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.71_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.71 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.71_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.72_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.72 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.72_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.91_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.91 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.91_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.15_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.15 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.15_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.16_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.16 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.16_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.21_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.21 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.21_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.25_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.25 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.40_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.40 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.50_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.50 by Dekolte) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.75_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.75 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.76_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.76 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.76_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
@@ -154,6 +207,8 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.40_emu.abs` | Amiko Impulse SAT (System ID 20020A00) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200; SDK4.0fa.13.11_20150910 / SDK4.0fa.13.6_20141203byD09WXW) | Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.45_emu.abs` | Amiko Impulse SAT (System ID 20020A00, firmware 2.3.45 emu) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.45_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.51_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.51 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.61_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.61 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.61_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.62_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.62 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.31_emu.abs` | Amiko Impulse SAT (System ID 20020A88, v2.4.31 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.43_emu.abs` | Amiko Impulse SAT (System ID 20020A88, v2.4.43 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.54_emu.abs` | Amiko Impulse SAT (System ID 20020A88, firmware 2.4.54 emu) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -169,6 +224,8 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MICRO HD SE/AMIKO MicroHD SE_v.2484.abs` | Amiko Micro HD SE (System ID 10010A88, Edision GUI v.2484) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0x86000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MicroHD%20SE_v.2484.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.40_emu.abs` | Amiko Micro HD SE (System ID 10010A00, v2.3.40 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.45_emu.abs` | Amiko Micro HD SE (System ID 10010A00, v2.3.45 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.45_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.51_emu.abs` | Amiko Micro HD SE (System ID 10010A00, v2.3.51 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.60_emu.abs` | Amiko Micro HD SE (System ID 10010A00, v2.3.60 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.4.43_emu.abs` | Amiko Micro HD SE (System ID 10010A88, v2.4.43 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.4.58_emu.abs` | Amiko Micro HD SE (System ID 10010A88, v2.4.58 EMU) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.4.58_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.4.58_mcas.abs` | Amiko Micro HD SE (System ID 10010A88, v2.4.58 MCAS) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.4.58_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -190,6 +247,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MICRO HD/AMIKO_MicroHD_1.5.73_emu.abs` | Amiko Micro HD (System ID 0E000A00, v1.5.73 EMU build) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_1.5.73_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (1.5.73 EMU) |
 | `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.57_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.57 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.5.57_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.70_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.70 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.5.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.77_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.77 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.5.77_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.91_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.91 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.5.91_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.6.10_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Galaxy v1.6.10 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.6.10_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD/AMIKO_MicroHD_Synaps_1.5.40_by Dekolte.abs` | Amiko Micro HD (System ID 0E000A00, Synaps v1.5.40 by Dekolte) | ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) | - | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Synaps_1.5.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
@@ -210,6 +268,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.09_emu.abs` | Amiko Mini Combo Extra RCA (System ID 6A000A00, v1.1.09 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.09_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.13_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.1.13 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.13_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.67_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.1.67 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.67_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.3.15 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.4.21_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.4.21 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.4.21_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.5.27_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.5.27 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.5.27_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.5.52_emu.abs` | Amiko Mini Combo Extra RCA (System ID 6A000A00, v1.5.52 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_S3501_1, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200; Libcore 17.23.a@SDK4.0ia.17.23a_20200526) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.5.52_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -236,6 +295,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.4.51_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A88, Synaps v2.4.51 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Synaps_2.4.51_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.5.41_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.5.43_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.43 EMU) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.5.46_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.46 EMU) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 + Rafael Micro R... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.46_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.6.03_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00 / 0E060A88, v1.6.03 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.6.03_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (1.6.03 EMU) |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.6.07_conax.abs` | Amiko Mini HD Combo (System ID 0E060A88, v1.6.07 Conax) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.6.07_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.65_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Edision v1.4.65 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
@@ -654,6 +714,66 @@ Amiko CHD8270+ (System ID 14000A00) 2.3.49 EMU firmware (2016-2-22) on a 16 MB S
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.3.51_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A00, v2.3.51 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.51 EMU (maincode(AV) "14000A002351"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-3-9, 16777216 bytes, SHA-1 8171801a85f2f40ac24fdb908a8e67f3806c19a8
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002351, 2010-08-12, LZMA -> 13.03 MB), seecode 0x430000 (M3606 SEE, 2016-3-9), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-3-9). Archive AMIKO_CHD8270_2.3.51_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2351_app_starts.py, run_dump_chd8270_2351_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002351", 13.03 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A00) 2.3.51 EMU firmware (2016-3-9) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.3.61_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A00, v2.3.61 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.61 EMU (maincode(AV) "14000A002361"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-4-29, 16777216 bytes, SHA-1 ae2b9524a90b6b94c5e7635ea780c2c9483d7183
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002361, 2010-08-12, LZMA -> 13.13 MB), seecode 0x430000 (M3606 SEE, 2016-4-29), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.61_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-4-29). Archive AMIKO_CHD8270_2.3.61_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2361_app_starts.py, run_dump_chd8270_2361_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002361", 13.13 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A00) 2.3.61 EMU firmware (2016-4-29) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.3.62_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A00, v2.3.62 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.62 EMU (maincode(AV) "14000A002362"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-5-12, 16777216 bytes, SHA-1 425143bb514cc5e113f55ae2e76359b9427699d3
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002362, 2010-08-12, LZMA -> 13.14 MB), seecode 0x430000 (M3606 SEE, 2016-5-12), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-5-12). Archive AMIKO_CHD8270_2.3.62_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2362_app_starts.py, run_dump_chd8270_2362_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002362", 13.14 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A00) 2.3.62 EMU firmware (2016-5-12) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO CHD8270+/AMIKO_CHD8270_2.3.63_emu.abs`
 
 * **Box:** Amiko CHD8270+ (System ID 14000A00, v2.3.63 EMU)
@@ -670,6 +790,46 @@ Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2363_app_starts.py, run_dump_chd8270_2363_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002363", 13.22 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko CHD8270+ (System ID 14000A00) 2.3.63 EMU firmware (2016-5-19) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.11_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.11 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.11 EMU (maincode(AV) "14000A882411"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-2-23, 16777216 bytes, SHA-1 33705ea93f43e5f57bd4af4f027bc8f61cf5bf3d
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882411, 2010-08-12, LZMA -> 12.61 MB), seecode 0x430000 (M3606 SEE, 2017-2-23), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-2-23). Archive AMIKO_CHD8270_2.4.11_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2411_app_starts.py, run_dump_chd8270_2411_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882411", 12.61 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A88) 2.4.11 EMU firmware (2017-2-23) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.12_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.12 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.12 EMU (maincode(AV) "14000A882412"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-3-2, 16777216 bytes, SHA-1 ac6ca0e12fb1e8802af53def11749368e2b26431
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882412, 2010-08-12, LZMA -> 12.61 MB), seecode 0x430000 (M3606 SEE, 2017-3-2), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.12_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-3-2). Archive AMIKO_CHD8270_2.4.12_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2412_app_starts.py, run_dump_chd8270_2412_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882412", 12.61 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A88) 2.4.12 EMU firmware (2017-3-2) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -694,6 +854,46 @@ Amiko CHD8270+ (System ID 14000A88) firmware v2.4.22 EMU (2017-6-1) on a 16 MB S
 Pairs dual-CPU M3503 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 and the Amiko 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.31_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.31 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.31 EMU (maincode(AV) "14000A882431"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-11-10, 16777216 bytes, SHA-1 ea18aa14dfbd5f4d40618790bf9168f7f5b0d60f
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882431, 2010-08-12, LZMA -> 11.89 MB), seecode 0x430000 (M3606 SEE, 2017-11-10), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-11-10). Archive AMIKO_CHD8270_2.4.31_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2431_app_starts.py, run_dump_chd8270_2431_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882431", 11.89 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A88) 2.4.31 EMU firmware (2017-11-10) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.33_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.33 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.33 EMU (maincode(AV) "14000A882433"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-11-29, 16777216 bytes, SHA-1 0f3644f20bd5fe5ec7f81ea0a150069a0ea07415
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882433, 2010-08-12, LZMA -> 11.90 MB), seecode 0x430000 (M3606 SEE, 2017-11-29), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.33_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-11-29). Archive AMIKO_CHD8270_2.4.33_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2433_app_starts.py, run_dump_chd8270_2433_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882433", 11.90 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A88) 2.4.33 EMU firmware (2017-11-29) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.37_emu.abs`
 
 * **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.37 EMU)
@@ -710,6 +910,26 @@ Pairs dual-CPU M3503 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2437_app_starts.py, run_dump_chd8270_2437_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882437", 11.91 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko CHD8270+ (System ID 14000A88) 2.4.37 EMU firmware (2018-1-16) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO CHD8270+/AMIKO_CHD8270_2.4.40_emu.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A88, v2.4.40 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.40 EMU (maincode(AV) "14000A882440"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2018-3-5, 16777216 bytes, SHA-1 5e5e4ff7d741331767d9b168f0cc22b35691cc78
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882440, 2010-08-12, LZMA -> 11.93 MB), seecode 0x430000 (M3606 SEE, 2018-3-5), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.4.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-3-5). Archive AMIKO_CHD8270_2.4.40_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_chd8270_2440_app_starts.py, run_dump_chd8270_2440_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882440", 11.93 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko CHD8270+ (System ID 14000A88) 2.4.40 EMU firmware (2018-3-5) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -1229,6 +1449,111 @@ Amiko HD8150 (System ID 10030A00) firmware 2.3.45 EMU (2016-2-3) for the Full HD
 Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO HD8150/AMIKO_HD8150_2.3.51_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.3.51 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.51 EMU (maincode(AV) "10030A002351"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-3-9, 8388608 bytes, SHA-1 9e3e71746626454a79935334f202d10b7c79effe
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002351, 2010-08-12, LZMA -> 12.43 MB), seecode 0x3B0000 (M3606 SEE, 2016-3-9), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-3-9). Archive AMIKO_HD8150_2.3.51_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2351_app_starts.py, run_dump_hd8150_2351_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002351", 12.43 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.3.51 EMU (2016-3-9) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.3.60_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.3.60 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.60 EMU (maincode(AV) "10030A002360"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-4-26, 8388608 bytes, SHA-1 9e02188af8fe927e6a60c36f9a77427fa4d31c2c
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002360, 2010-08-12, LZMA -> 12.52 MB), seecode 0x3B0000 (M3606 SEE, 2016-4-26), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-4-26). Archive AMIKO_HD8150_2.3.60_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2360_app_starts.py, run_dump_hd8150_2360_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002360", 12.52 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.3.60 EMU (2016-4-26) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.3.62_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.3.62 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.62 EMU (maincode(AV) "10030A002362"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-5-12, 8388608 bytes, SHA-1 0d67a56b7596a84d3a2eed544e9a08e6d799cdda
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002362, 2010-08-12, LZMA -> 12.54 MB), seecode 0x3B0000 (M3606 SEE, 2016-5-12), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-5-12). Archive AMIKO_HD8150_2.3.62_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2362_app_starts.py, run_dump_hd8150_2362_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002362", 12.54 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.3.62 EMU (2016-5-12) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.3.65_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.3.65 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.65 EMU (maincode(AV) "10030A002365"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-6-13, 8388608 bytes, SHA-1 8b1faa484631ae1402552169ca5e599bc58af5c4
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002365, 2010-08-12, LZMA -> 12.61 MB), seecode 0x3B0000 (M3606 SEE, 2016-6-13), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.3.65_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-6-13). Archive AMIKO_HD8150_2.3.65_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2365_app_starts.py, run_dump_hd8150_2365_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002365", 12.61 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.3.65 EMU (2016-6-13) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.4.16_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.4.16 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.16 EMU (maincode(AV) "10030A002416"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-5-3, 8388608 bytes, SHA-1 c2b9ffe46a7f5b6a665a4c0ff5978e4cf5051191
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002416, 2010-08-12, LZMA -> 12.11 MB), seecode 0x3B0000 (M3606 SEE, 2017-5-3), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.16_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-5-3). Archive AMIKO_HD8150_2.4.16_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2416_app_starts.py, run_dump_hd8150_2416_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002416", 12.11 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.4.16 EMU (2017-5-3) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO HD8150/AMIKO_HD8150_2.4.19_emu.abs`
 
 * **Box:** Amiko HD8150 (System ID 10030A00, v2.4.19 EMU)
@@ -1250,6 +1575,48 @@ Amiko HD8150 (System ID 10030A00) firmware 2.4.19 EMU (2017-5-15) for the Full H
 Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO HD8150/AMIKO_HD8150_2.4.31_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.4.31 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.31 EMU (maincode(AV) "10030A002431"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-11-10, 8388608 bytes, SHA-1 ac78fba79cecfe25e25973e11f008b6322e355d9
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002431, 2010-08-12, LZMA -> 11.27 MB), seecode 0x3B0000 (M3606 SEE, 2017-11-10), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-11-10). Archive AMIKO_HD8150_2.4.31_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2431_app_starts.py, run_dump_hd8150_2431_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002431", 11.27 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.4.31 EMU (2017-11-10) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.4.33_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.4.33 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.33 EMU (maincode(AV) "10030A002433"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-11-29, 8388608 bytes, SHA-1 5d11fea33a2603001ebd5478b1bbdbc25e976512
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002433, 2010-08-12, LZMA -> 11.28 MB), seecode 0x3B0000 (M3606 SEE, 2017-11-29), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.33_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-11-29). Archive AMIKO_HD8150_2.4.33_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2433_app_starts.py, run_dump_hd8150_2433_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002433", 11.28 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.4.33 EMU (2017-11-29) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO HD8150/AMIKO_HD8150_2.4.43_emu.abs`
 
 * **Box:** Amiko HD8150 (System ID 10030A00, v2.4.43 EMU)
@@ -1267,6 +1634,48 @@ Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2443_app_starts.py, run_dump_hd8150_2443_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002443", 11.33 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko HD8150 (System ID 10030A00) firmware 2.4.43 EMU (2018-4-25) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.4.50_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.4.50 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.50 EMU (maincode(AV) "10030A002450"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2019-2-12, 8388608 bytes, SHA-1 ae416fdf1b914210a7dbc355c35b8ea3a061cc91
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002450, 2010-08-12, LZMA -> 11.36 MB), seecode 0x3B0000 (M3606 SEE, 2019-2-12), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.50_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-2-12). Archive AMIKO_HD8150_2.4.50_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2450_app_starts.py, run_dump_hd8150_2450_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002450", 11.36 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.4.50 EMU (2019-2-12) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_2.4.54_emu.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, v2.4.54 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.54 EMU (maincode(AV) "10030A002454"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2019-5-6, 8388608 bytes, SHA-1 451e674bcf211fcb07fa423f3181593348cca105
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002454, 2010-08-12, LZMA -> 11.36 MB), seecode 0x3B0000 (M3606 SEE, 2019-5-6), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-5-6). Archive AMIKO_HD8150_2.4.54_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_2454_app_starts.py, run_dump_hd8150_2454_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002454", 11.36 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware 2.4.54 EMU (2019-5-6) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -1313,6 +1722,111 @@ Amiko HD8150 (System ID 10030A00) firmware 2.3.65 Galaxy by Dekolte (2016-5-13) 
 Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, an Airoha AV2026 DVB-S2 tuner, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.3.72_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.3.72 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.72 by Dekolte (maincode(AV) "10030A002372"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-7-12, 8388608 bytes, SHA-1 89c9e22dac5f656134dd833bf013b2d9ef23c538
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002372, 18-07-2016, LZMA -> 12.28 MB), seecode 0x3B0000 (M3606 SEE, 2016-7-12), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.3.72_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-7-12). Archive AMIKO_HD8150_Galaxy_2.3.72_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2372_app_starts.py, run_dump_hd8150_galaxy_2372_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002372", 12.28 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.3.72 by Dekolte (2016-7-12) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.3.91_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.3.91 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.91 by Dekolte (maincode(AV) "10030A002391"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2016-10-26, 8388608 bytes, SHA-1 f72ee7fb29a8519ad749586c50094d0362d95b73
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002391, 2016-11-1, LZMA -> 12.31 MB), seecode 0x3B0000 (M3606 SEE, 2016-10-26), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.3.91_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-10-26). Archive AMIKO_HD8150_Galaxy_2.3.91_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2391_app_starts.py, run_dump_hd8150_galaxy_2391_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002391", 12.31 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.3.91 by Dekolte (2016-10-26) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.16_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.4.16 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.16 by Dekolte (maincode(AV) "10030A002416"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-2-9, 8388608 bytes, SHA-1 470195c6bc76721845d159d0ea2a3455f2487142
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 12-2-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002416, 12-2-2017, LZMA -> 12.60 MB), seecode 0x3B0000 (M3606 SEE, 2017-2-9), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.16_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-9). Archive AMIKO_HD8150_Galaxy_2.4.16_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2416_app_starts.py, run_dump_hd8150_galaxy_2416_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002416", 12.60 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.4.16 by Dekolte (2017-2-9) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.25_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.4.25 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.25 by Dekolte (maincode(AV) "10030A002425"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-2-24, 8388608 bytes, SHA-1 61b886961ccb9f1182e7da71dd9b62603bfa5b5e
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 26-03-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002425, 26-03-2017ÿÿÿÿÿÿ, LZMA -> 12.60 MB), seecode 0x3B0000 (M3606 SEE, 2017-2-24), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-24). Archive AMIKO_HD8150_Galaxy_2.4.25_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2425_app_starts.py, run_dump_hd8150_galaxy_2425_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002425", 12.60 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.4.25 by Dekolte (2017-2-24) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.40_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.4.40 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.40 by Dekolte (maincode(AV) "10030A002440"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-5-17, 8388608 bytes, SHA-1 efe67f18f438c51e4416954e19815f543eaff4cb
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 21-05-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002440, 21-05-2017ÿÿÿÿÿÿ, LZMA -> 12.73 MB), seecode 0x3B0000 (M3606 SEE, 2017-5-17), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-5-17). Archive AMIKO_HD8150_Galaxy_2.4.40_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2440_app_starts.py, run_dump_hd8150_galaxy_2440_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002440", 12.73 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.4.40 by Dekolte (2017-5-17) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.50_by Dekolte.abs`
 
 * **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.4.50 by Dekolte)
@@ -1330,6 +1844,27 @@ Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2450_app_starts.py, run_dump_hd8150_galaxy_2450_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002450", 12.79 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.4.50 by Dekolte (2017-7-12) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8150/AMIKO_HD8150_Galaxy_2.4.70_by Dekolte.abs`
+
+* **Box:** Amiko HD8150 (System ID 10030A00, Galaxy v2.4.70 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10030A00 (bootloader version "M3511D 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511D / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511D DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.70 by Dekolte (maincode(AV) "10030A002470"; bootloader "M3511D 1.1.1"; seecode "M3606 SEE"), 2017-11-9, 8388608 bytes, SHA-1 111ec3cf0c27eb53e3388ef5d84999a9a25afe15
+* **Layout:** bootloader 0x000000 (M3511D 1.1.1, 26-11-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10030A002470, 26-11-2017, LZMA -> 12.10 MB), seecode 0x3B0000 (M3606 SEE, 2017-11-9), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), img_webserver 0x4C8000 (1.0.0), patch 0x528000 (1.0.0), logo_user 0x5C8000 (1.0.0), logo_menu 0x5D8000 (1.0.0), logo_radio 0x5F8000 (1.0.0), logo_boot 0x618000 (1.0.0), patch 0x63FF80 (1.0.0), defaultdb(PRC) 0x660000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8150_Galaxy_2.4.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-11-9). Archive AMIKO_HD8150_Galaxy_2.4.70_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_hd8150_galaxy_2470_app_starts.py, run_dump_hd8150_galaxy_2470_capture_screen.py): the XIP bootloader ("M3511D 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10030A002470", 12.10 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to "-ON-", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8150 (System ID 10030A00) firmware Galaxy 2.4.70 by Dekolte (2017-11-9) for the Full HD DVB-S2 satellite receiver on the ALi M3511D / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses an XIP CacheAsRam bootloader ("M3511D 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -1600,6 +2135,46 @@ Amiko HD8155 (System ID 6B000A00) firmware 1.1.60 EMU (2017-11-8) for the Full H
 Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO HD8155/AMIKO_HD8155_1.3.14_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.14 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.1", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.14 EMU (maincode(AV) "6B000A001314"; bootloader "M3521A 1.1.1"), 2018-4-4, 8388608 bytes, SHA-1 1c697b0169080d55584a6c673360ca324078c26c
+* **Layout:** bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x030000 (6B000A001314, 2010-08-12, LZMA -> 11.12 MB), seecode 0x3C0000 (M3606 SEE, 2018-4-4), default_lang 0x4EFD00 (1.0.0), cipluskey 0x4EFF80 (1.1.0), countryband 0x4FFF80 (1.0.0), img_webserver 0x507F80 (1.0.0), patch 0x567F80 (1.0.0), logo_user 0x607F80 (1.0.0), logo_menu 0x617F80 (1.0.0), logo_radio 0x637F80 (1.0.0), logo_boot 0x657F80 (1.0.0), patch 0x67FF80 (1.0.0), defaultdb(PRC) 0x6A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.14_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-4-4). Archive AMIKO_HD8155_1.3.14_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1314_app_starts.py, run_dump_hd8155_1314_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001314", 11.12 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.14 EMU (2018-4-4) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO HD8155/AMIKO_HD8155_1.3.15_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.15 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.1", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.15 EMU (maincode(AV) "6B000A001315"; bootloader "M3521A 1.1.1"), 2018-4-26, 8388608 bytes, SHA-1 6989b337bd4e39eb0343dc07902bdb354ba3e6b5
+* **Layout:** bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x030000 (6B000A001315, 2010-08-12, LZMA -> 11.18 MB), seecode 0x3C0000 (M3606 SEE, 2018-4-26), default_lang 0x4EFD00 (1.0.0), cipluskey 0x4EFF80 (1.1.0), countryband 0x4FFF80 (1.0.0), img_webserver 0x507F80 (1.0.0), patch 0x567F80 (1.0.0), logo_user 0x607F80 (1.0.0), logo_menu 0x617F80 (1.0.0), logo_radio 0x637F80 (1.0.0), logo_boot 0x657F80 (1.0.0), patch 0x67FF80 (1.0.0), defaultdb(PRC) 0x6A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-4-26). Archive AMIKO_HD8155_1.3.15_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1315_app_starts.py, run_dump_hd8155_1315_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001315", 11.18 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.15 EMU (2018-4-26) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO HD8155/AMIKO_HD8155_1.3.49_conax.abs`
 
 * **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.49 Conax)
@@ -1660,6 +2235,86 @@ Amiko HD8155 (System ID 6B000A00) firmware 1.3.49 MCAS (2018-11-7) for the Full 
 Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO HD8155/AMIKO_HD8155_1.3.55_mcas.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.55 MCAS)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.1", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.55 MCAS (maincode(AV) "6B000A001355"; bootloader "M3521A 1.1.1"), 2018-11-21, 8388608 bytes, SHA-1 3f1db959d88eb61aa5d1029c2ba1675b1fafe0dc
+* **Layout:** bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x060000 (6B000A001355, 2010-08-12, LZMA -> 11.24 MB), seecode 0x3F0000 (M3606 SEE, 2018-11-21), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.55_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-11-21). Archive AMIKO_HD8155_1.3.55_mcas.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1355_mcas_app_starts.py, run_dump_hd8155_1355_mcas_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001355", 11.24 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.55 MCAS (2018-11-21) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO HD8155/AMIKO_HD8155_1.3.63_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.63 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.1", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.63 EMU (maincode(AV) "6B000A001363"; bootloader "M3521A 1.1.1"), 2019-2-12, 8388608 bytes, SHA-1 c773ee4445d18e8b6405a2447f39b42055f1fe8a
+* **Layout:** bootloader 0x000000 (M3521A 1.1.1, 2016-7-20), maincode(AV) 0x060000 (6B000A001363, 2010-08-12, LZMA -> 11.35 MB), seecode 0x3F0000 (M3606 SEE, 2019-2-12), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.63_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-2-12). Archive AMIKO_HD8155_1.3.63_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1363_app_starts.py, run_dump_hd8155_1363_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001363", 11.35 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.63 EMU (2019-2-12) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO HD8155/AMIKO_HD8155_1.3.75_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.75 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.2", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.75 EMU (maincode(AV) "6B000A001375"; bootloader "M3521A 1.1.2"), 2019-5-6, 8388608 bytes, SHA-1 faf4352697bd6190fd9c172650bf7c9a39f38063
+* **Layout:** bootloader 0x000000 (M3521A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6B000A001375, 2010-08-12, LZMA -> 10.83 MB), seecode 0x3F0000 (M3606 SEE, 2019-5-6), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.75_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-5-6). Archive AMIKO_HD8155_1.3.75_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1375_app_starts.py, run_dump_hd8155_1375_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001375", 10.83 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.75 EMU (2019-5-6) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO HD8155/AMIKO_HD8155_1.3.87_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.3.87 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.2", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.87 EMU (maincode(AV) "6B000A001387"; bootloader "M3521A 1.1.2"), 2019-6-26, 8388608 bytes, SHA-1 7faaaa05ed80bc2e7c9c2f70eb25573c3daff797
+* **Layout:** bootloader 0x000000 (M3521A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6B000A001387, 2010-08-12, LZMA -> 10.85 MB), seecode 0x3F0000 (M3606 SEE, 2019-6-26), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.3.87_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-6-26). Archive AMIKO_HD8155_1.3.87_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1387_app_starts.py, run_dump_hd8155_1387_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001387", 10.85 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.3.87 EMU (2019-6-26) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO HD8155/AMIKO_HD8155_1.4.07_emu.abs`
 
 * **Box:** Amiko HD8155 (System ID 6B000A00, v1.4.07 EMU)
@@ -1676,6 +2331,26 @@ Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1407_app_starts.py, run_dump_hd8155_1407_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001407", 10.92 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
 
 Amiko HD8155 (System ID 6B000A00) firmware 1.4.07 EMU (2020-1-17) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO HD8155/AMIKO_HD8155_1.4.30_emu.abs`
+
+* **Box:** Amiko HD8155 (System ID 6B000A00, v1.4.30 EMU)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet and USB Wi-Fi
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.2", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.4.30 EMU (maincode(AV) "6B000A001430"; bootloader "M3521A 1.1.2"), 2020-12-15, 8388608 bytes, SHA-1 87c7fdd5f569e647d66e9b330cb138e66ff774f1
+* **Layout:** bootloader 0x000000 (M3521A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6B000A001430, 2010-08-12, LZMA -> 11.02 MB), seecode 0x3F0000 (M3606 SEE, 2020-12-15), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8155_1.4.30_emu.abs.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2020-12-15). Archive AMIKO_HD8155_1.4.30_emu.abs.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8155_1430_app_starts.py, run_dump_hd8155_1430_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001430", 11.02 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko HD8155 (System ID 6B000A00) firmware 1.4.30 EMU (2020-12-15) for the Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
 
@@ -2220,6 +2895,86 @@ Amiko HD8260+ (System ID 14000A88, Edision v2.4.86 by Davor) firmware (2020-07-0
 Amiko HD8260+ (System ID 14000A00, PowerVu mod by f2f2) firmware (2016-05-15) on a 16 MB SPI flash for ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200).
 
 
+## `AMIKO HD8260+/AMIKO_HD8260_2.3.41_emu.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, v2.3.41 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.41 EMU (maincode(AV) "14000A002341"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-1-19, 16777216 bytes, SHA-1 ca2b332f2c5b8f4b7afcb52cbeedf3668910ba1a
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002341, 2010-08-12, LZMA -> 12.97 MB), seecode 0x430000 (M3606 SEE, 2016-1-19), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.3.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-1-19). Archive AMIKO_HD8260_2.3.41_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_2341_app_starts.py, run_dump_hd8260_2341_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002341", 12.97 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) 2.3.41 EMU firmware (2016-1-19) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_2.3.65_emu.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, v2.3.65 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.65 EMU (maincode(AV) "14000A002365"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-6-13, 16777216 bytes, SHA-1 c6d95006cb3ea7cede2601a858aad8ce0661553b
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002365, 2010-08-12, LZMA -> 13.22 MB), seecode 0x430000 (M3606 SEE, 2016-6-13), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.3.65_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-6-13). Archive AMIKO_HD8260_2.3.65_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_2365_app_starts.py, run_dump_hd8260_2365_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002365", 13.22 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) 2.3.65 EMU firmware (2016-6-13) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_2.4.13_emu.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A88, v2.4.13 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.13 EMU (maincode(AV) "14000A882413"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-3-21, 16777216 bytes, SHA-1 741dcaf8035b98b1519846988ca8c5d9e9222132
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882413, 2010-08-12, LZMA -> 12.69 MB), seecode 0x430000 (M3606 SEE, 2017-3-21), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.4.13_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-3-21). Archive AMIKO_HD8260_2.4.13_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_2413_app_starts.py, run_dump_hd8260_2413_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882413", 12.69 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A88) 2.4.13 EMU firmware (2017-3-21) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_2.4.54_emu.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A88, v2.4.54 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A88 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.4.54 EMU (maincode(AV) "14000A882454"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2019-5-6, 16777216 bytes, SHA-1 85ea2e5fd209e30eea872245abc98911cee0f43f
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A882454, 2010-08-12, LZMA -> 11.98 MB), seecode 0x430000 (M3606 SEE, 2019-5-6), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-5-6). Archive AMIKO_HD8260_2.4.54_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_2454_app_starts.py, run_dump_hd8260_2454_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A882454", 11.98 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on " and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A88) 2.4.54 EMU firmware (2019-5-6) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.2.32_by Dekolte.abs`
 
 * **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.2.32 by Dekolte build)
@@ -2236,6 +2991,166 @@ Amiko HD8260+ (System ID 14000A00, PowerVu mod by f2f2) firmware (2016-05-15) on
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2232_app_starts.py, run_dump_hd8260_edision_2232_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002232", 13.01 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko HD8260+ (System ID 14000A00) Edision 2.2.32 by Dekolte firmware (2016-2-19) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD DVB-S2 + DVB-T2/C Combo receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.2.50_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.2.50 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.2.50 by Dekolte (maincode(AV) "14000A002250"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-4-19, 16777216 bytes, SHA-1 75b6fa908ed14361b8fd882b06acf5fade4ac5c6
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002250, 2010-08-12, LZMA -> 13.02 MB), seecode 0x430000 (M3606 SEE, 2016-4-19), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.2.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-4-19). Archive AMIKO_HD8260_Edision_2.2.50_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2250_app_starts.py, run_dump_hd8260_edision_2250_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002250", 13.02 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.2.50 by Dekolte firmware (2016-4-19) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.52_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.3.52 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.3.52 by Dekolte (maincode(AV) "14000A002252"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-7-11, 16777216 bytes, SHA-1 4852a18313ef82e646e6d0d70bcc5175a1546de7
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002252, 15-07-2016, LZMA -> 13.02 MB), seecode 0x430000 (M3606 SEE, 2016-7-11), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.52_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-7-11). Archive AMIKO_HD8260_Edision_2.3.52_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2352_app_starts.py, run_dump_hd8260_edision_2352_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002252", 13.02 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.3.52 by Dekolte firmware (2016-7-11) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.56_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.3.56 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.3.56 by Dekolte (maincode(AV) "14000A002256"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-7-21, 16777216 bytes, SHA-1 e3b765f18d94c3babed60e83b38a91aad66cbcb6
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 12-08-2016), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002256, 2016-8-12, LZMA -> 12.90 MB), seecode 0x430000 (M3606 SEE, 2016-7-21), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.56_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-7-21). Archive AMIKO_HD8260_Edision_2.3.56_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2356_app_starts.py, run_dump_hd8260_edision_2356_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002256", 12.90 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.3.56 by Dekolte firmware (2016-7-21) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.60_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.3.60 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.3.60 by Dekolte (maincode(AV) "14000A002360"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-9-3, 16777216 bytes, SHA-1 4a5a0bb3c5cbe8f1ae01ee349e6ca773e99a00ba
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002360, 2016-9-18, LZMA -> 13.03 MB), seecode 0x430000 (M3606 SEE, 2016-9-3), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.60_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-9-3). Archive AMIKO_HD8260_Edision_2.3.60_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2360_app_starts.py, run_dump_hd8260_edision_2360_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002360", 13.03 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.3.60 by Dekolte firmware (2016-9-3) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.70_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.3.70 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.3.70 by Dekolte (maincode(AV) "14000A002370"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-9-24, 16777216 bytes, SHA-1 852e6109261853aab2bba83b8ecf737eab99d260
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2016-10-9), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002370, 2016-10-9, LZMA -> 13.03 MB), seecode 0x430000 (M3606 SEE, 2016-9-24), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-9-24). Archive AMIKO_HD8260_Edision_2.3.70_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2370_app_starts.py, run_dump_hd8260_edision_2370_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002370", 13.03 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.3.70 by Dekolte firmware (2016-9-24) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.3.90_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.3.90 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.3.90 by Dekolte (maincode(AV) "14000A002390"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-2-7, 16777216 bytes, SHA-1 c0b2002ac0e5ab6cb6b5ba330fa524efec57f333
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 13-2-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002390, 13-2-2017, LZMA -> 13.31 MB), seecode 0x430000 (M3606 SEE, 2017-2-7), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.3.90_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-7). Archive AMIKO_HD8260_Edision_2.3.90_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2390_app_starts.py, run_dump_hd8260_edision_2390_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002390", 13.31 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.3.90 by Dekolte firmware (2017-2-7) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.05_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.4.05 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.4.05 by Dekolte (maincode(AV) "14000A002405"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-4-1, 16777216 bytes, SHA-1 95c0ce25e74dc7431708b926159b272927283846
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 09-04-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002405, 09-04-2017ÿÿÿÿÿÿ, LZMA -> 13.50 MB), seecode 0x430000 (M3606 SEE, 2017-4-1), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.05_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-4-1). Archive AMIKO_HD8260_Edision_2.4.05_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2405_app_starts.py, run_dump_hd8260_edision_2405_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002405", 13.50 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.4.05 by Dekolte firmware (2017-4-1) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Edision_2.4.13_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Edision 2.4.13 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Edision 2.4.13 by Dekolte (maincode(AV) "14000A002413"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-4-27, 16777216 bytes, SHA-1 4bd2697ba0479213802991155efc80ad970a3c50
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 21-05-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002413, 21-05-2017ÿÿÿÿÿÿ, LZMA -> 13.52 MB), seecode 0x430000 (M3606 SEE, 2017-4-27), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.13_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-4-27). Archive AMIKO_HD8260_Edision_2.4.13_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2413_app_starts.py, run_dump_hd8260_edision_2413_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002413", 13.52 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Edision 2.4.13 by Dekolte firmware (2017-4-27) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -2316,6 +3231,226 @@ Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2346_app_starts.py, run_dump_hd8260_galaxy_2346_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002346", 12.75 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.46 by Dekolte firmware (2016-2-3) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD DVB-S2 + DVB-T2/C Combo receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.50_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.50 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.50 by Dekolte (maincode(AV) "14000A002350"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-2-22, 16777216 bytes, SHA-1 3b7ff62b6daa36839fe2d1256298af5af246ed4a
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002350, 2010-08-12, LZMA -> 12.76 MB), seecode 0x430000 (M3606 SEE, 2016-2-22), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-2-22). Archive AMIKO_HD8260_Galaxy_2.3.50_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2350_app_starts.py, run_dump_hd8260_galaxy_2350_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002350", 12.76 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.50 by Dekolte firmware (2016-2-22) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.63_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.63 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.63 by Dekolte (maincode(AV) "14000A002363"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-2-22, 16777216 bytes, SHA-1 cf95944adbe3f642aa918d07c2d50f9debd18f3a
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002363, 2010-08-12, LZMA -> 12.76 MB), seecode 0x430000 (M3606 SEE, 2016-2-22), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.63_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-2-22). Archive AMIKO_HD8260_Galaxy_2.3.63_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2363_app_starts.py, run_dump_hd8260_galaxy_2363_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002363", 12.76 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.63 by Dekolte firmware (2016-2-22) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.65_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.65 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.65 by Dekolte (maincode(AV) "14000A002365"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-5-12, 16777216 bytes, SHA-1 8755aba2f3935951ddd9718aed674fcfdbd273fd
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002365, 2010-08-12, LZMA -> 12.84 MB), seecode 0x430000 (M3606 SEE, 2016-5-12), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-5-12). Archive AMIKO_HD8260_Galaxy_2.3.65_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2365_app_starts.py, run_dump_hd8260_galaxy_2365_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002365", 12.84 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.65 by Dekolte firmware (2016-5-12) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.71_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.71 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.71 by Dekolte (maincode(AV) "14000A002371"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-6-13, 16777216 bytes, SHA-1 3c50a4c89e1d8a40a8ac19490eb97031c53d1d06
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 14-07-2016), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002371, 14-07-2016, LZMA -> 12.85 MB), seecode 0x430000 (M3606 SEE, 2016-6-13), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.71_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-6-13). Archive AMIKO_HD8260_Galaxy_2.3.71_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2371_app_starts.py, run_dump_hd8260_galaxy_2371_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002371", 12.85 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.71 by Dekolte firmware (2016-6-13) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.72_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.72 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.72 by Dekolte (maincode(AV) "14000A002372"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-6-13, 16777216 bytes, SHA-1 1a29218efaa84bb0a78872dc76b1f12652a3d114
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002372, 15-07-2016, LZMA -> 12.86 MB), seecode 0x430000 (M3606 SEE, 2016-6-13), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.72_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-6-13). Archive AMIKO_HD8260_Galaxy_2.3.72_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2372_app_starts.py, run_dump_hd8260_galaxy_2372_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002372", 12.86 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.72 by Dekolte firmware (2016-6-13) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.3.91_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.3.91 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.3.91 by Dekolte (maincode(AV) "14000A002391"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2016-10-26, 16777216 bytes, SHA-1 7668bd54979c1a425aede8660e967f63d24a3eea
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2016-10-27), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002391, 2016-10-27, LZMA -> 12.90 MB), seecode 0x430000 (M3606 SEE, 2016-10-26), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.3.91_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2016-10-26). Archive AMIKO_HD8260_Galaxy_2.3.91_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2391_app_starts.py, run_dump_hd8260_galaxy_2391_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002391", 12.90 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.3.91 by Dekolte firmware (2016-10-26) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.15_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.15 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.15 by Dekolte (maincode(AV) "14000A002415"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-1-13, 16777216 bytes, SHA-1 932b2bd31e3710d94ad5151616443aa340ae2381
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 18-1-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002415, 18-1-2017, LZMA -> 13.17 MB), seecode 0x430000 (M3606 SEE, 2017-1-13), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.15_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-1-13). Archive AMIKO_HD8260_Galaxy_2.4.15_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2415_app_starts.py, run_dump_hd8260_galaxy_2415_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002415", 13.17 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.4.15 by Dekolte firmware (2017-1-13) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.16_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.16 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.16 by Dekolte (maincode(AV) "14000A002416"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-2-9, 16777216 bytes, SHA-1 7eaa48593092d302ac527cfcdf085da473982d64
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 12-2-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002416, 12-2-2017, LZMA -> 13.19 MB), seecode 0x430000 (M3606 SEE, 2017-2-9), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.16_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-9). Archive AMIKO_HD8260_Galaxy_2.4.16_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2416_app_starts.py, run_dump_hd8260_galaxy_2416_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002416", 13.19 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.4.16 by Dekolte firmware (2017-2-9) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.21_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.21 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.21 by Dekolte (maincode(AV) "14000A002421"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-2-24, 16777216 bytes, SHA-1 eb8f220c0fe893d66890f75e4e92bf5017d215af
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 26-2-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002421, 26-2-2017, LZMA -> 13.19 MB), seecode 0x430000 (M3606 SEE, 2017-2-24), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.21_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-24). Archive AMIKO_HD8260_Galaxy_2.4.21_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2421_app_starts.py, run_dump_hd8260_galaxy_2421_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002421", 13.19 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.4.21 by Dekolte firmware (2017-2-24) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.25_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.25 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.25 by Dekolte (maincode(AV) "14000A002425"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-2-24, 16777216 bytes, SHA-1 4f30265610d5740bda22f1df5bb19c1c15b492f3
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 26-3-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002425, 26-3-2017, LZMA -> 13.19 MB), seecode 0x430000 (M3606 SEE, 2017-2-24), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-2-24). Archive AMIKO_HD8260_Galaxy_2.4.25_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2425_app_starts.py, run_dump_hd8260_galaxy_2425_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002425", 13.19 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.4.25 by Dekolte firmware (2017-2-24) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
+
+Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.40_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.40 by Dekolte)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)
+* **SoC:** ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 2.4.40 by Dekolte (maincode(AV) "14000A002440"; bootloader "M3516A 1.2.1"; seecode "M3606 SEE"), 2017-5-17, 16777216 bytes, SHA-1 1ba6cfc04e0ffeb3b2275b9f578a9ea8830d6391
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 21-05-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002440, 21-05-2017ÿÿÿÿÿÿ, LZMA -> 13.32 MB), seecode 0x430000 (M3606 SEE, 2017-5-17), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2017-5-17). Archive AMIKO_HD8260_Galaxy_2.4.40_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_galaxy_2440_app_starts.py, run_dump_hd8260_galaxy_2440_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("14000A002440", 13.32 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to "-ON-" and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko HD8260+ (System ID 14000A00) Galaxy 2.4.40 by Dekolte firmware (2017-5-17) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -3557,6 +4692,48 @@ Amiko Impulse SAT (System ID 20020A00) firmware 2.3.51 EMU (2016-3-9) for the Fu
 Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.61_emu.abs`
+
+* **Box:** Amiko Impulse SAT (System ID 20020A00, v2.3.61 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 20020A00 (bootloader version "M3510B 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3510B DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.61 EMU (maincode(AV) "20020A002361"; bootloader "M3510B 1.1.1"; seecode "M3606 SEE"), 2016-4-28, 8388608 bytes, SHA-1 f041fe7e5549a07b4dfa95b65692790e3201eb64
+* **Layout:** bootloader 0x000000 (M3510B 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (20020A002361, 2010-08-12, LZMA -> 12.52 MB), seecode 0x3B0000 (M3606 SEE, 2016-4-28), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(FAC) 0x560000 (1.0.1), defaultdb(PRC) 0x5E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.61_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-4-28). Archive AMIKO_Impulse_SAT_2.3.61_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_impulse_sat_2361_app_starts.py, run_dump_impulse_sat_2361_capture_screen.py): the XIP bootloader ("M3510B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("20020A002361", 12.52 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko Impulse SAT (System ID 20020A00) firmware 2.3.61 EMU (2016-4-28) for the Full HD DVB-S2 satellite receiver on the ALi M3510B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.62_emu.abs`
+
+* **Box:** Amiko Impulse SAT (System ID 20020A00, v2.3.62 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 20020A00 (bootloader version "M3510B 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3510B DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.62 EMU (maincode(AV) "20020A002362"; bootloader "M3510B 1.1.1"; seecode "M3606 SEE"), 2016-5-12, 8388608 bytes, SHA-1 4a4ff28163288cc993c928e9ea33cbbdf3e3d228
+* **Layout:** bootloader 0x000000 (M3510B 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (20020A002362, 2010-08-12, LZMA -> 12.54 MB), seecode 0x3B0000 (M3606 SEE, 2016-5-12), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(FAC) 0x560000 (1.0.1), defaultdb(PRC) 0x5E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-5-12). Archive AMIKO_Impulse_SAT_2.3.62_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_impulse_sat_2362_app_starts.py, run_dump_impulse_sat_2362_capture_screen.py): the XIP bootloader ("M3510B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("20020A002362", 12.54 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko Impulse SAT (System ID 20020A00) firmware 2.3.62 EMU (2016-5-12) for the Full HD DVB-S2 satellite receiver on the ALi M3510B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.31_emu.abs`
 
 * **Box:** Amiko Impulse SAT (System ID 20020A88, v2.4.31 EMU)
@@ -3862,6 +5039,48 @@ Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_microhd_se_2345_app_starts.py, run_dump_microhd_se_2345_capture_screen.py): the XIP bootloader ("M3511B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10010A002345", 12.38 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko Micro HD SE (System ID 10010A00) firmware 2.3.45 EMU (2016-2-3) for the Full HD DVB-S2 satellite receiver on the ALi M3511B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.51_emu.abs`
+
+* **Box:** Amiko Micro HD SE (System ID 10010A00, v2.3.51 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10010A00 (bootloader version "M3511B 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511B DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.51 EMU (maincode(AV) "10010A002351"; bootloader "M3511B 1.1.1"; seecode "M3606 SEE"), 2016-3-9, 8388608 bytes, SHA-1 c3e92d1f53fbb6d317cb1c0f15fd8cc2bcbd3562
+* **Layout:** bootloader 0x000000 (M3511B 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10010A002351, 2010-08-12, LZMA -> 12.39 MB), seecode 0x3B0000 (M3606 SEE, 2016-3-9), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-3-9). Archive AMIKO_MicroHD_SE_2.3.51_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_microhd_se_2351_app_starts.py, run_dump_microhd_se_2351_capture_screen.py): the XIP bootloader ("M3511B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10010A002351", 12.39 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko Micro HD SE (System ID 10010A00) firmware 2.3.51 EMU (2016-3-9) for the Full HD DVB-S2 satellite receiver on the ALi M3511B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_2.3.60_emu.abs`
+
+* **Box:** Amiko Micro HD SE (System ID 10010A00, v2.3.60 EMU)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10010A00 (bootloader version "M3511B 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511B DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 2.3.60 EMU (maincode(AV) "10010A002360"; bootloader "M3511B 1.1.1"; seecode "M3606 SEE"), 2016-4-26, 8388608 bytes, SHA-1 efbc5b0e397184e73c0dac0f0806bb86427ec566
+* **Layout:** bootloader 0x000000 (M3511B 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (10010A002360, 2010-08-12, LZMA -> 12.48 MB), seecode 0x3B0000 (M3606 SEE, 2016-4-26), default_lang 0x4AFD00 (1.0.0), cipluskey 0x4AFF80 (1.1.0), countryband 0x4C0000 (1.0.0), logo_user 0x4C8000 (1.0.0), logo_menu 0x4D8000 (1.0.0), logo_radio 0x4F8000 (1.0.0), logo_boot 0x518000 (1.0.0), patch 0x53FF80 (1.0.0), defaultdb(PRC) 0x560000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_2.3.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-4-26). Archive AMIKO_MicroHD_SE_2.3.60_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_microhd_se_2360_app_starts.py, run_dump_microhd_se_2360_capture_screen.py): the XIP bootloader ("M3511B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10010A002360", 12.48 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko Micro HD SE (System ID 10010A00) firmware 2.3.60 EMU (2016-4-26) for the Full HD DVB-S2 satellite receiver on the ALi M3511B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -4292,6 +5511,26 @@ Amiko Micro HD (System ID 0E000A00) firmware Galaxy 1.5.70 by Dekolte (2012-07-1
 Pairs the single-CPU M3801/S3811 SoC architecture with an external ALi S3501 DVB-S2 demodulator at I2C 0x33 on SCB0 and a CH455 4-digit LED panel on GPIO 31 / 9 (" ON " -> "-ON-").
 
 
+## `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.77_by Dekolte.abs`
+
+* **Box:** Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.77 by Dekolte)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 0E000A00 (bootloader version "M3612 1.0.4", HDCPKey "Demo M3612", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)
+* **SoC:** ALi M3612 / S3811 (single-CPU DVB-S2 variant of the M3801 / S3811 family; chip ID 0x3811) (M3801 (chips/m3801.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0 at I2C 0x33
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 31, SDA 9)
+* **IR coding:** necfirst
+* **Image:** update, Galaxy 1.5.77 by Dekolte (maincode(AV) "0E000A001577"; bootloader "M3612 1.0.4"), 2012-07-10, 8388608 bytes, SHA-1 406a7a5e5aaca6a01b716c48b8e41c5076245494
+* **Layout:** bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E000A001577, 2012-07-10, LZMA -> 11.48 MB), HDCPKey 0x3BFB00 (Demo M3612), default_lang 0x3BFD00 (1.0.0), cipluskey 0x3BFF80 (1.1.0), countryband 0x3D0000 (1.0.0), logo_user 0x3D8000 (1.0.0), logo_menu 0x3E8000 (1.0.0), logo_radio 0x408000 (1.0.0), logo_boot 0x428000 (1.0.0), patch 0x47FF80 (1.0.0), defaultdb(PRC) 0x4A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_Galaxy_1.5.77_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte (2012-07-10). Archive AMIKO_MicroHD_Galaxy_1.5.77_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '-ON-'. Boots as the single-CPU M3801 family (chips/m3801.py, run_dump_microhd_galaxy_1577_app_starts.py, run_dump_microhd_galaxy_1577_capture_screen.py): the "M3612 1.0.4" bootloader prints "APP  init ok / bl_panel_init! / -->>ch455!!", writes " ON " to the CH455 panel on GPIO 31 / 9, verifies and unpacks maincode(AV) ("0E000A001577") to 0x80000200, and enters the application (CP0 EBase 0x80002000).  With the ALi S3501 DVB-S2 demodulator attached at I2C 0x33 on SCB0, the application updates the CH455 front panel to "-ON-" and enables GMA layer 0 to display its 1280x720 OSD dialog.
+
+Amiko Micro HD (System ID 0E000A00) firmware Galaxy 1.5.77 by Dekolte (2012-07-10) on an 8 MB SPI flash for the single-CPU ALi M3612 (S3811 DVB-S2 variant) Full HD satellite receiver.
+
+Pairs the single-CPU M3801/S3811 SoC architecture with an external ALi S3501 DVB-S2 demodulator at I2C 0x33 on SCB0 and a CH455 4-digit LED panel on GPIO 31 / 9 (" ON " -> "-ON-").
+
+
 ## `AMIKO MICRO HD/AMIKO_MicroHD_Galaxy_1.5.91_by Dekolte.abs`
 
 * **Box:** Amiko Micro HD (System ID 0E000A00, Galaxy v1.5.91 by Dekolte)
@@ -4683,6 +5922,26 @@ Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digi
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB C3505 board (chips/c3505.py, run_dump_mini_combo_extra_rca_1167_app_starts.py, run_dump_mini_combo_extra_rca_1167_capture_screen.py): the boot-ROM bootloader runs at 0x9FE00800, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, writes " ON " to the CH455 panel on GPIO 107 / 110, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("6A000A001167", 10.92 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
 
 Amiko Mini Combo Extra RCA (System ID 6A000A00) firmware 1.1.67 EMU (2017-12-7) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3526C / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
+
+Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
+## `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.abs`
+
+* **Box:** Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.3.15 EMU)
+* **Type:** DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo satellite, terrestrial and cable receiver with RCA composite output, Conax / MultiCAS card reader, Ethernet and USB
+* **Board:** 6A000A00 (bootloader version "M3526C 1.1.2", 256 MB DDR3 C3505 platform)
+* **SoC:** ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal ALi C3505 DVB-S2 (NIM_C3505_0) + DVB-T2/C front end (NIM_COFDM_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 1.3.15 EMU (maincode(AV) "6A000A001315"; bootloader "M3526C 1.1.2"), 2018-4-26, 8388608 bytes, SHA-1 43a647d7248286377d91bb07b6f1132332d5ef87
+* **Layout:** bootloader 0x000000 (M3526C 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6A000A001315, 2010-08-12, LZMA -> 11.50 MB), seecode 0x3F0000 (M3606 SEE, 2018-4-26), default_lang 0x52FD00 (1.0.0), cipluskey 0x52FF80 (1.1.0), countryband 0x53FF80 (1.0.0), img_webserver 0x547F80 (1.0.0), patch 0x5A7F80 (1.0.0), logo_user 0x647F80 (1.0.0), logo_menu 0x657F80 (1.0.0), logo_radio 0x677F80 (1.0.0), logo_boot 0x697F80 (1.0.0), patch 0x6BFF80 (1.0.0), defaultdb(PRC) 0x6E0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-4-26). Archive AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB C3505 board (chips/c3505.py, run_dump_mini_combo_extra_rca_1315_app_starts.py, run_dump_mini_combo_extra_rca_1315_capture_screen.py): the boot-ROM bootloader runs at 0x9FE00800, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, writes " ON " to the CH455 panel on GPIO 107 / 110, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("6A000A001315", 11.50 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD through the display engine at 0xB8006900.
+
+Amiko Mini Combo Extra RCA (System ID 6A000A00) firmware 1.3.15 EMU (2018-4-26) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3526C / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
 
 Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), and the Amiko 0x60xx remote control table ("necfirst" coding).
 
@@ -5201,6 +6460,27 @@ Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink
 Amiko Mini HD Combo (System ID 0E060A00) firmware v1.5.43 EMU (2012-07-10) on an 8 MB SPI flash for the Full HD DVB-S2 / DVB-T2/C receiver.
 
 Built on the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 demodulator at I2C 0x14 (ChipID 0x0F), Sharp VZ7903 / AV2012 tuner at 0x61, Rafael Micro R836 DVB-T2/C tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9.
+
+
+## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.5.46_emu.abs`
+
+* **Box:** Amiko Mini HD Combo (System ID 0E060A00, v1.5.46 EMU)
+* **Type:** Full HD DVB-S2 / DVB-T2 / DVB-C receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 0E060A00 (bootloader version "M3612 1.0.4", HDCPKey "Demo M3612", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)
+* **SoC:** ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") (M3801 (chips/m3801.py))
+* **Demodulator:** external Availink AVL6862 DVB-S2 + DVB-T2/C demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)
+* **Tuner:** Sharp VZ7903 / Airoha AV2012 at I2C 0x61 + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 31, SDA 9)
+* **IR coding:** necfirst
+* **Image:** update, 1.5.46 EMU (maincode(AV) "0E060A001546"; bootloader "M3612 1.0.4"), 2012-07-10, 8388608 bytes, SHA-1 39fb8810412f6c3080248c9ce344371dfcc1b0de
+* **Layout:** bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E060A001546, 2012-07-10, LZMA -> 12.66 MB), HDCPKey 0x3BFB00 (Demo M3612), default_lang 0x3BFD00 (1.0.0), cipluskey 0x3BFF80 (1.1.0), countryband 0x3D0000 (1.0.0), logo_user 0x3D8000 (1.0.0), logo_menu 0x3E8000 (1.0.0), logo_radio 0x408000 (1.0.0), logo_boot 0x428000 (1.0.0), patch 0x47FF80 (1.0.0), defaultdb(PRC) 0x4A0000 (1.0.1), userdb(64+64) 0x73FF80 (1.0.1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.46_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2012-07-10). Archive AMIKO_MiniHD_Combo_1.5.46_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_minihd_combo_1546_app_starts.py, run_dump_minihd_combo_1546_capture_screen.py): the MIPS16e bootloader "M3612 1.0.4" copies itself to 0x81E80000, writes " ON " to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 12.66 MB maincode(AV) ("0E060A001546") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 demodulator on SCB0 at I2C 0x14 (ChipID 0x0F, demods.AVL6862A), configures both the Sharp VZ7903 / AV2012 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display to " on ", initialises userdb(64+64) from defaultdb(PRC), and renders its 32-bpp ARGB8888 OSD through GeM36F.
+
+Amiko Mini HD Combo (System ID 0E060A00) firmware v1.5.46 EMU (2012-07-10) on an 8 MB SPI flash for the Full HD DVB-S2 / DVB-T2/C receiver.
+
+Built on the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 demodulator at I2C 0x14 (ChipID 0x0F), Rafael Micro R836 DVB-T2/C tuner at 0x3A (plus AV2012 probe at 0x61), and a CH455 front-panel display on GPIO 31 / 9.
 
 
 ## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.6.03_emu.abs`

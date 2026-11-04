@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_HD8260_Edision_2.4.05_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8260+ (System ID 14000A00, Edision 2.4.05 by Dekolte)",
+    "type": "DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "14000A00 (bootloader version \"M3516A 1.2.1\", 16 MB SPI flash, 256 MB DDR3 M3503 rev B platform)",
+    "soc": "ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader \"M3516A 1.2.1\", seecode \"M3606 SEE\" at 0xAE000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3516A / M3503 DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)",
+    "tuner": null,
+    "flash": "16 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "Edision 2.4.05 by Dekolte (maincode(AV) \"14000A002405\"; bootloader \"M3516A 1.2.1\"; seecode \"M3606 SEE\")",
+    "date": "2017-4-1",
+    "size": 16777216,
+    "sha1": "95c0ce25e74dc7431708b926159b272927283846",
+    "layout": "bootloader 0x000000 (M3516A 1.2.1, 09-04-2017), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (14000A002405, 09-04-2017\u00ff\u00ff\u00ff\u00ff\u00ff\u00ff, LZMA -> 13.50 MB), seecode 0x430000 (M3606 SEE, 2017-4-1), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0), patch 0x688000 (1.0.0), blank_file 0x788000 (1.0.0), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Edision_2.4.05_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Dekolte",
+    "date": "2017-4-1",
+    "login": false,
+    "note": "Archive AMIKO_HD8260_Edision_2.4.05_by Dekolte.rar from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-04."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "-ON-"
+    ],
+    "note": "Boots as a 256 MB M3503 revision B board (chips/m3503.py, run_dump_hd8260_edision_2405_app_starts.py, run_dump_hd8260_edision_2405_capture_screen.py): the XIP bootloader (\"M3516A 1.2.1\") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\", writes \" ON \" to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA14187DC, unpacks seecode (\"M3606 SEE\") to 0xAE000200 and maincode(AV) (\"14000A002405\", 13.50 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to \"-ON-\" and renders its 1280x720 OSD dialog on GMA layer 0."
+  },
+  "desc": [
+    "Amiko HD8260+ (System ID 14000A00) Edision 2.4.05 by Dekolte firmware (2017-4-1) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD receiver with 256 MB DDR3.",
+    "Uses an XIP CacheAsRam bootloader (\"M3516A 1.2.1\"), dual-CPU \"M3606 SEE\" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA)."
+  ]
+}
