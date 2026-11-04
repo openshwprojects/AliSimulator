@@ -116,7 +116,10 @@ def images():
         for name in files:
             if name.lower().endswith(IMAGE_SUFFIXES):
                 out.append(os.path.join(root, name))
-    return sorted(out, key=str.lower)
+    # by the path with "/" on every platform: with os.sep, "AMIKO MINI HD\\" sorts after
+    # "AMIKO MINI HD265\\" on Windows but "AMIKO MINI HD/" before "AMIKO MINI HD265/" on
+    # Linux, and dumps/README.md (tools/dump_table.py) must come out the same on both
+    return sorted(out, key=lambda p: p.replace(os.sep, "/").lower())
 
 
 def catalog():
