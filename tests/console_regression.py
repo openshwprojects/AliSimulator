@@ -26,7 +26,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
-from simulator import AliMipsSimulator
+from simulator import AliMipsSimulator, default_engine
 
 WATCHDOG_S = 600        # see ConsoleHarness.__init__
 
@@ -512,7 +512,11 @@ def run_with_retry(fn):
     simulator crash (UcError: Unicorn's spurious faults, seen about once in
     several long boots on Linux) or a listener that stayed deaf (ConsoleDeaf):
     both depend on where the host-timed start-up was when the harness took
-    over."""
+    over.  On the C++ core, which is deterministic, there is no second boot:
+    a deaf console there is a bug, and the retry would only repeat it."""
+    if default_engine() == "cpp":
+        fn()
+        return
     for attempt in (1, 2, 3):
         try:
             fn()

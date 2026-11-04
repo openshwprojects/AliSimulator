@@ -41,7 +41,7 @@ import dump_catalog
 import gma_capture
 import report_artifacts
 from front_panel import make_panel
-from simulator import AliMipsSimulator, flash_size_for
+from simulator import AliMipsSimulator, default_engine, flash_size_for
 
 EXPECTED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expected")   # the expected screens
 
@@ -97,6 +97,9 @@ def run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct=0.0, mi
     screen alone tells drawn (min_ge_ops is not looked at) and when a redraw
     is over (no change for a while)."""
     print(f"=== {title or dump}: capture and verify the OSD drawn through the graphics engine ===")
+    if default_engine() == "cpp":
+        retries = 0     # the retries cover Unicorn's slice-stop race; the C++ core is deterministic,
+                        # so a stall there is a bug and one boot limit is enough to show it
     for attempt in range(retries + 1):
         try:
             _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_colours,

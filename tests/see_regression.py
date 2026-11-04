@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import time
 
 from unicorn.mips_const import UC_MIPS_REG_PC
-from simulator import AliMipsSimulator, flash_size_for, resolve_dump
+from simulator import AliMipsSimulator, default_engine, flash_size_for, resolve_dump
 
 LOGGED = ("[SEE] started", "[CAR]")     # log lines echoed and kept (Run.logs)
 STEP = 2_000_000                        # instructions between the run's checks of its targets
@@ -75,6 +75,8 @@ def run(dump, title, family, starts, calls, see_calls, limit, chip_id=None, uart
                 (min(t["main"][0], t["SEE"][1]), see_calls,
                  f"the main CPU answers the SEE's own calls ({t['main'][0]} / {t['SEE'][1]}")]
 
+    if default_engine() == "cpp":
+        retries = 0     # the retries cover Unicorn's slice-stop race; the C++ core is deterministic
     for attempt in range(retries + 1):
         r = Run(AliMipsSimulator(rom_size=flash_size_for(path), log_handler=log))
         sim = r.sim

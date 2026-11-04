@@ -21,12 +21,12 @@ to GitHub Pages after every push.
   python run_all_tests.py --timeout 1800   kill a test after 30 minutes
   python run_all_tests.py --slow --jobs 2  two tests at a time (output per test, not streamed)
   python run_all_tests.py --report-only    the page again from report/results.json, runs nothing
-  python run_all_tests.py --engine cpp     every simulator on the C++ core (simulator_cpp.py;
-                                           build it first: cpp\\build.bat on Windows,
-                                           cpp/build.sh elsewhere); its report goes to report/cpp/
-  python run_all_tests.py --link "C++ engine=cpp/index.html"   a link in the page's header
-                                           (repeatable; the CI links each engine's page to the
-                                           other's and to the engine comparison)
+  python run_all_tests.py --engine unicorn every simulator on the Unicorn engine instead of the
+                                           C++ core (simulator_cpp.py: the default, built first by
+                                           cpp\\build.bat on Windows, cpp/build.sh elsewhere; its
+                                           report goes to report/cpp/).  Unicorn's report goes to
+                                           report/; its suite takes about seven times longer
+  python run_all_tests.py --link "C++ engine=cpp/index.html"   a link in the page's header (repeatable)
 """
 
 import ast
@@ -44,7 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 TESTS_DIR = ROOT / "tests"
 REPORT_DIR = ROOT / "report"
-ENGINE = "unicorn"         # the simulator's engine in every test (--engine: unicorn or cpp)
+ENGINE = "cpp"             # the simulator's engine in every test (--engine: cpp, the default, or unicorn)
 LINKS = []                 # [label, href] pairs shown in the page's header (--link)
 NOT_APPLICABLE = "[NOT APPLICABLE]"
 sys.path[:0] = [str(TESTS_DIR), str(ROOT / "src")]     # the report helpers and the simulator's modules
@@ -697,15 +697,17 @@ def main():
     if "--engine" in args:
         ENGINE = args[args.index("--engine") + 1].lower()
         if ENGINE not in ("unicorn", "cpp"):
-            print(f"unknown engine {ENGINE!r} (unicorn, cpp)")
+            print(f"unknown engine {ENGINE!r} (cpp, unicorn)")
             sys.exit(2)
-        if ENGINE == "cpp":
-            REPORT_DIR = ROOT / "report" / "cpp"
-            sys.path.insert(0, str(ROOT / "src"))
-            import cpp_core
-            if not cpp_core.available():
-                print(f"the C++ core is not built ({cpp_core.DLL_PATH}): run {cpp_core.BUILD_HINT}")
-                sys.exit(2)
+    if ENGINE == "cpp":
+        # The default since 2026-11-04: the same suite takes about seven times
+        # longer on Unicorn (and needs the crash retries); --engine unicorn still runs it.
+        REPORT_DIR = ROOT / "report" / "cpp"
+        sys.path.insert(0, str(ROOT / "src"))
+        import cpp_core
+        if not cpp_core.available() and "--report-only" not in args:
+            print(f"the C++ core is not built ({cpp_core.DLL_PATH}): run {cpp_core.BUILD_HINT}")
+            sys.exit(2)
     for i, a in enumerate(args[:-1]):
         if a == "--link" and "=" in args[i + 1]:
             label, href = args[i + 1].split("=", 1)

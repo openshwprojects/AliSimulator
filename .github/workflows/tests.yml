@@ -3,11 +3,20 @@ name: Self-tests
 on:
   push:
   pull_request:
+  # By hand, optionally on the Unicorn engine: its suite takes about seven
+  # times longer than the C++ core's and no longer fits a job on every push
+  # (dropped from the push runs on 2026-11-04, see docs/development_notes.md).
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: "Engine: cpp (the default) or unicorn"
+        type: choice
+        options: [cpp, unicorn]
+        default: cpp
 
-# The HTML reports are published to GitHub Pages: report/index.html (the
-# Unicorn engine), report/cpp/index.html (the C++ engine) and
-# report/comparison.html (the two side by side, per test).  The repository's
-# Pages source must be set to "GitHub Actions" once (Settings -> Pages).
+# The HTML report (with the screens the tests rendered) is published to GitHub
+# Pages from report/cpp/.  The repository's Pages source must be set to
+# "GitHub Actions" once (Settings -> Pages).
 permissions:
   contents: read
   pages: write
@@ -18,24 +27,15 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+env:
+  ENGINE: ${{ inputs.engine || 'cpp' }}
+
 jobs:
-  # The whole suite once per engine, the two at the same time on separate
-  # runners.  Each writes its report (with the screens the tests rendered) and
-  # uploads it; the report job puts them together.
   test:
-    name: Tests (${{ matrix.engine }} engine)
+    name: Tests (${{ inputs.engine || 'cpp' }} engine)
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - engine: unicorn
-            report: report
-            links: --link "C++ engine=cpp/index.html" --link "Engine comparison=comparison.html"
-          - engine: cpp
-            report: report/cpp
-            links: --link "Unicorn engine=../index.html" --link "Engine comparison=../comparison.html"
+    # The C++ suite is about half an hour; a Unicorn run by hand needs hours.
+    timeout-minutes: ${{ inputs.engine == 'unicorn' && 360 || 90 }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,20 +51,25 @@ jobs:
       # cpp/build.sh: g++ -> cpp/build/libalicore.so (src/cpp_core.py loads it),
       # then the core's own tests (they run dump.bin and ali_sdk.bin).
       - name: Build the C++ core
-        if: ${{ matrix.engine == 'cpp' }}
         run: |
           sh cpp/build.sh
           cpp/build/alicore_tests
 
       # The report is written even when tests fail - a failing report is the
       # useful one; the real outcome is reflected after it is uploaded.  --slow
-      # adds the multi-minute firmware runs, which are the ones that render
-      # screens; two at a time on the runner's cores.
-      - name: Run all tests (writes ${{ matrix.report }}/index.html)
+      # adds the firmware runs that render screens, four at a time on the
+      # runner's cores.  --timeout kills a test that never gets there: 15 min
+      # on the C++ core, which boots a box in seconds; an hour on Unicorn,
+      # whose screen tests take minutes each.
+      - name: Run all tests (writes the report)
         id: tests
         run: |
           set +e
-          python run_all_tests.py --slow --jobs 2 --engine ${{ matrix.engine }} ${{ matrix.links }}
+          if [ "$ENGINE" = unicorn ]; then
+            python run_all_tests.py --slow --jobs 4 --timeout 3600 --engine unicorn
+          else
+            python run_all_tests.py --slow --jobs 4 --timeout 900 --engine cpp
+          fi
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           set -e
@@ -73,83 +78,30 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: report-${{ matrix.engine }}
-          path: ${{ matrix.report }}
+          name: report-${{ env.ENGINE }}
+          path: ${{ env.ENGINE == 'unicorn' && 'report' || 'report/cpp' }}
+
+      # Pushes only: pull requests (especially from forks) cannot deploy Pages,
+      # and a Unicorn run by hand must not replace the C++ report on the site.
+      - name: Upload the report as the Pages artifact
+        if: ${{ always() && github.event_name == 'push' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: report/cpp
 
       - name: Reflect the test outcome
         if: ${{ always() }}
         run: exit ${{ steps.tests.outputs.exit_code || 1 }}
 
-  # Both reports in one tree (report/ and report/cpp/), the engine comparison
-  # next to them (report/comparison.html, and as a table in the run's summary),
-  # uploaded for Pages.  Runs even when tests failed: those reports matter most.
-  report:
-    name: Reports and engine comparison
-    needs: test
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Download the Unicorn engine's report
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-unicorn
-          path: report
-
-      - name: Download the C++ engine's report
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-cpp
-          path: report/cpp
-
-      - name: Compare the engines (report/comparison.html)
-        run: |
-          if [ -f report/results.json ] && [ -f report/cpp/results.json ]; then
-            python tools/engine_compare.py report/results.json report/cpp/results.json \
-              --html report/comparison.html --markdown report/comparison.md \
-              --link "Unicorn engine=index.html" --link "C++ engine=cpp/index.html"
-            {
-              echo "## Engine comparison"
-              echo
-              echo "Per test: Unicorn vs the C++ engine (seconds; speed-up = Unicorn / C++)."
-              echo
-              cat report/comparison.md
-            } >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "A report is missing (a test job did not finish): no comparison." | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload both reports as one workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: self-test-report
-          path: report
-
-      # Pushes only: pull requests (especially from forks) cannot deploy Pages.
-      - name: Upload the reports as the Pages artifact
-        if: ${{ github.event_name == 'push' }}
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: report
-
   deploy:
-    needs: report
-    # always(): publish the reports even if a test job failed.  Push-only.
-    if: ${{ always() && github.event_name == 'push' && needs.report.result == 'success' }}
+    needs: test
+    # always(): publish the report even if tests failed.  Push-only.
+    if: ${{ always() && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy the reports to GitHub Pages
+      - name: Deploy the report to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

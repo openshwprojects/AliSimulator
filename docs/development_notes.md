@@ -1404,3 +1404,22 @@ updated even when tests fail, and each engine's job result still reflects its
 tests. Locally the same pages come from the two runs and
 `python tools/engine_compare.py report/results.json report/cpp/results.json
 --html report/comparison.html`.
+
+2026-11-04: the Unicorn leg was dropped from the workflow, and the C++ core is
+`run_all_tests.py`'s default engine. With 547 tests the Unicorn leg no longer
+finished inside the 180-minute job limit (the suite takes about 7x longer on
+Unicorn, 8x for the screen captures at ~55 s each: some 300 CPU minutes), and
+the suite has since grown past 1000 tests. The C++ leg's 2 h 13 min of that
+run was a single test, `run_dump_r265lite_120_capture_screen.py`: 3 retries x
+its 30-minute boot limit, 7207 s, after the C++ core raised RI on the MIPS DSP
+instructions of firmware 1.2.0 (fixed in c13a294; the test takes 39 s). The
+workflow now runs one job, `run_all_tests.py --slow --jobs 4 --timeout 900
+--engine cpp` (the runner has 4 cores; a test that never draws is killed after
+15 minutes), publishes `report/cpp/` as the Pages site, and can be started by
+hand (workflow_dispatch, engine=unicorn) for an on-demand Unicorn report: an
+artifact only, no Pages deploy and no comparison job (`tools/engine_compare.py`
+still compares two results.json files). The crash retries of
+`screen_regression`, `see_regression`, `uart_regression` and
+`console_regression.run_with_retry` exist for Unicorn's slice-stop race: on
+the C++ core, which is deterministic, they are skipped, so a stall there fails
+after one boot limit instead of four.

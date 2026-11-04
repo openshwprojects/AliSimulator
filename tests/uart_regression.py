@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import time
 
-from simulator import AliMipsSimulator
+from simulator import AliMipsSimulator, default_engine
 
 ECHO_CHARS = 1000           # UART characters echoed to stdout before the echo is suppressed
 
@@ -30,6 +30,8 @@ def run(dump, stop_at=None, expected=(), ordered=False, max_instructions=2_000_0
     is retried `retries` times from a fresh simulator before the checks."""
     title = title or f"{dump} prints {stop_at!r}"
     print(f"=== Regression Test: {title} ===")
+    if default_engine() == "cpp":
+        retries = 0     # the retries cover Unicorn's slice-stop race; the C++ core is deterministic
     for attempt in range(retries + 1):
         text, error, elapsed = _boot(dump, stop_at, max_instructions, truncate_to, setup)
         if error is None or attempt == retries:
