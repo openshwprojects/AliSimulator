@@ -1,0 +1,45 @@
+{
+  "file": "ALI3329C_05000200_globo_cr_amstar_led_multiroom_1.3.26.abs",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "7000CR MultiView (System ID 05000200, Amstar LED Multiroom v1.3.26)",
+    "type": "DVB-S MultiCAS card reader satellite receiver (ALi M3329C 2 MB SPI platform)",
+    "board": "05000200 (Opticum 7000CR / Globo 7010CR MultiView)",
+    "soc": "ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0)",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal ALi M3101 / NIM_M3327_0 QPSK DVB-S demodulator",
+    "tuner": null,
+    "flash": "2 MB SPI",
+    "panel": {
+      "chip": "PAN_HWSCAN_0 (internal hardware scanner)"
+    },
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "05000200 (maincode \"05000200\"; bootloader \"M3329C 1.0.6\")",
+    "date": "2010-6-3",
+    "size": 2097152,
+    "sha1": "236590346681520754d624996a63c53b0f78e867",
+    "layout": "bootloader 0x000000 (M3329C 1.0.6, 2009-08-10), maincode(AV) 0x010000 (05000200, 2010-6-3), default_lang 0x0DFD80 (1.0.0, 2007-12-05), patch 0x0DFF80 (1.0.0, 2006-03-03), logo_user 0x0F0000 (1.0.0, 2006-03-03), logo_menu 0x100000 (1.0.0, 2006-03-01), logo_radio 0x108000 (1.0.0, 2006-03-01), logo_def 0x110000 (1.0.0, 2006-03-01), defaultdb(PRC) 0x118000 (0.9.1, 2005-2-28), userdb(64+64) 0x15FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": "Globo",
+    "date": "2008-01-01",
+    "login": false,
+    "note": "Opticum / Globo 7000CR MultiView firmware from satedu.cba.pl."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots on M3329C (chips/m3329.py): bootloader \"M3329C 1.0.6\" unpacks maincode to SDRAM and prints \"APP init ok\"."
+  },
+  "desc": [
+    "Opticum / Globo 7000CR MultiView firmware for System ID 05000200 on ALi M3329C.",
+    "Features Amstar LED Multiroom firmware with smartcard reader support and 74HC164 LED panel."
+  ]
+}

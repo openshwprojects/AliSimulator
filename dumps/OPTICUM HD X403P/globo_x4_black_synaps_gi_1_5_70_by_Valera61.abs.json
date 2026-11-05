@@ -1,0 +1,58 @@
+{
+  "file": "globo_x4_black_synaps_gi_1_5_70_by_Valera61.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR",
+    "board": "06020200 (bootloader version \"M3602B 1.1.6\", 4 MB SPI flash, Lemontree M3602B platform)",
+    "soc": "ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 on SCB0 at I2C 0x33",
+    "tuner": "Airoha AV2011 DVB-S2 tuner at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "lemontree",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "060202001567 (maincode \"060202001567\"; bootloader \"M3602B 1.1.6\")",
+    "date": "2015-2-6",
+    "size": 4194304,
+    "sha1": "928d7b8870b0aaefe4d4fd65daab97ae53c054d3",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001567, 2015-2-6), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2014-04-15",
+    "login": false,
+    "note": "Archive globo_x4_black_synaps_gi_1_5_70_by_Valera61.abs from OPTICUM HD X403P; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      "    ",
+      " on "
+    ],
+    "note": "Boots on M3602 (chips/m3602.py) (run_dump_opticum_x402p_403p_synaps_rc1_1548_app_starts.py, run_dump_opticum_x402p_403p_synaps_rc1_1548_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) firmware (2014-04-15) on a 4 MB SPI flash for ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602)."
+  ]
+}

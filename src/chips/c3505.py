@@ -42,6 +42,11 @@ class C3505(UpperRamMixin, M3821):
         mc = maincode(image)
         return any(tag in mc for tag in (b"ALI_C3505", b"NIM_C3505_0", b"NIM_S3505", b"DECV_HEVC_0"))
 
+    def variant(self):
+        if self.chip_id == 0x3821:
+            return 0xC000
+        return super().variant()
+
     def install(self):
         self._ram_256m = False
         super().install()

@@ -1,0 +1,60 @@
+{
+  "file": "OPENBOX-S16-PATCH_AZ_2.6.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "S16 HD PVR (EU ALi 3606C)",
+    "type": "DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet",
+    "board": null,
+    "soc": "ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi M3501 / S3501 on SCB1 at I2C 0x33",
+    "tuner": "Airoha AV2011 on SCB1 at I2C 0x63",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1650-compatible",
+      "scl": 62,
+      "sda": 63
+    },
+    "irCoding": "nec",
+    "chipId": "0x3603",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "S3606qe001 (maincode \"S3606qe001\"; bootloader \"DVBS2---100\")",
+    "date": "2012-7-12",
+    "size": 4194304,
+    "sha1": "e33b1fed02fc68dab977092d3b57781194dda2b6",
+    "layout": "bootloader 0x000000 (DVBS2---100, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606qe001, 2012-7-12), seecode 0x180000 (M3606 SEE, 2012-7-12), Radioback 0x280000 (1.0.0, 2011-8-18), defaultdb 0x290000 (1.1.0, 2012-6-27), userdb 0x2AFF80 (1.0.0, 2012-7-12)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C",
+    "site": "satedu.cba.pl (a mirror of the official download)",
+    "author": "Openbox",
+    "date": "2012-11-29",
+    "login": false,
+    "note": "Archive OPENBOX-S16-PATCH_AZ_2.6.abs from OPENBOX S16; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " on ",
+      "Strt",
+      "noCH"
+    ],
+    "note": "Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode (\"M3606 SEE\") and 5.24 MB maincode (\"S3606H-1.0.0\"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (\" on \" -> \"noCH\"), and renders its 16-bpp ARGB1555 \"Edit Channel\" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table (\"necfirst\" coding) steps to \"Installation\"."
+  },
+  "desc": [
+    "Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.",
+    "Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB \"M3606 SEE\" co-processor image on the second core at 0xA6000200, ships an empty user database (\"noCH\"), and uses a 54-key European remote table at 0x80xx."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "file": "globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs",
+  "device": {
+    "brand": "Proton / Opticum",
+    "model": "Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet",
+    "board": "06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)",
+    "soc": "ALi M3602B (bootloader \"M3602B 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "lemontree",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "060202001541 (maincode \"060202001541\"; bootloader \"M3602B 1.1.6\")",
+    "date": "2012-03-18",
+    "size": 4194304,
+    "sha1": "f567d024849d5168f7e34ddee4eaa47e6bd86cf1",
+    "layout": "bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001541, 2012-03-18), default_lang 0x27FD80 (1.0.0, 2007-12-05), countryband 0x280000 (1.0.0, 2008-09-23), logo_user 0x288000 (1.0.0, 2006-03-03), logo_menu 0x288080 (1.0.0, 2006-03-01), logo_radio 0x288100 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28, LZMA -> 0.19 MB), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=lemontree_proton_1.5.12_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7",
+    "site": "satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)",
+    "author": "Proton / Fulansoft (Opticum X4 port)",
+    "date": "2012-03-18",
+    "login": false,
+    "note": "Archive globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs from PROTON HD; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_proton_lemontree_app_starts.py, run_dump_proton_lemontree_capture_screen.py): the \"M3602B 1.1.6\" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\" ON \" -> \"    \" -> \" on \"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its Lemontree OSD dialog through GeM3602 (7 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Proton HD (Lemontree GUI 1.5.12, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).",
+    "Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (\" ON \" -> \" on \"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 51-entry 0x99xx remote control table (\"necfirst\" coding)."
+  ]
+}

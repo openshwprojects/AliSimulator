@@ -1,0 +1,51 @@
+{
+  "file": "amiko_14000A00_galaxy_2.4.89_gisclub.tv.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "CHD8270+ (System ID 14000A00, v2.3.40 EMU build)",
+    "type": "DVB-C / DVB-T2 Full HD Twin Cable/Terrestrial receiver with Conax / MultiCAS card reader, CI+ slot, Ethernet and USB PVR",
+    "board": "M3606-01V01-030 (ALi M3516A / M3503 rev B 256 MB DDR3 board)",
+    "soc": "ALi M3516A / M3503 rev B (bootloader \"M3516A 1.2.1\", seecode \"M3606 SEE\", 256 MB DDR3)",
+    "family": "M3503 (chips/m3503.py)",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 / M3516A DVB-C/T2 (NIM_COFDM_0 / NIM_QAM_S3202)",
+    "tuner": null,
+    "flash": "16 MB SPI",
+    "panel": {
+      "chip": "tm1650",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "14000A002489 (maincode \"14000A002489\"; bootloader \"M3516A 1.2.1\")",
+    "date": "2018-6-22",
+    "size": 16777216,
+    "sha1": "b12c692e5d4e01965c7796d89460ec1c0d35a108",
+    "layout": "bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2018-4-24), maincode(AV) 0x030000 (14000A002489, 2018-6-22), seecode 0x430000 (M3606 SEE, 2018-4-24), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko",
+    "date": "2016-01-15",
+    "login": false,
+    "note": "Archive amiko_14000A00_galaxy_2.4.89_gisclub.tv.abs from AMIKO CHD8270+; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as M3503 rev B with 256 MB DDR3 (chips/m3503.py, run_dump_chd8270_plus_app_starts.py, run_dump_chd8270_plus_capture_screen.py): the XIP bootloader (\"M3516A 1.2.1\") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\" and writes \" ON \" to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA14187DC, unpacks seecode (\"M3606 SEE\") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints \"hs_config_init\", updates the CH455 display to \" on \", populates userdb(64+64) at 0xF3FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Amiko CHD8270+ (System ID 14000A00) firmware v2.3.40 EMU (2016-01-15) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD DVB-C / DVB-T2 Cable/Terrestrial CI+ receiver with 256 MB DDR3.",
+    "Pairs dual-CPU M3503 maincode + seecode (\"M3606 SEE\" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (\" ON \" -> \" on \") and a 60-entry 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

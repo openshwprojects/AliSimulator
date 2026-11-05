@@ -1,0 +1,44 @@
+{
+  "file": "Openbox X6 HD.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "X6 HD",
+    "type": "DVB-S2 Full HD satellite receiver with USB PVR, BISS key editor and Ethernet",
+    "board": "Openbox X6 HD (bootloader version \"1.00.00\", 4 MB SPI flash, 128 MB DDR2)",
+    "soc": "ALi M3606 / M3602 (dual-CPU MIPS32, seecode \"M3606 SEE\" at 0xA6000200, maincode at 0x8020C9B8)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3603",
+    "demod": "internal ALi S3501 DVB-S2",
+    "tuner": "Airoha AV2011 DVB-S2",
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.00.00 (maincode \"1.00.00\"; bootloader \"1.00.00\")",
+    "date": "2012-01-17",
+    "size": 4194304,
+    "sha1": "d9c9a0bf7cf974d854cab648d8ef85220718efad",
+    "layout": "bootloader 0x000000 (1.00.00, 2012-01-17), maincode 0x020000 (1.00.00, 2012-01-17), seecode 0x1D0000 (M3606 SEE, 2010-04-02), logo boot 0x280000 (1.00.00, 2012-01-17), logo menu 0x290000 (1.00.00, 2012-01-17), logo radio 0x2A0000 (1.00.00, 2012-01-17), patch key 0x2B0000 (1.00.00, 2012-01-17), defaultdb 0x2C0000 (1.00.00, 2012-01-17), userdb 0x31FF80 (1.00.00, 2013-7-24)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": "Openbox",
+    "date": "2013-06-14",
+    "login": false,
+    "note": "Archive Openbox X6 HD.abs from OPENBOX X6 HD; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": [],
+    "note": "The bootloader unpacks seecode to 0xA6000200 and maincode to 0x8020C9B8 on M3602 with chip ID 0x3603."
+  },
+  "desc": [
+    "Openbox X6 HD 4 MB SPI firmware for the dual-CPU ALi M3606 / M3602 platform.",
+    "Features custom logo boot, logo menu, and logo radio chunk structure with \"1.00.00\" versioning."
+  ]
+}

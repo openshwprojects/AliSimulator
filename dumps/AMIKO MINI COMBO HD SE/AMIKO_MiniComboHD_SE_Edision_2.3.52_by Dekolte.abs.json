@@ -1,0 +1,51 @@
+{
+  "file": "AMIKO_MiniComboHD_SE_Edision_2.3.52_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Mini Combo HD SE (System ID 14020A00, v2.3.40 EMU build)",
+    "type": "DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "M3606-01V01-030 (ALi M3516C / M3503 rev B 256 MB DDR3 board)",
+    "soc": "ALi M3516C / M3503 rev B (bootloader \"M3516C 1.2.1\", seecode \"M3606 SEE\", 256 MB DDR3)",
+    "family": "M3503 (chips/m3503.py)",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 / M3516C DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)",
+    "tuner": null,
+    "flash": "16 MB SPI",
+    "panel": {
+      "chip": "tm1650",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "14020A002252 (maincode \"14020A002252\"; bootloader \"M3516C 1.2.1\")",
+    "date": "15-07-2016",
+    "size": 16777216,
+    "sha1": "651c96e05f570f7d9a9cb46ee0f347e43cd971e3",
+    "layout": "bootloader 0x000000 (M3516C 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-7-11), maincode(AV) 0x030000 (14020A002252, 15-07-2016), seecode 0x430000 (M3606 SEE, 2016-7-11), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28, LZMA -> 1.54 MB), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko",
+    "date": "2016-01-15",
+    "login": false,
+    "note": "Archive AMIKO_MiniComboHD_SE_Edision_2.3.52_by Dekolte.abs from AMIKO MINI COMBO HD SE; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as M3503 rev B with 256 MB DDR3 (chips/m3503.py, run_dump_minicombo_hd_se_app_starts.py, run_dump_minicombo_hd_se_capture_screen.py): the XIP bootloader (\"M3516C 1.2.1\") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints \"CH455 panel init OK!\" and writes \" ON \" to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA141A7DC, unpacks seecode (\"M3606 SEE\") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints \"---led 455 attach OK--\" and \"hs_config_init\", updates the CH455 display to \" on \", populates userdb(64+64) at 0xF3FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours)."
+  },
+  "desc": [
+    "Amiko Mini Combo HD SE (System ID 14020A00) firmware v2.3.40 EMU (2016-01-15) on a 16 MB SPI flash for the ALi M3516C / M3503 rev B Full HD DVB-S2 + DVB-T2/C Combo receiver with 256 MB DDR3.",
+    "Pairs dual-CPU M3503 maincode + seecode (\"M3606 SEE\" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (\" ON \" -> \" on \") and a 60-entry 0x60xx remote control table (\"necfirst\" coding)."
+  ]
+}

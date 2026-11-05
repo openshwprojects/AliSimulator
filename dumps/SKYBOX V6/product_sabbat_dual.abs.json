@@ -1,0 +1,43 @@
+{
+  "file": "product_sabbat_dual.abs",
+  "device": {
+    "brand": "Skybox / Freesat",
+    "model": "V6 / V7 / V8 HD (product_sabbat_dual)",
+    "type": "DVB-S2 Full HD satellite receiver with USB Wi-Fi and Ethernet",
+    "board": "product_sabbat_dual (bootloader version \"M3503---0.1.0\", 4 MB SPI flash, 128 MB DDR3)",
+    "soc": "ALi M3503 rev B (dual-CPU MIPS32, seecode at 0xA6000200, maincode at 0x80000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 DVB-S2 (NIM_S3501_0)",
+    "tuner": "Airoha AV2011 / RDA5815M DVB-S2",
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "M3503 (maincode \"M3503\"; bootloader \"M3503---0.1.0\")",
+    "date": "2014-4-18",
+    "size": 4194304,
+    "sha1": "e1830745368833e766a119ccc3701c13d0553446",
+    "layout": "bootloader 0x000000 (M3503---0.1.0, 2012-07-24), HDCPKey 0x02EE00 (00000001, 2012-07-24), MemCfg 0x02F000 (00000001, 2014-4-18), maincode 0x030000 (M3503, 2014-4-18), seecode 0x230000 (M3503 SEE, 2014-4-18), Radioback 0x310000 (1.0.0, 2012-07-24), defaultdb 0x320000 (1.1.0, 2014-4-18), userdb 0x32FF80 (1.0.0, 2014-4-18)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": "Skybox",
+    "date": "2016-01-01",
+    "login": false,
+    "note": "4 MB SPI flash update product_sabbat_dual.abs for Skybox V6 from satedu.cba.pl."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [],
+    "note": "Boots on M3503 (chips/m3503.py): the M3503---0.1.0 bootloader starts SEE core at 0xA6000200, unpacks maincode to 0x80000200, and executes 187 GE commands rendering a 1280x720 OSD dialog."
+  },
+  "desc": [
+    "Skybox / Freesat V6 4 MB SPI flash firmware for the dual-CPU ALi M3503 platform.",
+    "First 4 MB M3503 SPI image in the catalog; renders a 1280x720 OSD through GeM36F."
+  ]
+}

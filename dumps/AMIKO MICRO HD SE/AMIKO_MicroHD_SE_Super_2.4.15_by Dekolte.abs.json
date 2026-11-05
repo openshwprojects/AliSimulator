@@ -1,0 +1,49 @@
+{
+  "file": "AMIKO_MicroHD_SE_Super_2.4.15_by Dekolte.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Micro HD SE (System ID 10010A88, Edision v2.4.86)",
+    "type": "Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "10010A88 (bootloader version \"M3511B 1.1.1\", 128 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0x86000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 / M3511B DVB-S2 (NIM_S3503_0)",
+    "tuner": null,
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "tm1650",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "10010A002415 (maincode \"10010A002415\"; bootloader \"M3511B 1.1.1\")",
+    "date": "18-1-2017",
+    "size": 8388608,
+    "sha1": "097120dd25d4eb5ce996fe9687d72b1fea77a769",
+    "layout": "bootloader 0x000000 (M3511B 1.1.1, 18-1-2017), MemCfg 0x02F000 (00000001, 2017-1-13), maincode(AV) 0x030000 (10010A002415, 18-1-2017), seecode 0x3B0000 (M3606 SEE, 2017-1-13), default_lang 0x4AFD00 (1.0.0, 2007-12-05), cipluskey 0x4AFF80 (1.1.0, 2010-04-20), countryband 0x4C0000 (1.0.0, 2008-09-23), img_webserver 0x4C8000 (1.0.0, 2008-09-23), html_webserver 0x528000 (1.0.0, 2008-09-23), logo_user 0x5C8000 (1.0.0, 2006-03-03), logo_menu 0x5D8000 (1.0.0, 2006-03-01), logo_radio 0x5F8000 (1.0.0, 2006-03-01), logo_boot 0x618000 (1.0.0, 2006-03-01), patch 0x63FF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x660000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MICRO%20HD%20SE%20Edision_v.2486.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2020-12-01",
+    "login": false,
+    "note": "Archive AMIKO_MicroHD_SE_Super_2.4.15_by Dekolte.abs from AMIKO MICRO HD SE; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots on M3503 (chips/m3503.py) (run_dump_micro_hd_se_edision_2486_app_starts.py, run_dump_micro_hd_se_edision_2486_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Micro HD SE (System ID 10010A88, Edision v2.4.86) firmware (2020-12-01) on a 8 MB SPI flash for ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode \"M3606 SEE\" at 0x86000200)."
+  ]
+}

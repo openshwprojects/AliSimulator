@@ -1,0 +1,59 @@
+{
+  "file": "amiko_300_black synaps_gi_1.5.72_gisclub.tv.abs",
+  "device": {
+    "brand": "Amiko / Galaxy Innovations",
+    "model": "STHD-8800 Combo / GI 300 Black Synaps (System ID 06000A00, v1.5.74 gisclub.tv build)",
+    "type": "DVB-S2 + DVB-T Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, 8-character VFD and Ethernet",
+    "board": "06000A00 (Fulansoft / Lemontree ALi M3602A VFD + EuP platform)",
+    "soc": "ALi M3602A (bootloader \"M3602A 1.1.6\", 128 MB DDR2)",
+    "family": "M3602 (chips/m3602.py)",
+    "chipId": "0x3602",
+    "demod": "ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33 + DVB-T COFDM",
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    },
+    "tuner": "Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    },
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "lemontree",
+      "scl": 62,
+      "sda": 171
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "06000A001572 (maincode \"06000A001572\"; bootloader \"M3602A 1.1.6\")",
+    "date": "2016-4-6",
+    "size": 4194304,
+    "sha1": "6cd2cfe108a22ce6064a3bbe74e37e3eaa7843b6",
+    "layout": "bootloader 0x000000 (M3602A 1.1.6, 2009-12-29), maincode(AV) 0x010000 (06000A001572, 2016-4-6), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_300_black%20synaps_gi_1.5.74_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl (a mirror of the Amiko firmware archive)",
+    "author": "Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod)",
+    "date": "2016-02-15",
+    "login": false,
+    "note": "Archive amiko_300_black synaps_gi_1.5.72_gisclub.tv.abs from AMIKO STHD-8800 COMBO; added for expanded coverage."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "  BOOT  ",
+      "GISCLUB "
+    ],
+    "note": "Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_amiko_300_synaps_1574_app_starts.py, run_dump_amiko_300_synaps_1574_capture_screen.py): the \"M3602A 1.1.6\" bootloader exchanges CRC-16/XMODEM 38-byte PT6311 VFD frames with the Lemontree EuP standby and 8-character 14-segment VFD MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (\"  BOOT  \" -> \"        \" -> \"GISCLUB \"), prints \"APP  init ok\", and unpacks maincode(AV) to 0x80008000.  The application prints \"Version:06000A00_1.5.74 EMU\", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60, and draws its Black Synaps GI OSD dialog through GeM3602."
+  },
+  "desc": [
+    "Amiko STHD-8800 Combo / GI 300 Black Synaps (v1.5.74 by gisclub.tv, System ID 06000A00) 4 MB SPI firmware for the ALi M3602A DVB-S2 + DVB-T Full HD Combo receiver.",
+    "Drives an 8-character 14-segment PT6311 VFD via the Lemontree EuP MCU on GPIO 62 / 171 (\"  BOOT  \" -> \"GISCLUB \"), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x44xx remote control table (\"necfirst\" coding)."
+  ]
+}

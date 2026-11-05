@@ -7,6 +7,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `Ali_3801_Globo_DVBT_dump SPI 4mb.bin` | Globo STB HD N3 | ALi M3801 | Rafael Micro R820T (7-bit I2C address 0x1A, 0x34 as the w... | TM1650 (SCL 31, SDA 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4156384-30.html#21933067), JacekTorun |
 | `ali_sdk.bin` | test program (not a flash dump) | ALi M3801 (it reads the chip id, "chip id raw: 3811") | - | - | yes / - / - | not recorded |
 | `AMIKO ALI3606/ALI3606_0A010A00_gui_edision_1.6.89.abs` | Amiko Mini HD / SHD-8140 (System ID 0A010A00, Edision GUI 1.6.89 build) | ALi M3606 / C3603 (the main-code chunk's version "M3606 ", the seecode chunk's "M3606 SEE"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) | - | - | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=ALI3606_0A010A00_gui_edision_1.6.89.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20inne), Amiko / Edision |
+| `AMIKO CHD8270+/amiko_14000A00_galaxy_2.4.89_gisclub.tv.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.40 EMU build) | ALi M3516A / M3503 rev B (bootloader "M3516A 1.2.1", seecode "M3606 SEE", 256 MB DDR3) | - | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.40_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.40 EMU build) | ALi M3516A / M3503 rev B (bootloader "M3516A 1.2.1", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.45_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.45 EMU) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.45_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO CHD8270+/AMIKO_CHD8270_2.3.47_emu.abs` | Amiko CHD8270+ (System ID 14000A00, v2.3.47 EMU) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.47_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -105,6 +106,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8255+/Amiko_HD8255_1.3.88_emu.abs` | Amiko HD8255+ (System ID 6C000A00, v1.3.88 EMU build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.3.88_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8255+/Amiko_HD8255_1.4.11_emu.abs` | Amiko HD8255+ (System ID 6C000A00, v1.4.11 EMU build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.4.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8255+/Amiko_HD8255_1.4.17_emu.abs` | Amiko HD8255+ (System ID 6C000A00, v1.4.17 EMU build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.4.17_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8255+/Amiko_HD8255_1.4.30_emu.abs` | Amiko HD8255+ (System ID 6C000A00, v1.3.88 EMU build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) | - | tm1650 (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.3.88_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8255+/Amiko_HD8255_1.5.06_emu.abs` | Amiko HD8255+ (System ID 6C000A00, v1.5.06 EMU build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.5.06_emu%201.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8260+/8260_Edision_Piccollo_ v.2468.abs` | Amiko HD8260+ (System ID 14000A00 / 14000A88, Edision Piccollo GUI v.2468 build) | ALi M3516A / M3503 with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=8260_Edision_Piccollo_%20v.2468.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO HD8260+/ALI3516_14000A00_2.3.34_by_ANIS.abs` | Amiko HD8260+ (System ID 14000A00, v2.3.34 by ANIS) | ALi M3516A / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=ALI3516_14000A00_2.3.34_by_ANIS.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
@@ -150,6 +152,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.75_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.75 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Galaxy_2.4.76_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Galaxy 2.4.76 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Galaxy_2.4.76_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.3.48_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Starlight 2.3.48 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Starlight_2.3.48_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
+| `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.3.50_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00 / 14000A88, Edision Piccollo GUI v.2468 build) | ALi M3516A / M3503 with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=8260_Edision_Piccollo_%20v.2468.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.4.25.R1A_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Starlight 2.4.25.R1A by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Starlight_2.4.25.R1A_by%20Dekolte.7z&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.4.25_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Starlight 2.4.25 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Starlight_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
 | `AMIKO HD8260+/AMIKO_HD8260_Super_2.3.75_by Dekolte.abs` | Amiko HD8260+ (System ID 14000A00, Super 2.3.75 by Dekolte build) | ALi M3516A / M3503 rev B with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8260_Super_2.3.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
@@ -177,11 +180,13 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO HD8265+/Amiko_8265_emu_edision_1423_byDavor.abs` | Amiko HD8265+ (System ID 6C000A00, Edision EMU v1.4.23 by Davor) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_8265_emu_edision_1423_byDavor.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO HD8265+/AMIKO_HD8265_1.1.63_emu.abs` | Amiko HD8265+ (System ID 6C000A00, v1.1.63 EMU build) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8265_1.1.63_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8265+/Amiko_HD8265_1.3.48_mcas.abs` | Amiko HD8265+ (System ID 6C000A00, v1.3.48 MCAS build) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8265_1.3.48_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8265+/Amiko_HD8265_1.3.63_mcas.abs` | Amiko HD8265+ (System ID 6C000A00, Edision GUI v.1515 build) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | tm1650 (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%208265%20Edision_v.1515.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO HD8265+/Amiko_HD8265_Edision_1.3.17.abs` | Amiko HD8265+ (System ID 6C000A00, Edision v1.3.17) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8265_Edision_1.3.17.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO HD8270+/AMIKO_HD8270_2.4.58_emu.abs` | Amiko HD8270+ (System ID 14000A88, v2.4.58 EMU build) | ALi M3516A / M3503 rev B (bootloader "M3516A 1.2.1", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8270_2.4.58_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8275+/Amiko_HD8275_1.2.02_emu.abs` | Amiko HD8275+ (System ID 6C000A00, firmware 1.2.02 emu) | ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode "M3606 SEE" at 0xAE000200; SDK4.0ia.17.15_20171115) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.2.02_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8275+/Amiko_HD8275_1.3.02_emu.abs` | Amiko HD8275+ (System ID 6C000A00, firmware 1.3.02 emu) | ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.3.02_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8275+/Amiko_HD8275_1.3.14_emu.abs` | Amiko HD8275+ (System ID 6C000A00, v1.3.14 EMU build) | ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.3.14_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO HD8275+/Amiko_HD8275_1.3.87_emu.abs` | Amiko HD8275+ (System ID 6C000A00, firmware 1.2.02 emu) | ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode "M3606 SEE" at 0xAE000200; SDK4.0ia.17.15_20171115) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | tm1650 (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.2.02_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8275+/Amiko_HD8275_1.5.52_emu.abs` | Amiko HD8275+ (System ID 6C000A00, firmware 1.5.52 emu) | ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.5.52_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO HD8300 SERIES/amiko_0A010A00_black synaps_gi_1.7.01_gisclub.tv.abs` | Amiko / Galaxy Innovations HD8300 Series / GI Black Synaps (System ID 0A010A00, 1.7.01 EMU build) | ALi M3606A / C3603 (bootloader "M3606A 1.1.3", seecode "M3606 SEE") | Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60 | Lemontree EuP MCU + front-panel display (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Galaxy Innovations firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_0A010A00_black%20synaps_gi_1.7.01_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod) |
 | `AMIKO HD8300 SERIES/AMIKO_HD8300_Galaxy_1.7.05_by Dekolte.abs` | Amiko HD8300 Series (System ID 0A010A00, Galaxy 1.7.05 by Dekolte build) | ALi M3606A / C3603 (bootloader "M3606A 1.1.3", seecode "M3606 SEE", chip ID 0x10047 rev 0x20001) | Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60 | Lemontree EuP MCU + front-panel display (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8300_Galaxy_1.7.05_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte |
@@ -209,15 +214,18 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.51_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.51 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.51_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.61_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.61 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.61_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.62_emu.abs` | Amiko Impulse SAT (System ID 20020A00, v2.3.62 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.62_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.63_emu.abs` | Amiko Impulse SAT (System ID 20020A00) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200; SDK4.0fa.13.11_20150910 / SDK4.0fa.13.6_20141203byD09WXW) | Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.31_emu.abs` | Amiko Impulse SAT (System ID 20020A88, v2.4.31 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.31_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.43_emu.abs` | Amiko Impulse SAT (System ID 20020A88, v2.4.43 EMU) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.54_emu.abs` | Amiko Impulse SAT (System ID 20020A88, firmware 2.4.54 emu) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.54_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_Synaps_2.3.40_by Dekolte.abs` | Amiko Impulse SAT (System ID 20020A00, Synaps v2.3.40 by Dekolte) | ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_Synaps_2.3.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.08_emu.abs` | Amiko Impulse T2/C (System ID 22000A88, v2.5.11 EMU) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | MaxLinear MxL608 / MxL603 DVB-T2/C tuner | tm1650 (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.11_emu.abs` | Amiko Impulse T2/C (System ID 22000A88, v2.5.11 EMU) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | MaxLinear MxL608 / MxL603 DVB-T2/C tuner | CH455 (TM1650-compatible) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.13_conax.abs` | Amiko Impulse T2/C (System ID 22000A88, v2.5.13 Conax) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | MaxLinear MxL608 / MxL603 DVB-T2/C tuner | CH455 (TM1650-compatible) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.13_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.15_emu.abs` | Amiko Impulse T2/C (System ID 22000A88, firmware 2.5.15 emu) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xA6000200) | {'chip': 'mxl603', 'i2c': '0x60'} | CH455 (TM1650-compatible, on external IR/LED sensor) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.42_emu.abs` | Amiko Impulse T2/C (System ID 22000A00) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xA6000200; Libcore 13.7.0@SDK4.0ga.13.7_20150114) | {'chip': 'mxl603', 'i2c': '0x60'} | CH455 (TM1650-compatible, on external IR/LED sensor) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_T2C_2.2.42_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte / Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.47_emu.abs` | Amiko Impulse T2/C (System ID 22000A00, v2.2.47 EMU) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | {'chip': 'mxl603', 'i2c': '0x60'} | CH455 (TM1650-compatible, on external IR/LED sensor) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_T2C_2.2.47_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.58_emu.abs` | Amiko Impulse T2/C (System ID 22000A88, v2.5.11 EMU) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | MaxLinear MxL608 / MxL603 DVB-T2/C tuner | tm1650 (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.60_emu.abs` | Amiko Impulse T2/C (System ID 22000A00, v2.2.60 EMU) | ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) | MaxLinear MxL608 / MxL603 DVB-T2/C tuner | CH455 (TM1650-compatible) (SCL 128, SDA 129) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_T2C_2.2.60_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MICRO HD SE/AMIKO MICRO HD SE Edision_v.2486.abs` | Amiko Micro HD SE (System ID 10010A88, Edision v2.4.86) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0x86000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MICRO%20HD%20SE%20Edision_v.2486.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO MICRO HD SE/AMIKO MicroHD SE_v.2483.abs` | Amiko Micro HD SE (System ID 10010A88, v.2483 build) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC; NIM_S3503_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0x86000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MicroHD%20SE_v.2483.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -237,6 +245,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Starlight_2.3.50_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Starlight v2.3.50 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Starlight_2.3.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Starlight_2.4.25_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Starlight v2.4.25 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Starlight_2.4.25_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.3.75_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Super v2.3.75 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Super_2.3.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.4.15_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A88, Edision v2.4.86) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0x86000200) | - | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MICRO%20HD%20SE%20Edision_v.2486.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.4.16_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Super v2.4.16 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Super_2.4.16_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.4.75_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Super v2.4.75 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Super_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Synaps_2.3.40_by Dekolte.abs` | Amiko Micro HD SE (System ID 10010A00, Synaps v2.3.40 by Dekolte) | ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MicroHD_SE_Synaps_2.3.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
@@ -267,6 +276,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI COMBO EXTRA/Amiko_mini_combo_EXTRA_RCA-Edision_By_Scepa_and_Davor_1375.abs` | Amiko Mini Combo Extra RCA (System ID 6A000A00, Edision v1.3.75 by Scepa & Davor) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_mini_combo_EXTRA_RCA-Edision_By_Scepa_and_Davor_1375.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.09_emu.abs` | Amiko Mini Combo Extra RCA (System ID 6A000A00, v1.1.09 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.09_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.13_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.1.13 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.13_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.62_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, Edision v.1453) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_S3501_1, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | tm1650 (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MINI%20COMBO%20EXTRA%20Edision_v.1453.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.67_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.1.67 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.1.67_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.3.15 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.3.15_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.4.21_emu.abs` | Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.4.21 EMU) | ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_Combo_Extra_RCA_1.4.21_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -278,6 +288,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_2.3.65_emu.abs` | Amiko Mini Combo HD SE (System ID 14020A00, v2.3.65 EMU) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.65_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_BBC_Galaxy_2.3.70_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, BBC Galaxy v2.3.70 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_BBC_Galaxy_2.3.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.2.50_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Edision v2.2.50 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Edision_2.2.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.3.52_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, v2.3.40 EMU build) | ALi M3516C / M3503 rev B (bootloader "M3516C 1.2.1", seecode "M3606 SEE", 256 MB DDR3) | - | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.4.75_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Edision 2.4.75 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Edision_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.4.76_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Edision v2.4.76 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Edision_2.4.76_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Galaxy_2.3.60_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Galaxy v2.3.60 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Galaxy_2.3.60_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
@@ -291,6 +302,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Super_2.4.50_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Super 2.4.50 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Super_2.4.50_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Super_2.4.75_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Super v2.4.75 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Super_2.4.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.3.40_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A00, Synaps v2.3.40 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Synaps_2.3.40_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.3.62_emu.abs` | Amiko Mini Combo HD SE (System ID 14020A00, v2.3.40 EMU build) | ALi M3516C / M3503 rev B (bootloader "M3516C 1.2.1", seecode "M3606 SEE", 256 MB DDR3) | - | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.4.15_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A88, Synaps 2.4.15 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Synaps_2.4.15_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.4.51_by Dekolte.abs` | Amiko Mini Combo HD SE (System ID 14020A88, Synaps v2.4.51 by Dekolte) | ALi M3516C / M3503 rev B (256 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xAE000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_Synaps_2.4.51_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.5.41_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -299,9 +311,11 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.6.03_emu.abs` | Amiko Mini HD Combo (System ID 0E060A00 / 0E060A88, v1.6.03 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.6.03_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (1.6.03 EMU) |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_1.6.07_conax.abs` | Amiko Mini HD Combo (System ID 0E060A88, v1.6.07 Conax) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.6.07_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.65_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Edision v1.4.65 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.65_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.70_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.78_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Edision 1.4.78 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.78_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.86_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Edision v1.4.86 by Dekolte) | ALi M3612 / S3811 (single-CPU combo variant of the M3801 / S3811 family; chip ID 0x3811) | Airoha AV2012 DVB-S2 tuner at I2C 0x61 | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Edision_1.4.86_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.5.56_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Galaxy v1.5.56 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.7") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Galaxy_1.5.56_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.5.70_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.5.92_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Galaxy 1.5.92 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.7") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 + Rafael Micro R... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Galaxy_1.5.92_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.6.10_by Dekolte.abs` | Amiko Mini HD Combo (System ID 0E060A00, Galaxy 1.6.10 by Dekolte) | ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.7") | Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafae... | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Galaxy_1.6.10_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.6.12.abs` | Amiko Mini HD Combo (System ID 0E060A00, Galaxy v1.6.12) | ALi M3612 / S3811 (single-CPU combo variant of the M3801 / S3811 family; chip ID 0x3811) | Airoha AV2012 DVB-S2 tuner at I2C 0x61 | CH455 (TM1650-compatible) (SCL 31, SDA 9) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_Galaxy_1.6.12.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) |
@@ -311,6 +325,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.19_emu.abs` | Amiko Mini HD RE (System ID 10000A88, v2.4.19 EMU) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.19_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.33_emu.abs` | Amiko Mini HD RE (System ID 10000A88, v2.4.33 EMU) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.33_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.43_emu.abs` | Amiko Mini HD RE (System ID 10000A88, v2.4.43 EMU) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.43_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.54_mcas.abs` | Amiko Mini HD RE (System ID 10000A88, v2.4.16 EMU build) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | tm1650 (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.16_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.58_emu.abs` | Amiko Mini HD RE (System ID 10000A00 / 10000A88, v2.4.58 EMU build) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.58_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2.4.58 EMU) |
 | `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.58_mcas.abs` | Amiko Mini HD RE (System ID 10000A88, v2.4.58 MCAS) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | Airoha AV2026 DVB-S2 tuner | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.58_mcas.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD SE/AMIKO_MiniHD_SE_2.3.40_emu.abs` | Amiko Mini HD SE (System ID 10000A00, v2.3.40 EMU) | ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -345,6 +360,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO MINI HD265/AMIKO_Mini_HD265_1.3.35_emu.abs` | Amiko Mini HD265 (System ID 6B000A00, v1.3.35 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_HD265_1.3.35_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD265/AMIKO_Mini_HD265_1.3.55_conax.abs` | Amiko Mini HD265 (System ID 6B000A00, v1.3.55 Conax) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_HD265_1.3.55_conax.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD265/AMIKO_Mini_HD265_1.3.55_emu.abs` | Amiko Mini HD265 (System ID 6B000A00, v1.3.55 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_HD265_1.3.55_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
+| `AMIKO MINI HD265/AMIKO_Mini_HD265_1.3.66_emu.abs` | Amiko Mini HD265 (System ID 6B000A00, Edision v.1521) | ALi M3521A / C3505 (128 MB DDR3 dual-CPU H.265/HEVC SoC reading chip ID 0x3505; NIM_C3505_0, NIM_S3501_1, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xA6000200) | - | tm1650 (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MINI%20HD265%20Edision%20v.1521.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision |
 | `AMIKO MINI HD265/AMIKO_Mini_HD265_1.4.21_emu.abs` | Amiko Mini HD265 (System ID 6B000A00, v1.4.21 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_HD265_1.4.21_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MINI HD265/AMIKO_Mini_HD265_1.5.03_emu.abs` | Amiko Mini HD265 (System ID 6B000A00, v1.5.03 EMU) | ALi M3521A / C3505 with 128 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xA6000200) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mini_HD265_1.5.03_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
 | `AMIKO MIRA WIFI/AMIKO_Mira_1.1.74_emu.abs` | Amiko Mira WiFi (System ID 67010A00, v1.1.74 build) | ALi M3510C / C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP 0x210 product 5) | - | - | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Mira_1.1.74_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko |
@@ -377,6 +393,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `AMIKO SHD-8360/AMIKO_SHD-8360_Multi_1.7.03_by Dekolte..abs` | Amiko SHD-8360 (System ID 0A0A0A00, Multi v1.7.03 by Dekolte) | ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode "M3606 SEE" at 0xA7000200) | Airoha AV2012 DVB-S2 tuner at I2C 0x65 | Lemontree EuP MCU (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8360_Multi_1.7.03_by%20Dekolte..rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO SHD-8360/AMIKO_SHD-8360_Synaps_1.6.95_by Dekolte.abs` | Amiko SHD-8360 (System ID 0A0A0A00, Synaps v1.6.95 by Dekolte) | ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode "M3606 SEE" at 0xA7000200) | Airoha AV2012 DVB-S2 tuner at I2C 0x65 | Lemontree EuP MCU (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8360_Synaps_1.6.95_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
 | `AMIKO SHD-8360/AMIKO_SHD-8360_Ultra_1.7.03_by Dekolte..abs` | Amiko SHD-8360 (System ID 0A0A0A00, Ultra v1.7.03 by Dekolte) | ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode "M3606 SEE" at 0xA7000200) | Airoha AV2012 DVB-S2 tuner at I2C 0x65 | Lemontree EuP MCU (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_SHD-8360_Ultra_1.7.03_by%20Dekolte..rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
+| `AMIKO STHD-8800 COMBO/amiko_300_black synaps_gi_1.5.72_gisclub.tv.abs` | Amiko / Galaxy Innovations STHD-8800 Combo / GI 300 Black Synaps (System ID 06000A00, v1.5.74 gisclub.tv build) | ALi M3602A (bootloader "M3602A 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_300_black%20synaps_gi_1.5.74_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod) |
 | `AMIKO STHD-8800 COMBO/amiko_300_black synaps_gi_1.5.74_gisclub.tv.abs` | Amiko / Galaxy Innovations STHD-8800 Combo / GI 300 Black Synaps (System ID 06000A00, v1.5.74 gisclub.tv build) | ALi M3602A (bootloader "M3602A 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 8-grid 14-segment PT6311 VFD (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_300_black%20synaps_gi_1.5.74_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod) |
 | `AMIKO STHD-8800 COMBO/AMIKO_STHD-8800_combo_Galaxy_1.5.75_by Dekolte.abs` | Amiko STHD-8800 Combo (System ID 06000A00, Galaxy 1.5.75 build by Dekolte) | ALi M3602A (bootloader "M3602A 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 8-grid 14-segment PT6311 VFD (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_STHD-8800_combo_Galaxy_1.5.75_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Dekolte (Galaxy mod) |
 | `AMIKO STHD-8800 COMBO/AMIKO_STHD-8800_combo_Synaps_1.5.70_by Dekolte.abs` | Amiko STHD-8800 Combo (System ID 06000A00, Synaps v1.5.70 by Dekolte) | ALi M3602A (64/128 MB DDR2 DVB-S2 + DVB-T/C SoC, chip ID 0x3602) | Airoha AV2011 DVB-S2 tuner at I2C 0x60 | Lemontree VFD / EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_STHD-8800_combo_Synaps_1.5.70_by%20Dekolte.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Dekolte |
@@ -406,7 +423,10 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `dump.bin` | Comsat TE 1050 HD | ALi M3801 | MaxLinear MxL603 family, by its wake-up: at start the app... | two buttons straight on GPIO inputs, no LED driver (keys on GPIO 31 / 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4155976.html), p.kaczmarek2 |
 | `dump_maciej.bin` | Opticum STB HD N2 | ALi M3801 | unknown: the application touches no hardware I2C master i... | TM1650 (SCL 31, SDA 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic4156384.html#21794256), maciej_333 |
 | `DYNAVISION DAVINCI HD/synaps_dynavision_1.5.28_x4_newremote.abs` | Dynavision / Opticum Davinci / Sparkle Plus HD (Synaps 1.5.28 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_dynavision_1.5.28_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Dynavision / Fulansoft (Opticum X4 port) |
+| `DYNAVISION DAVINCI HD/synaps_dynavision_1.5.28_x4_oldremote.abs` | Dynavision / Opticum Davinci / Sparkle Plus HD (Synaps 1.5.28 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_dynavision_1.5.28_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Dynavision / Fulansoft (Opticum X4 port) |
 | `ECHOLINK EL-700 FTA/flash ECHOLINK EL700FTA mx29lv160.bin` | Echolink EL-700 FTA | ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT01---0.9.6") | unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode... | SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud) | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) |
+| `ECHOLINK EL-700 FTA/Original_mit_bootloader_0.9.7.bin` | Echolink EL-700 FTA | ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT01---0.9.6") | unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode... | SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud) | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) |
+| `ECHOLINK EL-700 FTA/sw_v1.3.7_061108_2.bin` | Echolink EL-700 FTA | ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT01---0.9.6") | unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode... | SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud) | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) |
 | `EDISION ARGUS VIP3/Edision.vip3.0A050800_emu_1.6.60.abs` | Edision Argus VIP3 (System ID 0A050800, 1.6.60 EMU build) | ALi M3606C / C3603 (bootloader "M3606c 1.1.3", seecode "M3606 SEE"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) | Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60 | Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl (a mirror of the Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Edision.vip3.0A050800_emu_1.6.60.rar&directory=Firmware%20for%20to%20all%20receivers/Edison), Edision / Fulansoft |
 | `EDISION MINIPLUS HIGHSPEED/Edision.miniplus.highspeed.0A010800_emu_1.6.60.abs` | Edision Argus Miniplus Highspeed (System ID 0A010800, 1.6.60 EMU build) | ALi M3606A / C3603 (bootloader "M3606A 1.1.3", seecode "M3606 SEE"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) | Airoha AV2011 DVB-S2 on SCB0 at I2C 0x60 | Lemontree EuP MCU + front-panel display (I2C 0x28) (SCL 103, SDA 102) | yes / yes / yes | [satedu.cba.pl (a mirror of the Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Edision.miniplus.highspeed.0A010800_emu_1.6.60.rar&directory=Firmware%20for%20to%20all%20receivers/Edison), Edision / Fulansoft |
 | `EDISION MINIPLUS HIGHSPEED/miniplus_highspeed_official_hd_1.5.87.abs` | Edision Argus Miniplus Highspeed | ALi M3606 / C3603 (the main-code chunk's version "M3606 ", the seecode chunk's "M3606 SEE"; Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) | - | - | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=miniplus_highspeed_official_hd_1.5.87.zip&directory=Firmware%20for%20to%20all%20receivers/Edision/Miniplus%20highspeed), Edision |
@@ -431,6 +451,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `FERGUSON ARIVA 154 COMBO/A154Combo_20190719_V1.32B1.abs` | Ferguson Ariva 154 Combo (V1.32B1 build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A154Combo_20190719_V1.32B1.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
 | `FERGUSON ARIVA 154 COMBO/Ferguson_A154_V.132B1_24092019_PATCH.abs` | Ferguson Ariva 154 Combo (V1.32B1 PATCH build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A154Combo_20190924_V.132B1_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
 | `FERGUSON ARIVA 154 COMBO/FERGUSON_A154Combo_V1.29B8_10102018_PATCH.abs` | Ferguson Ariva 154 Combo (V1.29B8 PATCH build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A154Combo_10102018_V1.29B8_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
+| `FERGUSON ARIVA 160 COMBO/Ferguson_160combo_20251126.abs` | Ferguson Ariva 160 Combo | ALi C3505 / M3821 with 128 MB DDR3 (maincode "ALI_C3505", seecode "M3505 SEE" at 0xAE000200, chip ID 0x3821 with variant 0xC000) | RDA Microelectronics RDA5815M (DVB-S2X) + Rafael Micro R8... | - | yes / yes / no | [ferguson-digital.eu](https://ferguson-digital.eu/), Ferguson |
 | `FERGUSON ARIVA 204/A204_20190903_V1.3B1.abs` | Ferguson Ariva 204 (V1.3B1 build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A204_20190903_V1.3B1.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20104_Ariva%20204), Ferguson |
 | `FERGUSON ARIVA 204/A204_20190925_V1.3B1_PATCH.abs` | Ferguson Ariva 204 (V1.3B1 PATCH build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A204_20190925_V1.3B1_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20104_Ariva%20204), Ferguson |
 | `FERGUSON ARIVA 204/A204_V1.3B2_31072020.abs` | Ferguson Ariva 204 (V1.3B2 build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_204/firmware/A204_V1.3B2_31072020.zip), Ferguson |
@@ -444,6 +465,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `FERGUSON ARIVA 254 COMBO/A254Combo_27072020_V1.32B3.abs` | Ferguson Ariva 254 Combo (V1.32B3 (2020-07-27) build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A254Combo_27072020_V1.32B3.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
 | `FERGUSON ARIVA 254 COMBO/FERGUSON_A254Combo_V1.29B7_10102018_PATCH.abs` | Ferguson Ariva 254 Combo (V1.29B7 PATCH build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A254Combo_10102018_V1.29B7_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
 | `FERGUSON ARIVA 254 COMBO/FERGUSON_A254Combo_V1.30B0_01032019_PATCH.abs` | Ferguson Ariva 254 Combo (V1.30B0 PATCH build) | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A254Combo_01032019_V1.30B0_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20154combo%20Ariva254combo), Ferguson |
+| `FERGUSON ARIVA 255 COMBO S/Ferguson_255comboS_V1.29B6_27122021.abs` | Ferguson Ariva 255 Combo S | ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) | RDA Microelectronics RDA5816 at I2C 0x0C (DVB-S2) + Rafae... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo_s/software/Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip), Ferguson |
 | `FERGUSON ARIVA 255 COMBO S/Ferguson_A255 Slim_V1.30B4_20231103_EU.abs` | Ferguson Ariva 255 Combo S | ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) | RDA Microelectronics RDA5816 at I2C 0x0C (DVB-S2) + Rafae... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo_s/software/Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip), Ferguson |
 | `FERGUSON ARIVA 255 COMBO/Ferguson_A255_V1.32B4.abs` | Ferguson Ariva 255 Combo | ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo/software/Ferguson_A255_V1.32B4.zip), Ferguson |
 | `FERGUSON ARIVA 52E/A52E_20160812_V1.31B2.abs` | Ferguson Ariva 52E | ALi M3606-class dual-CPU chip (the main code's strings name the M3601E / M3606 platform, the seecode chunk is the SEE's program; Application SDK4.0ba.7.20_SAB_S2_20130314) | unknown (the main code carries an nim_av7306 driver) | PT6964 (TM1628-class 3-wire) (CLK 65, DIO 66, STB 64) | yes / no / no | [ferguson-digital.eu (the manufacturer's download area)](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_52E/firmware/A52E_20160812_V1.31B2.zip), Ferguson |
@@ -468,17 +490,30 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `GOLDEN MEDIA UNIBOX XWINDOW/xwindow_gm_1.5.13_x4_oldremote.abs` | Golden Media Uni-Box 9060 / 9080 CRCI HD PVR Class (System ID 06020200, XWindow GUI 1.5.13) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=xwindow_gm_1.5.13_x4_oldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Golden Media / Opticum (XWindow GUI build) |
 | `GTMEDIA V8 UHD/GTMedia_V8UHD_V248_20231110.bin` | GTMedia V8 UHD (V248, 2023-11-10) | ALi M3922 / S3922 (ARMv7-A CPU, get_clock_3922 / get_clock_cap210, DECV_HEVC_0, DECV_AVC_0, NIM_C3501h_0/1 + NIM_CXD2856_0 / NIM_COFDM_0) | - | - | no / no / no | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V8UHD_V248_20231110.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMedia%20V8UHD), GTMedia |
 | `GTMEDIA V9 PRIME/GTMedia_V9Prime_Release_V207_20250320.bin` | GTMedia V9 Prime (Release V207, 2025-03-20) | ALi M3507 / C3507 (chip word 0x35070000 at 0xB8000000 / 0xB8080000, SDK chip code 0x10056, 128-line interrupt controller at 0xB8081080 / 0xB8081040, OTP 0x210 product 5) | RDA Microelectronics RDA5815M / AV2018 DVB-S2X on SCB0 at... | - | yes / yes / yes | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Prime_Release_V207_20250320.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMEDIA%20V9%20Prime), GTMedia |
+| `GTMEDIA V9 PRIME/GTMedia_V9Prime_V161_20210422.bin` | GTMedia V9 Prime (Release V207, 2025-03-20) | ALi M3507 / C3507 (chip word 0x35070000 at 0xB8000000 / 0xB8080000, SDK chip code 0x10056, 128-line interrupt controller at 0xB8081080 / 0xB8081040, OTP 0x210 product 5) | RDA Microelectronics RDA5815M / AV2018 DVB-S2X on SCB0 at... | - | yes / yes / yes | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Prime_Release_V207_20250320.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMEDIA%20V9%20Prime), GTMedia |
+| `GTMEDIA V9 SUPER/Freesat_V9Super_v373.bin` | GTMedia V9 Super (MP V400, 2020-10-20) | ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3505 SEE" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212) | Airoha AV2011 DVB-S2 | FD650 (TM1650-compatible, PAN_FD650_0) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super), GTMedia |
+| `GTMEDIA V9 SUPER/GTMedia_V9Super20190704.bin` | GTMedia V9 Super (MP V400, 2020-10-20) | ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3505 SEE" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212) | Airoha AV2011 DVB-S2 | tm1650 (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super), GTMedia |
 | `GTMEDIA V9 SUPER/GTMedia_V9Super_MP_20201020_v400.bin` | GTMedia V9 Super (MP V400, 2020-10-20) | ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3505 SEE" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212) | Airoha AV2011 DVB-S2 | FD650 (TM1650-compatible, PAN_FD650_0) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super), GTMedia |
+| `ILTV HD/iltv_1.5.21_hd_x4_newoldremote.abs` | ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) |
 | `ILTV HD/iltv_1.5.27_hd_x4_newoldremote.abs` | ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) |
+| `ILTV HD/ILTV_SD_1.5.08_X4_newoldremote.abs` | ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) |
 | `KRUGER MATZ KM0183/J1100393-KM00183-MC6258-V1.0.4.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v104.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0183/KM00183_V1.0.6.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0183/KM00183_V1.0.8.abs` | Kruger&Matz KM0183 ("KM00183") | ALi M3601E (the Cabletech URZ0083's twin) | - | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0083/km00183_v108.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0186/KM00186_v1.0.6.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0186/KM00186_V1.0.9.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0186/KM00186_V1.1.1.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `OPENBOX S16/OPENBOX-S16-PATCH_AZ_2.6.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
 | `OPENBOX S16/OPENBOX-S16_Eu1129.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
+| `OPENBOX S16/S16_134OK_0808.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
+| `OPENBOX S16/S16_CHN_0129.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
 | `OPENBOX S16/S16_CHN_2.8.abs` | Openbox S16 HD PVR | ALi M3601S (the main-code chunk's version "M3601S"; the main code is the SDK's "M3602 HD STB" / "S3602 HD STB" platform build, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | - | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Openbox_S16_v2.8.rar&directory=Firmware%20for%20to%20all%20receivers/Inne%20tunerki/Openbox), Openbox |
+| `OPENBOX S16/S16_EN2.11.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
+| `OPENBOX S16/S16_ENG_2.7.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
+| `OPENBOX X6 HD/20130614-openbox-x6-biss.abs` | Openbox X6 HD | ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) | Airoha AV2011 DVB-S2 | - | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox |
+| `OPENBOX X6 HD/Openbox X6 HD.abs` | Openbox X6 HD | ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) | Airoha AV2011 DVB-S2 | - | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox |
 | `OPTICUM 4000A/DumpFlash Opticum4000a(Globo7xxx)4,5w.bin` | Opticum / Globo Opticum 4000A / Globo 7010A | ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0) | - | 74HC164 shift register + 4-digit multiplexed LED (PAN_COMMON_0) (CLK 16) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=DumpFlash-Opticum4000a-Globo7xxx45w.zip&directory=J-Tag_Dump_Flash), satedu.cba.pl J-Tag_Dump_Flash archive |
+| `OPTICUM 7000CR/ALI3329C_05000200_globo_cr_amstar_led_multiroom_1.3.26.abs` | Opticum / Globo 7000CR MultiView (System ID 05000200, Amstar LED Multiroom v1.3.26) | ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0) | - | PAN_HWSCAN_0 (internal hardware scanner) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/), Globo |
 | `OPTICUM 7300 PVR/7300PVR.bin` | Opticum 7300 PVR CI2CX | ALi M3329E (M3327-platform DVB-S PVR SoC reading chip ID 0x3329, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327 at 0xB8013200, DECV_AVC_0, VPO_M3327, SND_M3327, OSD_S36_0/1, GE_M36 at 0xB800E000) | - | PT6312 / uPD16312 14-segment 8-character VFD (CLK 3, DIO 2, STB 4) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum_7300PVR.rar&directory=J-Tag_Dump_Flash), satedu.cba.pl J-Tag_Dump_Flash archive |
 | `Opticum Blue R265 Lite/M3822P.bin` | Opticum Blue R265 Lite | ALi M3822P | MaxLinear MxL608 (reported for this board; the firmware p... | HD2015 (TM1650-compatible; no display soldered, 3 buttons) (SCL 57, SDA 58) | yes / no / no | [github.com/openshwprojects/FlashDumps](https://github.com/openshwprojects/FlashDumps/tree/main/Sat/Opticum%20Blue%20R265%20Lite), openshwprojects |
 | `Opticum Blue R265 Lite/T2GEN265_1.1.5-2022-08-01.abs` | Opticum Blue R265 Lite (also sold as Skymaster STB 2GEN, STB M265 and STB N2) | ALi M3822P | MaxLinear MxL608 (reported for this board; the firmware c... | HD2015 (TM1650-compatible; no display soldered, 3 buttons) (SCL 57, SDA 58) | yes / yes / yes | [update.skymaster.de](https://update.skymaster.de/api/downloadfile?file=sw/SW_Opticum_Blue_R265_Lite_1.2.0-2023-03-17.zip), Skymaster (the Polish distributor) |
@@ -513,6 +548,8 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `OPTICUM HD X4 220/synaps_galaxy_1.5.18_x4_newoldremote.abs` | Globo / Opticum HD X4 220 (System ID 06020200, Galaxy Synaps 1.5.18 newoldremote) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_galaxy_1.5.18_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Globo / Galaxy Innovations |
 | `OPTICUM HD X4 220/synaps_galaxy_1.5.20_x4_newoldremote.abs` | Globo / Opticum HD X4 220 (System ID 06020200, Galaxy Synaps 1.5.20 newoldremote) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_galaxy_1.5.20_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Globo / Galaxy Innovations |
 | `OPTICUM HD X4 220/synaps_galaxy_1.5.22_x4_newoldremote.abs` | Opticum / Globo HD X4 220 / X402p / X403p (System ID 06020200, Synaps Galaxy 1.5.22 new+old remote build) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.5_20110905) | Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_galaxy_1.5.22_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Globo / Opticum / Synaps |
+| `OPTICUM HD X403P/globo_x4_black synaps_mkfix_1.5.69_gisclub.tv.abs` | Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) | ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602) | Airoha AV2011 DVB-S2 tuner at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7) |
+| `OPTICUM HD X403P/globo_x4_black_synaps_gi_1_5_70_by_Valera61.abs` | Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) | ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602) | Airoha AV2011 DVB-S2 tuner at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7) |
 | `OPTICUM HD X403P/Opticum HD X402p-403p_220_ps_synaps_rc1_1.5.48.abs` | Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) | ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602) | Airoha AV2011 DVB-S2 tuner at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7) |
 | `OPTICUM HD X403P/Opticum HD X402p-403p_220_ps_synaps_rc2_1.5.48_by dreamer1983.abs` | Opticum HD X402p / X403p (System ID 06020200, Synaps RC2 1.5.48 build) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, NIM_QAM_S3202_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.12_GLS_S2_20120627 / SDK4.0aa.5.5_20110905) | Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc2_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Globo / Opticum (Synaps RC2 packaging by dreamer1983) |
 | `OPTICUM HD X403P/Opticum_HD-X402p-403p_galaxy_ps_synaps_1.5.53_by dreamer1983_TNT_fix.abs` | Opticum HD X402p / X403p (System ID 06020200, Synaps Galaxy PS 1.5.53 TNT fix by dreamer1983) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, NIM_QAM_S3202_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601; SDK4.0aa.5.12_GLS_S2_20120627) | Airoha AV2011 DVB-S2 on SCB1 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum_HD-X402p-403p_galaxy_ps_synaps_1.5.53_by%20dreamer1983_TNT_fix.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Globo / Opticum (Synaps Galaxy PS TNT fix packaging by dreamer1983) |
@@ -564,12 +601,15 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `OPTICUM XS65 TWIN/140_TWIN_RETAIL_PL.abs` | Opticum / Globo XS65 Twin (Polish retail build) | ALi M3511 / M3503 (the uppercase BOOTLOADER chunk's version "M3503---0.1.0"; 256 MB DDR3 with the SEE partition at 224..256 MB, 0xAE000200, and revision B variant 0x0001) | Airoha AV2011 at I2C 0x60 | FD650K (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20XS65%20TWIN_140_TWIN_RETAIL_PL.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum) |
 | `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN` | Echosonic Mini ESR-250 | ALi M3510A | RDA Microelectronics RDA5815 at I2C 0x60 | TM1650-compatible (SCL 135, SDA 134) | yes / yes / yes | not recorded |
 | `other/sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin` | satellite receiver main board "s15125" | ALi M3329 (an M3327-platform chip: the SDK's NIM_M3327, DMX_M3327, DECV_M3327, VPO_M3327, SND_M3327 and OSD_M3327C drivers) | - | TM1650-compatible (SCL 15, SDA 16) | yes / yes / yes | not recorded |
+| `PROTON HD/globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs` | Proton / Opticum Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=lemontree_proton_1.5.12_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Proton / Fulansoft (Opticum X4 port) |
 | `PROTON HD/lemontree_proton_1.5.12_x4_newoldremote.abs` | Proton / Opticum Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=lemontree_proton_1.5.12_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Proton / Fulansoft (Opticum X4 port) |
 | `SAB TITAN I HD 3602/globo_x4_amstar_sab_1.5.22_gisclub.tv.abs` | SAB / Globo Titan I HD 3602 / Opticum HD X4 (System ID 06020200, Amstar GUI 1.5.22) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x4_amstar_sab_1.5.22_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), SAB / Globo (gisclub.tv Amstar GUI mod) |
 | `SAB TITAN I HD 3602/globo_x4_amstar_sab_1.6.17_gisclub.tv.abs` | SAB / Globo Titan I HD 3602 / Opticum HD X4 (System ID 06020200, Amstar GUI 1.6.17) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x4_amstar_sab_1.6.17_gisclub.tv.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), SAB / Globo (gisclub.tv Amstar GUI mod) |
 | `SAB TITAN I HD 3602/globo_x4_xwindow_sab_1.6.17_gisclub.tv.abs` | SAB / Globo Titan I HD 3602 / Opticum HD X4 (System ID 06020200, XWindow GUI 1.6.17) | ALi M3602B (bootloader "M3602B 1.1.6"; NIM_S3501_0, NIM_COFDM_0, DMX_S3601_0, DECV_AVC_0, DECV_S3601_0, OSD_S36_0/1, VPO_S3601) | Airoha AV2011 DVB-S2 on SCB1 / SCB0 at I2C 0x60 | Lemontree EuP MCU (I2C 0x28) (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=globo_x4_xwindow_sab_1.6.17_gisclub.tv.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), SAB / Globo (gisclub.tv XWindow GUI mod) |
+| `SKYBOX V6/product_sabbat_dual.abs` | Skybox / Freesat V6 / V7 / V8 HD (product_sabbat_dual) | ALi M3503 rev B (dual-CPU MIPS32, seecode at 0xA6000200, maincode at 0x80000200) | Airoha AV2011 / RDA5815M DVB-S2 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/), Skybox |
 | `srt8115.BIN` | Strong SRT 8115 | ALi M3801 | MaxLinear MxL603 family (MxL603 / pin-compatible MxL608)... | TM1628-class 3-wire (CLK 31, DIO 9, STB 11) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3123357.html#15195863), andrzej 4 |
 | `SRT_Prima_VIII_V1.0.6_20160114.abs` | Strong Prima VIII | ALi M3801 | Silicon Labs Si2144 at I2C 0x60 | - | yes / yes / yes | not recorded |
+| `STARSAT SR-X4000D/ali_dvbs_v4_rock_3329c_v1.1.7_starsat_20080222.bin` | StarSat SR-X4000D / SR-X4200D | ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT03---3.0.4") | unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode... | SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud) | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/), StarSat |
 | `STRONG PRIMA VIII/GD25Q32B_20190128_141501.BIN` | Strong Prima VIII | ALi M3801 | MaxLinear MxL603 family at I2C 0x60 on the first hardware... | two buttons straight on GPIO inputs, no display (its CH455 driver has no pins) (keys on GPIO 31 / 9) | yes / yes / yes | [elektroda.pl](https://www.elektroda.pl/rtvforum/topic3549956.html#17756835), bakardjiev |
 | `SYNAPS STC-3220/RsP_MoD_14000A00_STC3220_2.4.41_EMU.abs` | Synaps / Amiko STC-3220 / HD8260+ (System ID 14000A00, RsP MoD v2.4.41 build) | ALi M3516A / M3503 with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=RsP_MoD_14000A00_STC3220_2.4.41_EMU.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), RsP / Synaps / Amiko |
 | `THOMSON THT501/THT501-V1.0.9.abs` | Thomson THT501 | ALi M36xx (the Cabletech URZ0083's generation: the same chunk layout, bootloader "DVBT---0.1.0" of 2011-08-03 and HDCPKey "Demo s3602") | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/strong_thomson/thomson_tht501_v109.rar), Thomson (Strong), mirrored by Gutek |
@@ -632,6 +672,26 @@ It prints "Booting...", "Main function", its stack and heap limits, a floating-p
 Amiko ALI3606 (System ID 0A010A00) firmware 1.6.89 with the Edision HD GUI (2015-10-20) on an 8 MB SPI flash.
 
 Built on the ALi M3606 / C3603 dual-core SDK (Libcore 7.24.0@SDK4.0ba.7.24_SAB_20130620) shared across Amiko and Edision receivers; silences UART TX via a dummy printf stub and checks an external anti-clone crypto chip at I2C 0x10 at startup.
+
+
+## `AMIKO CHD8270+/amiko_14000A00_galaxy_2.4.89_gisclub.tv.abs`
+
+* **Box:** Amiko CHD8270+ (System ID 14000A00, v2.3.40 EMU build)
+* **Type:** DVB-C / DVB-T2 Full HD Twin Cable/Terrestrial receiver with Conax / MultiCAS card reader, CI+ slot, Ethernet and USB PVR
+* **Board:** M3606-01V01-030 (ALi M3516A / M3503 rev B 256 MB DDR3 board)
+* **SoC:** ALi M3516A / M3503 rev B (bootloader "M3516A 1.2.1", seecode "M3606 SEE", 256 MB DDR3) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3516A DVB-C/T2 (NIM_COFDM_0 / NIM_QAM_S3202)
+* **Flash:** 16 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 14000A002489 (maincode "14000A002489"; bootloader "M3516A 1.2.1"), 2018-6-22, 16777216 bytes, SHA-1 b12c692e5d4e01965c7796d89460ec1c0d35a108
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2018-4-24), maincode(AV) 0x030000 (14000A002489, 2018-6-22), seecode 0x430000 (M3606 SEE, 2018-4-24), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_CHD8270_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-01-15). Archive amiko_14000A00_galaxy_2.4.89_gisclub.tv.abs from AMIKO CHD8270+; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3503 rev B with 256 MB DDR3 (chips/m3503.py, run_dump_chd8270_plus_app_starts.py, run_dump_chd8270_plus_capture_screen.py): the XIP bootloader ("M3516A 1.2.1") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!" and writes " ON " to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA14187DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints "hs_config_init", updates the CH455 display to " on ", populates userdb(64+64) at 0xF3FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours).
+
+Amiko CHD8270+ (System ID 14000A00) firmware v2.3.40 EMU (2016-01-15) on a 16 MB SPI flash for the ALi M3516A / M3503 rev B Full HD DVB-C / DVB-T2 Cable/Terrestrial CI+ receiver with 256 MB DDR3.
+
+Pairs dual-CPU M3503 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
 
 
 ## `AMIKO CHD8270+/AMIKO_CHD8270_2.3.40_emu.abs`
@@ -2642,6 +2702,26 @@ Amiko HD8255+ (System ID 6C000A00) firmware v1.4.17 EMU (2020-4-18) on an 8 MB S
 Pairs dual-CPU C3505 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 107 / 108 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO HD8255+/Amiko_HD8255_1.4.30_emu.abs`
+
+* **Box:** Amiko HD8255+ (System ID 6C000A00, v1.3.88 EMU build)
+* **Type:** Full HD H.265/HEVC DVB-S2 satellite receiver with Conax / MultiCAS card reader, CI+ slot, Ethernet and USB PVR
+* **Board:** 6C000A00 (ALi M3529A / C3505 256 MB DDR3 board)
+* **SoC:** ALi M3529A / C3505 (bootloader "M3529A 1.1.2", seecode "M3606 SEE", 256 MB DDR3) (C3505 (chips/c3505.py))
+* **Demodulator:** internal ALi C3505 DVB-S2 (NIM_C3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 108)
+* **IR coding:** necfirst
+* **Image:** update, 6C000A001430 (maincode "6C000A001430"; bootloader "M3529A 1.1.2"), 2010-08-12, 8388608 bytes, SHA-1 add9d42b9facac78fd4afe560c96cf42d8657fb3
+* **Layout:** bootloader 0x000000 (M3529A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6C000A001430, 2010-08-12), seecode 0x3F0000 (M3606 SEE, 2020-12-15), default_lang 0x52FD00 (1.0.0, 2007-12-05), cipluskey 0x52FF80 (1.1.0, 2010-04-20), countryband 0x53FF80 (1.0.0, 2008-09-23), img_webserver 0x547F80 (1.0.0, 2008-09-23), html_webserver 0x5A7F80 (1.0.0, 2008-09-23), logo_user 0x647F80 (1.0.0, 2006-03-03), logo_menu 0x657F80 (1.0.0, 2006-03-01), logo_radio 0x677F80 (1.0.0, 2006-03-01), logo_boot 0x697F80 (1.0.0, 2006-03-01), patch 0x6BFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x6E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8255_1.3.88_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-07-03). Archive Amiko_HD8255_1.4.30_emu.abs from AMIKO HD8255+; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as C3505 with 256 MB DDR3 (chips/c3505.py, run_dump_hd8255_plus_app_starts.py, run_dump_hd8255_plus_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, copies itself to 0x81000000, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, writes " ON " to the CH455 front panel on GPIO 107 (SCL) / 108 (SDA), shows the boot logo through VideoOutputM36F, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints "---led 455 attach OK--" and updates the CH455 panel to " on ", completes 2,136 SEE RPC calls (including DSC Command Queue operations in crypto_engine.py), and renders its 1280x720 ARGB8888 OSD dialog through the display engine at 0xB8006900.
+
+Amiko HD8255+ (System ID 6C000A00) firmware v1.3.88 EMU (2019-07-03) on an 8 MB SPI flash for the ALi M3529A / C3505 Full HD H.265/HEVC DVB-S2 CI+ satellite receiver with 256 MB DDR3.
+
+Pairs dual-CPU C3505 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 107 / 108 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO HD8255+/Amiko_HD8255_1.5.06_emu.abs`
 
 * **Box:** Amiko HD8255+ (System ID 6C000A00, v1.5.06 EMU build)
@@ -3535,6 +3615,27 @@ Amiko HD8260+ (System ID 14000A00) Starlight 2.3.48 by Dekolte firmware (2016-2-
 Uses an XIP CacheAsRam bootloader ("M3516A 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.3.50_by Dekolte.abs`
+
+* **Box:** Amiko HD8260+ (System ID 14000A00 / 14000A88, Edision Piccollo GUI v.2468 build)
+* **Type:** DVB-S2 + DVB-T2/C Full HD combo receiver with CI slot, CA card reader, Ethernet and USB Wi-Fi
+* **Board:** 14000A00 (bootloader version "M3516A 1.2.1", 16 MB SPI flash, 256 MB DDR3 M3503/M3516 combo platform)
+* **SoC:** ALi M3516A / M3503 with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal DVB-S2 + external Availink AVL6762 DVB-T2/C on bit-banged GPIO I2C (SCL = GPIO 7, SDA = GPIO 8) at 0x14
+* **Tuner:** Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)
+* **Flash:** 16 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 14000A002350 (maincode "14000A002350"; bootloader "M3516A 1.2.1"), 2010-08-12, 16777216 bytes, SHA-1 5192b4439f59ae11b9f1c37b36af120d29c39207
+* **Layout:** bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-2-18), maincode(AV) 0x030000 (14000A002350, 2010-08-12), seecode 0x430000 (M3606 SEE, 2016-2-18), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=8260_Edision_Piccollo_%20v.2468.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision (2019-01-25). Archive AMIKO_HD8260_Starlight_2.3.50_by Dekolte.abs from AMIKO HD8260+; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB DDR3 M3503 / M3516A board on a 16 MB SPI flash (chips/m3503.py, chip word 0x35030001 for M3503 revision B, run_dump_hd8260_app_starts.py, run_dump_hd8260_capture_screen.py): the XIP bootloader starts with its stack in the cache-as-RAM window at 0x8FFF8000..0x8FFFFFFF, copies itself to 0x81400000, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, parks the SEE boot stub, unpacks seecode ("M3606 SEE") to 0xAE000200 (224 MB physical DDR) and maincode(AV) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application initialises its external Availink AVL6762 DVB-T2/C demodulator at I2C 0x14 over bit-banged GPIO I2C on SCL = GPIO 7 / SDA = GPIO 8 ("Demod is 6762!!!", demods.py:AVL6762) and Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB0, drives the CH455 front panel on GPIO 135 / 134 (" ON ", " on "), populates userdb(64+64) at 0xF3FF80, and renders its 1920x1080 CLUT8 OSD through GeM36F / GMA layer 0 (without the board's anti-clone security IC it displays the hardware-ID warning dialog).
+
+Amiko HD8260+ (System ID 14000A00 / 14000A88) firmware v.2468 with the Edision Piccollo GUI (2019-01-25) for the Full HD DVB-S2 + DVB-T2/C combo receiver on the ALi M3516A / M3503 SoC with 256 MB DDR3 and a 16 MB SPI flash.
+
+Pairs the M3516A's internal DVB-S2 front-end + Airoha AV2012 tuner (0x61 on SCB0) with an external Availink AVL6762 DVB-T2/C demodulator at 0x14 on bit-banged GPIO 7 / 8 + MaxLinear MxL608 tuner (0x60), and drives a CH455 4-digit LED panel on GPIO 135 / 134.
+
+
 ## `AMIKO HD8260+/AMIKO_HD8260_Starlight_2.4.25.R1A_by Dekolte.abs`
 
 * **Box:** Amiko HD8260+ (System ID 14000A00, Starlight 2.4.25.R1A by Dekolte build)
@@ -4073,6 +4174,27 @@ Amiko HD8265+ (System ID 6C000A00) firmware 1.3.48 MCAS (2018-10-26) for the Ful
 Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108.
 
 
+## `AMIKO HD8265+/Amiko_HD8265_1.3.63_mcas.abs`
+
+* **Box:** Amiko HD8265+ (System ID 6C000A00, Edision GUI v.1515 build)
+* **Type:** DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI slot, CA card reader, Ethernet and USB Wi-Fi
+* **Board:** 6C000A00 (bootloader version "M3529A 1.1.1", 256 MB DDR3 C3505 combo platform)
+* **SoC:** ALi M3529A / C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3606 SEE" at 0xAE000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_S3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14
+* **Tuner:** Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 108)
+* **IR coding:** necfirst
+* **Image:** update, 6C000A001363 (maincode "6C000A001363"; bootloader "M3529A 1.1.2"), 2010-08-12, 8388608 bytes, SHA-1 e0e22b066af829f8dafb484086adfd4fa31360a3
+* **Layout:** bootloader 0x000000 (M3529A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6C000A001363, 2010-08-12), seecode 0x3F0000 (M3606 SEE, 2019-2-12), default_lang 0x52FD00 (1.0.0, 2007-12-05), cipluskey 0x52FF80 (1.1.0, 2010-04-20), countryband 0x53FF80 (1.0.0, 2008-09-23), img_webserver 0x547F80 (1.0.0, 2008-09-23), html_webserver 0x5A7F80 (1.0.0, 2008-09-23), logo_user 0x647F80 (1.0.0, 2006-03-03), logo_menu 0x657F80 (1.0.0, 2006-03-01), logo_radio 0x677F80 (1.0.0, 2006-03-01), logo_boot 0x697F80 (1.0.0, 2006-03-01), patch 0x6BFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x6E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%208265%20Edision_v.1515.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision (2020-12-4). Archive Amiko_HD8265_1.3.63_mcas.abs from AMIKO HD8265+; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8265_v1515_app_starts.py, run_dump_hd8265_v1515_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) to 0x80000200 and seecode ("M3606 SEE") to 0xAE000200 (224 MB physical DDR), sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR (restoring 0xBFE00000 to the 0xBF800000..0xBFFFFFFF flash mirror), and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application initialises its external Availink AVL6762 DVB-T2/C demodulator at I2C 0x14 on SCB3 ("Demod is 6762!!!", demods.py:AVL6762), Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB1 and MaxLinear MxL608 DVB-T2/C tuner at I2C 0x60 on SCB3, drives the CH455 front panel on GPIO 107 / 108 (" ON ", " on "), populates its blank userdb(64+64) partition from defaultdb(PRC) over SPI, and renders its 1280x720 ARGB8888 OSD through the display engine at 0xB8006900.
+
+Amiko HD8265+ (System ID 6C000A00) firmware v.1.5.15 with the Edision GUI (2020-12-4) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3529A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
+
+Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3, chip_id 0x0E) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108.
+
+
 ## `AMIKO HD8265+/Amiko_HD8265_Edision_1.3.17.abs`
 
 * **Box:** Amiko HD8265+ (System ID 6C000A00, Edision v1.3.17)
@@ -4173,6 +4295,27 @@ Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB
 Amiko HD8275+ (System ID 6C000A00) firmware 1.3.14 EMU (2018-4-3) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3529A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
 
 Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108.
+
+
+## `AMIKO HD8275+/Amiko_HD8275_1.3.87_emu.abs`
+
+* **Box:** Amiko HD8275+ (System ID 6C000A00, firmware 1.2.02 emu)
+* **Type:** DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo receiver with CI slot, CA card reader, Ethernet and USB PVR
+* **Board:** 6C000A00 (bootloader version "M3529A 1.1.2", 8 MB SPI flash, 256 MB DDR3 C3505 combo platform)
+* **SoC:** ALi M3529A / C3505 with 256 MB DDR3 (NIM_C3505_0 / NIM_S3505_0, DECV_HEVC_0, seecode "M3606 SEE" at 0xAE000200; SDK4.0ia.17.15_20171115) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 / NIM_S3505_0) + external Availink AVL6762 DVB-T2/C on SCB3 at I2C 0x14
+* **Tuner:** Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at I2C 0x60 (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 108)
+* **IR coding:** necfirst
+* **Image:** update, 6C000A001387 (maincode "6C000A001387"; bootloader "M3529A 1.1.2"), 2010-08-12, 8388608 bytes, SHA-1 07257cc26a8650b237e41d5d610f225449882fc1
+* **Layout:** bootloader 0x000000 (M3529A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6C000A001387, 2010-08-12), seecode 0x3F0000 (M3606 SEE, 2019-6-26), default_lang 0x52FD00 (1.0.0, 2007-12-05), cipluskey 0x52FF80 (1.1.0, 2010-04-20), countryband 0x53FF80 (1.0.0, 2008-09-23), img_webserver 0x547F80 (1.0.0, 2008-09-23), html_webserver 0x5A7F80 (1.0.0, 2008-09-23), logo_user 0x647F80 (1.0.0, 2006-03-03), logo_menu 0x657F80 (1.0.0, 2006-03-01), logo_radio 0x677F80 (1.0.0, 2006-03-01), logo_boot 0x697F80 (1.0.0, 2006-03-01), patch 0x6BFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x6E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Amiko_HD8275_1.2.02_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2018-01-23). Archive Amiko_HD8275_1.3.87_emu.abs from AMIKO HD8275+; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_hd8275_app_starts.py, run_dump_hd8275_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, writes " ON " to the CH455 panel on GPIO 107 / 108, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR (restoring flash at 0xBF800000..0xBFFFFFFF), unpacks 3.73 MB seecode ("M3606 SEE") to 0xAE000200 and 12.16 MB maincode(AV) ("6C000A001202") to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on ", downloads firmware into its external Availink AVL6762 DVB-T2/C demodulator on SCB3 at I2C 0x14 ("Demod is 6762!!!", demods.py:AVL6762), configures its Airoha AV2012 DVB-S2 tuner at I2C 0x61 on SCB1 and MaxLinear MxL608 DVB-T2/C tuner at I2C 0x60 on SCB3, populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD dialog through the display engine's G1 CLUT8 layer at 0xB8006A00 (5 GE commands; without the board's anti-clone IC it displays "SW is not designed for this HW, please change back to offical SW!-----00000000000000 6c000a00").
+
+Firmware 1.2.02 emu (2018-01-23, System ID 6C000A00) for the Amiko HD8275+ Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3529A / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
+
+Pairs the C3505's internal DVB-S2 demodulator + Airoha AV2012 tuner (0x61 on SCB1) with an external Availink AVL6762 DVB-T2/C demodulator (0x14 on SCB3, chip_id 0x0E) + MaxLinear MxL608 tuner (0x60 on SCB3), and drives a CH455 front-panel LED controller on GPIO 107 / 108.
 
 
 ## `AMIKO HD8275+/Amiko_HD8275_1.5.52_emu.abs`
@@ -4734,6 +4877,27 @@ Amiko Impulse SAT (System ID 20020A00) firmware 2.3.62 EMU (2016-5-12) for the F
 Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
 
+## `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.3.63_emu.abs`
+
+* **Box:** Amiko Impulse SAT (System ID 20020A00)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, external IR sensor / 4-digit LED eye, and USB PVR
+* **Board:** 20020A00 (bootloader version "M3510B 1.1.1", 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode "M3606 SEE" at 0xA6000200; SDK4.0fa.13.11_20150910 / SDK4.0fa.13.6_20141203byD09WXW) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3510B DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 20020A002363 (maincode "20020A002363"; bootloader "M3510B 1.1.1"), 2010-08-12, 8388608 bytes, SHA-1 7b93075d11f0c9d313930f07e77b713307eba2db
+* **Layout:** bootloader 0x000000 (M3510B 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-5-19), maincode(AV) 0x030000 (20020A002363, 2010-08-12), seecode 0x3B0000 (M3606 SEE, 2016-5-19), default_lang 0x4AFD00 (1.0.0, 2007-12-05), cipluskey 0x4AFF80 (1.1.0, 2010-04-20), countryband 0x4C0000 (1.0.0, 2008-09-23), logo_user 0x4C8000 (1.0.0, 2006-03-03), logo_menu 0x4D8000 (1.0.0, 2006-03-01), logo_radio 0x4F8000 (1.0.0, 2006-03-01), logo_boot 0x518000 (1.0.0, 2006-03-01), patch 0x53FF80 (1.0.0, 2010-02-24), defaultdb(FAC) 0x560000 (1.0.1, 2005-2-28), defaultdb(PRC) 0x5E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-01-15). Archive AMIKO_Impulse_SAT_2.3.63_emu.abs from AMIKO IMPULSE SAT; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_impulse_sat_app_starts.py, run_dump_impulse_sat_capture_screen.py): the XIP bootloader ("M3510B 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF before relocating to DDR, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE", 2.98 MB) and maincode(AV) ("20020A002340", 12.37 MB) to 0x80000200, and starts both cores ("MC: APP  init ok", main EBase 0x80002000, SEE running at 0xA6000200 with EBase 0x86002001).  The application prints "---led 455 attach OK--" and updates the CH455 panel to " on ", initialises hs_config_init and userdb(64+64) from defaultdb(PRC) over SPI, and without the board's anti-clone security IC displays "SW is not designed for this HW, please change back to offical SW!-----00000000000000 20020a00" on GMA layer 0 (1280x720).
+
+Amiko Impulse SAT (System ID 20020A00) firmware v2.3.40 (2016-01-15) for the compact Full HD DVB-S2 satellite receiver on the ALi M3510B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and an external CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA).
+
+
 ## `AMIKO IMPULSE SAT/AMIKO_Impulse_SAT_2.4.31_emu.abs`
 
 * **Box:** Amiko Impulse SAT (System ID 20020A88, v2.4.31 EMU)
@@ -4815,6 +4979,27 @@ Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmwar
 Amiko Impulse SAT (System ID 20020A00, Synaps v2.3.40 by Dekolte) firmware (2016-05-15) on a 8 MB SPI flash for the ALi M3510B / M3503 rev B receiver with 128 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3510B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA) (" ON " -> "-ON-").
+
+
+## `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.08_emu.abs`
+
+* **Box:** Amiko Impulse T2/C (System ID 22000A88, v2.5.11 EMU)
+* **Type:** DVB-T2/C Full HD terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 22000A88 (bootloader version "M3821A 1.1.1", 128 MB DDR3 M3821 platform)
+* **SoC:** ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) (M3821 (chips/m3821.py))
+* **Demodulator:** internal ALi M3821A DVB-T2/C (NIM_S3821_0 / NIM_QAM_S3281)
+* **Tuner:** MaxLinear MxL608 / MxL603 DVB-T2/C tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 128, SDA 129)
+* **IR coding:** necfirst
+* **Image:** update, 22000A882508 (maincode "22000A882508"; bootloader "M3821A 1.1.1"), 2010-08-12, 8388608 bytes, SHA-1 07177ade78d8b5bb5c449dedf5245d0576f43f49
+* **Layout:** bootloader 0x000000 (M3821A 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2019-3-12), maincode(AV) 0x030000 (22000A882508, 2010-08-12), seecode 0x330000 (M3606 SEE, 2019-3-12), default_lang 0x46FD00 (1.0.0, 2007-12-05), cipluskey 0x46FF80 (1.1.0, 2010-04-20), countryband 0x480000 (1.0.0, 2008-09-23), logo_user 0x488000 (1.0.0, 2006-03-03), logo_menu 0x498000 (1.0.0, 2006-03-01), logo_radio 0x4B8000 (1.0.0, 2006-03-01), logo_boot 0x4D8000 (1.0.0, 2006-03-01), patch 0x4FFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x520000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-8-22). Archive AMIKO_Impluse_T2C_2.5.08_emu.abs from AMIKO IMPULSE T2C; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a dual-CPU XIP M3821 board (chips/m3821.py, run_dump_impulse_t2c_2511_app_starts.py, run_dump_impulse_t2c_2511_capture_screen.py): the XIP bootloader uses cache-as-RAM until DDR3 is up, drives the CH455 panel on GPIO 128 / 129 ("CH455 panel init OK!", " ON "), parks the SEE boot stub at 0xA1016804, unpacks seecode ("M3606 SEE") and maincode(AV) ("22000A882511", 12.62 MB) via LZMA, and starts both cores (main EBase 0x80002000, SEE at 0xA6000200 with EBase 0x86002001).  The application attaches PAN_CH455_0 ("---led 455 attach OK--", " on ") and renders its 1280x720 OSD dialog through GE_M36F.
+
+Amiko Impulse T2/C (System ID 22000A88) firmware v2.5.11 EMU (2019-8-22) for the Full HD DVB-T2/C terrestrial and cable receiver on the ALi M3821A SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Pairs an XIP "M3821A 1.1.1" bootloader with a dual-CPU maincode(AV) + "M3606 SEE" co-processor build and a CH455 4-digit LED panel on GPIO 128 (SCL) / 129 (SDA).
 
 
 ## `AMIKO IMPULSE T2C/AMIKO_Impluse_T2C_2.5.11_emu.abs`
@@ -4920,6 +5105,27 @@ Pairs an XIP "M3821A 1.1.1" bootloader with a dual-CPU Libcore 13.7.0 maincode(A
 Amiko Impulse T2/C (System ID 22000A00) EMU firmware v2.2.47 emu (2016-3-14) for the compact Full HD DVB-T2/C terrestrial and cable receiver on the ALi M3821A SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Pairs an XIP "M3821A 1.1.1" bootloader with a dual-CPU maincode(AV) + "M3606 SEE" co-processor build and an external CH455 4-digit LED/IR sensor on GPIO 128 (SCL) / 129 (SDA).
+
+
+## `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.58_emu.abs`
+
+* **Box:** Amiko Impulse T2/C (System ID 22000A88, v2.5.11 EMU)
+* **Type:** DVB-T2/C Full HD terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 22000A88 (bootloader version "M3821A 1.1.1", 128 MB DDR3 M3821 platform)
+* **SoC:** ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode "M3606 SEE" at 0xA6000200) (M3821 (chips/m3821.py))
+* **Demodulator:** internal ALi M3821A DVB-T2/C (NIM_S3821_0 / NIM_QAM_S3281)
+* **Tuner:** MaxLinear MxL608 / MxL603 DVB-T2/C tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 128, SDA 129)
+* **IR coding:** necfirst
+* **Image:** update, 22000A002258 (maincode "22000A002258"; bootloader "M3821A 1.1.1"), 2010-08-12, 8388608 bytes, SHA-1 bfb9b11a3e27e38776b255b313f1268de6591aa8
+* **Layout:** bootloader 0x000000 (M3821A 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-4-21), maincode(AV) 0x030000 (22000A002258, 2010-08-12), seecode 0x330000 (M3606 SEE, 2016-4-21), default_lang 0x46FD00 (1.0.0, 2007-12-05), cipluskey 0x46FF80 (1.1.0, 2010-04-20), countryband 0x480000 (1.0.0, 2008-09-23), logo_user 0x488000 (1.0.0, 2006-03-03), logo_menu 0x498000 (1.0.0, 2006-03-01), logo_radio 0x4B8000 (1.0.0, 2006-03-01), logo_boot 0x4D8000 (1.0.0, 2006-03-01), patch 0x4FFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x520000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.5.11_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2019-8-22). Archive AMIKO_Impulse_T2C_2.2.58_emu.abs from AMIKO IMPULSE T2C; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a dual-CPU XIP M3821 board (chips/m3821.py, run_dump_impulse_t2c_2511_app_starts.py, run_dump_impulse_t2c_2511_capture_screen.py): the XIP bootloader uses cache-as-RAM until DDR3 is up, drives the CH455 panel on GPIO 128 / 129 ("CH455 panel init OK!", " ON "), parks the SEE boot stub at 0xA1016804, unpacks seecode ("M3606 SEE") and maincode(AV) ("22000A882511", 12.62 MB) via LZMA, and starts both cores (main EBase 0x80002000, SEE at 0xA6000200 with EBase 0x86002001).  The application attaches PAN_CH455_0 ("---led 455 attach OK--", " on ") and renders its 1280x720 OSD dialog through GE_M36F.
+
+Amiko Impulse T2/C (System ID 22000A88) firmware v2.5.11 EMU (2019-8-22) for the Full HD DVB-T2/C terrestrial and cable receiver on the ALi M3821A SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Pairs an XIP "M3821A 1.1.1" bootloader with a dual-CPU maincode(AV) + "M3606 SEE" co-processor build and a CH455 4-digit LED panel on GPIO 128 (SCL) / 129 (SDA).
 
 
 ## `AMIKO IMPULSE T2C/AMIKO_Impulse_T2C_2.2.60_emu.abs`
@@ -5308,6 +5514,24 @@ Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmwar
 Amiko Micro HD SE (System ID 10010A00) firmware Super 2.3.75 by Dekolte (2016-7-12) for the compact Full HD DVB-S2 satellite receiver on the ALi M3511B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses an XIP CacheAsRam bootloader ("M3511B 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.4.15_by Dekolte.abs`
+
+* **Box:** Amiko Micro HD SE (System ID 10010A88, Edision v2.4.86)
+* **Type:** Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 10010A88 (bootloader version "M3511B 1.1.1", 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0x86000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511B DVB-S2 (NIM_S3503_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 10010A002415 (maincode "10010A002415"; bootloader "M3511B 1.1.1"), 18-1-2017, 8388608 bytes, SHA-1 097120dd25d4eb5ce996fe9687d72b1fea77a769
+* **Layout:** bootloader 0x000000 (M3511B 1.1.1, 18-1-2017), MemCfg 0x02F000 (00000001, 2017-1-13), maincode(AV) 0x030000 (10010A002415, 18-1-2017), seecode 0x3B0000 (M3606 SEE, 2017-1-13), default_lang 0x4AFD00 (1.0.0, 2007-12-05), cipluskey 0x4AFF80 (1.1.0, 2010-04-20), countryband 0x4C0000 (1.0.0, 2008-09-23), img_webserver 0x4C8000 (1.0.0, 2008-09-23), html_webserver 0x528000 (1.0.0, 2008-09-23), logo_user 0x5C8000 (1.0.0, 2006-03-03), logo_menu 0x5D8000 (1.0.0, 2006-03-01), logo_radio 0x5F8000 (1.0.0, 2006-03-01), logo_boot 0x618000 (1.0.0, 2006-03-01), patch 0x63FF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x660000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MICRO%20HD%20SE%20Edision_v.2486.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD) (2020-12-01). Archive AMIKO_MicroHD_SE_Super_2.4.15_by Dekolte.abs from AMIKO MICRO HD SE; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots on M3503 (chips/m3503.py) (run_dump_micro_hd_se_edision_2486_app_starts.py, run_dump_micro_hd_se_edision_2486_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0.
+
+Amiko Micro HD SE (System ID 10010A88, Edision v2.4.86) firmware (2020-12-01) on a 8 MB SPI flash for ALi M3511B / M3503 rev B (128 MB DDR3 dual-CPU SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0x86000200).
 
 
 ## `AMIKO MICRO HD SE/AMIKO_MicroHD_SE_Super_2.4.16_by Dekolte.abs`
@@ -5906,6 +6130,26 @@ Amiko Mini Combo Extra RCA (System ID 6A000A00) firmware 1.1.13 EMU (2017-10-12)
 Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), and the Amiko 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.62_emu.abs`
+
+* **Box:** Amiko Mini Combo Extra (System ID 6A000A00, Edision v.1453)
+* **Type:** DVB-S2 + DVB-T2/C Full HD H.265/HEVC combo satellite, terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB
+* **Board:** 6A000A00 (bootloader version "M3526C 1.1.1", 256 MB DDR3 C3505 platform)
+* **SoC:** ALi M3526C / C3505 (256 MB DDR3 dual-CPU H.265/HEVC combo SoC reading chip ID 0x3505; NIM_C3505_0, NIM_S3501_1, NIM_COFDM_0, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xAE000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal ALi C3505 DVB-S2 (NIM_C3505_0) + DVB-T2/C front end (NIM_COFDM_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 6A000A001162 (maincode "6A000A001162"; bootloader "M3526C 1.1.2"), 2010-08-12, 8388608 bytes, SHA-1 197a2112175cd0f4c64617b1efbb2a584ee69057
+* **Layout:** bootloader 0x000000 (M3526C 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6A000A001162, 2010-08-12), seecode 0x3F0000 (M3606 SEE, 2017-11-20), default_lang 0x52FD00 (1.0.0, 2007-12-05), cipluskey 0x52FF80 (1.1.0, 2010-04-20), countryband 0x53FF80 (1.0.0, 2008-09-23), img_webserver 0x547F80 (1.0.0, 2008-09-23), html_webserver 0x5A7F80 (1.0.0, 2008-09-23), logo_user 0x647F80 (1.0.0, 2006-03-03), logo_menu 0x657F80 (1.0.0, 2006-03-01), logo_radio 0x677F80 (1.0.0, 2006-03-01), logo_boot 0x697F80 (1.0.0, 2006-03-01), patch 0x6BFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x6E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MINI%20COMBO%20EXTRA%20Edision_v.1453.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision (2020-7-17). Archive AMIKO_Mini_Combo_Extra_RCA_1.1.62_emu.abs from AMIKO MINI COMBO EXTRA; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 256 MB C3505 board (chips/c3505.py, run_dump_mini_combo_extra_v1453_app_starts.py, run_dump_mini_combo_extra_v1453_capture_screen.py): the boot-ROM bootloader runs at 0x9FE00800, sets 0xB8000220 bit 24 to remap physical 0x0F000000..0x0FFFFFFF to the top 16 MB of DDR, writes " ON " to the CH455 panel on GPIO 107 / 110, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) ("6A000A001453", 11.24 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x8E002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 ARGB8888 OSD through the display engine at 0xB8006900.
+
+Amiko Mini Combo Extra (System ID 6A000A00) firmware 1.4.53 Edision (2020-7-17) for the Full HD H.265/HEVC DVB-S2 + DVB-T2/C combo receiver on the ALi M3526C / C3505 SoC with 256 MB DDR3 and 8 MB SPI flash.
+
+Uses the 256 MB DDR remap (0xB8000220 bit 24, SEE at 0xAE000200), a CH455 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO MINI COMBO EXTRA/AMIKO_Mini_Combo_Extra_RCA_1.1.67_emu.abs`
 
 * **Box:** Amiko Mini Combo Extra (System ID 6A000A00, RCA v1.1.67 EMU)
@@ -6122,6 +6366,26 @@ Amiko Mini Combo HD SE (System ID 14020A00, BBC Galaxy v2.3.70 by Dekolte) firmw
 Amiko Mini Combo HD SE (System ID 14020A00) firmware Edision 2.2.50 by Dekolte (2016-4-19) on a 16 MB SPI flash for the ALi M3516C / M3503 rev B receiver with 256 MB DDR3.
 
 Uses an XIP CacheAsRam bootloader ("M3516C 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA) (" ON " -> "-ON-").
+
+
+## `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.3.52_by Dekolte.abs`
+
+* **Box:** Amiko Mini Combo HD SE (System ID 14020A00, v2.3.40 EMU build)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** M3606-01V01-030 (ALi M3516C / M3503 rev B 256 MB DDR3 board)
+* **SoC:** ALi M3516C / M3503 rev B (bootloader "M3516C 1.2.1", seecode "M3606 SEE", 256 MB DDR3) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3516C DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 14020A002252 (maincode "14020A002252"; bootloader "M3516C 1.2.1"), 15-07-2016, 16777216 bytes, SHA-1 651c96e05f570f7d9a9cb46ee0f347e43cd971e3
+* **Layout:** bootloader 0x000000 (M3516C 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-7-11), maincode(AV) 0x030000 (14020A002252, 15-07-2016), seecode 0x430000 (M3606 SEE, 2016-7-11), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28, LZMA -> 1.54 MB), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-01-15). Archive AMIKO_MiniComboHD_SE_Edision_2.3.52_by Dekolte.abs from AMIKO MINI COMBO HD SE; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3503 rev B with 256 MB DDR3 (chips/m3503.py, run_dump_minicombo_hd_se_app_starts.py, run_dump_minicombo_hd_se_capture_screen.py): the XIP bootloader ("M3516C 1.2.1") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!" and writes " ON " to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints "---led 455 attach OK--" and "hs_config_init", updates the CH455 display to " on ", populates userdb(64+64) at 0xF3FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours).
+
+Amiko Mini Combo HD SE (System ID 14020A00) firmware v2.3.40 EMU (2016-01-15) on a 16 MB SPI flash for the ALi M3516C / M3503 rev B Full HD DVB-S2 + DVB-T2/C Combo receiver with 256 MB DDR3.
+
+Pairs dual-CPU M3503 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
 
 
 ## `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Edision_2.4.75_by Dekolte.abs`
@@ -6382,6 +6646,26 @@ Amiko Mini Combo HD SE (System ID 14020A00) firmware Synaps 2.3.40 by Dekolte (2
 Uses an XIP CacheAsRam bootloader ("M3516C 1.2.1"), dual-CPU "M3606 SEE" firmware at 0xAE000200, and a CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA) (" ON " -> "-ON-").
 
 
+## `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.3.62_emu.abs`
+
+* **Box:** Amiko Mini Combo HD SE (System ID 14020A00, v2.3.40 EMU build)
+* **Type:** DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** M3606-01V01-030 (ALi M3516C / M3503 rev B 256 MB DDR3 board)
+* **SoC:** ALi M3516C / M3503 rev B (bootloader "M3516C 1.2.1", seecode "M3606 SEE", 256 MB DDR3) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3516C DVB-S2 (NIM_S3503_0) + DVB-T2/C (NIM_COFDM_0)
+* **Flash:** 16 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 14020A002362 (maincode "14020A002362"; bootloader "M3516C 1.2.1"), 2010-08-12, 16777216 bytes, SHA-1 49ff42f54f78d854bfdf1bd736c54bcedd8e710f
+* **Layout:** bootloader 0x000000 (M3516C 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2016-4-29), maincode(AV) 0x030000 (14020A002362, 2010-08-12), seecode 0x430000 (M3606 SEE, 2016-4-29), default_lang 0x56FD00 (1.0.0, 2007-12-05), cipluskey 0x56FF80 (1.1.0, 2010-04-20), countryband 0x580000 (1.0.0, 2008-09-23), img_webserver 0x588000 (1.0.0, 2008-09-23), html_webserver 0x688000 (1.0.0, 2008-09-23), blank_file 0x788000 (1.0.0, 2008-09-23), logo_user 0xC88000 (1.0.0, 2006-03-03), logo_menu 0xC98000 (1.0.0, 2006-03-01), logo_radio 0xCB8000 (1.0.0, 2006-03-01), logo_boot 0xCD8000 (1.0.0, 2006-03-01), patch 0xCFFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0xD20000 (1.0.1, 2005-2-28), userdb(64+64) 0xF3FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniComboHD_SE_2.3.40_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2016-01-15). Archive AMIKO_MiniComboHD_SE_Synaps_2.3.62_emu.abs from AMIKO MINI COMBO HD SE; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3503 rev B with 256 MB DDR3 (chips/m3503.py, run_dump_minicombo_hd_se_app_starts.py, run_dump_minicombo_hd_se_capture_screen.py): the XIP bootloader ("M3516C 1.2.1") runs with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!" and writes " ON " to the CH455 front panel on GPIO 135 (SCL) / 134 (SDA), parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xAE000200 and maincode(AV) to 0x80000200, and starts both cores (EBase 0x80002000 / 0x8E002001).  The application prints "---led 455 attach OK--" and "hs_config_init", updates the CH455 display to " on ", populates userdb(64+64) at 0xF3FF80, and draws its 1280x720 OSD dialog on GMA layer 0 (9 GE commands, 4 colours).
+
+Amiko Mini Combo HD SE (System ID 14020A00) firmware v2.3.40 EMU (2016-01-15) on a 16 MB SPI flash for the ALi M3516C / M3503 rev B Full HD DVB-S2 + DVB-T2/C Combo receiver with 256 MB DDR3.
+
+Pairs dual-CPU M3503 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 135 / 134 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO MINI COMBO HD SE/AMIKO_MiniComboHD_SE_Synaps_2.4.15_by Dekolte.abs`
 
 * **Box:** Amiko Mini Combo HD SE (System ID 14020A88, Synaps 2.4.15 by Dekolte)
@@ -6546,6 +6830,27 @@ Amiko Mini HD Combo (System ID 0E060A00) firmware Edision 1.4.65 by Dekolte (201
 Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 DVB-S2/T2/C combo demodulator at I2C 0x14, Airoha AV2012 satellite tuner at 0x61, Rafael Micro R836 terrestrial/cable tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9 (" ON " -> "-ON-").
 
 
+## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.70_by Dekolte.abs`
+
+* **Box:** Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build)
+* **Type:** Compact DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 0E060A00 (bootloader version "M3612 1.0.4", HDCPKey "Demo M3612", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)
+* **SoC:** ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") (M3801 (chips/m3801.py))
+* **Demodulator:** external Availink AVL6862 DVB-S2 + DVB-T2/C combo demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)
+* **Tuner:** Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 31, SDA 9)
+* **IR coding:** necfirst
+* **Image:** update, 0E060A001470 (maincode "0E060A001470"; bootloader "M3612 1.0.4"), 2012-07-10, 8388608 bytes, SHA-1 c7911287b1db831f7ffcdcd4a4806198e163e1b2
+* **Layout:** bootloader 0x000000 (M3612 1.0.4, 2012-07-10), maincode(AV) 0x020000 (0E060A001470, 2012-07-10), HDCPKey 0x43FB00 (Demo M3612, 2012-07-10), default_lang 0x43FD00 (1.0.0, 2012-07-10), cipluskey 0x43FF80 (1.1.0, 2012-07-10), countryband 0x450000 (1.0.0, 2012-07-10), logo_user 0x458000 (1.0.0, 2012-07-10), logo_menu 0x468000 (1.0.0, 2012-07-10), logo_radio 0x488000 (1.0.0, 2012-07-10), logo_boot 0x4A8000 (1.0.0, 2012-07-10), patch 0x4FFF80 (1.0.0, 2012-07-10), defaultdb(PRC) 0x520000 (1.0.1, 2012-07-10), userdb(64+64) 0x73FF80 (1.0.1, 2012-07-10)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2012-07-10). Archive AMIKO_MiniHD_Combo_Edision_1.4.70_by Dekolte.abs from AMIKO MINI HD COMBO; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_minihd_combo_1541_app_starts.py, run_dump_minihd_combo_1541_capture_screen.py): the MIPS16e bootloader "M3612 1.0.4" copies itself to 0x81E80000, writes " ON " to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 12.65 MB maincode(AV) ("0E060A001541") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 combo demodulator on SCB0 at I2C 0x14 ("Demod is 6862!!!", demods.AVL6862A), configures its Sharp VZ7903 / AV2012 DVB-S2 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display to " on ", and renders its 32-bpp ARGB8888 OSD through GeM36F.
+
+Amiko Mini HD Combo (System ID 0E060A00) firmware 1.5.41 EMU (2012-07-10) on an 8 MB SPI flash for the compact Full HD DVB-S2 + DVB-T2/C combo receiver.
+
+Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 DVB-S2/T2/C combo demodulator at I2C 0x14, Airoha AV2012 satellite tuner at 0x61, Rafael Micro R836 terrestrial/cable tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9 (" ON " -> " on ").
+
+
 ## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Edision_1.4.78_by Dekolte.abs`
 
 * **Box:** Amiko Mini HD Combo (System ID 0E060A00, Edision 1.4.78 by Dekolte)
@@ -6605,6 +6910,27 @@ Amiko Mini HD Combo (System ID 0E060A00, Edision v1.4.86 by Dekolte) firmware (2
 Amiko Mini HD Combo (System ID 0E060A00) firmware Galaxy 1.5.56 by Dekolte (2012-07-10) on an 8 MB SPI flash for the compact Full HD DVB-S2 + DVB-T2/C combo receiver.
 
 Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 DVB-S2/T2/C combo demodulator at I2C 0x14, Airoha AV2012 satellite tuner at 0x61, Rafael Micro R836 terrestrial/cable tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9 (" ON " -> "-ON-").
+
+
+## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.5.70_by Dekolte.abs`
+
+* **Box:** Amiko Mini HD Combo (System ID 0E060A00, v1.5.41 EMU build)
+* **Type:** Compact DVB-S2 + DVB-T2/C Full HD Combo receiver with Conax / MultiCAS card reader, Ethernet and USB PVR
+* **Board:** 0E060A00 (bootloader version "M3612 1.0.4", HDCPKey "Demo M3612", 8 MB SPI flash, single-CPU ALi M3612 / S3811 platform)
+* **SoC:** ALi M3612 / S3811 (single-CPU S3811-class SoC reading chip ID 0x3811; bootloader "M3612 1.0.4") (M3801 (chips/m3801.py))
+* **Demodulator:** external Availink AVL6862 DVB-S2 + DVB-T2/C combo demodulator on SCB0 at I2C 0x14 (FamilyID 0x68624955, ChipID 0x0F)
+* **Tuner:** Sharp VZ7903 / Airoha AV2012 at I2C 0x61 (DVB-S2) + Rafael Micro R836 at I2C 0x3A (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** CH455 (TM1650-compatible) (SCL 31, SDA 9)
+* **IR coding:** necfirst
+* **Image:** update, 0E060A001570 (maincode "0E060A001570"; bootloader "M3612 1.0.7"), 2012-07-10, 8388608 bytes, SHA-1 c14a0d13ff54e7482c6ec2d371ff51081557f7a4
+* **Layout:** bootloader 0x000000 (M3612 1.0.7, 2012-07-10), maincode(AV) 0x020000 (0E060A001570, 2012-07-10), HDCPKey 0x3BFB00 (Demo M3612, 2012-07-10), default_lang 0x3BFD00 (1.0.0, 2012-07-10), cipluskey 0x3BFF80 (1.1.0, 2012-07-10), countryband 0x3D0000 (1.0.0, 2012-07-10), logo_user 0x3D8000 (1.0.0, 2012-07-10), logo_menu 0x3E8000 (1.0.0, 2012-07-10), logo_radio 0x408000 (1.0.0, 2012-07-10), logo_boot 0x428000 (1.0.0, 2012-07-10), patch 0x47FF80 (1.0.0, 2012-07-10), defaultdb(PRC) 0x4A0000 (1.0.1, 2012-07-10), userdb(64+64) 0x73FF80 (1.0.1, 2012-07-10)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_Combo_1.5.41_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2012-07-10). Archive AMIKO_MiniHD_Combo_Galaxy_1.5.70_by Dekolte.abs from AMIKO MINI HD COMBO; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as the single-CPU M3801 family (chips/m3801.py, chip ID 0x3811 = ALI_S3811, run_dump_minihd_combo_1541_app_starts.py, run_dump_minihd_combo_1541_capture_screen.py): the MIPS16e bootloader "M3612 1.0.4" copies itself to 0x81E80000, writes " ON " to the CH455 4-digit panel on GPIO 31 (SCL) / 9 (SDA), unpacks the 12.65 MB maincode(AV) ("0E060A001541") to 0x80000200 and enters it.  The application moves CP0 EBase to 0x80002000, probes the external Availink AVL6862 combo demodulator on SCB0 at I2C 0x14 ("Demod is 6862!!!", demods.AVL6862A), configures its Sharp VZ7903 / AV2012 DVB-S2 tuner (0x61) and Rafael Micro R836 DVB-T2/C tuner (0x3A), updates the CH455 display to " on ", and renders its 32-bpp ARGB8888 OSD through GeM36F.
+
+Amiko Mini HD Combo (System ID 0E060A00) firmware 1.5.41 EMU (2012-07-10) on an 8 MB SPI flash for the compact Full HD DVB-S2 + DVB-T2/C combo receiver.
+
+Pairs the single-CPU ALi M3612 SoC (silicon ID 0x3811) with an external Availink AVL6862 DVB-S2/T2/C combo demodulator at I2C 0x14, Airoha AV2012 satellite tuner at 0x61, Rafael Micro R836 terrestrial/cable tuner at 0x3A, and a CH455 front-panel display on GPIO 31 / 9 (" ON " -> " on ").
 
 
 ## `AMIKO MINI HD COMBO/AMIKO_MiniHD_Combo_Galaxy_1.5.92_by Dekolte.abs`
@@ -6785,6 +7111,26 @@ Uses an XIP CacheAsRam bootloader ("M3511A 1.1.1"), dual-CPU "M3606 SEE" firmwar
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_minihd_re_2443_app_starts.py, run_dump_minihd_re_2443_capture_screen.py): the XIP bootloader ("M3511A 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10000A882443", 11.30 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
 
 Amiko Mini HD RE (System ID 10000A88) firmware 2.4.43 EMU (2018-4-25) for the Full HD DVB-S2 satellite receiver on the ALi M3511A / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Uses an XIP CacheAsRam bootloader ("M3511A 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
+
+
+## `AMIKO MINI HD RE/AMIKO_MiniHD_RE_2.4.54_mcas.abs`
+
+* **Box:** Amiko Mini HD RE (System ID 10000A88, v2.4.16 EMU build)
+* **Type:** Compact DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, Ethernet, external IR / LED eye and USB PVR
+* **Board:** 10000A88 (bootloader version "M3511A 1.1.1", 8 MB SPI flash, 128 MB DDR3 M3503 revision B platform)
+* **SoC:** ALi M3511A / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; seecode "M3606 SEE" at 0xA6000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 / M3511A DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 135, SDA 134)
+* **IR coding:** necfirst
+* **Image:** update, 10000A882454 (maincode "10000A882454"; bootloader "M3511A 1.1.1"), 2010-08-12, 8388608 bytes, SHA-1 5159a368aadd374a6f7fe690c9cda697aed7fb68
+* **Layout:** bootloader 0x000000 (M3511A 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2019-5-6), maincode(AV) 0x030000 (10000A882454, 2010-08-12), seecode 0x3B0000 (M3606 SEE, 2019-5-6), default_lang 0x4AFD00 (1.0.0, 2007-12-05), cipluskey 0x4AFF80 (1.1.0, 2010-04-20), countryband 0x4C0000 (1.0.0, 2008-09-23), logo_user 0x4C8000 (1.0.0, 2006-03-03), logo_menu 0x4D8000 (1.0.0, 2006-03-01), logo_radio 0x4F8000 (1.0.0, 2006-03-01), logo_boot 0x518000 (1.0.0, 2006-03-01), patch 0x53FF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x560000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_MiniHD_RE_2.4.16_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko (2017-5-3). Archive AMIKO_MiniHD_RE_2.4.54_mcas.abs from AMIKO MINI HD RE; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_minihd_re_2416_app_starts.py, run_dump_minihd_re_2416_capture_screen.py): the XIP bootloader ("M3511A 1.1.1") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF, prints "CH455 panel init OK!", writes " ON " to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode ("M3606 SEE") to 0xA6000200 and maincode(AV) ("10000A882416", 12.08 MB) to 0x80000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application updates the CH455 panel to " on ", populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 OSD dialog on GMA layer 0.
+
+Amiko Mini HD RE (System ID 10000A88) firmware 2.4.16 EMU (2017-5-3) for the compact Full HD DVB-S2 satellite receiver on the ALi M3511A / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.
 
 Uses an XIP CacheAsRam bootloader ("M3511A 1.1.1"), dual-CPU "M3606 SEE" firmware at 0xA6000200, and a 4-digit CH455 LED front panel on GPIO 135 (SCL) / 134 (SDA).
 
@@ -7445,6 +7791,26 @@ Amiko Mini HD265 (System ID 6B000A00) firmware 1.3.55 EMU (2018-11-21) for the F
 Uses a "maincode(AV)" application chunk, a CH455 (TM1650-compatible) 4-digit LED panel on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
 
 
+## `AMIKO MINI HD265/AMIKO_Mini_HD265_1.3.66_emu.abs`
+
+* **Box:** Amiko Mini HD265 (System ID 6B000A00, Edision v.1521)
+* **Type:** Compact DVB-S2 Full HD H.265/HEVC satellite receiver with Conax / MultiCAS card reader, Ethernet, USB Wi-Fi and external IR/LED eye
+* **Board:** 6B000A00 (bootloader version "M3521A 1.1.1", 128 MB DDR3 C3505 platform)
+* **SoC:** ALi M3521A / C3505 (128 MB DDR3 dual-CPU H.265/HEVC SoC reading chip ID 0x3505; NIM_C3505_0, NIM_S3501_1, OSD_DEV_0/1/2, seecode "M3606 SEE" at 0xA6000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0)
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 110)
+* **IR coding:** necfirst
+* **Image:** update, 6B000A001366 (maincode "6B000A001366"; bootloader "M3521A 1.1.2"), 2010-08-12, 8388608 bytes, SHA-1 db05f4ee3e119a847bf640cff0739e0abb3fef40
+* **Layout:** bootloader 0x000000 (M3521A 1.1.2, 2016-7-20), maincode(AV) 0x060000 (6B000A001366, 2010-08-12), seecode 0x3F0000 (M3606 SEE, 2019-3-15), default_lang 0x52FD00 (1.0.0, 2007-12-05), cipluskey 0x52FF80 (1.1.0, 2010-04-20), countryband 0x53FF80 (1.0.0, 2008-09-23), img_webserver 0x547F80 (1.0.0, 2008-09-23), html_webserver 0x5A7F80 (1.0.0, 2008-09-23), logo_user 0x647F80 (1.0.0, 2006-03-03), logo_menu 0x657F80 (1.0.0, 2006-03-01), logo_radio 0x677F80 (1.0.0, 2006-03-01), logo_boot 0x697F80 (1.0.0, 2006-03-01), patch 0x6BFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x6E0000 (1.0.1, 2005-2-28), userdb(64+64) 0x73FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko / Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO%20MINI%20HD265%20Edision%20v.1521.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Edision (2020-12-16). Archive AMIKO_Mini_HD265_1.3.66_emu.abs from AMIKO MINI HD265; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as a 128 MB DDR3 C3505 board (chips/c3505.py, run_dump_mini_hd265_v1521_app_starts.py, run_dump_mini_hd265_v1521_capture_screen.py): the boot-ROM bootloader runs in boot SRAM at 0x9FE00800, unpacks maincode(AV) ("6B000A001521", 11.10 MB) to 0x80000200 and seecode ("M3606 SEE") to 0xA6000200, and starts both cores (main EBase 0x80002000, SEE EBase 0x86002001).  The application drives the CH455 front panel on GPIO 107 / 110 (" ON " -> " on "), populates userdb(64+64) from defaultdb(PRC) over SPI, and renders its 1280x720 ARGB8888 OSD through the display engine at 0xB8006900.
+
+Amiko Mini HD265 (System ID 6B000A00) firmware 1.5.21 Edision (2020-12-16) for the compact Full HD H.265/HEVC DVB-S2 satellite receiver on the ALi M3521A / C3505 SoC with 128 MB DDR3 and 8 MB SPI flash.
+
+Shares the 6B000A00 hardware platform with the Amiko HD8155: uses a "maincode(AV)" application chunk at 0x060000, a CH455 (TM1650-compatible) 4-digit LED display on GPIO 107 / 110, and the Amiko 0x60xx remote control table ("necfirst" coding).
+
+
 ## `AMIKO MINI HD265/AMIKO_Mini_HD265_1.4.21_emu.abs`
 
 * **Box:** Amiko Mini HD265 (System ID 6B000A00, v1.4.21 EMU)
@@ -8063,6 +8429,27 @@ Amiko SHD-8360 (System ID 0A0A0A00, Synaps v1.6.95 by Dekolte) firmware (2015-01
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> 'dE O'. Boots on M3602 (chips/m3602.py) (run_dump_shd_8360_ultra_1703_app_starts.py, run_dump_shd_8360_ultra_1703_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0.
 
 Amiko SHD-8360 (System ID 0A0A0A00, Ultra v1.7.03 by Dekolte) firmware (2015-03-10) on a 8 MB SPI flash for ALi M3606G / C3603 (dual-CPU M3602-family SoC reading chip ID 0x3603; seecode "M3606 SEE" at 0xA7000200).
+
+
+## `AMIKO STHD-8800 COMBO/amiko_300_black synaps_gi_1.5.72_gisclub.tv.abs`
+
+* **Box:** Amiko / Galaxy Innovations STHD-8800 Combo / GI 300 Black Synaps (System ID 06000A00, v1.5.74 gisclub.tv build)
+* **Type:** DVB-S2 + DVB-T Full HD Combo receiver with Conax / MultiCAS card reader, CI slot, 8-character VFD and Ethernet
+* **Board:** 06000A00 (Fulansoft / Lemontree ALi M3602A VFD + EuP platform)
+* **SoC:** ALi M3602A (bootloader "M3602A 1.1.6", 128 MB DDR2) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33 + DVB-T COFDM
+* **Tuner:** Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** necfirst
+* **Image:** update, 06000A001572 (maincode "06000A001572"; bootloader "M3602A 1.1.6"), 2016-4-6, 4194304 bytes, SHA-1 6cd2cfe108a22ce6064a3bbe74e37e3eaa7843b6
+* **Layout:** bootloader 0x000000 (M3602A 1.1.6, 2009-12-29), maincode(AV) 0x010000 (06000A001572, 2016-4-6), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Amiko firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=amiko_300_black%20synaps_gi_1.5.74_gisclub.tv.rar&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD), Amiko / Galaxy Innovations (gisclub.tv Black Synaps mod) (2016-02-15). Archive amiko_300_black synaps_gi_1.5.72_gisclub.tv.abs from AMIKO STHD-8800 COMBO; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel '  BOOT  ' -> 'GISCLUB '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_amiko_300_synaps_1574_app_starts.py, run_dump_amiko_300_synaps_1574_capture_screen.py): the "M3602A 1.1.6" bootloader exchanges CRC-16/XMODEM 38-byte PT6311 VFD frames with the Lemontree EuP standby and 8-character 14-segment VFD MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) ("  BOOT  " -> "        " -> "GISCLUB "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application prints "Version:06000A00_1.5.74 EMU", configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60, and draws its Black Synaps GI OSD dialog through GeM3602.
+
+Amiko STHD-8800 Combo / GI 300 Black Synaps (v1.5.74 by gisclub.tv, System ID 06000A00) 4 MB SPI firmware for the ALi M3602A DVB-S2 + DVB-T Full HD Combo receiver.
+
+Drives an 8-character 14-segment PT6311 VFD via the Lemontree EuP MCU on GPIO 62 / 171 ("  BOOT  " -> "GISCLUB "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x44xx remote control table ("necfirst" coding).
 
 
 ## `AMIKO STHD-8800 COMBO/amiko_300_black synaps_gi_1.5.74_gisclub.tv.abs`
@@ -8738,6 +9125,27 @@ Dynavision Davinci / Sparkle Plus HD (Synaps 1.5.28, System ID 06020200, 2012-03
 Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (" ON " -> " on "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 49-entry 0xC8xx remote control table ("necfirst" coding).
 
 
+## `DYNAVISION DAVINCI HD/synaps_dynavision_1.5.28_x4_oldremote.abs`
+
+* **Box:** Dynavision / Opticum Davinci / Sparkle Plus HD (Synaps 1.5.28 build for Opticum HD X402p/X403p)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet
+* **Board:** 06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)
+* **SoC:** ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** necfirst
+* **Image:** update, 060202001528 (maincode "060202001528"; bootloader "M3602B 1.1.6"), 2012-03-18, 4194304 bytes, SHA-1 d8a97bffb53f54de3a8e4142ae1fec0ad098fa3c
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001528, 2012-03-18), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=synaps_dynavision_1.5.28_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Dynavision / Fulansoft (Opticum X4 port) (2012-03-18). Archive synaps_dynavision_1.5.28_x4_oldremote.abs from DYNAVISION DAVINCI HD; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_dynavision_synaps_app_starts.py, run_dump_dynavision_synaps_capture_screen.py): the "M3602B 1.1.6" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (" ON " -> "    " -> " on "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its Synaps OSD dialog through GeM3602 (8 GE commands, 30 colours).
+
+Dynavision Davinci / Sparkle Plus HD (Synaps 1.5.28, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).
+
+Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (" ON " -> " on "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 49-entry 0xC8xx remote control table ("necfirst" coding).
+
+
 ## `ECHOLINK EL-700 FTA/flash ECHOLINK EL700FTA mx29lv160.bin`
 
 * **Box:** Echolink EL-700 FTA
@@ -8752,6 +9160,56 @@ Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO
 * **Image:** dump, 1.3.2 (maincode "1.3.2" 2007-1-8; bootloader "SMT01---0.9.6" 2006-12-7), 2007-01-08, 2097152 bytes, SHA-1 329f883b97e62c33c7e2a4cfe19a8389749bfcf7
 * **Layout:** bootloader 0x000000 (SMT01---0.9.6, 2006-12-7), maincode 0x010000 (1.3.2, 2007-1-8, "CODE" XTEA+LZMA), CAS_data 0x08FF80 (1.0.0), ScriptGUI 0x0A0000 (1.0.0), Radioback 0x0B0000 (1.0.0), defaultdb 0x0C0000 (1.0.0), userdb 0x0EFF80 (1.0.0)
 * **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) (2026-11-01). JTAG parallel NOR flash dump from archive Dump ECHOLINK-700 EUROSAT3023.rar in J-Tag_Dump_Flash on satedu.cba.pl.
+* **Simulator:** boots yes, application no, display no, panel ' on ' -> 'upg '. The bootloader runs (run_dump_el700_security_mcu.py): it configures SDRAM, unpacks "SMT01---0.9.6" to 0x80300000, identifies the 2 MB MX29LV160 parallel NOR flash via AMD autoselect, opens SCI_16550_0 (0xB8001300, 115200 baud) and SCI_16550_1 (0xB8001400, 9600 baud, IC line 6), displays " on " on PAN_SMTM51_0, and sends four 8-byte challenge requests (92 d0 7c 93 b8 74 f7 d5) to the external SMTM51 MCU to obtain the secret half of the 128-bit XTEA key for the "CODE"-wrapped maincode.  Without the proprietary MCU's secret key reply (0x11 0x0A ...), it cleanly aborts decryption, displays "upg " on the front panel, and enters its RS-232 recovery prompt ("\r\n>:") on UART1.
+
+2 MB Macronix MX29LV160 JTAG parallel NOR flash dump of an Echolink EL-700 FTA (also sold as Eurosat 3023), a 2007 DVB-S FTA satellite receiver built on Moresat's "SMT01" / "Alpha" ALi M3329C platform.
+
+Chunk chain: bootloader 0x000000 (chunk ID 0xE3000010, version "SMT01---0.9.6", 2006-12-7), maincode 0x010000 (0x01FE0101, length 0x07EC41, version "1.3.2", 2007-1-8), CAS_data 0x08FF80, ScriptGUI 0x0A0000, Radioback 0x0B0000, defaultdb 0x0C0000 and userdb 0x0EFF80 (1 MB).
+
+Unlike standard ALi M3329 images whose maincode payload is a raw LZMA stream, Moresat wraps the maincode payload (0x010080) in a "CODE" container: the 4-byte magic "CODE" (43 4f 44 45), the big-endian encrypted length 0x0007EBC9, and 519,113 bytes of XTEA-encrypted LZMA data.  The relocated bootloader at 0x80300000 (0x8030D7A8) holds a 16-byte seed at 0x8030EED4 (92 d0 7c 93 b8 74 f7 d5 | 7a 91 51 5a 55 40 1e 11) and sends the first 8 bytes four times over SCI_16550_1 (UART2 at 0xB8001400, 9600 baud, interrupt line 6) to the external 8051 front-panel and anti-clone MCU (PAN_SMTM51_0) in checksummed frames (0d 0a 00 00 92 d0 7c 93 b8 74 f7 d5 80).  Only when the MCU replies with a 0x11 0x0A response carrying 8 secret bytes R[0..7] does 0x8030D87C combine R[0..7] and nibble-swapped R[0..7] XORed into bytes 8..15 to form the 128-bit XTEA key (0x8030D980) before calling LzmaDecode() (0x803058C8) into 0x80000200.
+
+Without the external SMTM51 MCU's secret response (an ACK-only stand-in acknowledges each frame with 0x80 on UART2 RX so link-layer retries do not stall), 0x8030D7A8 returns 0 without running XTEA or jumping into empty RAM; the bootloader then switches PAN_SMTM51_0 from " on " to "upg " and prints its RS-232 serial upgrade prompt "\r\n>:" on UART1 (0xB8001300).
+
+
+## `ECHOLINK EL-700 FTA/Original_mit_bootloader_0.9.7.bin`
+
+* **Box:** Echolink EL-700 FTA
+* **Type:** DVB-S FTA SD satellite receiver (Moresat "Alpha" / Ali 3329C B-series, 2007)
+* **Board:** SMT01 (Eurosat 3023 / Echolink EL-700 FTA)
+* **SoC:** ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT01---0.9.6") (M3329 (chips/m3329.py))
+* **Demodulator:** internal DVB-S (NIM_M3327; maincode XTEA-encrypted)
+* **Tuner:** unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode XTEA-encrypted)
+* **Flash:** 2 MB parallel NOR (Macronix MX29LV160, 8-bit bus via STO_FLASH_0)
+* **Front panel:** SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud)
+* **IR coding:** nec
+* **Image:** dump, 1.3.7 (maincode "1.3.7"; bootloader "SMT01---0.9.7"), 2007-10-9, 2031616 bytes, SHA-1 d222316459fed77f005c2187cc9e583936e726e8
+* **Layout:** bootloader 0x000000 (SMT01---0.9.7, 2007-6-21), maincode 0x010000 (1.3.7, 2007-10-9, "CODE" XTEA+LZMA), CAS_data 0x08FF80 (1.0.0, 2007-10-4), ScriptGUI 0x0A0000 (1.0.0, 2006-8-31), Radioback 0x0B0000 (1.0.0, 2006-7-11), defaultdb 0x0C0000 (1.0.2, 2007-9-29), userdb 0x0EFF80 (1.0.0, 2007-10-9)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) (2026-11-01). Archive Original_mit_bootloader_0.9.7.bin from ECHOLINK EL-700 FTA; added for expanded coverage.
+* **Simulator:** boots yes, application no, display no, panel ' on ' -> 'upg '. The bootloader runs (run_dump_el700_security_mcu.py): it configures SDRAM, unpacks "SMT01---0.9.6" to 0x80300000, identifies the 2 MB MX29LV160 parallel NOR flash via AMD autoselect, opens SCI_16550_0 (0xB8001300, 115200 baud) and SCI_16550_1 (0xB8001400, 9600 baud, IC line 6), displays " on " on PAN_SMTM51_0, and sends four 8-byte challenge requests (92 d0 7c 93 b8 74 f7 d5) to the external SMTM51 MCU to obtain the secret half of the 128-bit XTEA key for the "CODE"-wrapped maincode.  Without the proprietary MCU's secret key reply (0x11 0x0A ...), it cleanly aborts decryption, displays "upg " on the front panel, and enters its RS-232 recovery prompt ("\r\n>:") on UART1.
+
+2 MB Macronix MX29LV160 JTAG parallel NOR flash dump of an Echolink EL-700 FTA (also sold as Eurosat 3023), a 2007 DVB-S FTA satellite receiver built on Moresat's "SMT01" / "Alpha" ALi M3329C platform.
+
+Chunk chain: bootloader 0x000000 (chunk ID 0xE3000010, version "SMT01---0.9.6", 2006-12-7), maincode 0x010000 (0x01FE0101, length 0x07EC41, version "1.3.2", 2007-1-8), CAS_data 0x08FF80, ScriptGUI 0x0A0000, Radioback 0x0B0000, defaultdb 0x0C0000 and userdb 0x0EFF80 (1 MB).
+
+Unlike standard ALi M3329 images whose maincode payload is a raw LZMA stream, Moresat wraps the maincode payload (0x010080) in a "CODE" container: the 4-byte magic "CODE" (43 4f 44 45), the big-endian encrypted length 0x0007EBC9, and 519,113 bytes of XTEA-encrypted LZMA data.  The relocated bootloader at 0x80300000 (0x8030D7A8) holds a 16-byte seed at 0x8030EED4 (92 d0 7c 93 b8 74 f7 d5 | 7a 91 51 5a 55 40 1e 11) and sends the first 8 bytes four times over SCI_16550_1 (UART2 at 0xB8001400, 9600 baud, interrupt line 6) to the external 8051 front-panel and anti-clone MCU (PAN_SMTM51_0) in checksummed frames (0d 0a 00 00 92 d0 7c 93 b8 74 f7 d5 80).  Only when the MCU replies with a 0x11 0x0A response carrying 8 secret bytes R[0..7] does 0x8030D87C combine R[0..7] and nibble-swapped R[0..7] XORed into bytes 8..15 to form the 128-bit XTEA key (0x8030D980) before calling LzmaDecode() (0x803058C8) into 0x80000200.
+
+Without the external SMTM51 MCU's secret response (an ACK-only stand-in acknowledges each frame with 0x80 on UART2 RX so link-layer retries do not stall), 0x8030D7A8 returns 0 without running XTEA or jumping into empty RAM; the bootloader then switches PAN_SMTM51_0 from " on " to "upg " and prints its RS-232 serial upgrade prompt "\r\n>:" on UART1 (0xB8001300).
+
+
+## `ECHOLINK EL-700 FTA/sw_v1.3.7_061108_2.bin`
+
+* **Box:** Echolink EL-700 FTA
+* **Type:** DVB-S FTA SD satellite receiver (Moresat "Alpha" / Ali 3329C B-series, 2007)
+* **Board:** SMT01 (Eurosat 3023 / Echolink EL-700 FTA)
+* **SoC:** ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT01---0.9.6") (M3329 (chips/m3329.py))
+* **Demodulator:** internal DVB-S (NIM_M3327; maincode XTEA-encrypted)
+* **Tuner:** unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode XTEA-encrypted)
+* **Flash:** 2 MB parallel NOR (Macronix MX29LV160, 8-bit bus via STO_FLASH_0)
+* **Front panel:** SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud)
+* **IR coding:** nec
+* **Image:** dump, 1.3.7 (maincode "1.3.7"; bootloader "SMT01---0.9.9"), 2008-6-11, 2031616 bytes, SHA-1 80ec9000072d4d7bf413577d9294f58b5f44b6ba
+* **Layout:** bootloader 0x000000 (SMT01---0.9.9, 2007-10-11), maincode 0x010000 (1.3.7, 2008-6-11, "CODE" XTEA+LZMA), CAS_data 0x08FF80 (1.0.0, 2007-12-6), ScriptGUI 0x0A0000 (1.0.0, 2006-8-31), Radioback 0x0B0000 (1.0.0, 2006-7-11), defaultdb 0x0C0000 (1.0.2, 2008-5-26), userdb 0x0EFF80 (1.0.0, 2008-6-11)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Dump%20ECHOLINK-700%20EUROSAT3023.rar&directory=J-Tag_Dump_Flash) (2026-11-01). Archive sw_v1.3.7_061108_2.bin from ECHOLINK EL-700 FTA; added for expanded coverage.
 * **Simulator:** boots yes, application no, display no, panel ' on ' -> 'upg '. The bootloader runs (run_dump_el700_security_mcu.py): it configures SDRAM, unpacks "SMT01---0.9.6" to 0x80300000, identifies the 2 MB MX29LV160 parallel NOR flash via AMD autoselect, opens SCI_16550_0 (0xB8001300, 115200 baud) and SCI_16550_1 (0xB8001400, 9600 baud, IC line 6), displays " on " on PAN_SMTM51_0, and sends four 8-byte challenge requests (92 d0 7c 93 b8 74 f7 d5) to the external SMTM51 MCU to obtain the secret half of the 128-bit XTEA key for the "CODE"-wrapped maincode.  Without the proprietary MCU's secret key reply (0x11 0x0A ...), it cleanly aborts decryption, displays "upg " on the front panel, and enters its RS-232 recovery prompt ("\r\n>:") on UART1.
 
 2 MB Macronix MX29LV160 JTAG parallel NOR flash dump of an Echolink EL-700 FTA (also sold as Eurosat 3023), a 2007 DVB-S FTA satellite receiver built on Moresat's "SMT01" / "Alpha" ALi M3329C platform.
@@ -9251,6 +9709,26 @@ Ferguson Ariva 154 Combo firmware V1.29B8 PATCH (2018-10-10) for the H.265/HEVC 
 Pairs the C3505's internal S3505 satellite demodulator with a terrestrial/cable COFDM front end, an FD650K front panel on SCL = GPIO 107, SDA = GPIO 108, and a 63-key extended-NEC remote table (ext00).
 
 
+## `FERGUSON ARIVA 160 COMBO/Ferguson_160combo_20251126.abs`
+
+* **Box:** Ferguson Ariva 160 Combo
+* **Type:** DVB-S2X + DVB-T2/C Full HD H.265/HEVC Combo satellite and terrestrial receiver with CA card slot, Ethernet and USB PVR
+* **Board:** HATK5 bootloader version "66035-01047" (128 MB DDR3 C3505 combo platform)
+* **SoC:** ALi C3505 / M3821 with 128 MB DDR3 (maincode "ALI_C3505", seecode "M3505 SEE" at 0xAE000200, chip ID 0x3821 with variant 0xC000) (C3505 (chips/c3505.py))
+* **Demodulator:** internal ALi DVB-S2X (NIM_C3501h_0) + DVB-T2/C (NIM_S3821_0)
+* **Tuner:** RDA Microelectronics RDA5815M (DVB-S2X) + Rafael Micro R836 / R840 (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **IR coding:** nec
+* **Image:** update, V1.1B0 (maincode "V1.1B0"; bootloader "66035-01047"), 2025-11-26, 8388608 bytes, SHA-1 9afc0b3ea0d5bb4e91a01987ba523a22ccff5542
+* **Layout:** HATK5 0x000000 (66035-01047, 2025-11-26), HDCPKey 0x02FE00 (1.0.0, 2025-3-31), maincode 0x030000 (V1.1B0, 2025-11-26), seecode 0x480000 (V1.1B0, 2025-3-31), osd_string 0x5D0000 (V1.1B0, 2025-3-31), radioback 0x5F0000 (1.0.0, 2025-3-31), seeback 0x60FF80 (1.0.0, 2025-3-31), Ariva-HATK5 0x620000 (1.0.0, 2025-4-1), data 0x63FF80 (1.0.0, 2025-3-31), defaultdb 0x690000 (1.0.0, 2025-3-31), userdb 0x6AFF80 (1.0.0, 2025-11-26)
+* **Source:** [ferguson-digital.eu](https://ferguson-digital.eu/), Ferguson (2025-11-26). Official late-2025 firmware release Ferguson_160combo_20251126.abs from ferguson-digital.eu.
+* **Simulator:** boots yes, application yes, display no. Boots as C3505 with chip ID 0x3821 and variant 0xC000 (chips/c3505.py): the HATK5 bootloader unpacks maincode to 0x80000200 and seecode to 0xAE000200 with 128 MB DDR3, and runs Libcore 19.17.0 with DVB-S2X and DVB-T2/C NIMs.
+
+Ferguson Ariva 160 Combo official firmware update (2025-11-26) on 8 MB SPI flash for the ALi C3505 / M3821 (chip ID 0x3821) DVB-S2X + DVB-T2/C receiver with 128 MB DDR3.
+
+Combines internal NIM_C3501h_0 (DVB-S2X) and NIM_S3821_0 (DVB-T2/C) tuners under Libcore 19.17.0.
+
+
 ## `FERGUSON ARIVA 204/A204_20190903_V1.3B1.abs`
 
 * **Box:** Ferguson Ariva 204 (V1.3B1 build)
@@ -9522,6 +10000,27 @@ Combines the Ariva 154 Combo's dual DVB-S2 / DVB-T2/C front ends with the Ariva 
 Ferguson Ariva 254 Combo firmware V1.30B0 PATCH (2019-03-01) for the H.265/HEVC DVB-S2 + DVB-T2/C CI+ combo receiver on the ALi C3505 SoC.
 
 Combines the Ariva 154 Combo's dual DVB-S2 / DVB-T2/C front ends with the Ariva 204's CI+ conditional-access support (cipluskey chunk at 0x6E0000), using the FD650K front panel on SCL = GPIO 107, SDA = GPIO 108 and the 63-key extended-NEC remote coding (ext00).
+
+
+## `FERGUSON ARIVA 255 COMBO S/Ferguson_255comboS_V1.29B6_27122021.abs`
+
+* **Box:** Ferguson Ariva 255 Combo S
+* **Type:** DVB-S2 + DVB-T2/C Full HD H.265/HEVC 10-bit slim combo receiver with CI+ slot, CA card reader and Ethernet / Wi-Fi
+* **Board:** HASG4 bootloader version "39094-01047" (256 MB DDR3 C3505 slim combo board)
+* **SoC:** ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_S3505_0) + external Availink AVL6862 / AVL6762 DVB-T2/C on SCB3 at I2C 0x14
+* **Tuner:** RDA Microelectronics RDA5816 at I2C 0x0C (DVB-S2) + Rafael Micro R840 at I2C 0x1A (DVB-T2/C)
+* **Flash:** 8 MB SPI
+* **Front panel:** FD650K (TM1650-compatible) (SCL 107, SDA 108)
+* **IR coding:** nec
+* **Image:** update, V1.29B6* (maincode "V1.29B6*"; bootloader "39094-01047"), 2021-12-27, 8388608 bytes, SHA-1 a780cf8437dc2b872d8f85e68b49caa5bfd6dd7a
+* **Layout:** HASG4 0x000000 (39094-01047, 2021-12-27), HDCPKey 0x02FE00 (00000001, 2018-10-31), maincode 0x030000 (V1.29B6*, 2021-12-27), seecode 0x43F400 (M3505 SEE, 2021-12-27), osd_string 0x5BF400 (1.1.0, 2021-12-27), ARIVA255Slim 0x5F0000 (1.0.0, 2017-11-1), seeback 0x61FF80 (1.0.0, 2021-12-27), data 0x68FF80 (1.0.0, 2021-12-27), cipluskey 0x6F0000 (1.0.0, 2017-11-1), defaultdb 0x700000 (1.0.0, 2017-11-1), userdb 0x72FF80 (1.0.0, 2021-12-27)
+* **Source:** [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo_s/software/Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip), Ferguson (2023-11-03). Archive Ferguson_255comboS_V1.29B6_27122021.abs from FERGUSON ARIVA 255 COMBO S; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' O  ' -> ' On ' -> ' on ' -> 'StAr' -> 'nenu'. Boots as a 256 MB DDR3 C3505 board (chips/c3505.py, run_dump_a255s_app_starts.py, run_dump_a255s_capture_screen.py): its boot-ROM bootloader runs in boot SRAM at 0x9FE00800 while reading the chunk table through the 0xAFC00000 flash window, unpacks maincode to 0x80000200 and seecode to 0xAE000200 (224 MB physical DDR), then sets 0xB8000220 bit 24 before jumping to maincode -- switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, used for video/GMA buffers) and restoring 0xBFE00000..0xBFEFFFFF to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror.  The application moves EBase to 0x80002000, starts the SEE co-processor at 0xAE000200 (EBase 0x8E002001), initialises the internal S3505 DVB-S2 demodulator + RDA Microelectronics RDA5816 tuner (0x0C on SCB1) and the external Availink AVL6862 DVB-T2/C demodulator (0x14 on SCB3 at 0xB8018D00) + Rafael Micro R840 tuner (0x1A on SCB3), drives the FD650K front panel on GPIO 107 / 108 (" O  ", " On ", " on ", "StAr", "nenu"), and renders its 1280x720 ARGB8888 "System Setup" OSD menu through the display engine at 0xB8006900.
+
+Ferguson Ariva 255 Combo S (Slim) official EU firmware V1.30B4 (2023-11-03) for the Full HD H.265/HEVC 10-bit DVB-S2 + DVB-T2/C CI+ combo receiver on the ALi C3505 SoC with 256 MB DDR3.
+
+Compared with the 2020 HASG1 Ariva 255 Combo board (ALi M3031 at 0x20 + Rafael Micro R836 at 0x3A), the 2023 HASG4 Ariva 255 Combo S board replaces the RF front-ends with an RDA Microelectronics RDA5816 DVB-S2 silicon tuner at I2C 0x0C on SCB1 and a Rafael Micro R840 DVB-T2/C silicon tuner at I2C 0x1A on SCB3 alongside the Availink AVL6862 demodulator at 0x14.
 
 
 ## `FERGUSON ARIVA 255 COMBO S/Ferguson_A255 Slim_V1.30B4_20231103_EU.abs`
@@ -10041,6 +10540,68 @@ GTMedia V9 Prime official firmware V207 (2025-03-20) on an 8 MB SPI flash for th
 First ALi M3507 / C3507 (SDK chip code 0x10056) image in the catalog: combines an XIP CacheAsRam bootloader ("M3507---3", relocated to 0x82800000) with a 15.69 MB single-CPU application at 0x80100200, a 4-word (128-line) interrupt controller at 0xB8081080 / 0xB8081040, interrupt-driven SCB1 I2C for the CH455 panel, and the NIM_S3501H_0 internal DVB-S2X demodulator at 0xB804C000 (reading its 0x350100C0 chip ID from +0x140).
 
 
+## `GTMEDIA V9 PRIME/GTMedia_V9Prime_V161_20210422.bin`
+
+* **Box:** GTMedia V9 Prime (Release V207, 2025-03-20)
+* **Type:** DVB-S2X Full HD H.265/HEVC 10-bit satellite receiver with CA card slot, Ethernet and built-in 2.4G Wi-Fi
+* **Board:** bootloader chunk "M3507---3" (64 MB DDR2 single-CPU ALi M3507 / C3507 platform)
+* **SoC:** ALi M3507 / C3507 (chip word 0x35070000 at 0xB8000000 / 0xB8080000, SDK chip code 0x10056, 128-line interrupt controller at 0xB8081080 / 0xB8081040, OTP 0x210 product 5) (C3503 (chips/c3503.py))
+* **Demodulator:** internal DVB-S2X (NIM_S3501H_0 / NIM_C3501h_0 at 0xB804C000, chip ID 0x350100C0 at +0x140)
+* **Tuner:** RDA Microelectronics RDA5815M / AV2018 DVB-S2X on SCB0 at I2C 0x0C
+* **Flash:** 8 MB SPI
+* **IR coding:** nec
+* **Image:** dump, 00000001 (maincode "00000001"; bootloader "M3507---3"), 2015-09-16, 8388608 bytes, SHA-1 8cb88c676e86a6ebd052a8d4157c775602f2a4a5
+* **Layout:** bootloader 0x000000 (M3507---3, 2021-04-09), platform 0x04FE00 (00000001, 2021-4-19), upg_maincode 0x050000 (00000001, 2015-09-16), upg_osd_string 0x13A000 (0.0.1, 2015-11-23), Radioback 0x140000 (1.0.0, 2015-09-24), Menuback 0x160000 (1.0.0, 2019-08-15), osd_string 0x180000 (1.1.0, 2021-4-19), maincode 0x1B0000 (1.1.0, 2021-4-22), db5 0x600000 (1.1.0, 2021-4-22), tempdata 0x601000 (1.0.0, 2020-03-17), Code Key 0x610000 (1.0.0, 2017-06-27), script 0x630000 (1.1.0, 2020-11-9), Web TV 0x670000 (1.0.0, 2020-10-27), Preset DataBase 0x6B0000 (1.1.0, 2021-4-22), User Database 0x6DFF80 (1.0.0, 2021-4-22)
+* **Source:** [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Prime_Release_V207_20250320.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/GTMEDIA%20V9%20Prime), GTMedia (2025-03-20). Archive GTMedia_V9Prime_V161_20210422.bin from GTMEDIA V9 PRIME; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes. Boots as the single-CPU C3503/C3507 family (chips/c3503.py, matched by "c3507_phy_set", chip ID 0x3507 at 0xB8000000 and 0xB8080000 -> SDK chip code 0x10056, run_dump_gtmedia_v9_prime_v207_app_starts.py, run_dump_gtmedia_v9_prime_v207_capture_screen.py): the XIP bootloader ("M3507---3") starts at 0xAFC00000 with CacheAsRam at 0x8FFF8000..0x8FFFFFFF, polls PLL ready bit 7 of 0xB8080253, copies itself to 0x82800000, and unpacks the 15.69 MB maincode ("V1.10B1*") to 0x80100200 (CP0 EBase 0x80102000).  Uses the C3507's 128-line interrupt controller at 0xB8081080 (status) / 0xB8081040 (enable) with VPO/DEO on line 68, video engine on line 72, GE_M36F on line 76, IR receiver on line 12, and interrupt-driven SCB1 I2C (0xB8018700, line 21) for its CH455 front panel.  With OTP word 0x210 bits 20..24 = 5 and the internal S3501H demodulator's chip ID 0x350100C0 at 0xB804C140, the application decodes its boot logo and renders its 1280x720 32-bpp ARGB8888 "Factory Test Page" OSD (Model: GTMedia V9 Prime[P], SW Ver: V203.03.06.28.207, 70 colours, 157 GE commands) on GMA layer 0.
+
+GTMedia V9 Prime official firmware V207 (2025-03-20) on an 8 MB SPI flash for the Full HD H.265/HEVC 10-bit DVB-S2X satellite receiver on the single-CPU ALi M3507 / C3507 SoC with 64 MB DDR2.
+
+First ALi M3507 / C3507 (SDK chip code 0x10056) image in the catalog: combines an XIP CacheAsRam bootloader ("M3507---3", relocated to 0x82800000) with a 15.69 MB single-CPU application at 0x80100200, a 4-word (128-line) interrupt controller at 0xB8081080 / 0xB8081040, interrupt-driven SCB1 I2C for the CH455 panel, and the NIM_S3501H_0 internal DVB-S2X demodulator at 0xB804C000 (reading its 0x350100C0 chip ID from +0x140).
+
+
+## `GTMEDIA V9 SUPER/Freesat_V9Super_v373.bin`
+
+* **Box:** GTMedia V9 Super (MP V400, 2020-10-20)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with built-in Wi-Fi, Ethernet and USB PVR
+* **Board:** FREESAT1 / V9SUPER (bootloader version "M3505---0.1.0", 8 MB SPI flash, 128 MB DDR3)
+* **SoC:** ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3505 SEE" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 at 0xB804C000)
+* **Tuner:** Airoha AV2011 DVB-S2
+* **Flash:** 8 MB SPI
+* **Front panel:** FD650 (TM1650-compatible, PAN_FD650_0) (SCL 107, SDA 110)
+* **IR coding:** nec
+* **Image:** dump, 00000001 (maincode "00000001"; bootloader "M3505---0.1.0"), 2017-09-16, 8388608 bytes, SHA-1 6aab7eca708af1bdd975d8a35ae4ae43505f3422
+* **Layout:** bootloader 0x000000 (M3505---0.1.0, 2017-11-17), platform 0x06FE00 (00000001, 2020-3-14), upg_maincode 0x070000 (00000001, 2017-09-16), upg_osd_string 0x0DE000 (0.0.1, 2017-11-23), upg_seecode 0x0E0000 (00000001, 2017-09-16), seecode 0x120000 (M3505 SEE, 2020-3-17), Logo 0x260000 (1.0.0, 2017-11-17), osd_string 0x280000 (1.1.0, 2020-3-14), Main Code 0x2B0000 (M3505, 2020-3-17), Softcam Key 0x5B0000 (1.0.0, 2017-06-27), Web TV 0x5D0000 (1.0.0, 2017-06-27), Preset DataBase 0x650000 (1.1.0, 2020-3-17), User Database 0x68FF80 (1.0.0, 2020-3-17)
+* **Source:** [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super), GTMedia (2020-10-20). Archive Freesat_V9Super_v373.bin from GTMEDIA V9 SUPER; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel 'boot' -> ' on ' -> 'Strt'. Boots on C3505 (chips/c3505.py, front_panel.py, run_dump_gtmedia_v9_super_v400_app_starts.py, run_dump_gtmedia_v9_super_v400_capture_screen.py): the "M3505---0.1.0" boot-ROM bootloader at 0x800 runs at 0x9FE00800, copies its payload to 0x8100EF00, writes "boot" (0xB6, 0x36, 0x36, 0xA6) to the FD650 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), unpacks the 8.89 MB Main Code to 0x80000200 and M3505 SEE to 0xA6000200, and starts the dual-CPU application (which updates the FD650 panel through " on " to "Strt").  Because the MP (Mass Production) image carries an unprogrammed serial placeholder in its platform chunk at 0x06FE00, the application opens its 1280x720 "Factory Test Page" OSD ("Model: GTMedia V9 Super[P]", "SW Ver: V210.400", "HW Ver: Oct 20 2020") through the GE and display-engine list DMA.
+
+GTMedia V9 Super mass-production firmware V400 (V210.400, 2020-10-20) on an 8 MB SPI flash image for the Full HD H.265/HEVC DVB-S2 satellite receiver on the dual-CPU ALi M3505 / C3505 SoC with 128 MB DDR3.
+
+Drives an FD650 4-digit 7-segment display ("PAN_FD650_0") on GPIO 107 (SCL) / 110 (SDA) with custom segment wiring and boots into its 1280x720 "Factory Test Page" OSD when the platform serial number is unprogrammed.
+
+
+## `GTMEDIA V9 SUPER/GTMedia_V9Super20190704.bin`
+
+* **Box:** GTMedia V9 Super (MP V400, 2020-10-20)
+* **Type:** DVB-S2 Full HD H.265/HEVC satellite receiver with built-in Wi-Fi, Ethernet and USB PVR
+* **Board:** FREESAT1 / V9SUPER (bootloader version "M3505---0.1.0", 8 MB SPI flash, 128 MB DDR3)
+* **SoC:** ALi M3505 / C3505 (dual-CPU H.265/HEVC DVB-S2 SoC reading chip ID 0x3505; NIM_C3505_0, DECV_HEVC_0, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_DEV_0/1/2, seecode "M3505 SEE" at 0xA6000200; Libcore 17.8.0@SDK4.0ia.17.8_20161212) (C3505 (chips/c3505.py))
+* **Demodulator:** internal DVB-S2 (NIM_C3505_0 at 0xB804C000)
+* **Tuner:** Airoha AV2011 DVB-S2
+* **Flash:** 8 MB SPI
+* **Front panel:** tm1650 (SCL 107, SDA 110)
+* **IR coding:** nec
+* **Image:** dump, 00000001 (maincode "00000001"; bootloader "M3505---0.1.0"), 2017-09-16, 8388608 bytes, SHA-1 0fe72c52086cff7d8e62784781889f60911b0ba4
+* **Layout:** bootloader 0x000000 (M3505---0.1.0, 2017-11-17), platform 0x06FE00 (00000001, 2019-7-4), upg_maincode 0x070000 (00000001, 2017-09-16), upg_osd_string 0x0DE000 (0.0.1, 2017-11-23), upg_seecode 0x0E0000 (00000001, 2017-09-16), seecode 0x120000 (M3505 SEE, 2019-7-4), Logo 0x260000 (1.0.0, 2017-11-17), osd_string 0x280000 (1.1.0, 2019-7-4), Main Code 0x2B0000 (M3505, 2019-7-4), Softcam Key 0x5B0000 (1.0.0, 2017-06-27), Web TV 0x5D0000 (1.0.0, 2017-06-27), Preset DataBase 0x650000 (1.1.0, 2019-7-4), User Database 0x68FF80 (1.0.0, 2019-7-4)
+* **Source:** [satedu.cba.pl (a mirror of the GTMedia / Freesat firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=GTMedia_V9Super_MP_20201020_V400.zip&directory=Firmware%20for%20to%20all%20receivers/Freesat/Freesat%20V9%20Super), GTMedia (2020-10-20). Archive GTMedia_V9Super20190704.bin from GTMEDIA V9 SUPER; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel 'boot' -> ' on ' -> 'Strt'. Boots on C3505 (chips/c3505.py, front_panel.py, run_dump_gtmedia_v9_super_v400_app_starts.py, run_dump_gtmedia_v9_super_v400_capture_screen.py): the "M3505---0.1.0" boot-ROM bootloader at 0x800 runs at 0x9FE00800, copies its payload to 0x8100EF00, writes "boot" (0xB6, 0x36, 0x36, 0xA6) to the FD650 4-digit LED panel on GPIO 107 (SCL) / 110 (SDA), unpacks the 8.89 MB Main Code to 0x80000200 and M3505 SEE to 0xA6000200, and starts the dual-CPU application (which updates the FD650 panel through " on " to "Strt").  Because the MP (Mass Production) image carries an unprogrammed serial placeholder in its platform chunk at 0x06FE00, the application opens its 1280x720 "Factory Test Page" OSD ("Model: GTMedia V9 Super[P]", "SW Ver: V210.400", "HW Ver: Oct 20 2020") through the GE and display-engine list DMA.
+
+GTMedia V9 Super mass-production firmware V400 (V210.400, 2020-10-20) on an 8 MB SPI flash image for the Full HD H.265/HEVC DVB-S2 satellite receiver on the dual-CPU ALi M3505 / C3505 SoC with 128 MB DDR3.
+
+Drives an FD650 4-digit 7-segment display ("PAN_FD650_0") on GPIO 107 (SCL) / 110 (SDA) with custom segment wiring and boots into its 1280x720 "Factory Test Page" OSD when the platform serial number is unprogrammed.
+
+
 ## `GTMEDIA V9 SUPER/GTMedia_V9Super_MP_20201020_v400.bin`
 
 * **Box:** GTMedia V9 Super (MP V400, 2020-10-20)
@@ -10062,6 +10623,27 @@ GTMedia V9 Super mass-production firmware V400 (V210.400, 2020-10-20) on an 8 MB
 Drives an FD650 4-digit 7-segment display ("PAN_FD650_0") on GPIO 107 (SCL) / 110 (SDA) with custom segment wiring and boots into its 1280x720 "Factory Test Page" OSD when the platform serial number is unprogrammed.
 
 
+## `ILTV HD/iltv_1.5.21_hd_x4_newoldremote.abs`
+
+* **Box:** ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet
+* **Board:** 06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)
+* **SoC:** ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** nec
+* **Image:** update, 060202001521 (maincode "060202001521"; bootloader "M3602B 1.1.6"), 2012-03-18, 4194304 bytes, SHA-1 13150ab896ee5212d2a381e46dd9832e805f63d9
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001521, 2012-03-18), default_lang 0x25FD80 (1.0.0, 2007-12-05), countryband 0x260000 (1.0.0, 2008-09-23), logo_user 0x268000 (1.0.0, 2006-03-03), logo_menu 0x270000 (1.0.0, 2006-03-01), logo_radio 0x278000 (1.0.0, 2006-03-01), logo_boot 0x280000 (1.0.0, 2006-03-01), patch 0x29FF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2C0000 (1.0.2, 2005-2-28, LZMA -> 0.57 MB), userdb(64+64) 0x2EFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) (2012-03-18). Archive iltv_1.5.21_hd_x4_newoldremote.abs from ILTV HD; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_iltv_hd_app_starts.py, run_dump_iltv_hd_capture_screen.py): the "M3602B 1.1.6" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (" ON " -> "    " -> " on "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its ILTV OSD dialog through GeM3602 (7 GE commands, 4 colours).
+
+ILTV HD (v1.5.27, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).
+
+Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (" ON " -> " on "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x80xx remote control table ("necfirst" coding).
+
+
 ## `ILTV HD/iltv_1.5.27_hd_x4_newoldremote.abs`
 
 * **Box:** ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p)
@@ -10076,6 +10658,27 @@ Drives an FD650 4-digit 7-segment display ("PAN_FD650_0") on GPIO 107 (SCL) / 11
 * **Image:** update, 1.5.27 ILTV HD (maincode(AV) "060202001527"; bootloader "M3602B 1.1.6", 2009-12-29), 2012-03-18, 4194304 bytes, SHA-1 a7a245fe92ccfe4f67f542cc50a42dab5bc6d8a1
 * **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001527, 2012-03-18), default_lang 0x25FD80 (1.0.0), countryband 0x260000 (1.0.0), logo_user 0x268000 (1.0.0), logo_menu 0x270000 (1.0.0), logo_radio 0x278000 (1.0.0), logo_boot 0x280000 (1.0.0), patch 0x29FF80 (1.0.0), defaultdb(PRC) 0x2C0000 (1.0.2), userdb(64+64) 0x2EFF80 (1.0.2)
 * **Source:** [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) (2012-03-18). Archive iltv_1.5.27_hd_x4_newoldremote.zip from Opticum/Opticum HD X402-X403-X4-X7 on satedu.cba.pl; fetched 2026-11-02.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_iltv_hd_app_starts.py, run_dump_iltv_hd_capture_screen.py): the "M3602B 1.1.6" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (" ON " -> "    " -> " on "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its ILTV OSD dialog through GeM3602 (7 GE commands, 4 colours).
+
+ILTV HD (v1.5.27, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).
+
+Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (" ON " -> " on "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 40-entry 0x80xx remote control table ("necfirst" coding).
+
+
+## `ILTV HD/ILTV_SD_1.5.08_X4_newoldremote.abs`
+
+* **Box:** ILTV / Opticum ILTV HD (v1.5.27 build for Opticum HD X402p/X403p)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet
+* **Board:** 06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)
+* **SoC:** ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** Lemontree EuP MCU + 4-digit 7-segment LED (I2C 0x28) (SCL 62, SDA 171)
+* **IR coding:** nec
+* **Image:** update, 060202001508 (maincode "060202001508"; bootloader "M3602B 1.1.6"), 2012-03-18, 4194304 bytes, SHA-1 5d57a410b0efb64dfe7c9d3711367e91b935e0c1
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001508, 2012-03-18), default_lang 0x25FD80 (1.0.0, 2007-12-05), countryband 0x260000 (1.0.0, 2008-09-23), logo_user 0x268000 (1.0.0, 2006-03-03), logo_menu 0x270000 (1.0.0, 2006-03-01), logo_radio 0x278000 (1.0.0, 2006-03-01), logo_boot 0x280000 (1.0.0, 2006-03-01), patch 0x29FF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2C0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2EFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=iltv_1.5.27_hd_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), ILTV / Fulansoft (Opticum X4 port) (2012-03-18). Archive ILTV_SD_1.5.08_X4_newoldremote.abs from ILTV HD; added for expanded coverage.
 * **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_iltv_hd_app_starts.py, run_dump_iltv_hd_capture_screen.py): the "M3602B 1.1.6" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (" ON " -> "    " -> " on "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its ILTV OSD dialog through GeM3602 (7 GE commands, 4 colours).
 
 ILTV HD (v1.5.27, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).
@@ -10237,6 +10840,26 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
 
 
+## `OPENBOX S16/OPENBOX-S16-PATCH_AZ_2.6.abs`
+
+* **Box:** Openbox S16 HD PVR (EU ALi 3606C)
+* **Type:** DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet
+* **SoC:** ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi M3501 / S3501 on SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 on SCB1 at I2C 0x63
+* **Flash:** 4 MB SPI
+* **Front panel:** TM1650-compatible (SCL 62, SDA 63)
+* **IR coding:** nec
+* **Image:** update, S3606qe001 (maincode "S3606qe001"; bootloader "DVBS2---100"), 2012-7-12, 4194304 bytes, SHA-1 e33b1fed02fc68dab977092d3b57781194dda2b6
+* **Layout:** bootloader 0x000000 (DVBS2---100, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606qe001, 2012-7-12), seecode 0x180000 (M3606 SEE, 2012-7-12), Radioback 0x280000 (1.0.0, 2011-8-18), defaultdb 0x290000 (1.1.0, 2012-6-27), userdb 0x2AFF80 (1.0.0, 2012-7-12)
+* **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive OPENBOX-S16-PATCH_AZ_2.6.abs from OPENBOX S16; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'noCH'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
+
+Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
+
+Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
 ## `OPENBOX S16/OPENBOX-S16_Eu1129.abs`
 
 * **Box:** Openbox S16 HD PVR (EU ALi 3606C)
@@ -10250,6 +10873,46 @@ Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GP
 * **Image:** update, Eu1129 (maincode "S3606H-1.0.0" 2012-11-28, seecode "M3606 SEE" 2012-11-28; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree), 2012-11-28, 4194304 bytes, SHA-1 3c1287dbc2d9fd6a0514e4a08ab122f150b4602f
 * **Layout:** bootloader 0x000000 (DVBS2---1.0.0, 2011-08-11), HDCPKey 0x01FE00 (S3606), maincode 0x020000 (S3606H-1.0.0, 2012-11-28), seecode 0x180000 (M3606 SEE, 2012-11-28), Radioback 0x280000 (1.0.0), Openlogo 0x288000 (1.0.0), defaultdb 0x290000 (1.1.0), userdb 0x2AFF80 (1.0.0)
 * **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive OPENBOX-S16_Eu1129.zip from the Openbox S16 Ali 3606C directory on satedu.cba.pl; fetched 2026-10-31.
+* **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'noCH'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
+
+Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
+
+Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
+## `OPENBOX S16/S16_134OK_0808.abs`
+
+* **Box:** Openbox S16 HD PVR (EU ALi 3606C)
+* **Type:** DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet
+* **SoC:** ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi M3501 / S3501 on SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 on SCB1 at I2C 0x63
+* **Flash:** 4 MB SPI
+* **Front panel:** tm1650 (SCL 62, SDA 63)
+* **IR coding:** necfirst
+* **Image:** update, S3606H-1.0.0 (maincode "S3606H-1.0.0"; bootloader "DVBS2---1.0.0"), 2013-8-8, 4194304 bytes, SHA-1 f93456c9c78c275d8c993ca522ed3852e84eb97e
+* **Layout:** bootloader 0x000000 (DVBS2---1.0.0, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606H-1.0.0, 2013-8-8), seecode 0x200000 (M3606 SEE, 2013-8-8), Radioback 0x300000 (1.0.0, 2011-8-18), Openlogo 0x308000 (1.0.0, 2012-3-24), defaultdb 0x310000 (1.1.0, 2012-11-6), userdb 0x32FF80 (1.0.0, 2013-8-8)
+* **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive S16_134OK_0808.abs from OPENBOX S16; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'noCH'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
+
+Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
+
+Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
+## `OPENBOX S16/S16_CHN_0129.abs`
+
+* **Box:** Openbox S16 HD PVR (EU ALi 3606C)
+* **Type:** DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet
+* **SoC:** ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi M3501 / S3501 on SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 on SCB1 at I2C 0x63
+* **Flash:** 4 MB SPI
+* **Front panel:** tm1650 (SCL 62, SDA 63)
+* **IR coding:** necfirst
+* **Image:** update, S3606QN-1.0.0 (maincode "S3606QN-1.0.0"; bootloader "DVBS2---1.0.0"), 2013-1-29, 4194304 bytes, SHA-1 59373ef1bb70a13ff8d8020ad085e5304a4819c6
+* **Layout:** bootloader 0x000000 (DVBS2---1.0.0, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606QN-1.0.0, 2013-1-29), seecode 0x200000 (M3606 SEE, 2013-1-29), Radioback 0x300000 (1.0.0, 2011-8-18), Openlogo 0x308000 (1.0.0, 2012-3-24), defaultdb 0x310000 (1.1.0, 2012-11-6), userdb 0x32FF80 (1.0.0, 2013-1-29)
+* **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive S16_CHN_0129.abs from OPENBOX S16; added for expanded coverage.
 * **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'noCH'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
 
 Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
@@ -10276,6 +10939,86 @@ Openbox S16 HD PVR firmware v2.8 (S16_CHN_2.8.abs, 2012-07-20) for the ALi M3601
 Shares the M3601S hardware platform and GPIO 62 / 63 front-panel wiring with the Opticum HD S60, while carrying a 4 MB flash layout with HDCPKey and CI+ key chunks and a 50-key remote table at address 0x01xx (necfirst coding).
 
 
+## `OPENBOX S16/S16_EN2.11.abs`
+
+* **Box:** Openbox S16 HD PVR (EU ALi 3606C)
+* **Type:** DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet
+* **SoC:** ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi M3501 / S3501 on SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 on SCB1 at I2C 0x63
+* **Flash:** 4 MB SPI
+* **Front panel:** tm1650 (SCL 62, SDA 63)
+* **IR coding:** necfirst
+* **Image:** update, S3606q (maincode "S3606q"; bootloader "DVBS2---1.0.0"), 2012-5-31, 4194304 bytes, SHA-1 51f8c8186631064cd0f76ad538dacd117016fb85
+* **Layout:** bootloader 0x000000 (DVBS2---1.0.0, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606q, 2012-5-31), seecode 0x180000 (M3606 SEE, 2012-5-31), Radioback 0x280000 (1.0.0, 2011-8-18), Openlogo 0x288000 (1.0.0, 2012-3-24), defaultdb 0x290000 (1.1.0, 2012-6-6), userdb 0x2AFF80 (1.0.0, 2012-6-6)
+* **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive S16_EN2.11.abs from OPENBOX S16; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'OOO1'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
+
+Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
+
+Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
+## `OPENBOX S16/S16_ENG_2.7.abs`
+
+* **Box:** Openbox S16 HD PVR (EU ALi 3606C)
+* **Type:** DVB-S2 HD satellite receiver with USB PVR, CI/CA and Ethernet
+* **SoC:** ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi M3501 / S3501 on SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 on SCB1 at I2C 0x63
+* **Flash:** 4 MB SPI
+* **Front panel:** tm1650 (SCL 62, SDA 63)
+* **IR coding:** necfirst
+* **Image:** update, S3606QE-1.0.0 (maincode "S3606QE-1.0.0"; bootloader "DVBS2---1.0.0"), 2012-7-14, 4194304 bytes, SHA-1 519653e184cf69d01e43b07a4487be1753c79002
+* **Layout:** bootloader 0x000000 (DVBS2---1.0.0, 2011-8-11), HDCPKey 0x01FE00 (S3606, 2009-11-10), maincode 0x020000 (S3606QE-1.0.0, 2012-7-14), seecode 0x180000 (M3606 SEE, 2012-7-14), Radioback 0x280000 (1.0.0, 2011-8-18), defaultdb 0x290000 (1.1.0, 2012-6-27), userdb 0x2AFF80 (1.0.0, 2012-7-14)
+* **Source:** [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox (2012-11-29). Archive S16_ENG_2.7.abs from OPENBOX S16; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' on ' -> 'Strt' -> 'noCH'. Boots as the dual-CPU M3602 family with device.chipId 0x3603 (C3603), device.demodModel s3501@0x33 and device.tunerModel av2011@0x63: the bootloader parks the SEE boot stub at 0xA1E8F7C0, unpacks the 2.42 MB seecode ("M3606 SEE") and 5.24 MB maincode ("S3606H-1.0.0"), and starts the SEE program on the second core at 0xA6000200 (EBase 0x80000001).  The application initialises S3501 and probes AV2011 on SCB1, drives the TM1650-compatible front panel on GPIO 62 / 63 (" on " -> "noCH"), and renders its 16-bpp ARGB1555 "Edit Channel" main menu OSD (14 GE commands, 1,832 unique colours), where DOWN on its 0x80xx remote table ("necfirst" coding) steps to "Installation".
+
+Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
+
+Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
+## `OPENBOX X6 HD/20130614-openbox-x6-biss.abs`
+
+* **Box:** Openbox X6 HD
+* **Type:** DVB-S2 Full HD satellite receiver with USB PVR, BISS key editor and Ethernet
+* **Board:** Openbox X6 HD (bootloader version "1.00.00", 4 MB SPI flash, 128 MB DDR2)
+* **SoC:** ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) (M3602 (chips/m3602.py))
+* **Demodulator:** internal ALi S3501 DVB-S2
+* **Tuner:** Airoha AV2011 DVB-S2
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, 1.00.00 (maincode "1.00.00"; bootloader "1.00.00"), 2012-01-17, 4194304 bytes, SHA-1 817d88e67042f775eb0d042293bcf487cf13d3f7
+* **Layout:** bootloader 0x000000 (1.00.00, 2012-01-17), maincode 0x020000 (1.00.00, 2012-01-17), seecode 0x1D0000 (M3606 SEE, 2010-04-02), logo boot 0x280000 (1.00.00, 2012-01-17), logo menu 0x290000 (1.00.00, 2012-01-17), logo radio 0x2A0000 (1.00.00, 2012-01-17), patch key 0x2B0000 (1.00.00, 2012-01-17), defaultdb 0x2C0000 (1.00.00, 2012-01-17), userdb 0x31FF80 (1.00.00, 2013-4-2)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox (2013-06-14). Openbox X6 HD firmware from satedu.cba.pl.
+* **Simulator:** boots yes, application no, display no. The bootloader unpacks seecode to 0xA6000200 and maincode to 0x8020C9B8 on M3602 with chip ID 0x3603.
+
+Openbox X6 HD 4 MB SPI firmware for the dual-CPU ALi M3606 / M3602 platform.
+
+Features custom logo boot, logo menu, and logo radio chunk structure with "1.00.00" versioning.
+
+
+## `OPENBOX X6 HD/Openbox X6 HD.abs`
+
+* **Box:** Openbox X6 HD
+* **Type:** DVB-S2 Full HD satellite receiver with USB PVR, BISS key editor and Ethernet
+* **Board:** Openbox X6 HD (bootloader version "1.00.00", 4 MB SPI flash, 128 MB DDR2)
+* **SoC:** ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) (M3602 (chips/m3602.py))
+* **Demodulator:** internal ALi S3501 DVB-S2
+* **Tuner:** Airoha AV2011 DVB-S2
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, 1.00.00 (maincode "1.00.00"; bootloader "1.00.00"), 2012-01-17, 4194304 bytes, SHA-1 d9c9a0bf7cf974d854cab648d8ef85220718efad
+* **Layout:** bootloader 0x000000 (1.00.00, 2012-01-17), maincode 0x020000 (1.00.00, 2012-01-17), seecode 0x1D0000 (M3606 SEE, 2010-04-02), logo boot 0x280000 (1.00.00, 2012-01-17), logo menu 0x290000 (1.00.00, 2012-01-17), logo radio 0x2A0000 (1.00.00, 2012-01-17), patch key 0x2B0000 (1.00.00, 2012-01-17), defaultdb 0x2C0000 (1.00.00, 2012-01-17), userdb 0x31FF80 (1.00.00, 2013-7-24)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox (2013-06-14). Archive Openbox X6 HD.abs from OPENBOX X6 HD; added for expanded coverage.
+* **Simulator:** boots yes, application no, display no. The bootloader unpacks seecode to 0xA6000200 and maincode to 0x8020C9B8 on M3602 with chip ID 0x3603.
+
+Openbox X6 HD 4 MB SPI firmware for the dual-CPU ALi M3606 / M3602 platform.
+
+Features custom logo boot, logo menu, and logo radio chunk structure with "1.00.00" versioning.
+
+
 ## `OPTICUM 4000A/DumpFlash Opticum4000a(Globo7xxx)4,5w.bin`
 
 * **Box:** Opticum / Globo Opticum 4000A / Globo 7010A
@@ -10294,6 +11037,26 @@ Shares the M3601S hardware platform and GPIO 62 / 63 front-panel wiring with the
 2 MB Macronix MX29LV160B parallel-NOR JTAG flash dump (maincode dated 2008-03-19, preloaded with 4W/5E satellite channel list) from an Opticum 4000A / Globo 7010A DVB-S satellite receiver.
 
 Captured while the receiver's userdb(64+64) power state was standby (clock 17:37); waking via IR POWER updates parallel NOR flash, soft-reboots into channel 0001, and renders the full 8 bpp CLUT Russian OSD and illustrated Main Menu.
+
+
+## `OPTICUM 7000CR/ALI3329C_05000200_globo_cr_amstar_led_multiroom_1.3.26.abs`
+
+* **Box:** Opticum / Globo 7000CR MultiView (System ID 05000200, Amstar LED Multiroom v1.3.26)
+* **Type:** DVB-S MultiCAS card reader satellite receiver (ALi M3329C 2 MB SPI platform)
+* **Board:** 05000200 (Opticum 7000CR / Globo 7010CR MultiView)
+* **SoC:** ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0) (M3329 (chips/m3329.py))
+* **Demodulator:** internal ALi M3101 / NIM_M3327_0 QPSK DVB-S demodulator
+* **Flash:** 2 MB SPI
+* **Front panel:** PAN_HWSCAN_0 (internal hardware scanner)
+* **IR coding:** nec
+* **Image:** update, 05000200 (maincode "05000200"; bootloader "M3329C 1.0.6"), 2010-6-3, 2097152 bytes, SHA-1 236590346681520754d624996a63c53b0f78e867
+* **Layout:** bootloader 0x000000 (M3329C 1.0.6, 2009-08-10), maincode(AV) 0x010000 (05000200, 2010-6-3), default_lang 0x0DFD80 (1.0.0, 2007-12-05), patch 0x0DFF80 (1.0.0, 2006-03-03), logo_user 0x0F0000 (1.0.0, 2006-03-03), logo_menu 0x100000 (1.0.0, 2006-03-01), logo_radio 0x108000 (1.0.0, 2006-03-01), logo_def 0x110000 (1.0.0, 2006-03-01), defaultdb(PRC) 0x118000 (0.9.1, 2005-2-28), userdb(64+64) 0x15FF80 (1.0.1, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/), Globo (2008-01-01). Opticum / Globo 7000CR MultiView firmware from satedu.cba.pl.
+* **Simulator:** boots yes, application yes, display yes. Boots on M3329C (chips/m3329.py): bootloader "M3329C 1.0.6" unpacks maincode to SDRAM and prints "APP init ok".
+
+Opticum / Globo 7000CR MultiView firmware for System ID 05000200 on ALi M3329C.
+
+Features Amstar LED Multiroom firmware with smartcard reader support and 74HC164 LED panel.
 
 
 ## `OPTICUM 7300 PVR/7300PVR.bin`
@@ -11011,6 +11774,44 @@ Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microc
 Opticum / Globo HD X4 220 / X402p / X403p (System ID 06020200) firmware 1.5.22 with the Synaps Galaxy GUI and dual remote table (new + old remote, 2012-11-17) on a 4 MB SPI flash for the ALi M3602B Full HD DVB-S2 satellite receiver.
 
 Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol), an ALi S3501 DVB-S2 demodulator at I2C 0x33, and an Airoha AV2011 tuner at I2C 0x60.
+
+
+## `OPTICUM HD X403P/globo_x4_black synaps_mkfix_1.5.69_gisclub.tv.abs`
+
+* **Box:** Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 06020200 (bootloader version "M3602B 1.1.6", 4 MB SPI flash, Lemontree M3602B platform)
+* **SoC:** ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 tuner at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** necfirst
+* **Image:** update, 060202001569 (maincode "060202001569"; bootloader "M3602B 1.1.6"), 2015-7-26, 4194304 bytes, SHA-1 e441740f438372892d50a27ad79c4e6d3fe726a9
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001569, 2015-7-26), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7) (2014-04-15). Archive globo_x4_black synaps_mkfix_1.5.69_gisclub.tv.abs from OPTICUM HD X403P; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '    ' -> ' on '. Boots on M3602 (chips/m3602.py) (run_dump_opticum_x402p_403p_synaps_rc1_1548_app_starts.py, run_dump_opticum_x402p_403p_synaps_rc1_1548_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0.
+
+Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) firmware (2014-04-15) on a 4 MB SPI flash for ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602).
+
+
+## `OPTICUM HD X403P/globo_x4_black_synaps_gi_1_5_70_by_Valera61.abs`
+
+* **Box:** Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot, Ethernet and USB PVR
+* **Board:** 06020200 (bootloader version "M3602B 1.1.6", 4 MB SPI flash, Lemontree M3602B platform)
+* **SoC:** ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 tuner at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** necfirst
+* **Image:** update, 060202001567 (maincode "060202001567"; bootloader "M3602B 1.1.6"), 2015-2-6, 4194304 bytes, SHA-1 928d7b8870b0aaefe4d4fd65daab97ae53c054d3
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001567, 2015-2-6), default_lang 0x257D80 (1.0.0, 2007-12-05), countryband 0x258000 (1.0.0, 2008-09-23), logo_user 0x260000 (1.0.0, 2006-03-03), logo_menu 0x268000 (1.0.0, 2006-03-01), logo_radio 0x288000 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20HD%20X402p-403p_220_ps_synaps_rc1_1.5.48_by%20dreamer1983.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7) (2014-04-15). Archive globo_x4_black_synaps_gi_1_5_70_by_Valera61.abs from OPTICUM HD X403P; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> '    ' -> ' on '. Boots on M3602 (chips/m3602.py) (run_dump_opticum_x402p_403p_synaps_rc1_1548_app_starts.py, run_dump_opticum_x402p_403p_synaps_rc1_1548_capture_screen.py) and renders its 1280x720 OSD on GMA layer 0.
+
+Opticum HD X402p / X403p 220 (System ID 06020200, Synaps RC1 v1.5.48) firmware (2014-04-15) on a 4 MB SPI flash for ALi M3602B (64/128 MB DDR2 DVB-S2 SoC, chip ID 0x3602).
 
 
 ## `OPTICUM HD X403P/Opticum HD X402p-403p_220_ps_synaps_rc1_1.5.48.abs`
@@ -12033,6 +12834,27 @@ Its application names a satellite front end (NIM_S3501 / S3503 tuner-demodulator
 Its application names a "Djtuner driver" and the NIM_M3327 front end; its channel list holds 1042 TV channels (Nilesat, Arabic names first).
 
 
+## `PROTON HD/globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs`
+
+* **Box:** Proton / Opticum Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p)
+* **Type:** DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, CI slot and Ethernet
+* **Board:** 06020200 (Fulansoft / Lemontree ALi M3602B EuP platform)
+* **SoC:** ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 on SCB0/SCB1 at I2C 0x33
+* **Tuner:** Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **Front panel:** lemontree (SCL 62, SDA 171)
+* **IR coding:** necfirst
+* **Image:** update, 060202001541 (maincode "060202001541"; bootloader "M3602B 1.1.6"), 2012-03-18, 4194304 bytes, SHA-1 f567d024849d5168f7e34ddee4eaa47e6bd86cf1
+* **Layout:** bootloader 0x000000 (M3602B 1.1.6, 2009-12-29), maincode(AV) 0x010000 (060202001541, 2012-03-18), default_lang 0x27FD80 (1.0.0, 2007-12-05), countryband 0x280000 (1.0.0, 2008-09-23), logo_user 0x288000 (1.0.0, 2006-03-03), logo_menu 0x288080 (1.0.0, 2006-03-01), logo_radio 0x288100 (1.0.0, 2006-03-01), logo_boot 0x290000 (1.0.0, 2006-03-01), patch 0x2AFF80 (1.0.0, 2010-02-24), defaultdb(PRC) 0x2D0000 (1.0.2, 2005-2-28, LZMA -> 0.19 MB), userdb(64+64) 0x2FFF80 (1.0.2, 2005-1-1)
+* **Source:** [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=lemontree_proton_1.5.12_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Proton / Fulansoft (Opticum X4 port) (2012-03-18). Archive globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs from PROTON HD; added for expanded coverage.
+* **Simulator:** boots yes, application yes, display yes, panel ' ON ' -> ' on '. Boots as M3602 with chip ID 0x3602 (chips/m3602.py, lemontree_decoder.py, run_dump_proton_lemontree_app_starts.py, run_dump_proton_lemontree_capture_screen.py): the "M3602B 1.1.6" bootloader exchanges 8-byte CRC-16/XMODEM frames with the Lemontree EuP standby and 4-digit LED MCU at I2C 0x28 on bit-banged GPIO 62 (SCL) / 171 (SDA) (" ON " -> "    " -> " on "), prints "APP  init ok", and unpacks maincode(AV) to 0x80008000.  The application configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and Airoha AV2011 tuner at I2C 0x60 (80 writes) and draws its Lemontree OSD dialog through GeM3602 (7 GE commands, 4 colours).
+
+Proton HD (Lemontree GUI 1.5.12, System ID 06020200, 2012-03-18) 4 MB SPI firmware for the ALi M3602B DVB-S2 Full HD satellite receiver (ported to Opticum HD X402p/X403p).
+
+Uses a single-CPU M3602B maincode with the Lemontree EuP front-panel MCU on GPIO 62 / 171 (" ON " -> " on "), ALi S3501 demodulator at I2C 0x33, Airoha AV2011 tuner at I2C 0x60, and a 51-entry 0x99xx remote control table ("necfirst" coding).
+
+
 ## `PROTON HD/lemontree_proton_1.5.12_x4_newoldremote.abs`
 
 * **Box:** Proton / Opticum Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p)
@@ -12117,6 +12939,26 @@ SAB Titan I HD 3602 / Opticum HD X4-series (System ID 06020200) firmware 1.6.17 
 Uses the external Lemontree EuP standby and 4-digit 7-segment front-panel microcontroller at I2C 0x28 on GPIO 62 / 171 (CRC-16/XMODEM protocol, " ON " -> "boot"), an ALi S3501 DVB-S2 demodulator at I2C 0x33, and an Airoha AV2011 tuner at I2C 0x60.
 
 
+## `SKYBOX V6/product_sabbat_dual.abs`
+
+* **Box:** Skybox / Freesat V6 / V7 / V8 HD (product_sabbat_dual)
+* **Type:** DVB-S2 Full HD satellite receiver with USB Wi-Fi and Ethernet
+* **Board:** product_sabbat_dual (bootloader version "M3503---0.1.0", 4 MB SPI flash, 128 MB DDR3)
+* **SoC:** ALi M3503 rev B (dual-CPU MIPS32, seecode at 0xA6000200, maincode at 0x80000200) (M3503 (chips/m3503.py))
+* **Demodulator:** internal ALi M3503 DVB-S2 (NIM_S3501_0)
+* **Tuner:** Airoha AV2011 / RDA5815M DVB-S2
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, M3503 (maincode "M3503"; bootloader "M3503---0.1.0"), 2014-4-18, 4194304 bytes, SHA-1 e1830745368833e766a119ccc3701c13d0553446
+* **Layout:** bootloader 0x000000 (M3503---0.1.0, 2012-07-24), HDCPKey 0x02EE00 (00000001, 2012-07-24), MemCfg 0x02F000 (00000001, 2014-4-18), maincode 0x030000 (M3503, 2014-4-18), seecode 0x230000 (M3503 SEE, 2014-4-18), Radioback 0x310000 (1.0.0, 2012-07-24), defaultdb 0x320000 (1.1.0, 2014-4-18), userdb 0x32FF80 (1.0.0, 2014-4-18)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/), Skybox (2016-01-01). 4 MB SPI flash update product_sabbat_dual.abs for Skybox V6 from satedu.cba.pl.
+* **Simulator:** boots yes, application yes, display yes. Boots on M3503 (chips/m3503.py): the M3503---0.1.0 bootloader starts SEE core at 0xA6000200, unpacks maincode to 0x80000200, and executes 187 GE commands rendering a 1280x720 OSD dialog.
+
+Skybox / Freesat V6 4 MB SPI flash firmware for the dual-CPU ALi M3503 platform.
+
+First 4 MB M3503 SPI image in the catalog; renders a 1280x720 OSD through GeM36F.
+
+
 ## `srt8115.BIN`
 
 * **Box:** Strong SRT 8115
@@ -12152,6 +12994,27 @@ The attachment "Strong srt8115 MC6422-M3801.BIN" of the elektroda thread "Aktual
 * **Simulator:** boots yes, application yes, display yes. run_dump_Prima_to_check_program.py, run_dump_Prima_to_print_success.py and run_dump_Prima_to_main_app.py boot it through the bootloader ("bl_flash_init!", "bl_verify_sw", "check_program!", "success!") into the main application.  Without a channel database it opens its first-install wizard (2026-10-13, run_dump_prima8_update_capture_screen.py): "Welcome" -- language English, region United Kingdom, subtitle off, aspect mode auto, scan mode free, connection HDMI -- drawn by ~20 GE commands (~230 M instructions) through the M3801's GE and GMA.  Its remote takes the flash dump's extended-NEC coding (ext00; under the default "nec" DOWN did nothing): DOWN / UP move the wizard's highlight, RIGHT steps a value (2026-10-14).  Unlike the dump's application it does not poll GPIO 31 / 9 for buttons on its wizard (it reads only the GPIO bank of its CH455 driver's pinless software I2C bus, GPIO 127), so it has no panel entry.
 
 Despite the .abs name it is a complete 4 MB flash image.
+
+
+## `STARSAT SR-X4000D/ali_dvbs_v4_rock_3329c_v1.1.7_starsat_20080222.bin`
+
+* **Box:** StarSat SR-X4000D / SR-X4200D
+* **Type:** DVB-S FTA SD satellite receiver (Moresat "Beta" / Ali 3329C series, 2008)
+* **Board:** SMT03 (StarSat SR-X4000D / SR-X4200D)
+* **SoC:** ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader "SMT03---3.0.4") (M3329 (chips/m3329.py))
+* **Demodulator:** internal DVB-S (NIM_M3327; maincode XTEA-encrypted)
+* **Tuner:** unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode XTEA-encrypted)
+* **Flash:** 2 MB parallel NOR
+* **Front panel:** SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud)
+* **IR coding:** nec
+* **Image:** dump, 1.1.7 (maincode "1.1.7"; bootloader "SMT03---3.0.4"), 2008-2-22, 2031616 bytes, SHA-1 f741d7af3065408e051742d34f0097f49764d757
+* **Layout:** bootloader 0x000000 (SMT03---3.0.4, 2008-01-24), maincodeC 0x010000 (1.1.7, 2008-2-22), CAS_data 0x0DFF80 (1.0.0, 2007-12-11), ScriptGUI 0x0F0000 (1.0.0, 2007-07-09), logo 0x100000 (1.0.0, 2007-01-03), logo_radio 0x108000 (1.0.0, 2007-01-03), defaultdb 0x110000 (1.0.2, 2007-07-20), userdb 0x11FF80 (1.0.1, 2007-01-01)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/), StarSat (2008-02-22). StarSat SR-X4000D firmware from satedu.cba.pl JTAG dumps.
+* **Simulator:** boots yes, application no, display no, panel ' on ' -> 'upg '. The bootloader unpacks SMT03---3.0.4 to 0x80680000, communicates with PAN_SMTM51_0 MCU, and presents recovery prompt.
+
+StarSat SR-X4000D / SR-X4200D 2 MB NOR flash dump on ALi M3329C Moresat "SMT03" / "Beta" platform.
+
+Features SMT03---3.0.4 bootloader and XTEA-encrypted maincodeC.
 
 
 ## `STRONG PRIMA VIII/GD25Q32B_20190128_141501.BIN`

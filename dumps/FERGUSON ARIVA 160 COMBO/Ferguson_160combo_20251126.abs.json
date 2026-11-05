@@ -1,0 +1,44 @@
+{
+  "file": "Ferguson_160combo_20251126.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 160 Combo",
+    "type": "DVB-S2X + DVB-T2/C Full HD H.265/HEVC Combo satellite and terrestrial receiver with CA card slot, Ethernet and USB PVR",
+    "board": "HATK5 bootloader version \"66035-01047\" (128 MB DDR3 C3505 combo platform)",
+    "soc": "ALi C3505 / M3821 with 128 MB DDR3 (maincode \"ALI_C3505\", seecode \"M3505 SEE\" at 0xAE000200, chip ID 0x3821 with variant 0xC000)",
+    "family": "C3505 (chips/c3505.py)",
+    "chipId": "0x3821",
+    "demod": "internal ALi DVB-S2X (NIM_C3501h_0) + DVB-T2/C (NIM_S3821_0)",
+    "tuner": "RDA Microelectronics RDA5815M (DVB-S2X) + Rafael Micro R836 / R840 (DVB-T2/C)",
+    "flash": "8 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.1B0 (maincode \"V1.1B0\"; bootloader \"66035-01047\")",
+    "date": "2025-11-26",
+    "size": 8388608,
+    "sha1": "9afc0b3ea0d5bb4e91a01987ba523a22ccff5542",
+    "layout": "HATK5 0x000000 (66035-01047, 2025-11-26), HDCPKey 0x02FE00 (1.0.0, 2025-3-31), maincode 0x030000 (V1.1B0, 2025-11-26), seecode 0x480000 (V1.1B0, 2025-3-31), osd_string 0x5D0000 (V1.1B0, 2025-3-31), radioback 0x5F0000 (1.0.0, 2025-3-31), seeback 0x60FF80 (1.0.0, 2025-3-31), Ariva-HATK5 0x620000 (1.0.0, 2025-4-1), data 0x63FF80 (1.0.0, 2025-3-31), defaultdb 0x690000 (1.0.0, 2025-3-31), userdb 0x6AFF80 (1.0.0, 2025-11-26)"
+  },
+  "source": {
+    "url": "https://ferguson-digital.eu/",
+    "site": "ferguson-digital.eu",
+    "author": "Ferguson",
+    "date": "2025-11-26",
+    "login": false,
+    "note": "Official late-2025 firmware release Ferguson_160combo_20251126.abs from ferguson-digital.eu."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": null,
+    "note": "Boots as C3505 with chip ID 0x3821 and variant 0xC000 (chips/c3505.py): the HATK5 bootloader unpacks maincode to 0x80000200 and seecode to 0xAE000200 with 128 MB DDR3, and runs Libcore 19.17.0 with DVB-S2X and DVB-T2/C NIMs."
+  },
+  "desc": [
+    "Ferguson Ariva 160 Combo official firmware update (2025-11-26) on 8 MB SPI flash for the ALi C3505 / M3821 (chip ID 0x3821) DVB-S2X + DVB-T2/C receiver with 128 MB DDR3.",
+    "Combines internal NIM_C3501h_0 (DVB-S2X) and NIM_S3821_0 (DVB-T2/C) tuners under Libcore 19.17.0."
+  ]
+}

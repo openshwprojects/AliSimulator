@@ -1,0 +1,52 @@
+{
+  "file": "ali_dvbs_v4_rock_3329c_v1.1.7_starsat_20080222.bin",
+  "device": {
+    "brand": "StarSat",
+    "model": "SR-X4000D / SR-X4200D",
+    "type": "DVB-S FTA SD satellite receiver (Moresat \"Beta\" / Ali 3329C series, 2008)",
+    "board": "SMT03 (StarSat SR-X4000D / SR-X4200D)",
+    "soc": "ALi M3329C (M3327 / M3329 platform, 216 MHz fixed clock; bootloader \"SMT03---3.0.4\")",
+    "family": "M3329 (chips/m3329.py)",
+    "demod": "internal DVB-S (NIM_M3327; maincode XTEA-encrypted)",
+    "tuner": "unknown (on bit-banged GPIO I2C SCL 10 / SDA 9; maincode XTEA-encrypted)",
+    "flash": "2 MB parallel NOR",
+    "panel": {
+      "chip": "SMTM51 (PAN_SMTM51_0 8051 front-panel & security MCU over SCI_16550_1 UART2 at 0xB8001400, 9600 baud)"
+    },
+    "irCoding": "nec",
+    "gpioI2c": {
+      "scl": 10,
+      "sda": 9
+    }
+  },
+  "image": {
+    "kind": "dump",
+    "version": "1.1.7 (maincode \"1.1.7\"; bootloader \"SMT03---3.0.4\")",
+    "date": "2008-2-22",
+    "size": 2031616,
+    "sha1": "f741d7af3065408e051742d34f0097f49764d757",
+    "layout": "bootloader 0x000000 (SMT03---3.0.4, 2008-01-24), maincodeC 0x010000 (1.1.7, 2008-2-22), CAS_data 0x0DFF80 (1.0.0, 2007-12-11), ScriptGUI 0x0F0000 (1.0.0, 2007-07-09), logo 0x100000 (1.0.0, 2007-01-03), logo_radio 0x108000 (1.0.0, 2007-01-03), defaultdb 0x110000 (1.0.2, 2007-07-20), userdb 0x11FF80 (1.0.1, 2007-01-01)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": "StarSat",
+    "date": "2008-02-22",
+    "login": false,
+    "note": "StarSat SR-X4000D firmware from satedu.cba.pl JTAG dumps."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": [
+      " on ",
+      "upg "
+    ],
+    "note": "The bootloader unpacks SMT03---3.0.4 to 0x80680000, communicates with PAN_SMTM51_0 MCU, and presents recovery prompt."
+  },
+  "desc": [
+    "StarSat SR-X4000D / SR-X4200D 2 MB NOR flash dump on ALi M3329C Moresat \"SMT03\" / \"Beta\" platform.",
+    "Features SMT03---3.0.4 bootloader and XTEA-encrypted maincodeC."
+  ]
+}

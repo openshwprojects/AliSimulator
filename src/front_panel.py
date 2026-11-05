@@ -133,12 +133,15 @@ PANELS = [
     ("A254", _fd650k(107, 108)),
     ("254Combo", _fd650k(107, 108)),
     ("A255", _fd650k(107, 108)),
+    ("255combo", _fd650k(107, 108)),
     # GTMedia V9 Super (128 MB M3505 / C3505): FD650_0 ("PAN_FD650_0") on GPIO bank 3, SCL = GPIO 107,
     # SDA = GPIO 110, digits 0x6E, 0x6C, 0x6A, 0x68 from the left and segments a..g, DP on bits
     # 0, 6, 4, 2, 1, 7, 5, 3 (read off its font table at mc+0x7F5A06: '0'=0xD7, '1'=0x50, 'b'=0xB6,
     # 'o'=0x36, 't'=0xA6 -> "boot")
-    ("GTMedia_V9Super", dict(chip="tm1650", scl=107, sda=110, digit_order=(3, 2, 1, 0),
-                             seg_map=(0, 6, 4, 2, 1, 7, 5, 3), labels=_FERGUSON_KEYS)),
+    ("V9Super", dict(chip="tm1650", scl=107, sda=110, digit_order=(3, 2, 1, 0),
+                     seg_map=(0, 6, 4, 2, 1, 7, 5, 3), labels=_FERGUSON_KEYS)),
+    ("V9_Super", dict(chip="tm1650", scl=107, sda=110, digit_order=(3, 2, 1, 0),
+                      seg_map=(0, 6, 4, 2, 1, 7, 5, 3), labels=_FERGUSON_KEYS)),
     # Ferguson Ariva 54 (the C3503D, chips/c3503.py): the same FD650K and layout on GPIO bank 0
     # (0xB8000054), SCL = GPIO 24, SDA = GPIO 23 (" On ", " on ", "nenu" on its external IR/LED
     # eye; the Ariva 53's board_cfg leaves its panel I2C attach pointer NULL -- no display)
@@ -279,9 +282,9 @@ PANELS = [
     # GPIO 16, driven by its "pan bin" chunk's code (unpacked to 0xA01FA000) -- "  --" from the
     # bootloader, then the channel number ("0037"); its panel key map (0x8003E0AC) has the seven
     # DIG4 positions: KI1 down, KI2 up, KI3 OK, KI4 menu, KI5 left, KI6 right, KI7 power
-    ("ali3329", dict(chip="tm1650", scl=15, sda=16,
-                     labels={(1, 4): "▼", (2, 4): "▲", (3, 4): "OK", (4, 4): "MENU", (5, 4): "◀",
-                             (6, 4): "▶", (7, 4): "PWR"})),
+    ("ali3329-s15125", dict(chip="tm1650", scl=15, sda=16,
+                            labels={(1, 4): "▼", (2, 4): "▲", (3, 4): "OK", (4, 4): "MENU", (5, 4): "◀",
+                                    (6, 4): "▶", (7, 4): "PWR"})),
     # Opticum X80 Premium (M3329C / M3101C, 2 MB SPI): CH455 / TM1650 on SCL = GPIO 30, SDA = GPIO 31
     # (" on " -> "----" -> "OOO1")
     ("x80 premium", dict(chip="tm1650", scl=30, sda=31, labels={})),
