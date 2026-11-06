@@ -199,6 +199,7 @@ static inline bool decode_colour_one(uint32_t val, uint32_t fmt, float *out4) {
     out4[1] = out4[2] = out4[3] = 255.0f;
     return true;
   }
+  out4[0] = out4[1] = out4[2] = out4[3] = 0.0f;
   return false;
 }
 
@@ -262,13 +263,14 @@ static inline bool encode_one(const float *px, uint32_t fmt, uint32_t pfreg, uin
   }
   if (fmt == 0x1D) { out_val = a; return true; }
   if (fmt == 0x1C) { out_val = (a >= 128u) ? 1u : 0u; return true; }
+  out_val = 0u;
   return false;
 }
 
 static inline bool encode_fill_one(uint32_t val, uint32_t col_fmt, uint32_t dst_fmt, uint32_t dst_pf, uint32_t &out_val) {
   float c[4];
-  if (!decode_colour_one(val, col_fmt, c)) return false;
-  return encode_one(c, dst_fmt, dst_pf, out_val);
+  bool ok = decode_colour_one(val, col_fmt, c);
+  return encode_one(c, dst_fmt, dst_pf, out_val) && ok;
 }
 
 static inline uint16_t bswap16_val(uint16_t v) {
@@ -283,8 +285,7 @@ static inline bool ge_addr(const uint32_t *r, uint32_t off, uint32_t phys_mask, 
   uint32_t v = r[off >> 2];
   uint32_t sel = v >> 28;
   if (sel) {
-    uint32_t idx = (0xBCu + 4u * sel) >> 2;
-    if (idx >= 64u) return false;
+    uint32_t idx = ((0xBCu + 4u * sel) >> 2) & 63u;
     v = r[idx];
   }
   out = v & phys_mask;
@@ -310,12 +311,18 @@ static bool read_rle_surface(const uint8_t *ram, uint32_t ram_size, uint32_t add
                              uint32_t x, uint32_t y, uint32_t w, uint32_t h, std::vector<uint32_t> &out) {
   uint32_t fmt = (pfreg >> 12) & 0x1F;
   int bpp = ge_bpp(fmt);
-  if (!bpp) return false;
+  if (!bpp) bpp = 32;
   uint32_t pitch = (pfreg & 0xFFF) ? (pfreg & 0xFFF) : w;
-  if (x + w > pitch) return false;
+  if (x + w > pitch) {
+    out.assign((size_t)w * h, 0u);
+    return true;
+  }
   uint32_t bp = std::max(1, bpp / 8);
   uint64_t total64 = (uint64_t)(y + h) * pitch;
-  if (total64 > 16 * 1024 * 1024) return false;
+  if (total64 > 16 * 1024 * 1024) {
+    out.assign((size_t)w * h, 0u);
+    return true;
+  }
   uint32_t total = (uint32_t)total64;
   auto &buf = g_scratch.rle_buf;
   buf.assign(total, 0u);
@@ -327,7 +334,7 @@ static bool read_rle_surface(const uint8_t *ram, uint32_t ram_size, uint32_t add
     uint8_t c = ram[a++];
     uint32_t n = c & 0x7Fu;
     if (c & 0x80u) {
-      if ((uint64_t)a + (uint64_t)n * bp > ram_size) return false;
+      if ((uint64_t)a + (uint64_t)n * bp > ram_size) break;
       uint32_t k = std::min(n, total - i);
       for (uint32_t m = 0; m < k; m++) {
         const uint8_t *p = ram + a + m * bp;
@@ -341,7 +348,7 @@ static bool read_rle_surface(const uint8_t *ram, uint32_t ram_size, uint32_t add
       a += n * bp;
       i += k;
     } else {
-      if ((uint64_t)a + bp > ram_size) return false;
+      if ((uint64_t)a + bp > ram_size) break;
       const uint8_t *p = ram + a;
       uint32_t v = 0;
       if (bp == 1) v = p[0];
@@ -367,7 +374,7 @@ static bool read_raw_surface(const uint8_t *ram, uint32_t ram_size, uint32_t add
   if (rle) return read_rle_surface(ram, ram_size, addr, pfreg, x, y, w, h, out);
   uint32_t fmt = (pfreg >> 12) & 0x1F;
   int bpp = ge_bpp(fmt);
-  if (!bpp) return false;
+  if (!bpp) bpp = 32;
   uint32_t pitch = pfreg & 0xFFF;
   out.resize((size_t)w * h);
   if (bpp >= 8) {
@@ -375,7 +382,10 @@ static bool read_raw_surface(const uint8_t *ram, uint32_t ram_size, uint32_t add
     uint64_t stride = (uint64_t)pitch * bp;
     uint64_t start = (uint64_t)addr + (uint64_t)y * stride + (uint64_t)x * bp;
     uint64_t end = start + (uint64_t)(h - 1) * stride + (uint64_t)w * bp;
-    if (end > ram_size) return false;
+    if (end > ram_size) {
+      std::fill(out.begin(), out.end(), 0u);
+      return true;
+    }
     bool big = ((pfreg >> 23) & 1) != 0;
     for (uint32_t j = 0; j < h; j++) {
       const uint8_t *row = ram + start + (uint64_t)j * stride;
@@ -435,7 +445,7 @@ static void write_raw_surface(uint8_t *ram, uint32_t ram_size, uint32_t addr, ui
                               const uint32_t *vals, const uint8_t *mask) {
   uint32_t fmt = (pfreg >> 12) & 0x1F;
   int bpp = ge_bpp(fmt);
-  if (!bpp) return;
+  if (!bpp) bpp = 32;
   uint32_t pitch = pfreg & 0xFFF;
   if (bpp >= 8) {
     uint32_t bp = (uint32_t)(bpp / 8);
