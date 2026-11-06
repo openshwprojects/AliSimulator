@@ -42,8 +42,23 @@ Command lists: 0x02/0x82 << 24 | group mask loads register groups (GROUPS)
 and runs a primitive; 0x81 << 24 | reg << 8 | n writes n words from reg on.
 """
 from collections import Counter
+import ctypes
 
 import numpy as np
+
+try:
+    import cpp_core as _cpp_core
+except Exception:
+    _cpp_core = None
+
+
+def _get_cpp_lib():
+    if _cpp_core is not None and _cpp_core.available():
+        try:
+            return _cpp_core.lib()
+        except Exception:
+            return None
+    return None
 
 # Register groups of a command-list 0x02 header, in mask-bit order.
 GROUPS = ((0x30,), (0x34, 0x38), (0x44, 0x48), (0x50, 0x54), (0x60, 0x64), (0x90, 0x94, 0x98), (0x9C,),
@@ -91,12 +106,25 @@ class GeM36F:
         self.regs = [0] * 64            # register file of the command-list path (by offset / 4)
         self.trace = None               # set to a list to record the register file of every primitive
         self.trace_limit = 20000
+        self._cpp_lib = _get_cpp_lib() if (isinstance(ram, np.ndarray) and ram.dtype == np.uint8 and ram.flags.c_contiguous) else None
+        self._ram_ptr = int(ram.ctypes.data) if self._cpp_lib is not None else 0
+        self._c_regs = (ctypes.c_uint32 * 64)()
+        self._c_regs_io = (ctypes.c_uint32 * 64)()
+        self._c_prims = ctypes.c_uint64(0)
 
     # ------------------------------------------------------------------
     # entry points
     # ------------------------------------------------------------------
     def run_io(self, regs):
         """IO mode: regs = the 64 words of the live register file."""
+        if self.fast_paths and self.trace is None and self._cpp_lib is not None:
+            for i in range(64):
+                self._c_regs_io[i] = int(regs[i]) & 0xFFFFFFFF
+            self._c_prims.value = self.primitives
+            if self._cpp_lib.ali_ge_m36f_exec(self._ram_ptr, len(self.ram), self._phys_mask,
+                                              ctypes.byref(self._c_regs_io), ctypes.byref(self._c_prims)) == 0:
+                self.primitives = int(self._c_prims.value)
+                return
         r = list(regs)
         self.execute(r)
 
@@ -105,8 +133,24 @@ class GeM36F:
         (base registers +C0..+CC and defaults)."""
         r = self.regs
         for o in range(0xC0, 0xD0, 4):
-            r[o >> 2] = regs[o >> 2]
+            r[o >> 2] = int(regs[o >> 2]) & 0xFFFFFFFF
         i, n = 0, len(words)
+        if self.fast_paths and self.trace is None and self._cpp_lib is not None and n > 0:
+            for k in range(64):
+                self._c_regs[k] = r[k] & 0xFFFFFFFF
+            w_arr = words if (isinstance(words, np.ndarray) and words.dtype == np.uint32 and words.flags.c_contiguous) \
+                else np.asarray(words, dtype=np.uint32)
+            self._c_prims.value = self.primitives
+            done = int(self._cpp_lib.ali_ge_m36f_run_list(
+                self._ram_ptr, len(self.ram), self._phys_mask,
+                int(w_arr.ctypes.data), n, ctypes.byref(self._c_regs), None, ctypes.byref(self._c_prims)
+            ))
+            self.primitives = int(self._c_prims.value)
+            for k in range(64):
+                r[k] = int(self._c_regs[k])
+            if done >= n:
+                return
+            i = done
         while i < n:
             h = int(words[i])
             i += 1
@@ -602,6 +646,14 @@ class GeM36F:
     def execute(self, r):
         if self.trace is not None and len(self.trace) < self.trace_limit:
             self.trace.append(list(r))
+        if self.fast_paths and self._cpp_lib is not None:
+            for i in range(64):
+                self._c_regs_io[i] = int(r[i]) & 0xFFFFFFFF
+            self._c_prims.value = self.primitives
+            if self._cpp_lib.ali_ge_m36f_exec(self._ram_ptr, len(self.ram), self._phys_mask,
+                                              ctypes.byref(self._c_regs_io), ctypes.byref(self._c_prims)) == 0:
+                self.primitives = int(self._c_prims.value)
+                return
         try:
             self._execute(r)
         except Exception as e:          # never take the emulation down

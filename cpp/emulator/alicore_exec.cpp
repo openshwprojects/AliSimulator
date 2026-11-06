@@ -823,6 +823,8 @@ enum UopKind : uint8_t {
   U_EXT, U_INS,
   U_LB, U_LBU, U_LH, U_LHU, U_LW, U_SB, U_SH, U_SW,
   U_MFC0_COUNT, U_TRAP,
+  // fused two-op superinstructions (ops[i + 1] keeps its original Uop)
+  U_LI_ADDIU, U_LI_ORI, U_LI_LW, U_LI_SW, U_ADDIU2, U_ADDU2, U_LW2, U_SW2,
   // control transfers with a delay slot (MIPS32, MIPS16 jumps): the block's second-last op
   U_BEQ, U_BNE, U_BLEZ, U_BGTZ, U_BLTZ, U_BGEZ, U_BLTZAL, U_BGEZAL,
   U_BEQL, U_BNEL, U_BLEZL, U_BGTZL, U_BLTZL, U_BGEZL, U_BLTZALL, U_BGEZALL,
@@ -1257,6 +1259,36 @@ uint64_t Core::ff_passes(const Block *b) const {
   return (uint64_t)z;
 }
 
+static void fuse_block(Core::Block *b) {
+  uint32_t limit = b->n;
+  if (b->n >= 2 && b->ops[b->n - 2].op >= U_BEQ && b->ops[b->n - 2].op <= U16_JALR)
+    limit = b->n - 2;
+  else if (b->n >= 1 && b->ops[b->n - 1].op >= U16_B)
+    limit = b->n - 1;
+  for (uint32_t i = 0; i + 1 < limit; i++) {
+    uint8_t a = b->ops[i].op, c = b->ops[i + 1].op;
+    uint8_t f = 0;
+    if (a == U_LI) {
+      if (c == U_ADDIU) f = U_LI_ADDIU;
+      else if (c == U_ORI) f = U_LI_ORI;
+      else if (c == U_LW) f = U_LI_LW;
+      else if (c == U_SW) f = U_LI_SW;
+    } else if (a == U_ADDIU && c == U_ADDIU) {
+      f = U_ADDIU2;
+    } else if (a == U_ADDU && c == U_ADDU) {
+      f = U_ADDU2;
+    } else if (a == U_LW && c == U_LW) {
+      f = U_LW2;
+    } else if (a == U_SW && c == U_SW) {
+      f = U_SW2;
+    }
+    if (f) {
+      b->ops[i].op = f;
+      i++;
+    }
+  }
+}
+
 Core::Block *Core::build_block(uint32_t pc0, bool mode16, uint8_t *page) {
   Block *b = new Block;
   b->key = pc0 | (mode16 ? 1u : 0u);
@@ -1317,6 +1349,7 @@ Core::Block *Core::build_block(uint32_t pc0, bool mode16, uint8_t *page) {
   memcpy(b->raw, base, off);
   block_builds++;
   analyze_ff(b);
+  fuse_block(b);
   return b;
 }
 
@@ -1350,11 +1383,15 @@ static ALI_INLINE bool same_code(const uint8_t *a, const uint8_t *b, uint32_t n)
   return true;
 }
 
-Core::Block *Core::get_block(uint32_t pc0, bool mode16) {
-  if (!btab_) btab_ = new Block *[BLOCK_TABLE]();
+ALI_INLINE Core::Block *Core::get_block(uint32_t pc0, bool mode16) {
+  if (ALI_UNLIKELY(!btab_)) btab_ = new Block *[BLOCK_TABLE]();
   uint8_t *page = vx_[pc0 >> 12];
-  if (!page) return nullptr;
+  if (ALI_UNLIKELY(!page)) return nullptr;
   chunk_reported_ = false;
+  uint32_t key = pc0 | (mode16 ? 1u : 0u);
+  Block *&slot = btab_[block_slot(key)];
+  Block *b = slot;
+  if (ALI_LIKELY(b && b->key == key && same_code(page + (pc0 & 0xFFF), b->raw, b->bytes))) return b;
   if (ALI_UNLIKELY(chunk_events)) {
     // code about to run for the first time in its chunk: reported first, as the
     // instruction-at-a-time path does (the host looks for routines to shortcut
@@ -1367,10 +1404,6 @@ Core::Block *Core::get_block(uint32_t pc0, bool mode16) {
       return nullptr;
     }
   }
-  uint32_t key = pc0 | (mode16 ? 1u : 0u);
-  Block *&slot = btab_[block_slot(key)];
-  Block *b = slot;
-  if (b && b->key == key && same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return b;
   retire(b);
   slot = b = build_block(pc0, mode16, page);
   return b;
@@ -1510,6 +1543,94 @@ void Core::run_blocks(Block *b) {
         case U_SH: BLK_STORE(uint16_t)
         case U_SW: BLK_STORE(uint32_t)
 #undef BLK_STORE
+        // ---- fused two-op superinstructions ----
+        case U_LI_ADDIU: {
+          R[u.d] = u.imm;
+          const Uop &u2 = b->ops[++i];
+          R[u2.d] = R[u2.s] + u2.imm;
+          break;
+        }
+        case U_LI_ORI: {
+          R[u.d] = u.imm;
+          const Uop &u2 = b->ops[++i];
+          R[u2.d] = R[u2.s] | u2.imm;
+          break;
+        }
+        case U_ADDIU2: {
+          R[u.d] = R[u.s] + u.imm;
+          const Uop &u2 = b->ops[++i];
+          R[u2.d] = R[u2.s] + u2.imm;
+          break;
+        }
+        case U_ADDU2: {
+          R[u.d] = R[u.s] + R[u.t];
+          const Uop &u2 = b->ops[++i];
+          R[u2.d] = R[u2.s] + R[u2.t];
+          break;
+        }
+        case U_LI_LW: {
+          R[u.d] = u.imm;
+          const Uop &u2 = b->ops[++i];
+          uint32_t a = R[u2.s] + u2.imm;
+          if (ALI_UNLIKELY(a & 3)) { cur_pc_ = u2.pc; fault_unaligned(a, MEM_READ); }
+          uint8_t *p = vr_[a >> 12];
+          uint32_t v;
+          if (ALI_LIKELY(p != nullptr)) { memcpy(&v, p + (a & 0xFFF), 4); R[u2.d] = v; break; }
+          cur_pc_ = u2.pc; v = (uint32_t)load_slow(a, 4); R[u2.d] = v;
+          goto check_slow;
+        }
+        case U_LI_SW: {
+          R[u.d] = u.imm;
+          const Uop &u2 = b->ops[++i];
+          uint32_t a = R[u2.s] + u2.imm;
+          if (ALI_UNLIKELY(a & 3)) { cur_pc_ = u2.pc; fault_unaligned(a, MEM_WRITE); }
+          uint8_t *p = vw_[a >> 12];
+          uint32_t v = R[u2.t];
+          stores_++;
+          if (ALI_LIKELY(p != nullptr)) { memcpy(p + (a & 0xFFF), &v, 4); break; }
+          cur_pc_ = u2.pc; store_slow(a, 4, (uint64_t)v);
+          goto check_slow;
+        }
+        case U_LW2: {
+          uint32_t a = R[u.s] + u.imm;
+          if (ALI_UNLIKELY(a & 3)) { cur_pc_ = u.pc; fault_unaligned(a, MEM_READ); }
+          uint8_t *p = vr_[a >> 12];
+          uint32_t v;
+          if (ALI_UNLIKELY(p == nullptr)) {
+            cur_pc_ = u.pc; v = (uint32_t)load_slow(a, 4); R[u.d] = v;
+            goto check_slow;
+          }
+          memcpy(&v, p + (a & 0xFFF), 4); R[u.d] = v;
+          const Uop &u2 = b->ops[++i];
+          uint32_t a2 = R[u2.s] + u2.imm;
+          if (ALI_UNLIKELY(a2 & 3)) { cur_pc_ = u2.pc; fault_unaligned(a2, MEM_READ); }
+          uint8_t *p2 = vr_[a2 >> 12];
+          uint32_t v2;
+          if (ALI_LIKELY(p2 != nullptr)) { memcpy(&v2, p2 + (a2 & 0xFFF), 4); R[u2.d] = v2; break; }
+          cur_pc_ = u2.pc; v2 = (uint32_t)load_slow(a2, 4); R[u2.d] = v2;
+          goto check_slow;
+        }
+        case U_SW2: {
+          uint32_t a = R[u.s] + u.imm;
+          if (ALI_UNLIKELY(a & 3)) { cur_pc_ = u.pc; fault_unaligned(a, MEM_WRITE); }
+          uint8_t *p = vw_[a >> 12];
+          uint32_t v = R[u.t];
+          stores_++;
+          if (ALI_UNLIKELY(p == nullptr)) {
+            cur_pc_ = u.pc; store_slow(a, 4, (uint64_t)v);
+            goto check_slow;
+          }
+          memcpy(p + (a & 0xFFF), &v, 4);
+          const Uop &u2 = b->ops[++i];
+          uint32_t a2 = R[u2.s] + u2.imm;
+          if (ALI_UNLIKELY(a2 & 3)) { cur_pc_ = u2.pc; fault_unaligned(a2, MEM_WRITE); }
+          uint8_t *p2 = vw_[a2 >> 12];
+          uint32_t v2 = R[u2.t];
+          stores_++;
+          if (ALI_LIKELY(p2 != nullptr)) { memcpy(p2 + (a2 & 0xFFF), &v2, 4); break; }
+          cur_pc_ = u2.pc; store_slow(a2, 4, (uint64_t)v2);
+          goto check_slow;
+        }
         case U_MFC0_COUNT: {
           // Count as at this instruction (the block's own icount is added at its end)
           uint32_t v;
@@ -1680,14 +1801,14 @@ static bool uop_rw(const Core::Uop &u, uint64_t &rd, uint64_t &wr, bool &link) {
   link = false;
   switch (u.op) {
     case U_NOP: return true;
-    case U_ADDIU: case U_SLTI: case U_SLTIU: case U_ANDI: case U_ORI: case U_XORI:
+    case U_ADDIU: case U_ADDIU2: case U_SLTI: case U_SLTIU: case U_ANDI: case U_ORI: case U_XORI:
     case U_CLZ: case U_CLO: case U_EXT:
-    case U_LB: case U_LBU: case U_LH: case U_LHU: case U_LW:
+    case U_LB: case U_LBU: case U_LH: case U_LHU: case U_LW: case U_LW2:
       rd = R(u.s); wr = R(u.d); return true;
-    case U_ADDU: case U_SUBU: case U_AND: case U_OR: case U_XOR: case U_NOR: case U_SLT: case U_SLTU:
+    case U_ADDU: case U_ADDU2: case U_SUBU: case U_AND: case U_OR: case U_XOR: case U_NOR: case U_SLT: case U_SLTU:
     case U_SLLV: case U_SRLV: case U_SRAV: case U_ROTRV: case U_MUL:
       rd = R(u.s) | R(u.t); wr = R(u.d); return true;
-    case U_LI: case U_MFC0_COUNT:
+    case U_LI: case U_LI_ADDIU: case U_LI_ORI: case U_LI_LW: case U_LI_SW: case U_MFC0_COUNT:
       wr = R(u.d); return true;
     case U_SLL: case U_SRL: case U_SRA: case U_ROTR: case U_SEB: case U_SEH: case U_WSBH:
       rd = R(u.t); wr = R(u.d); return true;
@@ -1701,7 +1822,7 @@ static bool uop_rw(const Core::Uop &u, uint64_t &rd, uint64_t &wr, bool &link) {
       rd = R(u.s) | R(u.t); wr = HI | LO; return true;
     case U_MADD: case U_MADDU: case U_MSUB: case U_MSUBU:
       rd = R(u.s) | R(u.t) | HI | LO; wr = HI | LO; return true;
-    case U_SB: case U_SH: case U_SW: case U_TRAP:
+    case U_SB: case U_SH: case U_SW: case U_SW2: case U_TRAP:
       rd = R(u.s) | R(u.t); return true;
     case U_BEQ: case U_BNE: case U_BEQL: case U_BNEL:
       rd = R(u.s) | R(u.t); return true;
@@ -1910,7 +2031,7 @@ bool Core::poll_seq_valid(const PollLoop &pl) {
     if (!page || !same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return false;
     for (int i = 0; i < b->n; i++) {
       uint8_t op = b->ops[i].op;
-      if (op == U_SB || op == U_SH || op == U_SW || op == U_GEN32 || op == U_GEN16) return false;
+      if (op == U_SB || op == U_SH || op == U_SW || op == U_SW2 || op == U_LI_SW || op == U_GEN32 || op == U_GEN16) return false;
     }
   }
   return pl.n > 0;

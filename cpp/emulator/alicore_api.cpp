@@ -1,5 +1,6 @@
 // AliSimulator C++ core: the C API (alicore.dll), used by src/cpp_core.py through ctypes.
 #include "alicore.h"
+#include "alicore_gfx.h"
 
 #include <algorithm>
 
@@ -149,10 +150,14 @@ ALI_API void ali_set_chunks(void *c, int shift, uint32_t count) {
   k->chunk_shift = (uint32_t)shift;
   k->chunk_seen.assign(count, 0);
   k->chunk_events = count > 0;
+  k->flush_blocks();
 }
 ALI_API void ali_chunk_mark(void *c, uint32_t index, int seen) {
   Core *k = (Core *)c;
-  if (index < k->chunk_seen.size()) k->chunk_seen[index] = (uint8_t)seen;
+  if (index < k->chunk_seen.size()) {
+    if (!seen && k->chunk_seen[index]) k->flush_blocks();
+    k->chunk_seen[index] = (uint8_t)seen;
+  }
 }
 ALI_API void ali_set_flash_cmd(void *c, int on, const uint32_t *windows, int n) {
   ((Core *)c)->set_flash_cmd(on != 0, windows, n);
@@ -331,7 +336,7 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_PC_MODE: k->pc = w & ~1u; k->m16 = w & 1; k->ds_active = false; break;
     case F_COUNT_OBSERVED: k->count_observed = w; break;
     case F_COUNT_OBSERVED_VALID: k->count_observed_valid = v != 0; break;
-    case F_CHUNK_EVENTS: k->chunk_events = v != 0; break;
+    case F_CHUNK_EVENTS: k->chunk_events = v != 0; if (v) k->flush_blocks(); break;
     case F_DS_TARGET: k->ds_target = w; break;
     case F_DS_M16: k->ds_m16 = v != 0; break;
     case F_BADVADDR: k->badvaddr = w; break;
@@ -342,4 +347,45 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_SPIN_SKIPPED: k->spin_skipped = v; break;
   }
   k->poke_events();
+}
+
+// ------------------------------------------------------------------
+// 2D Graphics Engine (GE_M36F, GE_M3602) & GMA Display Capture Kernels
+// ------------------------------------------------------------------
+ALI_API int ali_ge_m36f_exec(void *ram, uint32_t ram_size, uint32_t phys_mask,
+                             const uint32_t *regs, uint64_t *prims_io) {
+  return ali_gfx::ge_m36f_exec_one((uint8_t *)ram, ram_size, phys_mask, regs, prims_io);
+}
+
+ALI_API uint32_t ali_ge_m36f_run_list(void *ram, uint32_t ram_size, uint32_t phys_mask,
+                                      const uint32_t *words, uint32_t n_words,
+                                      uint32_t *ge_regs, const uint32_t *live_regs,
+                                      uint64_t *prims_io) {
+  return ali_gfx::ge_m36f_run_list_cpp((uint8_t *)ram, ram_size, phys_mask, words, n_words,
+                                       ge_regs, live_regs, prims_io);
+}
+
+ALI_API int ali_ge_m3602_run(void *ram, uint32_t ram_size, uint32_t *addr_io,
+                             uint32_t *mask_io, uint64_t *cmds_io) {
+  return ali_gfx::ge_m3602_run_cpp((uint8_t *)ram, ram_size, addr_io, mask_io, cmds_io);
+}
+
+ALI_API uint32_t ali_gma_count_colours(const void *rgb, uint32_t n_pixels) {
+  return ali_gfx::gma_count_colours_cpp((const uint8_t *)rgb, n_pixels);
+}
+
+ALI_API uint32_t ali_gma_diff_rgb(const void *a, const void *b, uint32_t n_pixels, uint32_t *max_diff_out) {
+  return ali_gfx::gma_diff_rgb_cpp((const uint8_t *)a, (const uint8_t *)b, n_pixels, max_diff_out);
+}
+
+ALI_API void ali_gma_blend(void *canvas, uint32_t cw, uint32_t ch,
+                           const void *rgba, uint32_t rw, uint32_t rh,
+                           int32_t x, int32_t y) {
+  ali_gfx::gma_blend_cpp((float *)canvas, cw, ch, (const uint8_t *)rgba, rw, rh, x, y);
+}
+
+ALI_API void ali_gma_scale_u8(const void *src, uint32_t sw, uint32_t sh, uint32_t channels,
+                              void *dst, const int32_t *rows, uint32_t dh,
+                              const int32_t *cols, uint32_t dw) {
+  ali_gfx::gma_scale_u8_cpp((const uint8_t *)src, sw, sh, channels, (uint8_t *)dst, rows, dh, cols, dw);
 }

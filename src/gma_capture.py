@@ -58,11 +58,26 @@ a head in RAM whose second word is the bitmap address, and at +EC (0x6AEC) the
 de_registers() and de_layers() read that the way the hardware does, at the
 moment of the capture.
 """
+import ctypes
 import struct
 
 import numpy as np
 
 import ge_m36f
+
+try:
+    import cpp_core as _cpp_core
+except Exception:
+    _cpp_core = None
+
+
+def _get_cpp_lib():
+    if _cpp_core is not None and _cpp_core.available():
+        try:
+            return _cpp_core.lib()
+        except Exception:
+            return None
+    return None
 
 LAYER_REGS = (0x6300, 0x6380)       # (enable, base address) register pairs of GMA layers 0 / 1 (offsets in 0xB8000000)
 PHYS = 0x07FFFFFF
@@ -142,15 +157,30 @@ def _clut_rgba(pal, raw, ga=0xFF):
 
 def _resample_to(img, th, tw):
     rh, rw = img.shape[:2]
-    rows = np.minimum((np.arange(th) * rh // th).astype(int), rh - 1)
-    cols = np.minimum((np.arange(tw) * rw // tw).astype(int), rw - 1)
+    rows = np.minimum((np.arange(th, dtype=np.int64) * rh // th).astype(np.int32), rh - 1)
+    cols = np.minimum((np.arange(tw, dtype=np.int64) * rw // tw).astype(np.int32), rw - 1)
+    lib = _get_cpp_lib()
+    if lib is not None and img.dtype == np.uint8 and img.ndim == 3 and img.shape[2] in (3, 4) and img.flags.c_contiguous:
+        out = np.empty((th, tw, img.shape[2]), dtype=np.uint8)
+        lib.ali_gma_scale_u8(int(img.ctypes.data), rw, rh, img.shape[2],
+                             int(out.ctypes.data), int(rows.ctypes.data), th,
+                             int(cols.ctypes.data), tw)
+        return out
     return img[rows][:, cols]
 
 
 def _scale_by(img, fx, fy):
     h, w = img.shape[:2]
-    rows = np.minimum((np.arange(round(h * fy)) / fy).astype(int), h - 1)
-    cols = np.minimum((np.arange(round(w * fx)) / fx).astype(int), w - 1)
+    dh, dw = round(h * fy), round(w * fx)
+    rows = np.minimum((np.arange(dh) / fy).astype(np.int32), h - 1)
+    cols = np.minimum((np.arange(dw) / fx).astype(np.int32), w - 1)
+    lib = _get_cpp_lib()
+    if lib is not None and img.dtype == np.uint8 and img.ndim == 3 and img.shape[2] in (3, 4) and img.flags.c_contiguous:
+        out = np.empty((dh, dw, img.shape[2]), dtype=np.uint8)
+        lib.ali_gma_scale_u8(int(img.ctypes.data), w, h, img.shape[2],
+                             int(out.ctypes.data), int(rows.ctypes.data), dh,
+                             int(cols.ctypes.data), dw)
+        return out
     return img[rows][:, cols]
 
 
@@ -215,13 +245,17 @@ def render_m3602(ram, layer):
     if not bpp or width <= 0 or height <= 0 or pitch < width * bpp or a + height * pitch > ram.size:
         return None
     rows = ram[a:a + height * pitch].reshape(height, pitch)[:, :width * bpp]
-    if bpp == 4:
-        px = rows.reshape(height, width, 4)
-    else:
+    if bpp == 1:
         pal = layer['palette']
         if pal + 1024 > ram.size:
             return None
-        px = ram[pal:pal + 1024].reshape(256, 4)[rows]
+        pal_px = ram[pal:pal + 1024].reshape(256, 4)
+        rgb_lut = ge_m36f.GeM36F._ycbcr_to_rgb(pal_px[:, [1, 0, 2]].astype(np.float32), 0)
+        alpha_lut = np.minimum(pal_px[:, 3:4].astype(np.float32) * (255.0 / 127.0), 255.0)
+        lut_u8 = np.clip(np.concatenate([rgb_lut, alpha_lut], -1) + 0.5, 0, 255).astype(np.uint8)
+        lut_u32 = np.ascontiguousarray(lut_u8).view(np.uint32).reshape(-1)
+        return lut_u32[rows].view(np.uint8).reshape(height, width, 4)
+    px = rows.reshape(height, width, 4)
     rgb = ge_m36f.GeM36F._ycbcr_to_rgb(px[..., [1, 0, 2]].astype(np.float32), 0)
     alpha = np.minimum(px[..., 3].astype(np.float32) * (255.0 / 127.0), 255.0)
     return np.clip(np.concatenate([rgb, alpha[..., None]], -1) + 0.5, 0, 255).astype(np.uint8)
@@ -322,9 +356,10 @@ def render_m3327(ram, region, palette):
     for i, v in palette.items():
         cb, cr = (v >> 8) & 0xFF, v & 0xFF
         lut[i & 0xFF] = (v >> 16, cb & 0xFC, cr & 0xFC, (((cb & 3) << 2) | (cr & 3)) * 17)
-    px = lut[idx & 0xFF]
-    rgb = ge_m36f.GeM36F._ycbcr_to_rgb(px[..., :3], 0)
-    return np.clip(np.concatenate([rgb, px[..., 3:4]], -1) + 0.5, 0, 255).astype(np.uint8)
+    rgb_lut = ge_m36f.GeM36F._ycbcr_to_rgb(lut[:, :3], 0)
+    lut_u8 = np.clip(np.concatenate([rgb_lut, lut[:, 3:4]], -1) + 0.5, 0, 255).astype(np.uint8)
+    lut_u32 = np.ascontiguousarray(lut_u8).view(np.uint32).reshape(-1)
+    return lut_u32[idx & 0xFF].view(np.uint8).reshape(h, w, 4)
 
 
 DE_LIST_CHANNELS = (0x6080, 0x6088, 0x6090, 0x6098, 0x60A0, 0x60A8, 0x60B0)     # (list address, +4 load enable) 8-byte DMA channels
@@ -623,6 +658,11 @@ def _blend(canvas, rgba, x, y):
     """Alpha-blend an RGBA image onto the canvas at (x, y), clipped to it."""
     H, W = canvas.shape[:2]
     hh, ww = rgba.shape[:2]
+    lib = _get_cpp_lib()
+    if lib is not None and x >= 0 and y >= 0 and canvas.dtype == np.float32 and canvas.flags.c_contiguous \
+            and rgba.dtype == np.uint8 and rgba.flags.c_contiguous:
+        lib.ali_gma_blend(int(canvas.ctypes.data), W, H, int(rgba.ctypes.data), ww, hh, int(x), int(y))
+        return
     hh, ww = min(hh, H - y), min(ww, W - x)
     if hh <= 0 or ww <= 0:
         return

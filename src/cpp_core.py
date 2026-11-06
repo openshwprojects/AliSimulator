@@ -148,6 +148,13 @@ def lib():
         "ali_gpio_log": (None, [vp, i32, ctypes.POINTER(vp), ctypes.POINTER(vp)]),
         "ali_direct": (vp, [vp, u64, ctypes.POINTER(u64), ctypes.POINTER(u64)]),
         "ali_prof": (None, [vp, i32]), "ali_prof_top": (i32, [vp, i32, vp, vp, i32]),
+        "ali_ge_m36f_exec": (i32, [vp, u32, u32, vp, ctypes.POINTER(u64)]),
+        "ali_ge_m36f_run_list": (u32, [vp, u32, u32, vp, u32, vp, vp, ctypes.POINTER(u64)]),
+        "ali_ge_m3602_run": (i32, [vp, u32, ctypes.POINTER(u32), ctypes.POINTER(u32), ctypes.POINTER(u64)]),
+        "ali_gma_count_colours": (u32, [vp, u32]),
+        "ali_gma_diff_rgb": (u32, [vp, vp, u32, ctypes.POINTER(u32)]),
+        "ali_gma_blend": (None, [vp, u32, u32, vp, u32, u32, ctypes.c_int32, ctypes.c_int32]),
+        "ali_gma_scale_u8": (None, [vp, u32, u32, u32, vp, vp, u32, vp, u32]),
     }
     for name, (res, args) in sig.items():
         f = getattr(L, name)

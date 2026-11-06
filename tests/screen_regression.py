@@ -48,17 +48,50 @@ EXPECTED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expecte
 MAX_FRAMES = 6          # distinct intermediate frames attached to the report
 
 
+def _cpp_lib():
+    try:
+        import cpp_core
+        if cpp_core.available():
+            return cpp_core.lib()
+    except Exception:
+        pass
+    return None
+
+
 def count_colours(rgb):
     """The number of distinct colours in an RGB image: its pixels packed into
     one word each (np.unique over 3-byte rows sorts ~70x slower)."""
+    lib = _cpp_lib()
+    if lib is not None and isinstance(rgb, np.ndarray) and rgb.dtype == np.uint8 and rgb.ndim == 3 and rgb.shape[2] == 3:
+        arr = rgb if rgb.flags.c_contiguous else np.ascontiguousarray(rgb)
+        return int(lib.ali_gma_count_colours(int(arr.ctypes.data), arr.shape[0] * arr.shape[1]))
     px = rgb.reshape(-1, 3).astype(np.uint32)
     return len(np.unique((px[:, 0] << 16) | (px[:, 1] << 8) | px[:, 2]))
+
+
+def _diff_pixels(a, b):
+    lib = _cpp_lib()
+    if lib is not None and a.shape == b.shape and a.dtype == np.uint8 and b.dtype == np.uint8:
+        ca = a if a.flags.c_contiguous else np.ascontiguousarray(a)
+        cb = b if b.flags.c_contiguous else np.ascontiguousarray(b)
+        return int(lib.ali_gma_diff_rgb(int(ca.ctypes.data), int(cb.ctypes.data), ca.shape[0] * ca.shape[1], None))
+    return int((a != b).any(axis=2).sum())
 
 
 def compare(rgb, want):
     """(differing pixels, percent, max channel difference, mask)."""
     if rgb.shape != want.shape:
         raise ValueError(f"shape mismatch: {rgb.shape} vs {want.shape}")
+    lib = _cpp_lib()
+    if lib is not None and rgb.dtype == np.uint8 and want.dtype == np.uint8:
+        import ctypes
+        ca = rgb if rgb.flags.c_contiguous else np.ascontiguousarray(rgb)
+        cb = want if want.flags.c_contiguous else np.ascontiguousarray(want)
+        max_d = ctypes.c_uint32(0)
+        n = int(lib.ali_gma_diff_rgb(int(ca.ctypes.data), int(cb.ctypes.data),
+                                     ca.shape[0] * ca.shape[1], ctypes.byref(max_d)))
+        mask = (rgb != want).any(axis=2) if n else np.zeros(rgb.shape[:2], dtype=bool)
+        return n, 100.0 * n / (rgb.shape[0] * rgb.shape[1]), int(max_d.value), mask
     mask = (rgb != want).any(axis=2)
     n = int(mask.sum())
     return n, 100.0 * n / (rgb.shape[0] * rgb.shape[1]), \
@@ -363,11 +396,11 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
                 continue
             checked_ops = sim.ge_ops
             if (sim.ge_ops - ops >= 2 or not ge) and \
-                    int((sim.capture_screen() != previous).any(axis=2).sum()) >= min_px:
+                    _diff_pixels(sim.capture_screen(), previous) >= min_px:
                 break
         settle(120, 8, min_s=20)
         after = sim.capture_screen()
-        changed = int((after != previous).any(axis=2).sum())
+        changed = _diff_pixels(after, previous)
         step = f"{key[0]}{key[1]:.0f}" if isinstance(key, tuple) and key[0] == "wait" else key[1] if isinstance(key, tuple) else key
         path = report_artifacts.path(f"{name}_nav_{i}_{str(step).replace('+', 'plus').replace('-', 'minus')}.png")
         gma_capture.save_png(path, after)

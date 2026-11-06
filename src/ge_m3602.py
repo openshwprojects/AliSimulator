@@ -50,10 +50,25 @@ rectangle, through the palette when the CLUT is on, sampled at the resize
 steps (the nearest pixel: no filter), inside the clip rectangle.  Other ways
 of combining the sources are drawn as that copy and counted in unsupported.
 """
+import ctypes
 import struct
 
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
+
+try:
+    import cpp_core as _cpp_core
+except Exception:
+    _cpp_core = None
+
+
+def _get_cpp_lib():
+    if _cpp_core is not None and _cpp_core.available():
+        try:
+            return _cpp_core.lib()
+        except Exception:
+            return None
+    return None
 
 BASE = 0xC000                          # in the device window 0xB8000000
 BPP = {0x00: 2, 0x02: 2, 0x03: 2, 0x04: 2, 0x05: 4, 0x06: 2, 0x07: 2, 0x0B: 1, 0x0C: 2, 0x15: 4, 0x19: 1}
@@ -122,6 +137,35 @@ class GeM3602:
 
     def run(self, address, mask):
         """Run the command at address (physical) and the ones chained to it."""
+        lib = _get_cpp_lib()
+        ram_arr = self.ram
+        if lib is not None and isinstance(ram_arr, np.ndarray) and ram_arr.dtype == np.uint8 and ram_arr.flags.c_contiguous:
+            ram_ptr = int(ram_arr.ctypes.data)
+            c_addr = ctypes.c_uint32(address & 0xFFFFFFFF)
+            c_mask = ctypes.c_uint32(mask & 0xFFFFFFFF)
+            c_cmds = ctypes.c_uint64(0)
+            while c_cmds.value < MAX_COMMANDS:
+                status = lib.ali_ge_m3602_run(ram_ptr, self.sim.ram_size,
+                                              ctypes.byref(c_addr), ctypes.byref(c_mask), ctypes.byref(c_cmds))
+                if status == 0:
+                    self.commands += int(c_cmds.value)
+                    return
+                address, mask = int(c_addr.value), int(c_mask.value)
+                a = address % self.sim.ram_size
+                if a + 40 * 4 > ram_arr.size:
+                    self.commands += int(c_cmds.value)
+                    return
+                words = ram_arr[a:a + 40 * 4].view('<u4').tolist()
+                c_cmds.value += 1
+                self._execute(words, mask)
+                link = words[0]
+                if not link:
+                    self.commands += int(c_cmds.value)
+                    return
+                c_addr.value = (address & 0x0F000000) | (link & 0xFFFFFF)
+                c_mask.value = link >> 24
+            self.commands += int(c_cmds.value)
+            return
         for _ in range(MAX_COMMANDS):
             a = address % self.sim.ram_size
             if a + 40 * 4 > self.ram.size:

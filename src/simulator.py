@@ -2289,14 +2289,18 @@ class AliMipsSimulator:
             import ge_m36f
             ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
             self.ge = ge_m36f.GeM36F(ram, log=self.log)
-        regs = _np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4').tolist()
+        regs_arr = _np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4')
         if command == 1:
-            self.ge.run_io(regs)
+            self.ge.run_io(regs_arr if (self.ge.fast_paths and self.ge.trace is None) else regs_arr.tolist())
             return
         o = 0x10 if command == 2 else 0x18
-        start, end = regs[o >> 2] & 0x1FFFFFFF, regs[(o >> 2) + 1] & 0x1FFFFFFF
+        start, end = int(regs_arr[o >> 2]) & 0x1FFFFFFF, int(regs_arr[(o >> 2) + 1]) & 0x1FFFFFFF
         if start <= end < start + 0x400000 and end + 4 <= self.ram_size:
-            self.ge.run_list(self.ge.ram[start:end + 4].view('<u4').tolist(), regs)
+            words_view = self.ge.ram[start:end + 4].view('<u4')
+            if self.ge.fast_paths and self.ge.trace is None:
+                self.ge.run_list(words_view, regs_arr)
+            else:
+                self.ge.run_list(words_view.tolist(), regs_arr.tolist())
 
     def capture_screen(self, path=None, screen=(1280, 720), include_video=False):
         """What the TV would show of the OSD: the enabled GMA display layers

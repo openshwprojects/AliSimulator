@@ -555,7 +555,7 @@ class Core {
       uint8_t ind[8];             // induction registers ...
       uint32_t step[8];           // ... and their steps per pass
     } ff;
-    uint8_t raw[BLOCK_MAX * 4];
+    alignas(8) uint8_t raw[BLOCK_MAX * 4];
     Uop ops[BLOCK_MAX];
   };
   enum { FF_NE = 1, FF_FLAG = 2 };
@@ -608,6 +608,7 @@ class Core {
   template <bool CHAIN> void run_blocks(Block *b);
   void gen32_op(uint32_t insn, uint32_t pc);   // (a block's generic ops: out of line)
   void gen16_op(uint32_t pc);
+ public:
   void flush_blocks();
 };
 
