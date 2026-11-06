@@ -647,7 +647,7 @@ def save_png(path, rgb):
     os.makedirs(d, exist_ok=True)
     try:
         from PIL import Image
-        Image.fromarray(rgb).save(path)
+        Image.fromarray(rgb).save(path, compress_level=1)
         return
     except ImportError:
         pass
@@ -659,4 +659,4 @@ def save_png(path, rgb):
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
     with open(path, "wb") as f:
         f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
-                chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+                chunk(b"IDAT", zlib.compress(raw, 1)) + chunk(b"IEND", b""))

@@ -170,6 +170,8 @@ class GeM36F:
             return v.reshape(h, w).copy()
         # sub-byte formats: a linear bitstream (rows need not start on a byte)
         byte, shift = self._subbyte_pos(addr, pfreg, x, y, w, h, bpp)
+        if addr >= 0 and int(byte[-1, -1]) < ram.size:
+            return (ram[byte] >> shift) & ((1 << bpp) - 1)
         ok = byte < ram.size
         vals = np.zeros((h, w), np.uint8)
         vals[ok] = (ram[byte[ok]] >> shift[ok]) & ((1 << bpp) - 1)
@@ -184,6 +186,10 @@ class GeM36F:
         end = start + (h - 1) * stride + row_bytes
         if end > self.ram.size:
             return None
+        if h == 1 or stride == row_bytes:
+            return self.ram[start:end].reshape(h, row_bytes)
+        if start + h * stride <= self.ram.size:
+            return self.ram[start:start + h * stride].reshape(h, stride)[:, :row_bytes]
         return np.lib.stride_tricks.as_strided(self.ram[start:end], shape=(h, row_bytes), strides=(stride, 1))
 
     @staticmethod
@@ -193,8 +199,8 @@ class GeM36F:
         significant bits of a byte; 1: in the most significant bits (font
         glyphs: big-endian dwords, byte-swapped by a blit, then read so)."""
         pitch = pfreg & 0xFFF
-        bit = ((np.arange(y, y + h, dtype=np.int64)[:, None] * pitch +
-                np.arange(x, x + w, dtype=np.int64)[None, :]) * bpp)
+        bit = ((np.arange(y, y + h, dtype=np.int32)[:, None] * pitch +
+                np.arange(x, x + w, dtype=np.int32)[None, :]) * bpp)
         byte = addr + (bit >> 3)
         if (pfreg >> 22) & 1:
             shift = 8 - bpp - (bit & 7)
@@ -411,10 +417,31 @@ class GeM36F:
             out[..., 1:] = self._ycbcr_to_rgb(out[..., 1:], 0)
         return out
 
+    def _write_const(self, addr, pfreg, x, y, w, h, val, mask=None):
+        fmt = (pfreg >> 12) & 0x1F
+        pitch = pfreg & 0xFFF
+        bpp = BPP.get(fmt, 32)
+        if bpp >= 8:
+            bp = bpp // 8
+            stride = pitch * bp
+            dt = {4: '<u4', 2: '<u2', 1: 'u1'}[bp]
+            if bp > 1 and (pfreg >> 23) & 1:
+                dt = dt.replace('<', '>')
+            scalar = np.array(val, dtype=np.uint32).astype(dt)
+            region = self._rows(addr + y * stride + x * bp, stride, w * bp, h)
+            if region is not None:
+                region = region.view(dt)
+                if mask is None:
+                    region[:] = scalar
+                else:
+                    region[mask] = scalar
+                return
+        self._write_raw(addr, pfreg, x, y, np.full((h, w), val, np.uint32), mask)
+
     def _decode(self, raw, fmt, pfreg, clut=None):
         """raw values -> float32 (h, w, 4) in A, R, G, B order."""
         if fmt in _PACKED:
-            if fmt in _PACKED16_FMTS and raw.size >= 64:
+            if fmt in _PACKED16_FMTS:
                 lut = self._packed16_lut(fmt, pfreg)
                 return lut[raw if raw.dtype == np.uint16 else (raw & 0xFFFF)]
             return self._decode_packed(raw, fmt, pfreg)
@@ -484,7 +511,10 @@ class GeM36F:
 
     def _encode(self, px, fmt, pfreg):
         """float32 (h, w, 4) A, R, G, B -> raw values for format fmt."""
-        p = np.clip(px + 0.5, 0, 255).astype(np.uint32)
+        tmp = np.empty_like(px)
+        np.add(px, 0.5, out=tmp)
+        np.clip(tmp, 0, 255, out=tmp)
+        p = tmp.astype(np.uint32)
         a, r, g, b = p[..., 0], p[..., 1], p[..., 2], p[..., 3]
         order = (pfreg >> 17) & 3
         if fmt in _PACKED:
@@ -496,9 +526,20 @@ class GeM36F:
                 a = 255 - a
             if (pfreg >> 24) & 1:
                 a = a >> 1
-            wa, w1, w2, w3 = _PACKED[fmt]
             if order in (1, 3):
                 r, b = b, r
+            if order in (0, 1):
+                if fmt == 0x05:
+                    return ((a >> 7) << 15) | ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)
+                if fmt == 0x06:
+                    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+                if fmt == 0x01 or fmt == 0x13:
+                    return (a << 24) | (r << 16) | (g << 8) | b
+                if fmt == 0x00 or fmt == 0x10:
+                    return (r << 16) | (g << 8) | b
+                if fmt == 0x03:
+                    return ((a >> 4) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)
+            wa, w1, w2, w3 = _PACKED[fmt]
             c = [(a >> (8 - wa)) if wa else None, r >> (8 - w1), g >> (8 - w2), b >> (8 - w3)]
             if order in (2, 3):
                 seq = [(c[1], w1), (c[2], w2), (c[3], w3), (c[0], wa)]
@@ -639,8 +680,60 @@ class GeM36F:
                 return
         if plain and rop == 1 and ptn_type == 0 and prim in (3, 4) and api not in (1, 2) and not index_domain:
             enc = self._encode_fill(r[0x90 >> 2] if prim == 3 else r[0x98 >> 2], col_fmt, dst_fmt, dst_pf)
-            self._write_raw(dst, dst_pf, dx, dy, np.full((h, w), enc, np.uint32), wmask)
+            self._write_const(dst, dst_pf, dx, dy, w, h, enc, wmask)
             return
+        if plain and ptn_type == 2 and not index_domain and BPP.get(ptn_fmt, 1) == 1:
+            fill_back = api == 6 or (ptn_pf >> 27) & 1
+            fg, bg = r[0x94 >> 2], r[0x90 >> 2]
+            if rop == 1:
+                p_addr = self._addr(r, 0x50)
+                pxy = r[0x58 >> 2]
+                px, py = pxy & 0xFFF, (pxy >> 16) & 0xFFF
+                sx, sy = (ptn_pf >> 28) & 1, (ptn_pf >> 29) & 1
+                raw = self._read_raw(p_addr, ptn_pf, px, py, (w + sx) >> sx, (h + sy) >> sy)
+                if sx:
+                    raw = np.repeat(raw, 2, axis=1)[:, :w]
+                if sy:
+                    raw = np.repeat(raw, 2, axis=0)[:h]
+                fg_enc = self._encode_fill(fg, col_fmt, dst_fmt, dst_pf)
+                on = raw != 0
+                if fill_back:
+                    bg_enc = self._encode_fill(bg, col_fmt, dst_fmt, dst_pf)
+                    self._write_raw(dst, dst_pf, dx, dy, np.where(on, fg_enc, bg_enc), wmask)
+                else:
+                    self._write_const(dst, dst_pf, dx, dy, w, h, fg_enc, on if wmask is None else (on & wmask))
+                return
+            if rop == 2:
+                ac = r[0x84 >> 2]
+                s_pf = src_pf if (src_pf & 0xFFF) else dst_pf
+                sxy = r[0x4C >> 2]
+                same_dst = src_mode == 0 or (
+                    src_mode in (1, 2) and (self._addr(r, 0x44) or dst) == dst
+                    and sxy in (dxy, 0x0FFF0FFF) and s_pf == dst_pf
+                )
+                if same_dst and (ac & 0x100FFF) == 0xFF and ((ac >> 20) & 3) == 0 \
+                        and self._same_raw(dst_fmt, dst_pf, dst_pf, clut_en, index_domain) \
+                        and sum(_PACKED.get(dst_fmt, ())) == BPP.get(dst_fmt):
+                    fgc = self._decode_colour(fg, col_fmt)
+                    bgc = self._decode_colour(bg, col_fmt) if fill_back else None
+                    if fgc[0] == 255.0 and (not fill_back or bgc[0] in (0.0, 255.0)):
+                        p_addr = self._addr(r, 0x50)
+                        pxy = r[0x58 >> 2]
+                        px, py = pxy & 0xFFF, (pxy >> 16) & 0xFFF
+                        sx, sy = (ptn_pf >> 28) & 1, (ptn_pf >> 29) & 1
+                        raw = self._read_raw(p_addr, ptn_pf, px, py, (w + sx) >> sx, (h + sy) >> sy)
+                        if sx:
+                            raw = np.repeat(raw, 2, axis=1)[:, :w]
+                        if sy:
+                            raw = np.repeat(raw, 2, axis=0)[:h]
+                        fg_enc = self._encode_fill(fg, col_fmt, dst_fmt, dst_pf)
+                        on = raw != 0
+                        if fill_back and bgc[0] == 255.0:
+                            bg_enc = self._encode_fill(bg, col_fmt, dst_fmt, dst_pf)
+                            self._write_raw(dst, dst_pf, dx, dy, np.where(on, fg_enc, bg_enc), wmask)
+                        else:
+                            self._write_const(dst, dst_pf, dx, dy, w, h, fg_enc, on if wmask is None else (on & wmask))
+                        return
 
         # ---------------- PTN (foreground) ----------------
         ptn = None          # raw (index domain) or float (h, w, 4)

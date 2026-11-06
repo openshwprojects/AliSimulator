@@ -42,6 +42,7 @@ class StepResult:
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # the repository
 DUMPS_DIR = os.path.join(ROOT_DIR, "dumps")                               # the firmware images
+_DUMP_INDEX = None
 
 
 def resolve_dump(path):
@@ -51,15 +52,22 @@ def resolve_dump(path):
     file name ("dump.bin", "STRONG PRIMA VIII/GD25Q32B_20190128_141501.BIN")
     and run from any directory.  An unknown name comes back unchanged, so the
     open() error names it."""
+    global _DUMP_INDEX
     if os.path.exists(path):
         return path
     candidate = os.path.join(DUMPS_DIR, path)
     if os.path.exists(candidate):
         return candidate
     base = os.path.basename(path)
-    for folder, _dirs, files in os.walk(DUMPS_DIR):
-        if base in files:
-            return os.path.join(folder, base)
+    if _DUMP_INDEX is None:
+        idx = {}
+        for folder, _dirs, files in os.walk(DUMPS_DIR):
+            for f in files:
+                if f not in idx:
+                    idx[f] = os.path.join(folder, f)
+        _DUMP_INDEX = idx
+    if base in _DUMP_INDEX:
+        return _DUMP_INDEX[base]
     return path
 
 
@@ -2146,9 +2154,11 @@ class AliMipsSimulator:
             # unless the GPIO handler's object drives a line (the TM1650
             # decoder answers key reads on SDA: di_override)
             di_val = do_val & dir_val
-            override = getattr(getattr(self.gpio_callback, '__self__', None), 'di_override', None)
-            if override is not None:
-                di_val = override(di_offset, di_val)
+            cb = self.gpio_callback
+            if cb is not None:
+                override = getattr(getattr(cb, '__self__', None), 'di_override', None)
+                if override is not None:
+                    di_val = override(di_offset, di_val)
             for device in self.gpio_devices:
                 di_val = device.di_override(di_offset, di_val)
             di_val = di_val & ~dir_val | (do_val & dir_val)
@@ -2466,9 +2476,16 @@ class AliMipsSimulator:
 
     def tuner(self):
         """The tuner model on the I2C bus (tuners.py), or None."""
+        devs = self.i2c_devices
+        if not devs:
+            return None
         import tuners
-        ts = [d for d in self.i2c_devices.values() if tuners.is_tuner(d)]
-        return next((d for d in ts if d.frequency() is not None), ts[0] if ts else None)
+        ts = [d for d in devs.values() if tuners.is_tuner(d)]
+        if not ts:
+            return None
+        if len(ts) == 1:
+            return ts[0]
+        return next((d for d in ts if d.frequency() is not None), ts[0])
 
     def tuner_info(self):
         """What the tuner is tuned to, one line (tuners.describe), or None
@@ -2508,13 +2525,24 @@ class AliMipsSimulator:
         """Whether the tuner sits on a frequency with a signal: any frequency
         unless set_signal() named some; then the tuner model must be tuned
         within SIGNAL_TOLERANCE_HZ of one of them (not while it calibrates)."""
-        if self.signal_frequencies is None:
+        freqs = self.signal_frequencies
+        if freqs is None:
             return True
+        devs = self.i2c_devices
+        if not devs:
+            return False
+        key = (freqs, tuple((id(d), getattr(d, "writes", None), getattr(d, "rf_hz", None)) for d in devs.values()))
+        cache = self.__dict__.get("_tuned_cache")
+        if cache is not None and cache[0] == key:
+            return cache[1]
         tuner = self.tuner()
         f = tuner.frequency() if tuner is not None else None
         if not f or f.get("calibrating"):
-            return False
-        return any(abs(f["rf_hz"] - hz) <= self.SIGNAL_TOLERANCE_HZ for hz in self.signal_frequencies)
+            res = False
+        else:
+            res = any(abs(f["rf_hz"] - hz) <= self.SIGNAL_TOLERANCE_HZ for hz in freqs)
+        self._tuned_cache = (key, res)
+        return res
 
     def attach_mux(self, mux=None):
         """Put a transport stream behind the locked channel: the chip family's
@@ -2604,13 +2632,21 @@ class AliMipsSimulator:
         is asserted and enabled (0xB8000038 / 3C) the CPU sees IP3."""
         bit = 1 << line
         was = self._ic_lines
-        self._ic_lines = (was | bit) if on else (was & ~bit)
         addr = self._ic + 4 * (line // 32)
         b = 1 << (line % 32)
         cur = self._mmio_word(addr)
-        self._mmio_write_word(addr, (cur | b) if on else (cur & ~b))
-        if on and not was & bit:
-            self._irq_soon()
+        if on:
+            if (was & bit) and (cur & b):
+                return
+            self._ic_lines = was | bit
+            self._mmio_write_word(addr, cur | b)
+            if not (was & bit):
+                self._irq_soon()
+        else:
+            if not (was & bit) and not (cur & b):
+                return
+            self._ic_lines = was & ~bit
+            self._mmio_write_word(addr, cur & ~b)
 
     def _ic_ip3(self):
         """IP3 from the interrupt controller: a modelled line asserted and
@@ -5136,11 +5172,19 @@ class AliMipsSimulator:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
         n = len(data)
+        if n < 20:
+            return
         unpack = struct.unpack_from
-        for m in self._POLL_ORI_RE.finditer(data):
-            p = m.start()
-            if p & 3:
-                continue
+        hits = []
+        for pat in (b"\x00\x02", b"\x04\x02"):
+            pos = data.find(pat)
+            while 0 <= pos <= n - 20:
+                if (pos & 3) == 0 and 0x34 <= data[pos + 3] <= 0x37:
+                    hits.append(pos)
+                pos = data.find(pat, pos + 2)
+        if len(hits) > 1:
+            hits.sort()
+        for p in hits:
             ori = unpack("<I", data, p)[0]
             rs = (ori >> 16) & 31
             end = min(n - 16, p + 36 * 4)
@@ -5168,35 +5212,45 @@ class AliMipsSimulator:
     def _poll_start(self, pc):
         """The start (its load) of the mailbox poll whose load or branch is at
         pc, while it holds; its code hook is installed then.  None otherwise."""
+        if not self.poll_skip:
+            return None
         words = self._ram_words
         i = (pc & 0x1FFFFFFF) >> 2
-        if not self.poll_skip or words is None or (pc >> 29) not in (4, 5) \
+        if words is None or (pc >> 29) not in (4, 5) \
                 or not 0 <= i < self._ram_words_len - 4 or not self._mailbox_peer():
             return None
         w = words[i]
         op = w >> 26
         if op == 0x23:
-            candidates = (pc,)
+            indices = (i,)
         elif op in (4, 5):
-            candidates = (pc - 8 if i >= 2 and (words[i - 1] >> 21) == 0x120 else pc - 4,)
+            indices = (i - 2 if i >= 2 and (words[i - 1] >> 21) == 0x120 else i - 1,)
         elif op == 9:
-            candidates = (pc - 4,)
+            indices = (i - 1,)
         elif op == 0x0D:
-            candidates = (pc + 4,)
+            indices = (i + 1,)
         elif op == 0x0F:
-            candidates = (pc + 8,)
+            indices = (i + 2,)
         elif op == 3 or (op == 0 and (w & 0x3F) == 0x23):
-            candidates = tuple(pc + off for off in range(32, 116, 4))
+            indices = range(i + 8, min(i + 29, self._ram_words_len - 4))
         else:
             return None
-        for start in candidates:
-            si = (start & 0x1FFFFFFF) >> 2
-            if 0 <= si < self._ram_words_len - 4 and (words[si] >> 26) == 0x23 and self._poll_loop(start) is not None:
-                if start not in self._poll_loops:
-                    self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
-                                                               begin=start, end=start)
-                    self._tb_flush_needed = True
-                return start
+        seg = pc & 0xE0000000
+        for si in indices:
+            if 0 <= si < self._ram_words_len - 4 and (words[si] >> 26) == 0x23:
+                w1 = words[si + 1]
+                if (w1 >> 21) == 0x120:
+                    if words[si + 3] != 0 or (words[si + 2] >> 26) not in (4, 5):
+                        continue
+                elif words[si + 2] != 0 or (w1 >> 26) not in (4, 5):
+                    continue
+                start = seg | (si << 2)
+                if self._poll_loop(start) is not None:
+                    if start not in self._poll_loops:
+                        self._poll_loops[start] = self.mu.hook_add(UC_HOOK_CODE, self._hook_poll_loop,
+                                                                   begin=start, end=start)
+                        self._tb_flush_needed = True
+                    return start
         return None
 
     def _skip_poll(self, pc, max_vtime):
@@ -5331,18 +5385,20 @@ class AliMipsSimulator:
         if not self.lzma_hle:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
-        for sig, align in ((self._LZMA_DECODE_SIG, 4), (self._LZMA_DECODE_O2_SIG, 4),
-                           (self._LZMA_DECODE_9_SIG, 4), (self._LZMA_DECODE_9B_SIG, 4),
-                           (self._LZMA_DECODE_M16_SIG, 2)):
-            i = data.find(sig)
+        for sig, align, head_len in ((self._LZMA_DECODE_SIG, 4, 4), (self._LZMA_DECODE_O2_SIG, 4, 4),
+                                     (self._LZMA_DECODE_9_SIG, 4, 4), (self._LZMA_DECODE_9B_SIG, 4, 4),
+                                     (self._LZMA_DECODE_M16_SIG, 2, 12)):
+            head = sig[:head_len]
+            n = len(sig)
+            i = data.find(head)
             while i >= 0:
-                if i % align == 0:
+                if i % align == 0 and data[i:i + n] == sig:
                     for view in views:
                         a = view + base + i
                         if a not in self._lzma_hooks:
                             self._lzma_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_lzma, begin=a, end=a)
                             self._tb_flush_needed = True
-                i = data.find(sig, i + 1)
+                i = data.find(head, i + 1)
 
     def _guest_bytes(self, address, size):
         """Up to `size` bytes of guest memory from `address`, as many as are

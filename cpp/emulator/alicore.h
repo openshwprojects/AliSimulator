@@ -139,7 +139,7 @@ class Core {
   // The ALi device window (physical 0x18000000, 16 MB): its register buffer and the
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
-  enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_WATCH = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32 };
+  enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_WATCH = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64 };
   void set_dev_flags(uint32_t offset, uint32_t count, uint8_t flags);   // replace
   uint8_t *devflags() { return devflags_; }
 
@@ -527,7 +527,7 @@ class Core {
   // them: no event before their end, no code hook or breakpoint on their page,
   // not in a delay slot; everything else (CP0, the FPU, ERET, idle loops)
   // ends a block and runs on the instruction-at-a-time path.
-  enum { BLOCK_MAX = 32, BLOCK_TABLE = 1 << 15 };
+  enum { BLOCK_MAX = 32, BLOCK_TABLE = 1 << 17 };
   struct Uop {
     uint8_t op, d, s, t;
     uint32_t imm;
@@ -578,9 +578,9 @@ class Core {
     uint32_t keys[REC_MAX];        // (their PCs: whether the table still holds them)
   };
   uint64_t pass_ignorable(bool &ok) const;
-  enum { POLL_CACHE = 64 };
+  enum { POLL_CACHE = 256 };
   PollLoop poll_cache_[POLL_CACHE];
-  static uint32_t poll_slot(uint32_t key) { return (key * 0x9E3779B1u) >> 26; }
+  static uint32_t poll_slot(uint32_t key) { return (key * 0x9E3779B1u) >> 24; }
   uint64_t poll_skip(uint32_t head, uint64_t guess);
   bool poll_seq_valid(const PollLoop &pl);
   bool poll_probe(uint64_t k, uint32_t pass, uint32_t head);

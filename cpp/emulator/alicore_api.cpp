@@ -149,12 +149,10 @@ ALI_API void ali_set_chunks(void *c, int shift, uint32_t count) {
   k->chunk_shift = (uint32_t)shift;
   k->chunk_seen.assign(count, 0);
   k->chunk_events = count > 0;
-  k->flush_blocks();      // (a block's first run reports its chunk: they run again first)
 }
 ALI_API void ali_chunk_mark(void *c, uint32_t index, int seen) {
   Core *k = (Core *)c;
   if (index < k->chunk_seen.size()) k->chunk_seen[index] = (uint8_t)seen;
-  if (!seen) k->flush_blocks();
 }
 ALI_API void ali_set_flash_cmd(void *c, int on, const uint32_t *windows, int n) {
   ((Core *)c)->set_flash_cmd(on != 0, windows, n);

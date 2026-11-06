@@ -44,7 +44,7 @@ STOP_NONE, STOP_COUNT, STOP_UNTIL, STOP_REQUEST, STOP_ERROR, STOP_BREAKPOINT, ST
 # machine events (alicore.h EVT_*)
 EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ = 1, 2, 3, 5
 # device window flags (Core::DF_*)
-DF_READ, DF_WRITE, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR = 1, 2, 8, 16, 32
+DF_READ, DF_WRITE, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS = 1, 2, 8, 16, 32, 64
 
 REG_F0 = 1000           # the FPU registers F0..F31 (64-bit) of the core
 REG_CP0_BASE = 2000     # CP0 register rd, sel: REG_CP0_BASE + 8 * rd + sel

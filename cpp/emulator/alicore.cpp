@@ -401,7 +401,7 @@ uint64_t Core::load_slow(uint32_t va, uint32_t size) {
   // effect, no memory hook -- is like RAM for the loop checks: nothing changes it
   // during a spin, and a replayed pass may do it (anything else it may not)
   bool plain = dev_buf_ && pa >= dev_phys_ && pa - dev_phys_ + size <= dev_size_ &&
-               !(devflags_[pa - dev_phys_] & (DF_READ | DF_NATIVE)) && !(mem_hook_page_[pa >> 12] & 1);
+               !(devflags_[pa - dev_phys_] & (DF_READ | DF_NATIVE | DF_IC_STATUS)) && !(mem_hook_page_[pa >> 12] & 1);
   if (ALI_UNLIKELY(probe_)) {
     if (!plain) throw Fault{ERR_EXCEPTION};
     uint64_t v = 0;
@@ -561,6 +561,23 @@ void Core::report_chunk(uint32_t pa) {
 
 uint64_t Core::dev_load(uint32_t off, uint32_t size) {
   if (devflags_[off] & DF_NATIVE) return native_dev_load(off, size);
+  if (devflags_[off] & DF_IC_STATUS) {
+    uint64_t words[2] = {ic_lines_, ic_lines_hi_};
+    for (uint32_t w = 0; w < 4; w++) {
+      uint32_t bits = (uint32_t)(words[w >> 1] >> (32 * (w & 1)));
+      if (bits && ic_status_off_ + 4 * w + 4 <= dev_size_) {
+        uint32_t cur;
+        memcpy(&cur, dev_buf_ + ic_status_off_ + 4 * w, 4);
+        cur |= bits;
+        memcpy(dev_buf_ + ic_status_off_ + 4 * w, &cur, 4);
+      }
+    }
+    icount += host_access_cost;
+    poke_events();
+    uint64_t v = 0;
+    memcpy(&v, dev_buf_ + off, size);
+    return v;
+  }
   if (devflags_[off] & DF_READ) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
@@ -606,9 +623,12 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     uint32_t do_val, dir_val;
     memcpy(&do_val, dev_buf_ + do_off, 4);
     memcpy(&dir_val, dev_buf_ + do_off + 4, 4);
-    gpio_log_[2 * gpio_n_] = do_off;
-    gpio_log_[2 * gpio_n_ + 1] = (do_val & dir_val) | ~dir_val;
-    if (++gpio_n_ == GPIO_LOG_MAX) flush_gpio();
+    uint32_t levels = (do_val & dir_val) | ~dir_val;
+    if (gpio_n_ == 0 || gpio_log_[2 * (gpio_n_ - 1)] != do_off || gpio_log_[2 * (gpio_n_ - 1) + 1] != levels) {
+      gpio_log_[2 * gpio_n_] = do_off;
+      gpio_log_[2 * gpio_n_ + 1] = levels;
+      if (++gpio_n_ == GPIO_LOG_MAX) flush_gpio();
+    }
     icount += host_access_cost;
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
@@ -1077,7 +1097,13 @@ uint32_t Core::cp0_read(int rd, int sel) {
     case 8 * 8: return badvaddr;
     case 9 * 8: {
       uint32_t v = count_now();
-      timer_update();
+      uint32_t d_cmp = compare - timer_anchor;
+      if (timer_enabled && timer_armed && !ti && timer_check_at != 0 && d_cmp != 0 &&
+          (uint32_t)(v - timer_anchor) < d_cmp) {
+        timer_anchor = v;
+      } else {
+        timer_update();
+      }
       count_observed = v;
       count_observed_valid = true;
       return v;

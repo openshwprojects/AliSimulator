@@ -205,9 +205,17 @@ class Demux:
         except ImportError:
             return None
         ram = np.frombuffer(self.sim.ram_buffer, dtype=np.uint8, count=self.sim.ram_size)
+        if len(ram) > 0x2000000 and not ram[0x2000000:].any():
+            ram = ram[:0x2000000]
         n = len(ram) - 24
-        hits = np.flatnonzero((ram[:n] == 0xFF) & (ram[3:n + 3] == 0xFF) & (ram[4:n + 4] == 0xFF)
-                              & (ram[1:n + 1] == 0) & (ram[2:n + 2] == 0))
+        u32 = ram[:n].view('<u4')
+        cand = np.flatnonzero(u32 == 0xFF0000FF) * 4
+        hits = []
+        for base in cand:
+            for off in (base, base - 3):
+                if 0 <= off < n and ram[off] == 0xFF and ram[off + 1] == 0 and ram[off + 2] == 0 \
+                        and ram[off + 3] == 0xFF and ram[off + 4] == 0xFF:
+                    hits.append(off)
         found = {}
         for off in hits[:256]:
             tid = int(ram[off + 16])

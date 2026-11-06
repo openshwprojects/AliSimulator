@@ -61,18 +61,19 @@ def chunk_chain(image, limit=40):
     return out
 
 
-_maincode_cache = (None, b"")
+_maincode_cache = {}
 
 
 def maincode(image):
     """The image's maincode chunk unpacked (its LZMA-alone payload after the
     0x80-byte chunk header), b"" when there is none or it does not unpack.
-    The last result is kept: several families may ask about one image."""
-    global _maincode_cache
-    mid = len(image) // 4
-    key = (len(image), hashlib.sha1(bytes(image[:0x40000]) + bytes(image[mid:mid + 0x10000])).digest())
-    if _maincode_cache[0] == key:
-        return _maincode_cache[1]
+    Recent results are kept: several families may ask about one image."""
+    n = len(image)
+    mid = n // 4
+    key = (n, bytes(image[:256]), bytes(image[mid:mid + 256]), bytes(image[max(0, n - 256):]))
+    cached = _maincode_cache.get(key)
+    if cached is not None:
+        return cached
     data = b""
     for offset, name, _version in chunk_chain(image):
         cid, length = struct.unpack_from(">II", image, offset)
@@ -83,7 +84,9 @@ def maincode(image):
             except lzma.LZMAError:
                 data = b""
             break
-    _maincode_cache = (key, data)
+    if len(_maincode_cache) >= 16:
+        _maincode_cache.pop(next(iter(_maincode_cache)))
+    _maincode_cache[key] = data
     return data
 
 
@@ -109,13 +112,13 @@ class DemodulatorLock:
         self.lock_reads += 1
         if not self.signal or not self.sim.tuned_to_signal():
             return
-        start = (address & 0xFFFFFF) - self.BASE
-        data = bytearray(uc.mem_read(address, size))
+        off = address & 0xFFFFFF
+        start = off - self.BASE
+        view = self.sim._mmio_view
         for i in range(size):
             f = self.LOCKED.get(start + i)
             if f:
-                data[i] = f(data[i]) & 0xFF
-        uc.mem_write(address, bytes(data))
+                view[off + i] = f(view[off + i]) & 0xFF
 
 
 class ReadyBits:
@@ -124,6 +127,7 @@ class ReadyBits:
     byte): the bits that always read as set}.  A read of any size that covers
     such a byte sees them -- a word read of its register too."""
     def __init__(self, sim, bits):
+        self.sim = sim
         self.bits = bits
         starts = set()
         for offset in bits:
@@ -133,10 +137,11 @@ class ReadyBits:
 
     def _read(self, uc, access, address, size, value, user_data):
         start = address & 0xFFFFFF
-        data = bytearray(uc.mem_read(address, size))
+        view = self.sim._mmio_view
         for i in range(size):
-            data[i] |= self.bits.get(start + i, 0)
-        uc.mem_write(address, bytes(data))
+            b = self.bits.get(start + i, 0)
+            if b:
+                view[start + i] |= b
 
 
 class ChipFamily:

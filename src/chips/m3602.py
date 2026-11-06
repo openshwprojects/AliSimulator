@@ -150,7 +150,7 @@ class M3602(ChipFamily):
         # reading chunks above 4 MB; on M3606 / C3603 silicon (0x3603) they use
         # the 16 MB flash base 0xAF000000.
         if type(self) is M3602 and self.sim.rom_image:
-            if any(version.startswith(("M3606", "S3606"))
+            if any(version.startswith(("M3606", "S3606", "370"))
                    for _o, _n, version in chunk_chain(self.sim.rom_image)):
                 return C3603
         return super().default_chip_id()

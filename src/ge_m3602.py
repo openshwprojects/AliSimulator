@@ -111,9 +111,14 @@ class GeM3602:
         """The RAM's rows of width pixels from address (physical) on, pitch bytes apart, as a writable view
         of bpp-byte pixels; None when they leave the RAM."""
         a = address % self.sim.ram_size
-        if rows <= 0 or width <= 0 or a + (rows - 1) * pitch + width * bpp > self.ram.size:
+        row_bytes = width * bpp
+        if rows <= 0 or width <= 0 or a + (rows - 1) * pitch + row_bytes > self.ram.size:
             return None
-        return as_strided(self.ram[a:], shape=(rows, width * bpp), strides=(pitch, 1)).view(DTYPE[bpp])
+        if rows == 1 or pitch == row_bytes:
+            return self.ram[a:a + rows * row_bytes].reshape(rows, row_bytes).view(DTYPE[bpp])
+        if pitch > row_bytes and a + rows * pitch <= self.ram.size:
+            return self.ram[a:a + rows * pitch].reshape(rows, pitch)[:, :row_bytes].view(DTYPE[bpp])
+        return as_strided(self.ram[a:], shape=(rows, row_bytes), strides=(pitch, 1)).view(DTYPE[bpp])
 
     def run(self, address, mask):
         """Run the command at address (physical) and the ones chained to it."""

@@ -100,6 +100,9 @@ class PanelDecoder:
         if not changed:
             return 0
         self._prev_reg_values[offset] = value
+        if not self.dump_enabled:
+            self.gpio_event_count += 1
+            return changed
         if offset not in self._offsets_seen:
             self._offsets_seen.add(offset)
             if self.dump_enabled:
@@ -188,7 +191,15 @@ class TM1650Decoder(PanelDecoder):
         """Called with a GPIO bank's pin levels (`address` its DO register)
         whenever the CPU writes the bank's DO or DIR register."""
         offset = address & 0xFFF
-        if not self._gpio_changed(offset, value):
+        if not self.dump_enabled:
+            prev = self._prev_reg_values.get(offset, 0)
+            if value == prev:
+                return
+            self._prev_reg_values[offset] = value
+            self.gpio_event_count += 1
+            if offset != self.scl_offset and offset != self.sda_offset:
+                return
+        elif not self._gpio_changed(offset, value):
             return
 
         # Also try I2C decode with current scl/sda config

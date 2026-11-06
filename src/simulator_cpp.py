@@ -49,7 +49,7 @@ from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_
                       F_PC_MODE, F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_COUNT_RAW_WRITE,
                       F_COMPARE_WRITE, STOP_ERROR, STOP_BREAKPOINT, STOP_REQUEST, STOP_COUNT,
                       EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ, DF_READ, DF_WRITE,
-                      DF_GPIO_DO, DF_GPIO_DIR, F_UART_IRQS)
+                      DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, F_UART_IRQS)
 from simulator import AliMipsSimulator, ISAMode
 
 DEFAULT_IPS = int(float(os.environ.get("ALISIM_CPP_IPS", "50e6")))     # instructions per emulated second
@@ -432,6 +432,10 @@ class CppAliMipsSimulator(AliMipsSimulator):
             if handlers == [gpio_write] and not (want[off] & DF_READ) and \
                     not any(w and lo <= off <= hi for w, lo, hi, _cb in self._mmio_observers):
                 want[off] = DF_GPIO_DO if (off & ~3 & 0xFFF) in self._GPIO_DO_OFFSETS else DF_GPIO_DIR
+        ic_read = self._hook_ic_status_read
+        for off, handlers in self._mmio_rd.items():
+            if handlers == [ic_read] and not any(not w and lo <= off <= hi for w, lo, hi, _cb in self._mmio_observers):
+                want[off] = (want.get(off, 0) & ~DF_READ) | DF_IC_STATUS
         changes = [(off, f) for off, f in want.items() if self._dev_pushed.get(off) != f]
         changes += [(off, 0) for off in self._dev_pushed if off not in want]
         if changes:
@@ -584,9 +588,15 @@ class CppAliMipsSimulator(AliMipsSimulator):
 
     @_ic_lines.setter
     def _ic_lines(self, value):
+        prev = self.__dict__.get('_ic_lines_v', 0)
+        if value == prev and '_ic_lines_v' in self.__dict__:
+            return
         self.__dict__['_ic_lines_v'] = value
         self._core.set(F_IC_LINES, value & 0xFFFFFFFFFFFFFFFF)
-        self._core.set(F_IC_LINES_HI, (value >> 64) & 0xFFFFFFFFFFFFFFFF)
+        hi = (value >> 64) & 0xFFFFFFFFFFFFFFFF
+        if hi != ((prev >> 64) & 0xFFFFFFFFFFFFFFFF) or '_ic_lines_hi_pushed' not in self.__dict__:
+            self.__dict__['_ic_lines_hi_pushed'] = hi
+            self._core.set(F_IC_LINES_HI, hi)
 
     def set_ic_layout(self, status, enable):
         super().set_ic_layout(status, enable)
@@ -910,12 +920,20 @@ class CppAliMipsSimulator(AliMipsSimulator):
         if ranges is None:
             if self._rom_sites_dirty:
                 self._rom_sites_dirty = False
-                self._find_lzma_decoders(self.rom_image, 0, (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000))
+                if self.__dict__.get('_rom_scanned_bytes') != self.rom_image:
+                    self._rom_scanned_bytes = bytes(self.rom_image)
+                    self._find_lzma_decoders(self.rom_image, 0, (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000))
             ranges = self.chip.code_ranges()
         for start, length in ranges:
             phys = start & 0x1FFFFFFF
-            if (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size:
+            in_ram = (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size
+            ram_bytes = None
+            if in_ram:
                 data = self._ram_view[phys:phys + length]
+                if length >= self._VIRGIN_CHUNK:
+                    ram_bytes = bytes(data)
+                    if self._scanned_ram_chunks.get((phys, length, False)) == ram_bytes:
+                        continue
             else:
                 try:
                     data = self.mu.mem_read(start, length)
@@ -925,6 +943,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 self._find_lzma_decoders(data, phys, (0x80000000, 0xA0000000))
                 self._find_delay_routines(data, phys, (0x80000000, 0xA0000000))
                 self._find_poll_loops(data, phys, (0x80000000, 0xA0000000))
+            if ram_bytes is not None:
+                self._scanned_ram_chunks[(phys, length, False)] = ram_bytes
 
     def _cpp_hook_code(self, uc, address, size, user_data):
         """Exact mode: the per-instruction bookkeeping of the Python engine's

@@ -82,11 +82,11 @@ class C3503(C3505):
         return b"get_clock_3503D" in mc or C3503C_GUARD in mc or b"c3507_phy_set" in mc
 
     def default_chip_id(self):
-        mc = maincode(bytes(self.sim.rom_image)) if self.sim.rom_image else b""
+        mc = maincode(self.sim.rom_image) if self.sim.rom_image else b""
         return 0x3507 if b"c3507_phy_set" in mc else 0x3503
 
     def write_chip_id(self):
-        mc = maincode(bytes(self.sim.rom_image)) if self.sim.rom_image else b""
+        mc = maincode(self.sim.rom_image) if self.sim.rom_image else b""
         is_c3507 = b"c3507_phy_set" in mc
         is_c3503c = C3503C_GUARD in mc
         self.chip_variant = 0x0000 if is_c3507 else (0xC000 if is_c3503c else 0xD000)

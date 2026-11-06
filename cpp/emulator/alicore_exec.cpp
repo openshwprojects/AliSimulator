@@ -1322,8 +1322,8 @@ Core::Block *Core::build_block(uint32_t pc0, bool mode16, uint8_t *page) {
 
 // a block's slot in the table (a multiplicative hash: MIPS32 keys are multiples of 4)
 static ALI_INLINE uint32_t block_slot(uint32_t key) {
-  static_assert(Core::BLOCK_TABLE == 1 << 15, "block_slot's shift");
-  return (key * 0x9E3779B1u) >> 17;
+  static_assert(Core::BLOCK_TABLE == 1 << 17, "block_slot's shift");
+  return (key * 0x9E3779B1u) >> 15;
 }
 
 // whether the code is still what the block was decoded from (lengths are even)
@@ -1354,24 +1354,23 @@ Core::Block *Core::get_block(uint32_t pc0, bool mode16) {
   if (!btab_) btab_ = new Block *[BLOCK_TABLE]();
   uint8_t *page = vx_[pc0 >> 12];
   if (!page) return nullptr;
-  uint32_t key = pc0 | (mode16 ? 1u : 0u);
-  Block *&slot = btab_[block_slot(key)];
-  Block *b = slot;
   chunk_reported_ = false;
-  if (b && b->key == key && same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return b;
   if (ALI_UNLIKELY(chunk_events)) {
     // code about to run for the first time in its chunk: reported first, as the
     // instruction-at-a-time path does (the host looks for routines to shortcut
     // there and may hook them); the loop then looks at this PC again
     uint32_t pa = phys_of(pc0);
     uint32_t c = pa >> chunk_shift;
-    if (c < chunk_seen.size() && !chunk_seen[c]) {
+    if (ALI_UNLIKELY(c < chunk_seen.size() && !chunk_seen[c])) {
       report_chunk(pa);
       chunk_reported_ = true;
       return nullptr;
     }
   }
-  b = slot;           // (the slot again: a report may have flushed the table)
+  uint32_t key = pc0 | (mode16 ? 1u : 0u);
+  Block *&slot = btab_[block_slot(key)];
+  Block *b = slot;
+  if (b && b->key == key && same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return b;
   retire(b);
   slot = b = build_block(pc0, mode16, page);
   return b;
@@ -1419,7 +1418,6 @@ void Core::run_blocks(Block *b) {
     nm = m;
     for (i = 0; i < n; i++) {
       const Uop &u = b->ops[i];
-      bool slow = false;
       switch (u.op) {
         case U_NOP: break;
         case U_ADDIU: R[u.d] = R[u.s] + u.imm; break;
@@ -1487,10 +1485,9 @@ void Core::run_blocks(Block *b) {
     if (ALI_UNLIKELY(a & (sizeof(T) - 1))) { cur_pc_ = u.pc; fault_unaligned(a, MEM_READ); } \
     uint8_t *p = vr_[a >> 12];                                                               \
     T v;                                                                                     \
-    if (ALI_LIKELY(p != nullptr)) memcpy(&v, p + (a & 0xFFF), sizeof(T));                    \
-    else { cur_pc_ = u.pc; v = (T)load_slow(a, sizeof(T)); slow = true; }                    \
-    R[u.d] = CONV;                                                                           \
-    break;                                                                                   \
+    if (ALI_LIKELY(p != nullptr)) { memcpy(&v, p + (a & 0xFFF), sizeof(T)); R[u.d] = CONV; break; } \
+    cur_pc_ = u.pc; v = (T)load_slow(a, sizeof(T)); R[u.d] = CONV;                           \
+    goto check_slow;                                                                         \
   }
         case U_LB: BLK_LOAD(uint8_t, (uint32_t)(int32_t)(int8_t)v)
         case U_LBU: BLK_LOAD(uint8_t, (uint32_t)v)
@@ -1505,9 +1502,9 @@ void Core::run_blocks(Block *b) {
     uint8_t *p = vw_[a >> 12];                                                                \
     T v = (T)R[u.t];                                                                          \
     stores_++;                                                                                \
-    if (ALI_LIKELY(p != nullptr)) memcpy(p + (a & 0xFFF), &v, sizeof(T));                     \
-    else { cur_pc_ = u.pc; store_slow(a, sizeof(T), (uint64_t)v); slow = true; }              \
-    break;                                                                                    \
+    if (ALI_LIKELY(p != nullptr)) { memcpy(p + (a & 0xFFF), &v, sizeof(T)); break; }          \
+    cur_pc_ = u.pc; store_slow(a, sizeof(T), (uint64_t)v);                                    \
+    goto check_slow;                                                                          \
   }
         case U_SB: BLK_STORE(uint8_t)
         case U_SH: BLK_STORE(uint16_t)
@@ -1518,15 +1515,16 @@ void Core::run_blocks(Block *b) {
           uint32_t v;
           if (ALI_UNLIKELY(probe_)) {
             v = count_at(icount + i);
-          } else {
-            icount += i;
-            v = cp0_read(9, 0);
-            icount -= i;
-            slow = true;       // (the timer may have latched: leave if an event is due)
+            if (u.d) R[u.d] = v;
+            count_reads_++;
+            break;
           }
+          icount += i;
+          v = cp0_read(9, 0);
+          icount -= i;
           if (u.d) R[u.d] = v;
           count_reads_++;
-          break;
+          goto check_slow;     // (the timer may have latched: leave if an event is due)
         }
         case U_TRAP: {      // (a divide's zero check: an exception only when it holds)
           uint32_t a = R[u.s], c = R[u.t];
@@ -1547,12 +1545,10 @@ void Core::run_blocks(Block *b) {
         }
         case U_GEN32:
           gen32_op(u.imm, u.pc);
-          slow = true;
-          break;
+          goto check_slow;
         case U_GEN16:
           gen16_op(u.pc);
-          slow = true;
-          break;
+          goto check_slow;
         // ---- transfers with a delay slot (the block's second-last op) ----
         case U_BEQ: next = R[u.s] == R[u.t] ? u.imm : u.pc + 8; nm = false; break;
         case U_BNE: next = R[u.s] != R[u.t] ? u.imm : u.pc + 8; nm = false; break;
@@ -1578,7 +1574,7 @@ void Core::run_blocks(Block *b) {
         case U_BGTZL: LIKELY_BR((int32_t)R[u.s] > 0, false)
         case U_BLTZL: LIKELY_BR((int32_t)R[u.s] < 0, false)
         case U_BGEZL: LIKELY_BR((int32_t)R[u.s] >= 0, false)
-        case U_BLTZALL: LIKELY_BR((int32_t)R[u.s] < 0, true)
+        case U_BLTZALL: LIKELY_BR((int32_t)R[u.s] >= 0 ? false : true, true)
         case U_BGEZALL: LIKELY_BR((int32_t)R[u.s] >= 0, true)
 #undef LIKELY_BR
         case U_J: next = u.imm; nm = false; break;
@@ -1598,7 +1594,9 @@ void Core::run_blocks(Block *b) {
         case U16_JALRC: { uint32_t t = R[u.s]; R[31] = (u.pc + 2) | 1; next = t & ~1u; nm = t & 1; break; }
         default: ALI_UNREACHABLE();
       }
-      if (ALI_UNLIKELY(slow) && next_event_ <= icount + i + 1 && i + 1 < n) {
+      continue;
+    check_slow:
+      if (ALI_UNLIKELY(next_event_ <= icount + i + 1 && i + 1 < n)) {
         // a device access or a host call may have raised an interrupt, stopped the
         // run or changed code: leave after this instruction (never before a delay
         // slot: those ops end blocks, a slow op is never a transfer)
@@ -1784,6 +1782,7 @@ void Core::spin_check() {
         memcpy(pl.seq, rec_, sizeof(Block *) * rec_n_);
         for (int j = 0; j < rec_n_; j++) pl.keys[j] = rec_[j]->key;
         pl.last_k = poll_skip(key, guess);
+        loop_poll_tried_ = false;
       }
     }
     loop_key_ = key;
@@ -1818,9 +1817,20 @@ void Core::spin_check() {
     return;
   }
   if (count_reads_ != loop_creads_) {
-    // the last pass read Count: record the next one (once per entry into the loop)
+    // the last pass read Count: replay the cached pass (across slice boundaries) or
+    // record the next one (once per entry into the loop)
     loop_creads_ = count_reads_;
-    if (!loop_poll_tried_) {
+    PollLoop &pl = poll_cache_[poll_slot(key)];
+    if (!loop_poll_tried_ && pl.key == key && spin_skip && poll_seq_valid(pl)) {
+      memcpy(loop_regs_, gpr, sizeof(gpr));
+      loop_regs_[32] = hi;
+      loop_regs_[33] = lo;
+      memcpy(rec_, pl.seq, sizeof(Block *) * pl.n);
+      rec_n_ = pl.n;
+      rec_ign_ = pl.ign;
+      pl.last_k = poll_skip(key, pl.last_k);
+      loop_creads_ = count_reads_;
+    } else if (!loop_poll_tried_) {
       loop_poll_tried_ = true;
       memcpy(loop_regs_, gpr, sizeof(gpr));
       loop_regs_[32] = hi;
@@ -1912,7 +1922,7 @@ uint64_t Core::poll_skip(uint32_t head, uint64_t guess) {
   for (int j = 0; j < rec_n_; j++) pass += rec_[j]->n;
   if (!pass) return 0;
   uint64_t room = next_event_ == ~0ull ? (1ull << 40) : next_event_ - icount;
-  if (room < 3 * pass) return 0;
+  if (room < 3 * pass) return guess;
   uint64_t kmax = (room - 1) / pass - 1;      // (the pass after the skip fits before the event)
   uint64_t lo_k = 0, hi_k = kmax + 1;          // goes on after lo_k passes; not known past hi_k - 1
   if (guess && guess <= kmax) {                // the last call's: often the same again
@@ -1952,6 +1962,8 @@ uint64_t Core::poll_skip(uint32_t head, uint64_t guess) {
     icount += lo_k * pass;
     poll_skipped += lo_k * pass;
     poll_skips++;
+  } else {
+    loop_poll_tried_ = true;
   }
   return lo_k;
 }

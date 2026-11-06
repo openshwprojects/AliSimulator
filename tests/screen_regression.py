@@ -357,7 +357,11 @@ def _run(dump, expected, boot_limit_s, settle_s, min_ge_ops, max_diff_pct, min_c
         # a blinking no-signal text -- must not count as the redraw having
         # started), then for the redraw to finish
         t = fw()
+        checked_ops = ops
         while fw() - t < 120 and advance(t + 120):
+            if ge and sim.ge_ops == checked_ops:
+                continue
+            checked_ops = sim.ge_ops
             if (sim.ge_ops - ops >= 2 or not ge) and \
                     int((sim.capture_screen() != previous).any(axis=2).sum()) >= min_px:
                 break

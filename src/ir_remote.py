@@ -253,6 +253,8 @@ def _scan_key_table(ram, min_entries, old_layout=False):
     older M3327/M3329 Libcore (`old_layout=True`) packs `ir_code` in bits 0..15
     and `hdr = 0x0101` (`PAN_KEY_PRESSED | (PAN_KEY_TYPE_REMOTE << 8)`) in 16..31."""
     import numpy as np
+    if len(ram) > 0x2000000 and not ram[0x2000000:].any():
+        ram = ram[:0x2000000]
     n = len(ram) // 8 * 8
     if n < 8:
         return {}
