@@ -41,7 +41,7 @@ where the Ariva 54's bootloader puts its own).
 """
 import struct
 
-from unicorn.mips_const import UC_MIPS_REG_SP
+from uc_const import UC_MIPS_REG_SP
 
 from .base import ReadyBits, chunk_chain, maincode
 from .c3505 import C3505

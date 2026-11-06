@@ -144,7 +144,7 @@ class Core {
   // The ALi device window (physical 0x18000000, 16 MB): its register buffer and the
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
-  enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_WATCH = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64 };
+  enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_GPIO_DI = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64, DF_GE = 128 };
   void set_dev_flags(uint32_t offset, uint32_t count, uint8_t flags);   // replace
   uint8_t *devflags() { return devflags_; }
 
@@ -186,6 +186,7 @@ class Core {
   void set_ic(uint32_t status_off, uint32_t enable_off, uint32_t ic_base);
   void set_ic_lines(uint64_t lines) { ic_lines_ = lines; poke_events(); }
   void set_ic_lines_hi(uint64_t lines) { ic_lines_hi_ = lines; poke_events(); }
+  void ic_set_line(uint32_t line, bool on);
   void set_doorbell(int32_t offset, int32_t shift) { doorbell_off_ = offset; doorbell_shift_ = shift; poke_events(); }
   bool ic_ip3() const;
 
@@ -334,6 +335,21 @@ class Core {
   uint32_t gpio_watch_[GPIO_BANKS];
   uint32_t gpio_last_[GPIO_BANKS];
   uint8_t gpio_last_ok_[GPIO_BANKS];
+  uint32_t gpio_di_high_[GPIO_BANKS];
+  bool gpio_di_busy_ = false;
+  // GE_M36F graphics engine (0xB800A004 command trigger, 0xB800A008 interrupt status):
+  // executes IO and command-list blits / fills directly in C++ when DF_GE is set.
+  struct Ge {
+    bool render = true;
+    uint8_t *ram = nullptr;
+    uint32_t ram_size = 0, phys_mask = 0x07FFFFFFu;
+    uint32_t status = 0;
+    uint64_t ops = 0, primitives = 0;
+    uint32_t regs[64] = {};
+    bool resume_valid = false;
+    uint32_t resume_idx = 0;
+  } ge_;
+  bool ge_store(uint32_t off, uint32_t size, uint64_t value);
   // A bit-banged I2C bus on two GPIO pins (the simulator's gpio_i2c.GpioI2cBus, in
   // the core): it follows the pin levels of every GPIO store at once, and calls the
   // host per address, write transaction and read byte (i2c_cb_), not per edge.

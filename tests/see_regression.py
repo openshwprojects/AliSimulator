@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import time
 
-from unicorn.mips_const import UC_MIPS_REG_PC
+from uc_const import UC_MIPS_REG_PC
 from simulator import AliMipsSimulator, default_engine, flash_size_for, resolve_dump
 
 LOGGED = ("[SEE] started", "[CAR]")     # log lines echoed and kept (Run.logs)

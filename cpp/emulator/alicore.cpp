@@ -1,6 +1,7 @@
 // AliSimulator C++ core: memory map, hooks, CP0, interrupts, the run loop.
 // The instructions themselves are in alicore_exec.cpp.
 #include "alicore.h"
+#include "alicore_gfx.h"
 
 #include <algorithm>
 #include <chrono>
@@ -23,6 +24,7 @@ Core::Core() {
   memset(gpio_watch_, 0, sizeof(gpio_watch_));
   memset(gpio_last_, 0, sizeof(gpio_last_));
   memset(gpio_last_ok_, 0, sizeof(gpio_last_ok_));
+  memset(gpio_di_high_, 0, sizeof(gpio_di_high_));
   vr_ = new uint8_t *[NPAGES]();
   vw_ = new uint8_t *[NPAGES]();
   vx_ = new uint8_t *[NPAGES]();
@@ -404,7 +406,8 @@ uint64_t Core::load_slow(uint32_t va, uint32_t size) {
   // effect, no memory hook -- is like RAM for the loop checks: nothing changes it
   // during a spin, and a replayed pass may do it (anything else it may not)
   bool plain = dev_buf_ && pa >= dev_phys_ && pa - dev_phys_ + size <= dev_size_ &&
-               !(devflags_[pa - dev_phys_] & (DF_READ | DF_NATIVE | DF_IC_STATUS)) && !(mem_hook_page_[pa >> 12] & 1);
+               !(devflags_[pa - dev_phys_] & (DF_READ | DF_GPIO_DI | DF_NATIVE | DF_IC_STATUS)) &&
+               !(mem_hook_page_[pa >> 12] & 1);
   if (ALI_UNLIKELY(probe_)) {
     if (!plain) throw Fault{ERR_EXCEPTION};
     uint64_t v = 0;
@@ -581,7 +584,40 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
     memcpy(&v, dev_buf_ + off, size);
     return v;
   }
-  if (devflags_[off] & DF_READ) {
+  if ((devflags_[off] & (DF_GE | DF_READ)) == (DF_GE | DF_READ)) {
+    uint32_t st_off = (off & ~0xFFFu) | 0x008u;
+    if (st_off + 4u <= dev_size_) memcpy(dev_buf_ + st_off, &ge_.status, 4);
+    icount += host_access_cost;
+    poke_events();
+    uint64_t v = 0;
+    memcpy(&v, dev_buf_ + off, size);
+    return v;
+  }
+  if ((devflags_[off] & DF_GPIO_DI) && gpio_n_ == 0 && !gpio_di_busy_) {
+    if ((off & 3u) == 0 && off + 12u <= dev_size_) {
+      uint32_t do_off = off + 4u;
+      uint32_t do_val, dir_val;
+      memcpy(&do_val, dev_buf_ + do_off, 4);
+      memcpy(&dir_val, dev_buf_ + off + 8u, 4);
+      uint32_t bank = (do_off & 0xFFFu) >> 2;
+      uint32_t di_val = (do_val & dir_val) | (bank < GPIO_BANKS ? gpio_di_high_[bank] : 0u);
+      if (gi2c_.on) {
+        if ((do_off & 0xFFFu) == gi2c_.scl_off) di_val |= gi2c_.scl_mask;
+        if ((do_off & 0xFFFu) == gi2c_.sda_off) {
+          if (gi2c_sda_out() == 0) di_val &= ~gi2c_.sda_mask;
+          else di_val |= gi2c_.sda_mask;
+        }
+      }
+      di_val = (di_val & ~dir_val) | (do_val & dir_val);
+      memcpy(dev_buf_ + off, &di_val, 4);
+    }
+    icount += host_access_cost;
+    poke_events();
+    uint64_t v = 0;
+    memcpy(&v, dev_buf_ + off, size);
+    return v;
+  }
+  if (devflags_[off] & (DF_READ | DF_GPIO_DI)) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
     enter_callback();
@@ -644,6 +680,7 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     // (after the log: the host's decoders got each store before the bus, in its order)
     if (gi2c_.on && (do_off == gi2c_.scl_off || do_off == gi2c_.sda_off)) gi2c_levels(do_off, levels);
     icount += host_access_cost;
+  } else if ((f & (DF_GE | DF_WRITE)) == (DF_GE | DF_WRITE) && ge_store(off, size, value)) {
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
@@ -1209,6 +1246,76 @@ void Core::set_ic(uint32_t status_off, uint32_t enable_off, uint32_t ic_base) {
   ic_enable_off_ = enable_off;
   ic_base_ = ic_base;
   poke_events();
+}
+
+void Core::ic_set_line(uint32_t line, bool on) {
+  uint32_t st_off = ic_status_off_ + 4u * (line >> 5);
+  uint32_t b = 1u << (line & 31u);
+  if (on) {
+    if (line < 64u) ic_lines_ |= (1ull << line);
+    else if (line < 128u) ic_lines_hi_ |= (1ull << (line - 64u));
+    if (dev_buf_ && st_off + 4u <= dev_size_) {
+      uint32_t cur;
+      memcpy(&cur, dev_buf_ + st_off, 4);
+      cur |= b;
+      memcpy(dev_buf_ + st_off, &cur, 4);
+    }
+  } else {
+    if (line < 64u) ic_lines_ &= ~(1ull << line);
+    else if (line < 128u) ic_lines_hi_ &= ~(1ull << (line - 64u));
+    if (dev_buf_ && st_off + 4u <= dev_size_) {
+      uint32_t cur;
+      memcpy(&cur, dev_buf_ + st_off, 4);
+      cur &= ~b;
+      memcpy(dev_buf_ + st_off, &cur, 4);
+    }
+  }
+  poke_events();
+}
+
+bool Core::ge_store(uint32_t off, uint32_t size, uint64_t value) {
+  uint32_t roff = off & 0xFFFu;
+  if (roff == 0x004u) {
+    uint32_t cmd = (uint32_t)value;
+    uint32_t done = (cmd == 1u) ? 4u : (cmd == 2u) ? 1u : (cmd == 3u) ? 2u : 0u;
+    if (done) {
+      if (ge_.render) {
+        uint32_t base = off & ~0xFFFu;
+        if (!ge_.ram || base + 0x100u > dev_size_) return false;
+        uint32_t live_regs[64];
+        memcpy(live_regs, dev_buf_ + base, 256);
+        if (cmd == 1u) {
+          if (ali_gfx::ge_m36f_exec_one(ge_.ram, ge_.ram_size, ge_.phys_mask, live_regs, &ge_.primitives) != 0)
+            return false;
+        } else {
+          uint32_t o = (cmd == 2u) ? 0x10u : 0x18u;
+          uint32_t start = live_regs[o >> 2] & 0x1FFFFFFFu;
+          uint32_t end = live_regs[(o >> 2) + 1u] & 0x1FFFFFFFu;
+          if (start <= end && end < start + 0x400000u && (uint64_t)end + 4ull <= ge_.ram_size) {
+            if ((start & 3u) != 0) return false;
+            uint32_t n_words = ((end + 4u) - start) >> 2;
+            const uint32_t *words = (const uint32_t *)(ge_.ram + start);
+            uint32_t reached = ali_gfx::ge_m36f_run_list_cpp(
+                ge_.ram, ge_.ram_size, ge_.phys_mask, words, n_words, ge_.regs, live_regs, &ge_.primitives);
+            if (reached < n_words) {
+              ge_.resume_valid = true;
+              ge_.resume_idx = reached;
+              return false;
+            }
+          }
+        }
+      }
+      ge_.ops++;
+      ge_.status |= done;
+      ic_set_line(4, true);
+    }
+  } else if (roff == 0x008u) {
+    ge_.status &= ~(uint32_t)value;
+    if (!ge_.status) ic_set_line(4, false);
+  }
+  memcpy(dev_buf_ + off, &value, size);
+  icount += host_access_cost;
+  return true;
 }
 
 bool Core::ic_ip3() const {

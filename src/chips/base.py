@@ -4,7 +4,7 @@ import hashlib
 import lzma
 import struct
 
-from unicorn.mips_const import UC_MIPS_REG_PC
+from uc_const import UC_MIPS_REG_PC
 
 REMAP_CTRL = 0x220                  # 0xB8000220: SEE control + bit 24 upper-DDR remap
 REMAP_BIT = 0x01000000              # 0xB8000220 bit 24: 0x0F000000..0x0FFFFFFF is DDR (240..256 MB), not flash

@@ -319,7 +319,7 @@ class M3329(ChipFamily):
         if self._ir_usr_code is not None:
             return self._ir_usr_code
         import numpy as np
-        from unicorn.mips_const import UC_MIPS_REG_GP
+        from uc_const import UC_MIPS_REG_GP
         sim = self.sim
         gp = sim.mu.reg_read(UC_MIPS_REG_GP) & 0xFFFFFFFF
         ram_words = np.frombuffer(sim.ram_buffer, dtype='<u4', count=sim.ram_size // 4)

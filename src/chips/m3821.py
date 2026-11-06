@@ -51,8 +51,7 @@ drives the M3821's own demodulator ("NIM_S3821").
 import ctypes
 import struct
 
-from unicorn import UC_HOOK_CODE, UC_PROT_ALL
-from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
+from uc_const import UC_HOOK_CODE, UC_PROT_ALL, UC_MIPS_REG_PC, UC_MIPS_REG_SP
 
 from .base import ChipFamily, DemodulatorLock, ReadyBits, chunk_chain, maincode, word_after_store
 from .see import SeeStart

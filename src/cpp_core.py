@@ -17,10 +17,9 @@ import ctypes
 import os
 import sys
 
-from unicorn import UcError
-from unicorn.unicorn_const import (UC_HOOK_CODE, UC_HOOK_INTR, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE,
-                                   UC_HOOK_MEM_FETCH, UC_HOOK_MEM_INVALID, UC_HOOK_MEM_PROT,
-                                   UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
+from uc_const import (UcError, UC_HOOK_CODE, UC_HOOK_INTR, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE,
+                      UC_HOOK_MEM_FETCH, UC_HOOK_MEM_INVALID, UC_HOOK_MEM_PROT,
+                      UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the core's library: cpp\build.bat (MSVC) builds alicore.dll, cpp/build.sh (g++ / clang) libalicore.so
@@ -37,14 +36,15 @@ DLL_PATH = os.environ.get("ALISIM_CPP_DLL") or os.path.join(ROOT, "cpp", "build"
  F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_CHUNK_EVENTS, F_DS_TARGET, F_DS_M16, F_BADVADDR, F_LLBIT,
  F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
  F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS,
- F_FF_SKIPPED, F_IC_LINES_HI) = range(1, 63)
+ F_FF_SKIPPED, F_IC_LINES_HI, F_GPIO_DI_BUSY, F_GE_STATUS, F_GE_OPS, F_GE_RENDER, F_GE_PRIMS,
+ F_GE_RESUME) = range(1, 69)
 
 # run() / emu_start() stop reasons (alicore.h StopReason)
 STOP_NONE, STOP_COUNT, STOP_UNTIL, STOP_REQUEST, STOP_ERROR, STOP_BREAKPOINT, STOP_NULL, STOP_TIMEOUT = range(8)
 # machine events (alicore.h EVT_*)
 EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ = 1, 2, 3, 5
 # device window flags (Core::DF_*)
-DF_READ, DF_WRITE, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS = 1, 2, 8, 16, 32, 64
+DF_READ, DF_WRITE, DF_GPIO_DI, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE = 1, 2, 4, 8, 16, 32, 64, 128
 
 REG_F0 = 1000           # the FPU registers F0..F31 (64-bit) of the core
 REG_CP0_BASE = 2000     # CP0 register rd, sel: REG_CP0_BASE + 8 * rd + sel
@@ -150,6 +150,9 @@ def lib():
         "ali_set_gpio_cb": (None, [vp, vp, vp]),
         "ali_gpio_log": (None, [vp, i32, ctypes.POINTER(vp), ctypes.POINTER(vp)]),
         "ali_gpio_watch": (None, [vp, i32, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
+        "ali_gpio_di_config": (None, [vp, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
+        "ali_ge_config": (None, [vp, vp, u32]),
+        "ali_ge_regs": (None, [vp, i32, ctypes.POINTER(u32)]),
         "ali_gpio_i2c_config": (None, [vp, i32, u32, u32, u32, u32, vp, vp]),
         "ali_gpio_i2c_get": (ctypes.c_int64, [vp, i32]),
         "ali_direct": (vp, [vp, u64, ctypes.POINTER(u64), ctypes.POINTER(u64)]),

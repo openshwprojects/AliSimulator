@@ -36,9 +36,9 @@ import struct
 import sys
 import threading
 
-from unicorn import UcError, UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED, UC_HOOK_MEM_FETCH_PROT, \
-    UC_HOOK_MEM_READ_PROT, UC_HOOK_MEM_WRITE_PROT, UC_PROT_ALL
-from unicorn.mips_const import UC_MIPS_REG_PC, UC_MIPS_REG_SP
+from uc_const import (UcError, UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED, UC_HOOK_MEM_FETCH_PROT,
+                      UC_HOOK_MEM_READ_PROT, UC_HOOK_MEM_WRITE_PROT, UC_PROT_ALL,
+                      UC_MIPS_REG_PC, UC_MIPS_REG_SP)
 
 import cpp_core
 from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_EPC, F_EBASE, F_COMPARE, F_COUNT,
@@ -49,7 +49,7 @@ from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_
                       F_PC_MODE, F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_COUNT_RAW_WRITE,
                       F_COMPARE_WRITE, STOP_ERROR, STOP_BREAKPOINT, STOP_REQUEST, STOP_COUNT,
                       EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ, DF_READ, DF_WRITE,
-                      DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, F_UART_IRQS)
+                      DF_GPIO_DI, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE, F_UART_IRQS)
 from simulator import AliMipsSimulator, ISAMode
 
 DEFAULT_IPS = int(float(os.environ.get("ALISIM_CPP_IPS", "50e6")))     # instructions per emulated second
@@ -143,6 +143,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
     _uart_irq_delivered = _cpu_prop(F_UART_DELIVERED, "... and delivered", True)
     _uart_irq_force = _cpu_prop(F_UART_FORCE, "... whatever Status says", True)
     _uart_irq_retries = _cpu_prop(F_UART_IRQS, "UART receive interrupts delivered")
+    ge_ops = _cpu_prop(cpp_core.F_GE_OPS, "GE commands executed")
+    _ge_status = _cpu_prop(cpp_core.F_GE_STATUS, "GE interrupt status")
+    ge_render = _cpu_prop(cpp_core.F_GE_RENDER, "execute GE commands", True)
     # the SPI flash controller's state lives in the core (its native model and the
     # Python one, _hook_spi_*, share it)
     _spi_ins = _spi_prop(S_INS, "SF_INS")
@@ -213,6 +216,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._gi2c_bus = None           # the gpio_i2c.GpioI2cBus the core runs (_cpp_gpio_sync)
         self._gi2c_cb = None
         self._gpio_watch_pushed = None
+        self._gpio_di_high_pushed = None
+        self._gpio_di_busy_pushed = None
+        self._gpio_di_owners = ()
         super().__init__(*args, **kwargs)
         self._insn_rate = DEFAULT_RATE
         self._apply_count_ratio()
@@ -374,6 +380,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
         L.ali_set_ic(core.handle, self.ic_base, self.ic_base + 8, self.ic_base)
         # first-execution reports of the RAM's 1 MB chunks (LzmaDecode found in new code)
         L.ali_set_chunks(core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
+        L.ali_ge_config(core.handle, ram_ptr, self.ram_size)
 
     def _calibrate_hflags(self):
         pass
@@ -409,8 +416,10 @@ class CppAliMipsSimulator(AliMipsSimulator):
     def _cpp_dev_flags(self):
         """The device window offsets whose accesses go to Python, and how."""
         native_spi = bool(cpp_core.lib().ali_spi_get(self._core.handle, S_ON))
+        ge_obj = getattr(self, 'ge', None)
+        native_ge = ge_obj is None or (ge_obj.fast_paths and ge_obj.trace is None)
         sig = (self._mmio_version, id(self._mmio_rd), len(self._mmio_rd), id(self._mmio_wr), len(self._mmio_wr),
-               len(self._mmio_observers), native_spi)
+               len(self._mmio_observers), native_spi, native_ge)
         if sig == self._dev_sig:
             return
         self._dev_sig = sig
@@ -435,10 +444,23 @@ class CppAliMipsSimulator(AliMipsSimulator):
             if handlers == [gpio_write] and not (want[off] & DF_READ) and \
                     not any(w and lo <= off <= hi for w, lo, hi, _cb in self._mmio_observers):
                 want[off] = DF_GPIO_DO if (off & ~3 & 0xFFF) in self._GPIO_DO_OFFSETS else DF_GPIO_DIR
+        gpio_di_read = self._hook_gpio_di_read
+        for off, handlers in self._mmio_rd.items():
+            di_base = off & ~3 & 0xFFF
+            if handlers == [gpio_di_read] and not (want[off] & DF_WRITE) and \
+                    self._GPIO_DI_TO_DO.get(di_base) == di_base + 4 and \
+                    self._GPIO_DI_TO_DIR.get(di_base) == di_base + 8 and \
+                    not any(not w and lo <= off <= hi for w, lo, hi, _cb in self._mmio_observers):
+                want[off] = DF_GPIO_DI
         ic_read = self._hook_ic_status_read
         for off, handlers in self._mmio_rd.items():
             if handlers == [ic_read] and not any(not w and lo <= off <= hi for w, lo, hi, _cb in self._mmio_observers):
                 want[off] = (want.get(off, 0) & ~DF_READ) | DF_IC_STATUS
+        if native_ge and all(self._mmio_wr.get(o) == [self._hook_ge_write] for o in range(0xA004, 0xA00C)) and \
+                all(self._mmio_rd.get(o) == [self._hook_ge_read] for o in range(0xA008, 0xA00C)) and \
+                not any(lo <= 0xA00B and 0xA004 <= hi for _w, lo, hi, _cb in self._mmio_observers):
+            for o in range(0xA004, 0xA00C):
+                want[o] = want.get(o, 0) | DF_GE
         changes = [(off, f) for off, f in want.items() if self._dev_pushed.get(off) != f]
         changes += [(off, 0) for off in self._dev_pushed if off not in want]
         if changes:
@@ -447,6 +469,43 @@ class CppAliMipsSimulator(AliMipsSimulator):
             flags = (ctypes.c_uint8 * n)(*[c[1] for c in changes])
             cpp_core.lib().ali_set_dev_flags_list(self._core.handle, offs, flags, n)
         self._dev_pushed = want
+
+    def _ge_execute(self, command):
+        """Fallback GE execution when a command list or IO primitive in Core::ge_store
+        returns to Python (or when an MMIO observer disables DF_GE)."""
+        from simulator import _get_np
+        np = _get_np()
+        if np is None:
+            return
+        if self.ge is None:
+            import ge_m36f
+            ram = np.frombuffer(self.ram_buffer, dtype=np.uint8, count=self.ram_size)
+            self.ge = ge_m36f.GeM36F(ram, log=self.log)
+        L, h = cpp_core.lib(), self._core.handle
+        c_regs = (ctypes.c_uint32 * 64)()
+        L.ali_ge_regs(h, 0, c_regs)
+        self.ge.regs[:] = [int(c_regs[i]) for i in range(64)]
+        self.ge.primitives = int(self._core.get(cpp_core.F_GE_PRIMS))
+        resume = self._core.get(cpp_core.F_GE_RESUME)
+        self._core.set(cpp_core.F_GE_RESUME, 0xFFFFFFFFFFFFFFFF)
+        regs_arr = np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4')
+        if command == 1:
+            self.ge.run_io(regs_arr if (self.ge.fast_paths and self.ge.trace is None) else regs_arr.tolist())
+        else:
+            o = 0x10 if command == 2 else 0x18
+            start, end = int(regs_arr[o >> 2]) & 0x1FFFFFFF, int(regs_arr[(o >> 2) + 1]) & 0x1FFFFFFF
+            if start <= end < start + 0x400000 and end + 4 <= self.ram_size:
+                words_view = self.ge.ram[start:end + 4].view('<u4')
+                if resume != 0xFFFFFFFFFFFFFFFF and resume < len(words_view):
+                    words_view = words_view[resume:]
+                if self.ge.fast_paths and self.ge.trace is None:
+                    self.ge.run_list(words_view, regs_arr)
+                else:
+                    self.ge.run_list(words_view.tolist(), regs_arr.tolist())
+        for i in range(64):
+            c_regs[i] = self.ge.regs[i] & 0xFFFFFFFF
+        L.ali_ge_regs(h, 1, c_regs)
+        self._core.set(cpp_core.F_GE_PRIMS, self.ge.primitives)
 
     def _cpp_dev(self, user, write, offset, size, value):
         """A device window access that needs Python (the core's DevCb); the GPIO
@@ -460,7 +519,10 @@ class CppAliMipsSimulator(AliMipsSimulator):
             if write:
                 self._mmio_write(self.mu, offset, size, value, None)
                 return 0
-            return self._mmio_read(self.mu, offset, size, None) & 0xFFFFFFFFFFFFFFFF
+            res = self._mmio_read(self.mu, offset, size, None) & 0xFFFFFFFFFFFFFFFF
+            if self._gpio_di_busy_pushed:
+                self._cpp_gpio_busy_sync()
+            return res
         except BaseException as e:
             self.mu._catch(e)
             return 0
@@ -490,10 +552,12 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 on_write = devices[0].on_gpio_write
                 for i in range(0, 2 * count, 2):
                     on_write(0xB8000000 | data[i], 4, data[i + 1])
+                self._cpp_gpio_busy_sync()
                 return
         elif not devices:
             for i in range(0, 2 * count, 2):
                 cb(0xB8000000 | data[i], 4, data[i + 1])
+            self._cpp_gpio_busy_sync()
             return
         for i in range(0, 2 * count, 2):
             address, levels = 0xB8000000 | data[i], data[i + 1]
@@ -501,6 +565,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 cb(address, 4, levels)
             for device in devices:
                 device.on_gpio_write(address, 4, levels)
+        self._cpp_gpio_busy_sync()
 
     def _cpp_event(self, user, kind, a, b):
         try:
@@ -582,26 +647,26 @@ class CppAliMipsSimulator(AliMipsSimulator):
 
     def _on_ram_size_changed(self):
         if '_core' in self.__dict__:
-            cpp_core.lib().ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
+            L = cpp_core.lib()
+            L.ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
+            L.ali_ge_config(self._core.handle, ctypes.addressof(self.ram_buffer), self.ram_size)
 
     def _update_short_block_hook(self):
         pass
 
     # ---- the interrupt controller ----
-    # (the modelled devices' lines are only ever set from Python: read back from a copy)
     @property
     def _ic_lines(self):
-        return self.__dict__.get('_ic_lines_v', 0)
+        if '_core' not in self.__dict__:
+            return self.__dict__.get('_ic_lines_v', 0)
+        return (self.__dict__.get('_ic_lines_hi_pushed', 0) << 64) | self._core.get(F_IC_LINES)
 
     @_ic_lines.setter
     def _ic_lines(self, value):
-        prev = self.__dict__.get('_ic_lines_v', 0)
-        if value == prev and '_ic_lines_v' in self.__dict__:
-            return
         self.__dict__['_ic_lines_v'] = value
         self._core.set(F_IC_LINES, value & 0xFFFFFFFFFFFFFFFF)
         hi = (value >> 64) & 0xFFFFFFFFFFFFFFFF
-        if hi != ((prev >> 64) & 0xFFFFFFFFFFFFFFFF) or '_ic_lines_hi_pushed' not in self.__dict__:
+        if hi != self.__dict__.get('_ic_lines_hi_pushed', -1):
             self.__dict__['_ic_lines_hi_pushed'] = hi
             self._core.set(F_IC_LINES_HI, hi)
 
@@ -944,6 +1009,56 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 offs = (ctypes.c_uint32 * max(1, n))(*[k for k, _ in key])
                 masks = (ctypes.c_uint32 * max(1, n))(*[m & 0xFFFFFFFF for _, m in key])
                 L.ali_gpio_watch(h, 1, offs, masks, n)
+        di_owners = [o for o in owners if o is not None and hasattr(o, 'di_override')]
+        self._gpio_di_owners = tuple(di_owners)
+        di_high = {}
+        for o in di_owners:
+            t = type(o).__name__
+            if t == 'TM1650Decoder' or t == 'LemontreeDecoder':
+                if o.scl_offset is not None:
+                    di_high[o.scl_offset] = di_high.get(o.scl_offset, 0) | (1 << o.scl_bit)
+                if o.sda_offset is not None:
+                    di_high[o.sda_offset] = di_high.get(o.sda_offset, 0) | (1 << o.sda_bit)
+            elif t == 'GpioKeys':
+                for di_off, pins in o._bank_pins.items():
+                    do_off = di_off + 4
+                    for _pin, mask in pins:
+                        di_high[do_off] = di_high.get(do_off, 0) | mask
+        di_key = tuple(sorted(di_high.items()))
+        if di_key != self._gpio_di_high_pushed:
+            self._gpio_di_high_pushed = di_key
+            n = len(di_key)
+            offs = (ctypes.c_uint32 * max(1, n))(*[k for k, _ in di_key])
+            masks = (ctypes.c_uint32 * max(1, n))(*[m & 0xFFFFFFFF for _, m in di_key])
+            L.ali_gpio_di_config(h, offs, masks, n)
+        self._cpp_gpio_busy_sync()
+
+    def _cpp_gpio_busy_sync(self):
+        busy = False
+        for d in self._gpio_di_owners:
+            t = type(d).__name__
+            if t == 'TM1650Decoder':
+                if d.state != 'IDLE':
+                    busy = True
+                    break
+            elif t == 'LemontreeDecoder':
+                if d.state not in ('IDLE', 'IGNORE'):
+                    busy = True
+                    break
+            elif t == 'TM1628Decoder':
+                if d._key_read and d.frame is not None:
+                    busy = True
+                    break
+            elif t == 'GpioKeys':
+                if any(v > 0 for v in d._held.values()):
+                    busy = True
+                    break
+            elif t != 'HC164Decoder':
+                busy = True
+                break
+        if busy != self._gpio_di_busy_pushed:
+            self._gpio_di_busy_pushed = busy
+            self._core.set(cpp_core.F_GPIO_DI_BUSY, 1 if busy else 0)
 
     def _cpp_i2c(self, user, kind, arg, data, n):
         """The core's bit-banged I2C bus at an address, a write transaction's
@@ -1060,6 +1175,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
         """One slice on the core: until its instruction count reaches limit.
         Returns (stop reason, instructions executed)."""
         core = self._core
+        if self._gpio_di_owners:
+            self._cpp_gpio_busy_sync()
         core.set(F_IDLE_SKIP, 1 if idle else 0)
         e0 = core.get(F_EXECUTED)
         r = core.run(limit)

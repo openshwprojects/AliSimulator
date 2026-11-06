@@ -28,7 +28,7 @@ Recognised by the bootloader chunk's version, "M3503---0.1.0", "3510-", "M3510",
 """
 import ctypes
 
-from unicorn import UC_PROT_ALL
+from uc_const import UC_PROT_ALL
 
 from demods import S3501
 

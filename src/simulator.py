@@ -1,16 +1,23 @@
-from unicorn import *
-from unicorn.mips_const import *
-from capstone import *
+from uc_const import *
 import sys
 import os
 import re
 import struct
 import threading
 import time
-try:
-    import numpy as _np          # fast CP0-site scans; optional
-except ImportError:              # pragma: no cover
-    _np = None
+_np = False
+
+
+def _get_np():
+    global _np
+    if _np is False:
+        try:
+            import numpy as np
+            _np = np
+        except ImportError:              # pragma: no cover
+            _np = None
+    return _np
+
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
@@ -132,7 +139,7 @@ class AliMipsSimulator:
         self._ic_en = self._ic + 8          # (the enables: elsewhere on older chips, set_ic_layout)
         self.base_addr = 0xAFC00000
         self.mu = None
-        self.md = None
+        self._md = None
         self.uart_callback = None
         self.spi_callback = None
         self.gpio_callback = None
@@ -516,7 +523,7 @@ class AliMipsSimulator:
         # or (without it) the forced ERL (see native_status)
         self.force_erl = not (self.native_status and self._setup_kuseg_tlb())
         self._site_words = self._CP0_WORDS - ({0x40006000} if not self.force_erl else set())
-        self._site_word_array = None if _np is None else _np.array(sorted(self._site_words), dtype=_np.uint32)
+        self._site_word_array = None
 
         # Map MMIO: one shared register buffer.  The guest reaches it at the
         # physical 0x18000000 (from any segment), an mmio_map region whose
@@ -1028,7 +1035,20 @@ class AliMipsSimulator:
             self._mmio_view[off:off + 4] = (value & 0xFFFFFFFF).to_bytes(4, 'little')
 
     def _init_capstone(self):
-        self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
+        self._md = None
+
+    @property
+    def md(self):
+        md = self._md
+        if md is None:
+            from capstone import Cs, CS_ARCH_MIPS, CS_MODE_MIPS32, CS_MODE_LITTLE_ENDIAN
+            md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 + CS_MODE_LITTLE_ENDIAN)
+            self._md = md
+        return md
+
+    @md.setter
+    def md(self, value):
+        self._md = value
 
     def setLogHandler(self, handler):
         self.log_callback = handler
@@ -1229,21 +1249,25 @@ class AliMipsSimulator:
     # translation block cleanly before the crash threshold.
     _LONG_BLOCK_INSNS = 300
     _LONG_BLK_BRK_MASK = 0x20F000FE
-    _LONG_BLK_BRK_OP = None if _np is None else _np.array(
-        [(1 <= op <= 7) or op == 0x1D or (20 <= op <= 23) for op in range(64)], dtype=bool)
-    _LONG_BLK_VAL_OP = None if _np is None else _np.array(
-        [op == 0 or (8 <= op <= 15) or (28 <= op <= 46) for op in range(64)], dtype=bool)
+    _LONG_BLK_BRK_OP = None
+    _LONG_BLK_VAL_OP = None
 
     def _find_long_blocks(self, data, base, views):
         """Hook branchless runs of >= _LONG_BLOCK_INSNS MIPS32 instructions in
         data (code at physical offset `base`) with _hook_short_blocks."""
-        if _np is None:
+        np = _get_np()
+        if np is None:
             return
         n = len(data) // 4
         low = self._LONG_BLOCK_INSNS
         if n < low:
             return
-        w = _np.frombuffer(data, dtype='<u4', count=n)
+        if self._LONG_BLK_BRK_OP is None:
+            AliMipsSimulator._LONG_BLK_BRK_OP = np.array(
+                [(1 <= op <= 7) or op == 0x1D or (20 <= op <= 23) for op in range(64)], dtype=bool)
+            AliMipsSimulator._LONG_BLK_VAL_OP = np.array(
+                [op == 0 or (8 <= op <= 15) or (28 <= op <= 46) for op in range(64)], dtype=bool)
+        w = np.frombuffer(data, dtype='<u4', count=n)
         half = low >> 1
         sw = w[::half]
         sop = sw >> 26
@@ -1253,7 +1277,7 @@ class AliMipsSimulator:
         s_brk = ((sw == 0) | (sw == 0xFFFFFFFF) | brk_lut[sop] |
                  ((sop == 0) & (sfn >= 8) & (sfn <= 13)) | (sw == 0x42000018))
         s_ok = ~s_brk
-        cand = _np.flatnonzero(s_ok[:-1] & s_ok[1:] & (val_lut[sop[:-1]] | val_lut[sop[1:]]))
+        cand = np.flatnonzero(s_ok[:-1] & s_ok[1:] & (val_lut[sop[:-1]] | val_lut[sop[1:]]))
         if len(cand) == 0:
             return
         mv = memoryview(data)[:n * 4].cast('I')
@@ -1288,13 +1312,13 @@ class AliMipsSimulator:
             fn = sub & 0x3F
             breaker = ((sub == 0) | (sub == 0xFFFFFFFF) | brk_lut[op] |
                        ((op == 0) & (fn >= 8) & (fn <= 13)) | (sub == 0x42000018))
-            raw_idx = _np.flatnonzero(breaker)
-            idx = _np.empty(len(raw_idx) + 2, dtype=_np.intp)
+            raw_idx = np.flatnonzero(breaker)
+            idx = np.empty(len(raw_idx) + 2, dtype=np.intp)
             idx[0] = -1
             idx[1:-1] = raw_idx
             idx[-1] = len(sub)
-            gaps = _np.diff(idx)
-            for g in _np.flatnonzero(gaps >= low).tolist():
+            gaps = np.diff(idx)
+            for g in np.flatnonzero(gaps >= low).tolist():
                 st = int(idx[g]) + 1
                 en = int(idx[g + 1])
                 if int(val_lut[op[st:en]].sum()) >= (en - st) * 3 // 4:
@@ -2283,13 +2307,14 @@ class AliMipsSimulator:
     def _ge_execute(self, command):
         """Run GE command 1 (the live registers), 2 / 3 (the HQ / LQ command
         list between its start and end pointers) on the RAM image."""
-        if _np is None:
+        np = _get_np()
+        if np is None:
             return
         if self.ge is None:
             import ge_m36f
-            ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+            ram = np.frombuffer(self.ram_buffer, dtype=np.uint8, count=self.ram_size)
             self.ge = ge_m36f.GeM36F(ram, log=self.log)
-        regs_arr = _np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4')
+        regs_arr = np.frombuffer(self._mmio_view[0xA000:0xA100], dtype='<u4')
         if command == 1:
             self.ge.run_io(regs_arr if (self.ge.fast_paths and self.ge.trace is None) else regs_arr.tolist())
             return
@@ -2311,7 +2336,8 @@ class AliMipsSimulator:
         writes a PNG if path is given.  Needs numpy (and Pillow or zlib for the
         PNG)."""
         import gma_capture
-        ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+        np = _get_np()
+        ram = np.frombuffer(self.ram_buffer, dtype=np.uint8, count=self.ram_size)
         osd = getattr(self.chip, "osd", None)          # (the M3329's OSD layers: their palettes)
         ve = getattr(self.chip, "video_engine", None)
         video_rgb = ve.decode_last_frame() if (include_video and ve is not None) else None
@@ -2599,7 +2625,8 @@ class AliMipsSimulator:
             return address, command
         vkey = ir_remote.VKEYS[key.upper()] if isinstance(key, str) else int(key)
         if not self._ir_key_table:
-            ram = _np.frombuffer(self.ram_buffer, dtype=_np.uint8, count=self.ram_size)
+            np = _get_np()
+            ram = np.frombuffer(self.ram_buffer, dtype=np.uint8, count=self.ram_size)
             self._ir_key_table = ir_remote.find_key_table(ram)
             if not self._ir_key_table:
                 raise RuntimeError("no remote key table in RAM (has the application started?)")
@@ -4387,21 +4414,24 @@ class AliMipsSimulator:
     # (word & 0xFFE0FFFF) of MFC0/MTC0 rt, {Count, Compare, Status, Cause, EPC} sel 0 and EBase (15 sel 1)
     _CP0_WORDS = frozenset([op | (rd << 11) | sel for op in (0x40000000, 0x40800000)
                             for rd, sel in ((9, 0), (11, 0), (12, 0), (13, 0), (14, 0), (15, 1))])
-    _CP0_WORD_ARRAY = None if _np is None else _np.array(sorted(_CP0_WORDS), dtype=_np.uint32)
+    _CP0_WORD_ARRAY = None
     _ERET_WORD = 0x42000018
 
     def _find_cp0_sites(self, data, base):
         """Offsets (plus base) of 4-byte-aligned CP0 instruction encodings in data."""
         out = set()
-        if _np is not None:
+        np = _get_np()
+        if np is not None:
+            if self._site_word_array is None:
+                self._site_word_array = np.array(sorted(self._site_words), dtype=np.uint32)
             n = len(data) & ~3
             # The words' top bytes (a strided view): MFC0 / MTC0 have 0x40, ERET
             # 0x42 -- rare in code and data, so one vector pass over them finds
             # the few candidates, a second classifies those.
-            cand = _np.flatnonzero((_np.frombuffer(data, dtype=_np.uint8, count=n)[3::4] | 2) == 0x42)
+            cand = np.flatnonzero((np.frombuffer(data, dtype=np.uint8, count=n)[3::4] | 2) == 0x42)
             if len(cand):
-                x = _np.frombuffer(data, dtype='<u4', count=n // 4)[cand]
-                hit = (x == self._ERET_WORD) | _np.isin(x & _np.uint32(0xFFE0FFFF), self._site_word_array)
+                x = np.frombuffer(data, dtype='<u4', count=n // 4)[cand]
+                hit = (x == self._ERET_WORD) | np.isin(x & np.uint32(0xFFE0FFFF), self._site_word_array)
                 out.update((base + 4 * cand[hit]).tolist())
             return self._drop_disable_sites(data, base, out)
         data = bytes(data)

@@ -22,6 +22,7 @@ enum Field : int {
   F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_CHUNK_EVENTS, F_DS_TARGET, F_DS_M16, F_BADVADDR, F_LLBIT,
   F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
   F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS, F_FF_SKIPPED, F_IC_LINES_HI,
+  F_GPIO_DI_BUSY, F_GE_STATUS, F_GE_OPS, F_GE_RENDER, F_GE_PRIMS, F_GE_RESUME,
 };
 
 ALI_API void *ali_new() { return new Core(); }
@@ -156,6 +157,26 @@ ALI_API void ali_gpio_watch(void *c, int on, const uint32_t *offsets, const uint
   memset(k->gpio_last_ok_, 0, sizeof(k->gpio_last_ok_));
   for (int i = 0; i < n; i++)
     if ((offsets[i] >> 2) < Core::GPIO_BANKS) k->gpio_watch_[offsets[i] >> 2] |= masks[i];
+}
+ALI_API void ali_gpio_di_config(void *c, const uint32_t *offsets, const uint32_t *masks, int n) {
+  Core *k = (Core *)c;
+  memset(k->gpio_di_high_, 0, sizeof(k->gpio_di_high_));
+  for (int i = 0; i < n; i++)
+    if ((offsets[i] >> 2) < Core::GPIO_BANKS) k->gpio_di_high_[offsets[i] >> 2] |= masks[i];
+}
+ALI_API void ali_ge_config(void *c, void *ram, uint32_t ram_size) {
+  Core *k = (Core *)c;
+  k->ge_.ram = (uint8_t *)ram;
+  k->ge_.ram_size = ram_size;
+  k->ge_.phys_mask = (ram_size && !(ram_size & (ram_size - 1u))) ? (ram_size - 1u) : 0x07FFFFFFu;
+  memset(k->ge_.regs, 0, sizeof(k->ge_.regs));
+  k->ge_.resume_valid = false;
+  k->ge_.resume_idx = 0;
+}
+ALI_API void ali_ge_regs(void *c, int write, uint32_t *regs64) {
+  Core *k = (Core *)c;
+  if (write) memcpy(k->ge_.regs, regs64, sizeof(k->ge_.regs));
+  else memcpy(regs64, k->ge_.regs, sizeof(k->ge_.regs));
 }
 // The bit-banged I2C bus in the core (on = 0: none): SCL / SDA as DO register
 // offsets in the device window and bit numbers, the host's slave callback (I2cCb).
@@ -330,6 +351,12 @@ ALI_API uint64_t ali_get(void *c, int field) {
     case F_POLL_SKIPPED: return k->poll_skipped;
     case F_POLL_SKIPS: return k->poll_skips;
     case F_FF_SKIPPED: return k->ff_skipped;
+    case F_GPIO_DI_BUSY: return k->gpio_di_busy_;
+    case F_GE_STATUS: return k->ge_.status;
+    case F_GE_OPS: return k->ge_.ops;
+    case F_GE_RENDER: return k->ge_.render;
+    case F_GE_PRIMS: return k->ge_.primitives;
+    case F_GE_RESUME: return k->ge_.resume_valid ? (uint64_t)k->ge_.resume_idx : ~0ull;
     case 100: case 101: case 102: case 103: case 104: case 105: return k->spin_dbg[field - 100];
   }
   return 0;
@@ -383,6 +410,12 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_BLOCKS_ON: k->blocks_on = v != 0; break;
     case F_SPIN_SKIP: k->spin_skip = v != 0; break;
     case F_SPIN_SKIPPED: k->spin_skipped = v; break;
+    case F_GPIO_DI_BUSY: k->gpio_di_busy_ = v != 0; break;
+    case F_GE_STATUS: k->ge_.status = w; break;
+    case F_GE_OPS: k->ge_.ops = v; break;
+    case F_GE_RENDER: k->ge_.render = v != 0; break;
+    case F_GE_PRIMS: k->ge_.primitives = v; break;
+    case F_GE_RESUME: k->ge_.resume_valid = (v != ~0ull); k->ge_.resume_idx = w; break;
   }
   k->poke_events();
 }

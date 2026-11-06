@@ -47,8 +47,8 @@ import ctypes
 import random
 import struct
 
-from unicorn import UC_ARCH_MIPS, UC_MODE_LITTLE_ENDIAN, UC_MODE_MIPS32, UC_PROT_ALL, Uc, UcError
-from unicorn.mips_const import UC_CPU_MIPS32_24KF, UC_MIPS_REG_PC
+from uc_const import UC_ARCH_MIPS, UC_MODE_LITTLE_ENDIAN, UC_MODE_MIPS32, UC_PROT_ALL, Uc, UcError, \
+    UC_CPU_MIPS32_24KF, UC_MIPS_REG_PC
 
 from .base import ChipFamily, word_after_store
 

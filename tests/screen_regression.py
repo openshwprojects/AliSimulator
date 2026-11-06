@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import time
 
 import numpy as np
-from unicorn.mips_const import UC_MIPS_REG_PC
+from uc_const import UC_MIPS_REG_PC
 
 import dump_catalog
 import gma_capture

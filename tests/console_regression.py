@@ -12,7 +12,11 @@ import re
 import struct
 import sys
 import time
-from unicorn.mips_const import (
+sys.stdout.reconfigure(encoding="utf-8")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+
+from uc_const import (
     UC_MIPS_REG_A0,
     UC_MIPS_REG_A1,
     UC_MIPS_REG_A2,
@@ -21,11 +25,6 @@ from unicorn.mips_const import (
     UC_MIPS_REG_RA,
     UC_MIPS_REG_SP,
 )
-
-sys.stdout.reconfigure(encoding="utf-8")
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "src"))
-
 from simulator import AliMipsSimulator, default_engine
 
 WATCHDOG_S = 600        # see ConsoleHarness.__init__

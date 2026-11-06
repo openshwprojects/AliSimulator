@@ -59,8 +59,7 @@ Opticum satellite updates: "M3601S", "M3606 2Tuner").
 """
 import ctypes
 
-from unicorn import UC_PROT_ALL
-from unicorn.mips_const import UC_MIPS_REG_FP
+from uc_const import UC_PROT_ALL, UC_MIPS_REG_FP
 
 from demods import S3501
 import tuners
