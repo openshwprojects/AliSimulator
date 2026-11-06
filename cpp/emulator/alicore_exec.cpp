@@ -823,6 +823,7 @@ enum UopKind : uint8_t {
   U_EXT, U_INS,
   U_LB, U_LBU, U_LH, U_LHU, U_LW, U_SB, U_SH, U_SW,
   U_MFC0_COUNT, U_TRAP,
+  U_MFC0_STATUS, U_MTC0_STATUS, U_DI, U_EI,      // (the RTOS's interrupt disable / enable)
   // fused two-op superinstructions (ops[i + 1] keeps its original Uop)
   U_LI_ADDIU, U_LI_ORI, U_LI_LW, U_LI_SW, U_ADDIU2, U_ADDU2, U_LW2, U_SW2,
   // control transfers with a delay slot (MIPS32, MIPS16 jumps): the block's second-last op
@@ -966,6 +967,9 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
     case 0x2F: case 0x33: uop(u, U_NOP, 0, 0, 0, 0); return K_OP;                    // CACHE / PREF
     case 0x10:
       if (rs == 0 && rd == 9 && (insn & 0x7FF) == 0) { uop(u, U_MFC0_COUNT, rt, 0, 0, 0); return K_OP; }   // MFC0 Count
+      if (rs == 0 && rd == 12 && (insn & 0x7FF) == 0) { uop(u, U_MFC0_STATUS, rt, 0, 0, 0); return K_OP; }  // MFC0 Status
+      if (rs == 4 && rd == 12 && (insn & 0x7FF) == 0) { uop(u, U_MTC0_STATUS, 0, 0, rt, 0); return K_OP; }  // MTC0 Status
+      if (rs == 0x0B && rd == 12) { uop(u, (insn & 0x20) ? U_EI : U_DI, rt, 0, 0, 0); return K_OP; }      // DI / EI
       break;
   }
   return K_BARRIER;                                                                   // CP0 / COP1 / COP1X / ...
@@ -1667,6 +1671,26 @@ void Core::run_blocks(Block *b) {
         case U_GEN32:
           gen32_op(u.imm, u.pc);
           goto check_slow;
+        // ---- Status (as exec32's COP0 path: still counted as slow ops, so no
+        // loop pass with one is replayed or skipped, as before they ran in blocks) ----
+        case U_MFC0_STATUS:
+          slow_++;
+          if (u.d) R[u.d] = status;
+          break;
+        case U_MTC0_STATUS:
+          slow_++;
+          status = (status & ~0x3678FF1Fu) | (R[u.t] & 0x3678FF1Fu);
+          status_events(icount + i + 1);
+          goto check_slow;
+        case U_DI:
+        case U_EI: {
+          slow_++;
+          uint32_t old = status;
+          if (u.op == U_EI) status |= 1; else status &= ~1u;
+          if (u.d) R[u.d] = old;
+          status_events(icount + i + 1);
+          goto check_slow;
+        }
         case U_GEN16:
           gen16_op(u.pc);
           goto check_slow;
@@ -1916,6 +1940,7 @@ void Core::spin_check() {
   }
   if (!same) {
     spin_dbg[1]++;
+    poll_done_ = false;
     PollLoop &pl = poll_cache_[poll_slot(key)];
     if (pl.key == key && spin_skip && poll_seq_valid(pl)) {
       // a Count-polling loop seen before: its pass from these registers, at once
@@ -1925,7 +1950,8 @@ void Core::spin_check() {
       memcpy(rec_, pl.seq, sizeof(Block *) * pl.n);
       rec_n_ = pl.n;
       rec_ign_ = pl.ign;
-      pl.last_k = poll_skip(key, pl.last_k);
+      uint64_t k = poll_skip(key, pl.last_k);
+      if (k) pl.last_k = k;       // (a guess only: 0 -- the loop ending at once -- keeps the last one)
     }
     loop_key_ = key;
     loop_stores_ = stores_;
@@ -1942,14 +1968,17 @@ void Core::spin_check() {
     // record the next one (once per entry into the loop)
     loop_creads_ = count_reads_;
     PollLoop &pl = poll_cache_[poll_slot(key)];
-    if (!loop_poll_tried_ && pl.key == key && spin_skip && poll_seq_valid(pl)) {
+    if (poll_done_) {
+      // (a skip in this loop entry found its last pass: nothing left to skip or record)
+    } else if (!loop_poll_tried_ && pl.key == key && spin_skip && poll_seq_valid(pl)) {
       memcpy(loop_regs_, gpr, sizeof(gpr));
       loop_regs_[32] = hi;
       loop_regs_[33] = lo;
       memcpy(rec_, pl.seq, sizeof(Block *) * pl.n);
       rec_n_ = pl.n;
       rec_ign_ = pl.ign;
-      pl.last_k = poll_skip(key, pl.last_k);
+      uint64_t k = poll_skip(key, pl.last_k);
+      if (k) pl.last_k = k;
       loop_creads_ = count_reads_;
     } else if (!loop_poll_tried_) {
       loop_poll_tried_ = true;
@@ -2031,7 +2060,8 @@ bool Core::poll_seq_valid(const PollLoop &pl) {
     if (!page || !same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return false;
     for (int i = 0; i < b->n; i++) {
       uint8_t op = b->ops[i].op;
-      if (op == U_SB || op == U_SH || op == U_SW || op == U_SW2 || op == U_LI_SW || op == U_GEN32 || op == U_GEN16) return false;
+      if (op == U_SB || op == U_SH || op == U_SW || op == U_SW2 || op == U_LI_SW || op == U_GEN32 || op == U_GEN16 ||
+          op == U_MFC0_STATUS || op == U_MTC0_STATUS || op == U_DI || op == U_EI) return false;
     }
   }
   return pl.n > 0;
@@ -2083,6 +2113,9 @@ uint64_t Core::poll_skip(uint32_t head, uint64_t guess) {
     icount += lo_k * pass;
     poll_skipped += lo_k * pass;
     poll_skips++;
+    // the pass after lo_k ends the loop (probed): another try in this loop
+    // would find nothing to skip -- and would cost probes and clobber the guess
+    if (lo_k < kmax) poll_done_ = true;
   } else {
     loop_poll_tried_ = true;
   }

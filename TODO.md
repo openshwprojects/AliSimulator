@@ -213,6 +213,27 @@ delay HLE off on cpp, page-table refresh only for touched pages (init 0.5 s ->
   faster than `np.unique(axis=0)`); `tools/screen_survey.py` likewise.
 * `CppAliMipsSimulator._ic_lines` read from a Python copy.
 
+### Round 3 (profiling the screen suites)
+* `MFC0 Status`, `MTC0 Status`, `DI`, `EI` are block ops (`U_MFC0_STATUS`,
+  `U_MTC0_STATUS`, `U_DI`, `U_EI`), not barriers: the RTOS's interrupt
+  disable / enable (around every bit-banged GPIO edge) no longer leaves the
+  block chain twice per call.  After a Status write `Core::status_events`
+  pokes the events only when `events()` would act (an interrupt to deliver, a
+  stop, a due timer / deadline) and otherwise reschedules as `events()` would,
+  so the run is identical instruction for instruction.  They still count as
+  slow ops (`slow_`) and are refused in replayed poll passes, as before.
+* Count-poll skip: after a skip that found the loop's last pass
+  (`poll_done_`), no further attempt in that loop entry -- it could only find
+  0, cost a search and overwrote the loop's guess (`PollLoop::last_k`) with 0,
+  so every other udelay() call searched from scratch.  A 0 result no longer
+  replaces the guess.  Probes: impulse_h265 32.9M -> 4.0M, r265lite 15.6M -> 3.2M.
+* Verified bit-identical (icount, executed, RAM hash, UART) against the
+  round-2 core on impulse_h265 (240 s) and r265lite with signal (306 s).
+* Next candidate: the bit-banged tuner bus (`gpio_i2c.GpioI2cBus`) in the core
+  -- impulse_h265 hands Python 2.1M GPIO events, 99% of them its SCL / SDA
+  edges (24 sidecars have `gpioI2c`); then filter the panel's events by the
+  pins it watches.
+
 ### Verification done
 * Default suite (`run_all_tests.py --engine cpp --jobs 2`): all applicable pass
   (71 + 1 N/A) on the round-2 core (snapshot 2); Unicorn default suite 71/71

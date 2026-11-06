@@ -298,6 +298,7 @@ class Core {
   // like `now` the poll keeps): such registers (rec_ign_) are not compared.
   uint64_t rec_ign_ = 0;
   bool loop_poll_tried_ = false;   // this loop's pass was recorded already
+  bool poll_done_ = false;         // a skip in this loop found its last pass (no later one can skip more)
   uint32_t count_at(uint64_t ic) const {
     uint64_t ticks = (ic - count_icount) * cnum;
     // Integer ratios need no divide; retain the uint64_t wrap before division.
@@ -451,6 +452,7 @@ class Core {
   int run_loop();
   bool events();                  // at an instruction boundary; true = stop
   void schedule();
+  void status_events(uint64_t now);   // after a Status write in a block (see alicore.cpp)
   bool code_hooks(uint32_t address, uint32_t size);   // true = do not execute (stop / redirect)
   bool check_breakpoint(uint32_t address);
  public:

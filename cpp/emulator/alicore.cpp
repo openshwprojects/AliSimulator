@@ -1190,6 +1190,30 @@ void Core::schedule() {
   next_event_ = n;
 }
 
+// A Status write (MTC0 Status, DI, EI) run inside a block, `now` the
+// instruction count after it.  The single-instruction path poked the events
+// after one, so events() ran at the next boundary; here that happens (by a
+// poke, which ends the block after the write) only when events() would do
+// more than reschedule: a stop, a due deadline / timer check, or an
+// interrupt to deliver.  Otherwise its remaining effects are applied directly,
+// so the run is the same instruction for instruction.
+void Core::status_events(uint64_t now) {
+  bool act = stop_request_ || now >= limit_ || (deadline_ms_ && now >= wall_check_at_) ||
+             (timer_armed && timer_enabled && !ti && now >= timer_check_at);
+  if (!act && irqs_enabled && !ds_active)
+    act = (uart_pending_ && !uart_delivered_ && now >= uart_at_ &&
+           (uart_force_ || ((status & 1) && !(status & 2)))) || irq_deliverable();
+  if (act) {
+    poke_events();
+    return;
+  }
+  dev_callback_dirty_ = false;
+  uint64_t save = icount;
+  icount = now;
+  schedule();
+  icount = save;
+}
+
 bool Core::events() {
   // A callback below (including one reached through host_sync) can dirty this
   // again. Callback exit also marks it, so nested runs cannot lose outer writes.
