@@ -20,6 +20,9 @@ Core::Core() {
   memset(gpr, 0, sizeof(gpr));
   memset(fpr, 0, sizeof(fpr));
   memset(cp0, 0, sizeof(cp0));
+  memset(gpio_watch_, 0, sizeof(gpio_watch_));
+  memset(gpio_last_, 0, sizeof(gpio_last_));
+  memset(gpio_last_ok_, 0, sizeof(gpio_last_ok_));
   vr_ = new uint8_t *[NPAGES]();
   vw_ = new uint8_t *[NPAGES]();
   vx_ = new uint8_t *[NPAGES]();
@@ -624,11 +627,22 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     memcpy(&do_val, dev_buf_ + do_off, 4);
     memcpy(&dir_val, dev_buf_ + do_off + 4, 4);
     uint32_t levels = (do_val & dir_val) | ~dir_val;
-    if (gpio_n_ == 0 || gpio_log_[2 * (gpio_n_ - 1)] != do_off || gpio_log_[2 * (gpio_n_ - 1) + 1] != levels) {
+    uint32_t bank = do_off >> 2;
+    bool log;
+    if (gpio_filter_ && bank < GPIO_BANKS) {
+      // (only a change of a pin the host's decoders watch)
+      log = gpio_watch_[bank] && (!gpio_last_ok_[bank] || ((levels ^ gpio_last_[bank]) & gpio_watch_[bank]));
+      if (log) { gpio_last_[bank] = levels; gpio_last_ok_[bank] = 1; }
+    } else {
+      log = gpio_n_ == 0 || gpio_log_[2 * (gpio_n_ - 1)] != do_off || gpio_log_[2 * (gpio_n_ - 1) + 1] != levels;
+    }
+    if (log) {
       gpio_log_[2 * gpio_n_] = do_off;
       gpio_log_[2 * gpio_n_ + 1] = levels;
       if (++gpio_n_ == GPIO_LOG_MAX) flush_gpio();
     }
+    // (after the log: the host's decoders got each store before the bus, in its order)
+    if (gi2c_.on && (do_off == gi2c_.scl_off || do_off == gi2c_.sda_off)) gi2c_levels(do_off, levels);
     icount += host_access_cost;
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
@@ -645,6 +659,157 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     if (plain_device && plain_device_store(off, size)) return;
   }
   poke_events();      // (the interrupt controller's enables, a doorbell)
+}
+
+// ------------------------------------------------------------------
+// The bit-banged I2C bus (gpio_i2c.GpioI2cBus, step for step: its pin levels,
+// its slave's acknowledges and read bits; the slaves themselves stay the host's)
+// ------------------------------------------------------------------
+void Core::gi2c_config(bool on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off, uint32_t sda_bit) {
+  host_sync();
+  GpioI2c &g = gi2c_;
+  g.on = on;
+  g.scl_off = scl_off;
+  g.sda_off = sda_off;
+  g.scl_mask = 1u << (scl_bit & 31);
+  g.sda_mask = 1u << (sda_bit & 31);
+  g.scl = g.sda = 1;
+  g.state = GI2C_IDLE;
+  g.phase = GP_BITS;
+  g.nbits = 0;
+  g.byte = g.out = 0;
+  g.reading = g.master_ack = g.device = false;
+  g.written.clear();
+  g.edges = 0;
+}
+
+int32_t Core::gi2c_host(int kind, uint32_t arg, const uint8_t *data, uint32_t n) {
+  if (!i2c_cb_) return kind == I2C_READ ? -1 : 0;
+  host_sync();        // (the GPIO log first: the host's decoders saw those stores before)
+  enter_callback();
+  int32_t r = i2c_cb_(i2c_user_, kind, arg, data, n);
+  leave_callback();
+  return r;
+}
+
+int Core::gi2c_sda_out() const {
+  const GpioI2c &g = gi2c_;
+  if (g.phase == GP_ACK && (g.state == GI2C_ADDR || g.state == GI2C_WRITE)) return 0;
+  if (g.state == GI2C_READ && g.phase == GP_BITS) {
+    int64_t i = g.scl ? (int64_t)g.nbits - 1 : (int64_t)g.nbits;   // held until SCL falls, then the next bit
+    if (i >= 0 && i <= 7) return (g.out >> (7 - i)) & 1;
+  }
+  return -1;
+}
+
+void Core::gi2c_finish() {
+  GpioI2c &g = gi2c_;
+  if (g.state == GI2C_WRITE && g.device && !g.written.empty())
+    gi2c_host(I2C_WRITE, 0, g.written.data(), (uint32_t)g.written.size());
+  g.written.clear();
+  g.device = false;
+}
+
+void Core::gi2c_load() {
+  GpioI2c &g = gi2c_;
+  int32_t got = g.device ? gi2c_host(I2C_READ, 0, nullptr, 0) : -1;
+  if (got < 0) {
+    g.state = GI2C_IGNORE;
+    return;
+  }
+  g.out = (uint8_t)got;
+}
+
+void Core::gi2c_rising() {
+  GpioI2c &g = gi2c_;
+  if (g.state == GI2C_IDLE || g.state == GI2C_IGNORE) return;
+  int out = gi2c_sda_out();
+  uint8_t line = g.sda & (out < 0 ? 1 : (uint8_t)out);      // (wired-AND: the CPU's level and the slave's)
+  if (g.phase == GP_BITS) {
+    if (g.state != GI2C_READ) g.byte = (uint8_t)((g.byte << 1) | line);
+    g.nbits++;
+  } else if (g.phase == GP_MACK) {
+    g.master_ack = line == 0;
+  }
+}
+
+void Core::gi2c_falling() {
+  GpioI2c &g = gi2c_;
+  if (g.state == GI2C_IDLE || g.state == GI2C_IGNORE) return;
+  if (g.phase == GP_BITS && g.nbits == 8) {
+    if (g.state == GI2C_ADDR) {
+      g.reading = g.byte & 1;
+      g.device = gi2c_host(I2C_ADDRESS, g.byte, nullptr, 0) != 0;
+      if (!g.device) g.state = GI2C_IGNORE;
+      else g.phase = GP_ACK;
+    } else if (g.state == GI2C_WRITE) {
+      g.written.push_back(g.byte);
+      g.phase = GP_ACK;
+    } else {
+      g.phase = GP_MACK;            // the master acknowledges (or not) the byte it read
+    }
+  } else if (g.phase == GP_ACK) {
+    g.phase = GP_BITS;
+    g.nbits = 0;
+    g.byte = 0;
+    if (g.reading && g.state == GI2C_ADDR) {
+      g.state = GI2C_READ;
+      gi2c_load();
+    } else if (g.state == GI2C_ADDR) {
+      g.state = GI2C_WRITE;
+    }
+  } else if (g.phase == GP_MACK) {
+    g.phase = GP_BITS;
+    g.nbits = 0;
+    if (g.master_ack) gi2c_load();
+    else g.state = GI2C_IGNORE;     // the last byte: the master sends its STOP next
+  }
+}
+
+void Core::gi2c_levels(uint32_t off, uint32_t levels) {
+  GpioI2c &g = gi2c_;
+  uint8_t scl = g.scl, sda = g.sda;
+  if (g.scl_off == g.sda_off) {
+    scl = (levels & g.scl_mask) ? 1 : 0;
+    sda = (levels & g.sda_mask) ? 1 : 0;
+  } else if (off == g.scl_off) {
+    scl = (levels & g.scl_mask) ? 1 : 0;
+  } else {
+    sda = (levels & g.sda_mask) ? 1 : 0;
+  }
+  if (scl == g.scl && sda == g.sda) return;
+  g.edges++;
+  if (scl != g.scl) {
+    g.scl = scl;
+    g.sda = sda;
+    if (scl) {
+      if (g.phase == GP_BITS) {
+        if (g.state == GI2C_WRITE || g.state == GI2C_ADDR) {
+          g.byte = (uint8_t)((g.byte << 1) | sda);
+          g.nbits++;
+        } else if (g.state == GI2C_READ) {
+          g.nbits++;
+        }
+      } else {
+        gi2c_rising();
+      }
+    } else if (g.phase != GP_BITS || g.nbits == 8) {
+      gi2c_falling();
+    }
+  } else {
+    g.sda = sda;
+    if (scl && gi2c_sda_out() < 0) {          // the CPU's own edge while SCL is high
+      gi2c_finish();
+      if (sda) {                              // STOP
+        g.state = GI2C_IDLE;
+      } else {                                // START (a repeated one ends the transfer before it)
+        g.state = GI2C_ADDR;
+        g.phase = GP_BITS;
+        g.nbits = 0;
+        g.byte = 0;
+      }
+    }
+  }
 }
 
 // ------------------------------------------------------------------

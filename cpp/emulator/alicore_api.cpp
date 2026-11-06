@@ -145,6 +145,44 @@ ALI_API void ali_gpio_log(void *c, int drains, uint32_t **count, uint32_t **pair
   *count = &k->gpio_n_;
   *pairs = k->gpio_log_;
 }
+// The GPIO stores the host's decoders want logged: on = 0 every store that changes
+// a bank's levels (as before); on = 1 only those changing a watched pin (n
+// (DO register offset, pin mask) pairs; a bank nobody watches is not logged).
+ALI_API void ali_gpio_watch(void *c, int on, const uint32_t *offsets, const uint32_t *masks, int n) {
+  Core *k = (Core *)c;
+  k->host_sync();
+  k->gpio_filter_ = on != 0;
+  memset(k->gpio_watch_, 0, sizeof(k->gpio_watch_));
+  memset(k->gpio_last_ok_, 0, sizeof(k->gpio_last_ok_));
+  for (int i = 0; i < n; i++)
+    if ((offsets[i] >> 2) < Core::GPIO_BANKS) k->gpio_watch_[offsets[i] >> 2] |= masks[i];
+}
+// The bit-banged I2C bus in the core (on = 0: none): SCL / SDA as DO register
+// offsets in the device window and bit numbers, the host's slave callback (I2cCb).
+ALI_API void ali_gpio_i2c_config(void *c, int on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off,
+                                 uint32_t sda_bit, void *cb, void *user) {
+  Core *k = (Core *)c;
+  k->gi2c_config(on != 0, scl_off, scl_bit, sda_off, sda_bit);
+  k->i2c_cb_ = (I2cCb)cb;
+  k->i2c_user_ = user;
+}
+// The bus's state: 0 the level the slave drives on SDA (-1: released), 1 state
+// (IDLE, ADDR, WRITE, READ, IGNORE), 2 phase (bits, ack, mack), 3 SCL rising edges
+// in the byte, 4 level changes followed, 5 / 6 the CPU's SCL / SDA levels
+ALI_API int64_t ali_gpio_i2c_get(void *c, int field) {
+  Core *k = (Core *)c;
+  const Core::GpioI2c &g = k->gi2c_;
+  switch (field) {
+    case 0: return k->gi2c_sda_out();
+    case 1: return g.state;
+    case 2: return g.phase;
+    case 3: return g.nbits;
+    case 4: return (int64_t)g.edges;
+    case 5: return g.scl;
+    case 6: return g.sda;
+  }
+  return 0;
+}
 ALI_API void ali_set_chunks(void *c, int shift, uint32_t count) {
   Core *k = (Core *)c;
   k->chunk_shift = (uint32_t)shift;

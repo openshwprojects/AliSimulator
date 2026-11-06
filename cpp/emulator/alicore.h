@@ -83,6 +83,11 @@ typedef int (*EventHookCb)(void *user, int access, uint64_t address, int size, i
 typedef void (*IntrHookCb)(void *user, uint32_t intno);
 // GPIO pin levels for the host: count (DO register offset, levels) pairs
 typedef void (*GpioCb)(void *user, const uint32_t *pairs, uint32_t count);
+// The bit-banged I2C bus's slave side for the host (I2C_*): an address byte (returns
+// 1 when a slave answers), a write transaction's bytes (data, n), the next byte of
+// a read (returns it, or -1: the slave has none)
+typedef int32_t (*I2cCb)(void *user, int kind, uint32_t arg, const uint8_t *data, uint32_t n);
+enum : int { I2C_ADDRESS = 1, I2C_WRITE = 2, I2C_READ = 3 };
 // The device window's accesses that need the host: write = 1 for a store; returns
 // the value a load reads (a store's value is the callback's to put in place).
 typedef uint64_t (*DevCb)(void *user, int write, uint32_t offset, uint32_t size, uint64_t value);
@@ -320,6 +325,41 @@ class Core {
   ALI_INLINE void host_sync() {
     if (ALI_UNLIKELY(gpio_n_ != 0)) flush_gpio();
   }
+  // Which logged GPIO stores the host wants (ali_gpio_watch): with gpio_filter_ on,
+  // a bank's store is logged only when it changes a pin some host decoder watches
+  // (gpio_watch_, by DO register offset / 4) since the last one logged for it -- the
+  // decoders follow those pins only; off, every store that changes the levels is.
+  enum { GPIO_BANKS = 0x400 };     // (DO registers in the first 4 KB of the window)
+  bool gpio_filter_ = false;
+  uint32_t gpio_watch_[GPIO_BANKS];
+  uint32_t gpio_last_[GPIO_BANKS];
+  uint8_t gpio_last_ok_[GPIO_BANKS];
+  // A bit-banged I2C bus on two GPIO pins (the simulator's gpio_i2c.GpioI2cBus, in
+  // the core): it follows the pin levels of every GPIO store at once, and calls the
+  // host per address, write transaction and read byte (i2c_cb_), not per edge.
+  struct GpioI2c {
+    bool on = false;
+    uint32_t scl_off = 0, sda_off = 0, scl_mask = 0, sda_mask = 0;   // DO register offsets, pin bits
+    uint8_t scl = 1, sda = 1;        // the levels the CPU leaves on the lines
+    uint8_t state = 0, phase = 0;    // GI2C_* / GP_*
+    uint32_t nbits = 0;              // SCL rising edges in the byte so far
+    uint8_t byte = 0, out = 0;       // the byte the master sends / the slave sends
+    bool reading = false, master_ack = false, device = false;
+    std::vector<uint8_t> written;    // a write transaction's data
+    uint64_t edges = 0;              // level changes followed
+  } gi2c_;
+  enum : uint8_t { GI2C_IDLE, GI2C_ADDR, GI2C_WRITE, GI2C_READ, GI2C_IGNORE };
+  enum : uint8_t { GP_BITS, GP_ACK, GP_MACK };
+  I2cCb i2c_cb_ = nullptr;
+  void *i2c_user_ = nullptr;
+  void gi2c_config(bool on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off, uint32_t sda_bit);
+  void gi2c_levels(uint32_t do_off, uint32_t levels);
+  int gi2c_sda_out() const;        // the level the slave drives on SDA, -1: released
+  int32_t gi2c_host(int kind, uint32_t arg, const uint8_t *data, uint32_t n);
+  void gi2c_finish();
+  void gi2c_rising();
+  void gi2c_falling();
+  void gi2c_load();
   // Profile (ali_prof): instructions run per block start / per instruction outside
   // blocks (pc | m16), and the device accesses handled in Python per instruction.
   std::unordered_map<uint32_t, uint64_t> *prof_insns_ = nullptr, *prof_dev_ = nullptr;

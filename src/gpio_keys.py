@@ -38,6 +38,10 @@ class GpioKeys:
     def on_gpio_write(self, address, size, value):
         """GPIO DO writes: no chip on the pins to follow."""
 
+    def gpio_watch(self):
+        """No pins to follow (see TM1650Decoder.gpio_watch)."""
+        return {}
+
     def get_display_text(self):
         return ""
 

@@ -210,6 +210,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self.cpp_ips = DEFAULT_IPS
         self._count_hz_v = 100_000_000
         self._cb_keep = []
+        self._gi2c_bus = None           # the gpio_i2c.GpioI2cBus the core runs (_cpp_gpio_sync)
+        self._gi2c_cb = None
+        self._gpio_watch_pushed = None
         super().__init__(*args, **kwargs)
         self._insn_rate = DEFAULT_RATE
         self._apply_count_ratio()
@@ -473,8 +476,12 @@ class CppAliMipsSimulator(AliMipsSimulator):
 
     def _gpio_events(self, data, count):
         """The logged pin levels after each GPIO store, to the GPIO handler and
-        the board's GPIO devices, in order (as _hook_gpio_write passes them)."""
+        the board's GPIO devices, in order (as _hook_gpio_write passes them) --
+        but the bit-banged I2C bus the core runs itself (_cpp_gpio_sync)."""
         cb, devices = self.gpio_callback, self.gpio_devices
+        bus = self._gi2c_bus
+        if bus is not None and devices:
+            devices = [d for d in devices if d is not bus]
         if not cb:
             ndev = len(devices)
             if ndev == 0:
@@ -886,6 +893,69 @@ class CppAliMipsSimulator(AliMipsSimulator):
             self._apply_count_ratio()
         if self._flash_hooks_pending:
             self._update_flash_read_hooks()
+        self._cpp_gpio_sync()
+
+    def _cpp_gpio_sync(self):
+        """The board's bit-banged I2C bus (gpio_i2c.GpioI2cBus) runs in the core
+        (Core::gi2c_*): it follows every GPIO store there and calls the bus's
+        native_slave() per address, write transaction and read byte, not
+        _gpio_events per edge (ALISIM_CPP_GPIO_I2C=0: in Python, as on Unicorn).
+        The GPIO log then carries only the stores that change a pin the other
+        decoders watch, when every one of them says which (gpio_watch())."""
+        from gpio_i2c import GpioI2cBus
+        L, h = cpp_core.lib(), self._core.handle
+        devices = getattr(self, 'gpio_devices', None) or []
+        callback = getattr(self, 'gpio_callback', None)
+        bus = None
+        if os.environ.get("ALISIM_CPP_GPIO_I2C", "1") != "0":
+            bus = next((d for d in devices if isinstance(d, GpioI2cBus)), None)
+        if bus is not self._gi2c_bus:
+            if self._gi2c_bus is not None:
+                self._gi2c_bus.native = None
+            if bus is None:
+                L.ali_gpio_i2c_config(h, 0, 0, 0, 0, 0, None, None)
+            else:
+                if self._gi2c_cb is None:
+                    self._gi2c_cb = cpp_core._I2C_CB(self._cpp_i2c)
+                L.ali_gpio_i2c_config(h, 1, bus.scl_offset, bus.scl_bit, bus.sda_offset, bus.sda_bit,
+                                      ctypes.cast(self._gi2c_cb, ctypes.c_void_p), None)
+                get = L.ali_gpio_i2c_get
+                bus.native = lambda field, _get=get, _h=h: _get(_h, field)
+            self._gi2c_bus = bus
+        watch = {}
+        owners = [d for d in devices if d is not bus]
+        if callback:
+            owners.append(getattr(callback, '__self__', None))   # (a plain function: none)
+        for owner in owners:
+            fn = getattr(owner, 'gpio_watch', None)
+            pins = fn() if fn is not None else None
+            if pins is None:
+                watch = None
+                break
+            for off, mask in pins.items():
+                watch[off] = watch.get(off, 0) | mask
+        key = None if watch is None else tuple(sorted(watch.items()))
+        if key != self._gpio_watch_pushed:
+            self._gpio_watch_pushed = key
+            if key is None:
+                L.ali_gpio_watch(h, 0, None, None, 0)
+            else:
+                n = len(key)
+                offs = (ctypes.c_uint32 * max(1, n))(*[k for k, _ in key])
+                masks = (ctypes.c_uint32 * max(1, n))(*[m & 0xFFFFFFFF for _, m in key])
+                L.ali_gpio_watch(h, 1, offs, masks, n)
+
+    def _cpp_i2c(self, user, kind, arg, data, n):
+        """The core's bit-banged I2C bus at an address, a write transaction's
+        end, a read byte (gpio_i2c.GpioI2cBus.native_slave)."""
+        try:
+            bus = self._gi2c_bus
+            if bus is None:
+                return -1 if kind == 3 else 0
+            return int(bus.native_slave(kind, arg, ctypes.string_at(data, n) if n else b""))
+        except BaseException as e:
+            self.mu._catch(e)
+            return 0
 
     def _cpp_after_start(self, executed):
         if self._rom_dirty:

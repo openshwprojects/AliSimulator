@@ -229,10 +229,21 @@ delay HLE off on cpp, page-table refresh only for touched pages (init 0.5 s ->
   replaces the guess.  Probes: impulse_h265 32.9M -> 4.0M, r265lite 15.6M -> 3.2M.
 * Verified bit-identical (icount, executed, RAM hash, UART) against the
   round-2 core on impulse_h265 (240 s) and r265lite with signal (306 s).
-* Next candidate: the bit-banged tuner bus (`gpio_i2c.GpioI2cBus`) in the core
-  -- impulse_h265 hands Python 2.1M GPIO events, 99% of them its SCL / SDA
-  edges (24 sidecars have `gpioI2c`); then filter the panel's events by the
-  pins it watches.
+* Bit-banged I2C bus in the core (`Core::gi2c_*`, `ali_gpio_i2c_config` /
+  `_get`): `gpio_i2c.GpioI2cBus`'s state machine, step for step, follows every
+  GPIO store at once; Python is called per address / write transaction / read
+  byte (`GpioI2cBus.native_slave`, `CppAliMipsSimulator._cpp_i2c`), DI reads ask
+  the core (`native(0)`).  The Python model stays (Unicorn engine, reference,
+  `ALISIM_CPP_GPIO_I2C=0`).  impulse_h265 handed Python 2.1M GPIO events, 99%
+  of them this bus's SCL / SDA edges (24 sidecars have `gpioI2c`).
+* GPIO log filter (`ali_gpio_watch`, `_cpp_gpio_sync`): when every remaining
+  decoder says which pins it follows (`gpio_watch()`: TM1650Decoder with the
+  dump off, GpioKeys none), a bank's store is logged only when it changes one
+  of them.  Host callbacks on impulse_h265: 15.5 s -> 5.1 s; bit-identical
+  state either way (`tests/test_cpp_gpio_i2c.py` compares every DI read too).
+* Next candidates: the GPIO DI reads (still Python: 125k on impulse_h265, for
+  the panel's key answers), the GE register trigger (`_hook_ge_write` ->
+  `run_list` per command list, 69k on r265lite).
 
 ### Verification done
 * Default suite (`run_all_tests.py --engine cpp --jobs 2`): all applicable pass

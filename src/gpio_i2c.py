@@ -17,6 +17,11 @@ low, after a falling edge, as I2C wants.  A write transaction's bytes go to
 the slave in one device.write() at the STOP or repeated START; a read
 transaction's bytes come from device.read(1), one per byte the master clocks
 in, until it answers a byte with no acknowledge.
+
+On the C++ engine the state machine below runs in the core instead
+(Core::gi2c_*, simulator_cpp: `native` set): it follows every GPIO store
+there and calls native_slave() per address, write transaction and read byte;
+on_gpio_write is then not called and di_override asks the core.
 """
 from i2c_scb import AckAll
 from tm1650_decoder import PanelDecoder
@@ -25,6 +30,7 @@ from tm1650_decoder import PanelDecoder
 class GpioI2cBus:
     """The slave side of a bit-banged I2C bus on pins `scl`, `sda` (GPIO numbers)."""
     LOG_FIRST = 64                              # transactions logged
+    native = None                               # the core's bus state reader (simulator_cpp), or None
 
     def __init__(self, sim, scl, sda, name="GPIO I2C"):
         self.sim, self.name = sim, name
@@ -176,10 +182,35 @@ class GpioI2cBus:
         if di_offset == self.scl_offset - 4:
             value |= 1 << self.scl_bit
         if di_offset == self.sda_offset - 4:
-            out = self._sda_out()
-            level = 1 if out is None else out
+            out = self._sda_out() if self.native is None else self.native(0)
+            level = 1 if out is None or out < 0 else out
             value = value & ~(1 << self.sda_bit) | (level << self.sda_bit)
         return value
+
+    # ---- the slave side of the core's bus (C++ engine) ------------------------
+    def native_slave(self, kind, arg, data):
+        """The core's bus at an address byte (kind 1, arg the byte: returns 1
+        when a slave answers), at the end of a write transaction (kind 2, data
+        its bytes) and for the next byte of a read (kind 3: returns it, -1
+        for none) -- what _address, _finish and _load do here."""
+        if kind == 1:
+            self.address, self.reading = arg >> 1, bool(arg & 1)
+            self.device = self.sim.i2c_devices.get(self.address) or (AckAll() if self.sim.i2c_ack_all else None)
+            if self.device is None:
+                self._log("R" if self.reading else "W", b"", ack=False)
+                return 0
+            return 1
+        if kind == 2:
+            if self.device is not None:
+                self.device.write(data)
+                self._log("W", data)
+            self.device = None
+            return 0
+        got = self.device.read(1) if self.device is not None else None
+        if not got:
+            return -1
+        self._log("R", bytes(got[:1]))
+        return got[0]
 
     def _log(self, kind, data, ack=True):
         self.transactions += 1

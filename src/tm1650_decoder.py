@@ -187,6 +187,17 @@ class TM1650Decoder(PanelDecoder):
         self._last_key_value = None
         self._i2c_trace_count = 0
 
+    def gpio_watch(self):
+        """The pins on_gpio_write follows, {DO register offset: pin mask}: a
+        simulator may pass only the stores that change one of them (with the
+        dump off a store that changes neither SCL nor SDA does nothing here
+        but count).  None while the GPIO dump is on: it logs every pin."""
+        if self.dump_enabled:
+            return None
+        watch = {self.scl_offset: 1 << self.scl_bit}
+        watch[self.sda_offset] = watch.get(self.sda_offset, 0) | (1 << self.sda_bit)
+        return watch
+
     def on_gpio_write(self, address, size, value):
         """Called with a GPIO bank's pin levels (`address` its DO register)
         whenever the CPU writes the bank's DO or DIR register."""

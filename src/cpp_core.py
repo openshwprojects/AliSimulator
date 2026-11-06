@@ -60,6 +60,9 @@ _DEV_CB = ctypes.CFUNCTYPE(ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int, ctype
                            ctypes.c_uint64)
 _MACHINE_EVENT = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint64)
 _GPIO_CB = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32)
+# the core's bit-banged I2C bus calling its slaves (I2cCb): kind, argument, data, length -> result
+_I2C_CB = ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32,
+                           ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint32)
 
 _lib = None
 
@@ -146,6 +149,9 @@ def lib():
         "ali_spi_get": (u64, [vp, i32]), "ali_spi_set": (None, [vp, i32, u64]),
         "ali_set_gpio_cb": (None, [vp, vp, vp]),
         "ali_gpio_log": (None, [vp, i32, ctypes.POINTER(vp), ctypes.POINTER(vp)]),
+        "ali_gpio_watch": (None, [vp, i32, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
+        "ali_gpio_i2c_config": (None, [vp, i32, u32, u32, u32, u32, vp, vp]),
+        "ali_gpio_i2c_get": (ctypes.c_int64, [vp, i32]),
         "ali_direct": (vp, [vp, u64, ctypes.POINTER(u64), ctypes.POINTER(u64)]),
         "ali_prof": (None, [vp, i32]), "ali_prof_top": (i32, [vp, i32, vp, vp, i32]),
         "ali_ge_m36f_exec": (i32, [vp, u32, u32, vp, ctypes.POINTER(u64)]),
