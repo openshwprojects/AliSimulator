@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_Impluse_T2C_2.3.24_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Impulse T2/C (System ID 22000A88, v2.3.24 EMU)",
+    "type": "DVB-T2/C Full HD terrestrial and cable receiver with Conax / MultiCAS card reader, Ethernet and USB PVR",
+    "board": "22000A88 (bootloader version \"M3821A 1.1.1\", 128 MB DDR3 M3821 platform)",
+    "soc": "ALi M3821A (128 MB DDR3 dual-CPU DVB-T2/C SoC reading chip ID 0x3821, revision B; NIM_S3821_0 / NIM_QAM_S3281, seecode \"M3606 SEE\" at 0xA6000200)",
+    "family": "M3821 (chips/m3821.py)",
+    "demod": "internal ALi M3821A DVB-T2/C (NIM_S3821_0 / NIM_QAM_S3281)",
+    "tuner": "MaxLinear MxL608 / MxL603 DVB-T2/C tuner",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "tm1650",
+      "scl": 128,
+      "sda": 129
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "2.3.24 EMU (maincode(AV) \"22000A882312\"; bootloader \"M3821A 1.1.1\")",
+    "date": "2017-07-17",
+    "size": 8388608,
+    "sha1": "d060526bd93aabf3a514094dda5469d074c9466e",
+    "layout": "bootloader 0x000000 (M3821A 1.1.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2017-7-17), maincode(AV) 0x030000 (22000A882312, 2010-08-12, LZMA -> 12.18 MB), seecode 0x330000 (M3606 SEE, 2017-7-17, LZMA -> 3.22 MB), default_lang 0x46FD00 (1.0.0), cipluskey 0x46FF80 (1.1.0), countryband 0x480000 (1.0.0), logo_user 0x488000 (1.0.0), logo_menu 0x498000 (1.0.0), logo_radio 0x4B8000 (1.0.0), logo_boot 0x4D8000 (1.0.0), patch 0x4FFF80 (1.0.0), defaultdb(PRC) 0x520000 (1.0.1, LZMA -> 0.07 MB), userdb(64+64) 0x73FF80 (1.0.1)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impluse_T2C_2.3.24_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2017-07-17",
+    "login": false,
+    "note": "Archive AMIKO_Impluse_T2C_2.3.24_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a dual-CPU XIP M3821 board (chips/m3821.py, run_dump_impulse_t2c_2324_app_starts.py): the XIP bootloader uses cache-as-RAM until DDR3 is up, drives the CH455 panel on GPIO 128 / 129 (\"CH455 panel init OK!\", \" ON \"), parks the SEE boot stub at 0xA1016804, unpacks seecode (\"M3606 SEE\", 3.22 MB) and maincode(AV) (\"22000A882312\", 12.18 MB) via LZMA, and starts both cores (main EBase 0x80002000, SEE at 0xA6000200 with EBase 0x86002001).  The application attaches PAN_CH455_0 (\"---led 455 attach OK--\", \" on \") and renders its OSD dialog through GE_M36F."
+  },
+  "desc": [
+    "Amiko Impulse T2/C (System ID 22000A88) firmware v2.3.24 EMU (2017-07-17) for the Full HD DVB-T2/C terrestrial and cable receiver on the ALi M3821A SoC with 128 MB DDR3 and 8 MB SPI flash.",
+    "Pairs an XIP \"M3821A 1.1.1\" bootloader with a dual-CPU maincode(AV) + \"M3606 SEE\" co-processor build and a CH455 4-digit LED panel on GPIO 128 (SCL) / 129 (SDA)."
+  ]
+}

@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
 
+from concurrent.futures import ThreadPoolExecutor
 import chips
 import dump_catalog
 import dump_table
@@ -24,13 +25,28 @@ print("=== Test: every firmware image has a correct sidecar (dump_catalog.py) ==
 failures = []
 entries = dump_catalog.catalog()
 rows = []
-for path, data in entries:
+
+
+def _read_and_check(item):
+    path, data = item
     if data is None:
-        failures += dump_catalog.problems(path, data)
-        continue
+        return dump_catalog.problems(path, data), None
     with open(path, "rb") as f:
         image_bytes = f.read()
-    failures += dump_catalog.problems(path, data, image_bytes=image_bytes)
+    return (
+        dump_catalog.problems(path, data, image_bytes=image_bytes),
+        chips.detect(image_bytes).__name__,
+    )
+
+
+with ThreadPoolExecutor(max_workers=8) as _ex:
+    _checked = list(_ex.map(_read_and_check, entries))
+
+for (path, data), (entry_probs, fam) in zip(entries, _checked):
+    if data is None:
+        failures += entry_probs
+        continue
+    failures += entry_probs
     rel = os.path.relpath(path, dump_catalog.DUMPS_DIR)
     # the panel pins the decoders use must be the sidecar's
     spec = front_panel.panel_spec(path)
@@ -59,7 +75,6 @@ for path, data in entries:
                         f"ir_remote.coding_for gives {coding!r}")
 
     dev, sim_info = data["device"], data["simulator"]
-    fam = chips.detect(image_bytes).__name__
     sidecar_fam = (dev.get("family") or "").split()[0]
     if sidecar_fam != fam:
         failures.append(f"{rel}: device.family starts with {sidecar_fam!r}, chips.detect gives {fam!r}")

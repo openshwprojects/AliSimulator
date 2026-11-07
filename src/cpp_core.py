@@ -37,7 +37,7 @@ DLL_PATH = os.environ.get("ALISIM_CPP_DLL") or os.path.join(ROOT, "cpp", "build"
  F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
  F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS,
  F_FF_SKIPPED, F_IC_LINES_HI, F_GPIO_DI_BUSY, F_GE_STATUS, F_GE_OPS, F_GE_RENDER, F_GE_PRIMS,
- F_GE_RESUME, F_DEMOD_LOCKED, F_DEMOD_READS) = range(1, 71)
+ F_GE_RESUME, F_DEMOD_LOCKED, F_DEMOD_READS, F_GE_IC_LINE, F_GE_M3602_CMDS) = range(1, 73)
 
 # run() / emu_start() stop reasons (alicore.h StopReason)
 STOP_NONE, STOP_COUNT, STOP_UNTIL, STOP_REQUEST, STOP_ERROR, STOP_BREAKPOINT, STOP_NULL, STOP_TIMEOUT = range(8)
@@ -45,9 +45,13 @@ STOP_NONE, STOP_COUNT, STOP_UNTIL, STOP_REQUEST, STOP_ERROR, STOP_BREAKPOINT, ST
 EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ = 1, 2, 3, 5
 # device window flags (Core::DF_*)
 DF_READ, DF_WRITE, DF_GPIO_DI, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE = 1, 2, 4, 8, 16, 32, 64, 128
-DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE = 1, 2, 4, 8
+DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE, DR_VPO, DR_SCB = 1, 2, 4, 8, 16, 32
 RULE_DEMOD, RULE_DEMOD_COUNT, RULE_DEMOD_CLR3F, RULE_DEMOD_IFZERO = 1, 2, 4, 8
 RULE_EXACT_OFF, RULE_VE_STATUS, RULE_MAC_MDIO = 16, 32, 64
+RULE_VPO_WRITE, RULE_VPO_M36F_WRITE, RULE_VE_STATUS_WRITE = 128, 256, 512
+RULE_GE3602_WRITE, RULE_OSD_PAL_WRITE, RULE_MIRROR, RULE_DDR_TRAINING, RULE_SDRAM_CMD, RULE_TRNG_WRITE = (
+    1024, 2048, 4096, 8192, 16384, 32768
+)
 
 REG_F0 = 1000           # the FPU registers F0..F31 (64-bit) of the core
 REG_CP0_BASE = 2000     # CP0 register rd, sel: REG_CP0_BASE + 8 * rd + sel
@@ -157,11 +161,25 @@ def lib():
         "ali_gpio_di_config": (None, [vp, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
         "ali_ge_config": (None, [vp, vp, u32]),
         "ali_ge_regs": (None, [vp, i32, ctypes.POINTER(u32)]),
+        "ali_set_peer_core": (None, [vp, vp]),
         "ali_gpio_i2c_config": (None, [vp, i32, u32, u32, u32, u32, vp, vp]),
         "ali_gpio_i2c_get": (ctypes.c_int64, [vp, i32]),
         "ali_tm1650_config": (None, [vp, i32, u32, u32, u32, u32, i32, vp, vp]),
         "ali_tm1650_set_key": (None, [vp, u32, u32]),
         "ali_tm1650_get": (ctypes.c_int64, [vp, i32]),
+        "ali_tm1628_config": (None, [vp, i32, u32, u32, u32, u32, u32, u32, i32, vp, vp]),
+        "ali_tm1628_set_key": (None, [vp, vp, u32]),
+        "ali_tm1628_get": (ctypes.c_int64, [vp, i32]),
+        "ali_hc164_config": (None, [vp, i32, u32, u32, u32, u32, ctypes.POINTER(u32), ctypes.POINTER(u32), u32, i32, i32, vp, vp]),
+        "ali_hc164_get": (ctypes.c_int64, [vp, i32]),
+        "ali_lemontree_config": (None, [vp, i32, u32, u32, u32, u32, i32, vp, vp]),
+        "ali_lemontree_set_key": (None, [vp, u32, u32]),
+        "ali_lemontree_get": (ctypes.c_int64, [vp, i32]),
+        "ali_scb_config": (None, [vp, i32, i32, i32]),
+        "ali_scb_pull_tx": (u32, [vp, i32, vp, vp]),
+        "ali_scb_push_rx": (None, [vp, i32, vp, u32, ctypes.c_uint8, ctypes.c_uint8]),
+        "ali_osd_pal": (None, [vp, ctypes.POINTER(u32)]),
+        "ali_scan_code": (u32, [vp, u32, ctypes.POINTER(u32), ctypes.POINTER(ctypes.c_uint8), u32, u32]),
         "ali_direct": (vp, [vp, u64, ctypes.POINTER(u64), ctypes.POINTER(u64)]),
         "ali_prof": (None, [vp, i32]), "ali_prof_top": (i32, [vp, i32, vp, vp, i32]),
         "ali_ge_m36f_exec": (i32, [vp, u32, u32, vp, ctypes.POINTER(u64)]),

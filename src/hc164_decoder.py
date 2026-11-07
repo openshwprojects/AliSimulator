@@ -46,7 +46,8 @@ class HC164Decoder(PanelDecoder):
         self.data = 1
         self._digit_levels = [1 if self.active_low_digits else 0] * n
         self._last_text = None
-        self.frame_count = 0
+        self._frame_count = 0
+        self.native = None
 
         # Fast-path single-bank bitmasks when CLK, DATA, and all digit strobes
         # share one GPIO bank (the common case on M3329 bank 0 0xB8000054).
@@ -63,6 +64,31 @@ class HC164Decoder(PanelDecoder):
         else:
             self._fast_offset = None
         self._prev_masked = None
+
+    @property
+    def gpio_event_count(self):
+        return self.native(0) if self.native is not None else self._gpio_event_count
+
+    @gpio_event_count.setter
+    def gpio_event_count(self, v):
+        self._gpio_event_count = v
+
+    @property
+    def frame_count(self):
+        return self.native(1) if self.native is not None else self._frame_count
+
+    @frame_count.setter
+    def frame_count(self, v):
+        self._frame_count = v
+
+    def native_update(self, raw_bytes):
+        n = min(len(self.raw), len(raw_bytes))
+        self.raw[:n] = raw_bytes[:n]
+        self._frame_count += 1
+        text = self.get_display_text()
+        if text != self._last_text:
+            self._last_text = text
+            self.log(f"{self.TAG} Display: [{text}]")
 
     @property
     def digits(self):

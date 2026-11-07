@@ -132,6 +132,14 @@ class DdrTraining:
 
     def __init__(self, sim):
         self.sim = sim
+        view = getattr(sim, "_mmio_view", None)
+        if view is not None:
+            view[self.STATUS:self.STATUS + 4] = (0xC0000000 | (2 * self.TAPS)).to_bytes(4, 'little')
+            for lane in range(self.LANES):
+                patterns = self.PATTERNS_LANE0 if lane == 0 else self.PATTERNS_OTHER
+                for word, val in enumerate(patterns):
+                    off = self.CAPTURE + lane * 0x20 + word * 4
+                    view[off:off + 4] = val.to_bytes(4, 'little')
         sim._mmio_on('r', self._read_status, self.STATUS, self.STATUS + 3)
         sim._mmio_on('r', self._read_capture, self.CAPTURE, self.CAPTURE + self.LANES * 0x20 - 1)
 
@@ -321,6 +329,13 @@ class DmaRings:
         """The engine's registers among a core's device handlers (the SEE core
         of a dual-CPU chip feeds the engine too: its video decoder)."""
         b = self.BASE
+        if not hasattr(self, "_wired_cores"):
+            self._wired_cores = []
+        if core not in self._wired_cores:
+            self._wired_cores.append(core)
+        view = getattr(core, "_mmio_view", None)
+        if view is not None:
+            view[b + self.DONE:b + self.DONE + self.CHANNELS] = bytes(self.done)
         core._mmio_on('w', self._write_submit, b + self.SUBMIT, b + self.SUBMIT + self.CHANNELS - 1)
         core._mmio_on('r', self._read_done, b + self.DONE, b + self.DONE + self.CHANNELS - 1)
 
@@ -351,6 +366,10 @@ class DmaRings:
                     if self.start_codes and word & self.SC_FLAG and ch < self.SC_CHANNELS:
                         self._find_start_codes(ch, dst, data)
                 self.done[ch] = (self.done[ch] + 1) & 0xFF
+            for c in getattr(self, "_wired_cores", (sim,)):
+                v = getattr(c, "_mmio_view", None)
+                if v is not None:
+                    v[self.BASE + self.DONE + ch] = self.done[ch]
 
     def _find_start_codes(self, ch, dst, data):
         """Append the start codes in a copy (and across its start, from the

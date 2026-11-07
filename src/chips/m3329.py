@@ -200,14 +200,39 @@ class Osd:
     entry's 4-bit alpha in the low two bits of Cb and Cr."""
 
     def __init__(self, sim):
-        self.palettes = ({}, {})
-        for layer, port in enumerate(OSD_PALETTE_PORTS):
-            sim._mmio_on('w', lambda uc, access, address, size, value, user_data, layer=layer:
-                         self._write(layer, size, value), port, port)
+        self.sim = sim
+        self._palettes = ({}, {})
+        core = getattr(sim, "_core", None)
+        if core is not None:
+            import cpp_core
+            cpp_core.lib().ali_osd_pal(core.handle, None)
+        sim._mmio_on('w', self._write0, OSD_PALETTE_PORTS[0], OSD_PALETTE_PORTS[0])
+        sim._mmio_on('w', self._write1, OSD_PALETTE_PORTS[1], OSD_PALETTE_PORTS[1])
 
-    def _write(self, layer, size, value):
+    def _write0(self, uc, access, address, size, value, user_data):
         if size == 4:
-            self.palettes[layer][value >> 24] = value & 0xFFFFFF
+            self._palettes[0][value >> 24] = value & 0xFFFFFF
+
+    def _write1(self, uc, access, address, size, value, user_data):
+        if size == 4:
+            self._palettes[1][value >> 24] = value & 0xFFFFFF
+
+    @property
+    def palettes(self):
+        core = getattr(self.sim, "_core", None)
+        if core is not None:
+            import ctypes
+            import cpp_core
+            buf = (ctypes.c_uint32 * 512)()
+            cpp_core.lib().ali_osd_pal(core.handle, buf)
+            for layer in (0, 1):
+                d = self._palettes[layer]
+                base = layer * 256
+                for i in range(256):
+                    w = buf[base + i]
+                    if w & 0x80000000:
+                        d[i] = w & 0xFFFFFF
+        return self._palettes
 
 
 class M3329(ChipFamily):

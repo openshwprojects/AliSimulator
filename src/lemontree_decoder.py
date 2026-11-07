@@ -96,16 +96,58 @@ class LemontreeDecoder(PanelDecoder):
         self.vfd_ram = [0x00] * 24
         self.vfd_text = None
         self._last_text = None
-        self.frame_count = 0
-        self.i2c_transaction_count = 0
-        self.key_read_count = 0
-        self.key_reads_answered = 0
+        self._frame_count = 0
+        self._i2c_transaction_count = 0
+        self._key_read_count = 0
+        self._key_reads_answered = 0
         self.key_byte = 0x00
         self._press_reads_left = 0
+        self.native = None
+        self.native_press = None
 
         body = bytes([0x10, 0x04, 1, 0, 0, 0])
         self._resp = body + struct.pack("<H", crc16_xmodem(body))
         self._resp_idx = 0
+
+    @property
+    def gpio_event_count(self):
+        return self.native(3) if self.native is not None else self._gpio_event_count
+
+    @gpio_event_count.setter
+    def gpio_event_count(self, v):
+        self._gpio_event_count = v
+
+    @property
+    def frame_count(self):
+        return self.native(4) if self.native is not None else self._frame_count
+
+    @frame_count.setter
+    def frame_count(self, v):
+        self._frame_count = v
+
+    @property
+    def i2c_transaction_count(self):
+        return self.native(5) if self.native is not None else self._i2c_transaction_count
+
+    @i2c_transaction_count.setter
+    def i2c_transaction_count(self, v):
+        self._i2c_transaction_count = v
+
+    @property
+    def key_read_count(self):
+        return self.native(6) if self.native is not None else self._key_read_count
+
+    @key_read_count.setter
+    def key_read_count(self, v):
+        self._key_read_count = v
+
+    @property
+    def key_reads_answered(self):
+        return self.native(7) if self.native is not None else self._key_reads_answered
+
+    @key_reads_answered.setter
+    def key_reads_answered(self, v):
+        self._key_reads_answered = v
 
     @staticmethod
     def key_code(code):
@@ -114,6 +156,21 @@ class LemontreeDecoder(PanelDecoder):
     def press_key(self, code, hold_reads=1):
         self.key_byte = int(code) & 0xFF
         self._press_reads_left = hold_reads
+        if self.native_press is not None:
+            self.native_press(self.key_byte, hold_reads)
+
+    def native_frame(self, addr, data):
+        if addr == self.ADDRESS and data:
+            self._handle_command(data)
+        elif 0x34 <= addr <= 0x37 and data and self.vfd_text is None and self.raw == [0, 0, 0, 0]:
+            if self._tm1650_digits is None:
+                self._tm1650_digits = [0x00, 0x00, 0x00, 0x00]
+            self._tm1650_digits[addr - 0x34] = data[0]
+            self._frame_count += 1
+            text = self.get_display_text()
+            if text != self._last_text:
+                self._last_text = text
+                self.log(f"{self.TAG} CH455 Display: [{text}]")
 
     @property
     def digits(self):

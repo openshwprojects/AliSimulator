@@ -67,6 +67,24 @@ def bootrom_bootloader(image):
     return False
 
 
+_mc_flags_cache = {}
+
+
+def _mc_flags(mc):
+    """Cached (is_c3507, is_c3503c, has_clock_3503d) for unpacked `maincode` `mc`."""
+    if not mc:
+        return (False, False, False)
+    key = (len(mc), mc[:64], mc[-64:])
+    cached = _mc_flags_cache.get(key)
+    if cached is not None:
+        return cached
+    res = (b"c3507_phy_set" in mc, C3503C_GUARD in mc, b"get_clock_3503D" in mc)
+    if len(_mc_flags_cache) >= 16:
+        _mc_flags_cache.pop(next(iter(_mc_flags_cache)))
+    _mc_flags_cache[key] = res
+    return res
+
+
 class C3503(C3505):
     name = "C3503"
     chip_id = 0x3503
@@ -74,21 +92,30 @@ class C3503(C3505):
 
     @classmethod
     def matches(cls, image):
-        if not bootrom_bootloader(image):
+        if len(image) >= 0x26 and bytes(image[0x20:0x26]) == b"M3507-":
+            return True
+        if not bootrom_bootloader(image) or bytes(image[0x20:0x25]) == b"M3821":
             return False
-        if any(name == "seecode" for _o, name, _v in chunk_chain(image)):
-            return False            # (the dual-CPU C3505 images)
-        mc = maincode(image)
-        return b"get_clock_3503D" in mc or C3503C_GUARD in mc or b"c3507_phy_set" in mc
+        chunks = chunk_chain(image)
+        if any(name == "seecode" or ( name.lower() == "hdcpkey" and ver.startswith("M3821")) for _o, name, ver in chunks):
+            return False            # (the dual-CPU C3505 or M3821 boot-ROM images)
+        return any(name.lower().startswith("maincode") or (struct.unpack_from(">I", image, o)[0] >> 16) == 0x01FE
+                   for o, name, _v in chunks)
+
+    def _image_flags(self):
+        img = self.sim.rom_image
+        if not img:
+            return (False, False, False)
+        if len(img) >= 0x26 and bytes(img[0x20:0x26]) == b"M3507-":
+            return (True, False, False)
+        return _mc_flags(maincode(img))
 
     def default_chip_id(self):
-        mc = maincode(self.sim.rom_image) if self.sim.rom_image else b""
-        return 0x3507 if b"c3507_phy_set" in mc else 0x3503
+        is_c3507, _is_c3503c, _has_3503d = self._image_flags()
+        return 0x3507 if is_c3507 else 0x3503
 
     def write_chip_id(self):
-        mc = maincode(self.sim.rom_image) if self.sim.rom_image else b""
-        is_c3507 = b"c3507_phy_set" in mc
-        is_c3503c = C3503C_GUARD in mc
+        is_c3507, is_c3503c, _has_3503d = self._image_flags()
         self.chip_variant = 0x0000 if is_c3507 else (0xC000 if is_c3503c else 0xD000)
         super().write_chip_id()
         if is_c3507:

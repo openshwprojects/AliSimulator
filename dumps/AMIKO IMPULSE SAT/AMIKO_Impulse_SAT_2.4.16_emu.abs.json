@@ -1,0 +1,50 @@
+{
+  "file": "AMIKO_Impulse_SAT_2.4.16_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "Impulse SAT (System ID 20020A88, firmware 2.4.16 emu)",
+    "type": "DVB-S2 Full HD satellite receiver with Conax / MultiCAS card reader, external IR sensor / 4-digit LED eye, and USB PVR",
+    "board": "20020A88 (bootloader version \"M3510B 1.1.1\", 128 MB DDR3 M3503 revision B platform)",
+    "soc": "ALi M3510B / M3503 rev B (128 MB DDR3 dual-CPU DVB-S2 SoC reading chip ID 0x3503 rev 0x0001; NIM_S3503_0, DMX_S3601_0/2, DECV_AVC_0, DECV_AVS_0, DECV_S3601_0, OSD_M36F_0/1, seecode \"M3606 SEE\" at 0xA6000200)",
+    "family": "M3503 (chips/m3503.py)",
+    "demod": "internal ALi M3503 / M3510B DVB-S2 (NIM_S3503_0 at 0xB8028000)",
+    "tuner": "Airoha AV2026 DVB-S2 tuner + ASC RF374 modulator",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455 (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "necfirst"
+  },
+  "image": {
+    "kind": "update",
+    "version": "2.4.16 emu (maincode(AV) \"20020A882416\"; bootloader \"M3510B 1.1.1\"; seecode \"M3606 SEE\")",
+    "date": "2017-05-03",
+    "size": 8388608,
+    "sha1": "922548c1aea20a205cb9205c70f0e1d6362b7355",
+    "layout": "bootloader 0x000000 (M3510B 1.1.1, 2012-12-20, XIP with CacheAsRam stack at 0x8FFF8000), MemCfg 0x02F000 (00000001), maincode(AV) 0x030000 (20020A882416, LZMA -> 12.08 MB at 0x80000200), seecode 0x3B0000 (M3606 SEE, 2017-5-3, LZMA -> 2.96 MB at 0xA6000200), default_lang 0x4AFD00, cipluskey 0x4AFF80, countryband 0x4C0000, logo_user 0x4C8000, logo_menu 0x4D8000, logo_radio 0x4F8000, logo_boot 0x518000, patch 0x53FF80, defaultdb(PRC) 0x560000, userdb(64+64) 0x73FF80"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_Impulse_SAT_2.4.16_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD",
+    "site": "satedu.cba.pl",
+    "author": "Amiko",
+    "date": "2017-05-03",
+    "login": false,
+    "note": "Archive AMIKO_Impulse_SAT_2.4.16_emu.zip from the Amiko / Amiko HD directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      " ON ",
+      " on "
+    ],
+    "note": "Boots as a 128 MB M3503 revision B board (chips/m3503.py, run_dump_impulse_sat_2416_app_starts.py): the XIP bootloader (\"M3510B 1.1.1\") runs from flash using CacheAsRam at 0x8FFF8000..0x8FFFFFFF before relocating to DDR, prints \"CH455 panel init OK!\", writes \" ON \" to the CH455 panel on GPIO 135 / 134, parks the SEE boot stub at 0xA141A7DC, unpacks seecode (\"M3606 SEE\", 2.96 MB) and maincode(AV) (\"20020A882416\", 12.08 MB) to 0x80000200, and starts both cores (\"MC: APP  init ok\", main EBase 0x80002000, SEE running at 0xA6000200 with EBase 0x86002001).  The application prints \"---led 455 attach OK--\" and updates the CH455 panel to \" on \", initialises hs_config_init and userdb(64+64) from defaultdb(PRC) over SPI, and renders its OSD dialog on GMA layer 0."
+  },
+  "desc": [
+    "Amiko Impulse SAT (System ID 20020A88) EMU firmware v2.4.16 (2017-05-03) for the compact Full HD DVB-S2 satellite receiver on the ALi M3510B / M3503 rev B SoC with 128 MB DDR3 and 8 MB SPI flash.",
+    "Uses an XIP CacheAsRam bootloader (\"M3510B 1.1.1\"), dual-CPU \"M3606 SEE\" firmware at 0xA6000200, and an external CH455 4-digit LED / IR sensor eye on GPIO 135 (SCL) / 134 (SDA)."
+  ]
+}

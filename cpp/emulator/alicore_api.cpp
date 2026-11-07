@@ -23,7 +23,7 @@ enum Field : int {
   F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
   F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS, F_FF_SKIPPED, F_IC_LINES_HI,
   F_GPIO_DI_BUSY, F_GE_STATUS, F_GE_OPS, F_GE_RENDER, F_GE_PRIMS, F_GE_RESUME,
-  F_DEMOD_LOCKED, F_DEMOD_READS,
+  F_DEMOD_LOCKED, F_DEMOD_READS, F_GE_IC_LINE, F_GE_M3602_CMDS,
 };
 
 ALI_API void *ali_new() { return new Core(); }
@@ -183,6 +183,12 @@ ALI_API void ali_ge_regs(void *c, int write, uint32_t *regs64) {
   if (write) memcpy(k->ge_.regs, regs64, sizeof(k->ge_.regs));
   else memcpy(regs64, k->ge_.regs, sizeof(k->ge_.regs));
 }
+ALI_API void ali_set_peer_core(void *c, void *peer) {
+  Core *k = (Core *)c;
+  Core *p = (Core *)peer;
+  k->peer_core_ = p;
+  if (p) p->peer_core_ = k;
+}
 // The bit-banged I2C bus in the core (on = 0: none): SCL / SDA as DO register
 // offsets in the device window and bit numbers, the host's slave callback (I2cCb).
 ALI_API void ali_gpio_i2c_config(void *c, int on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off,
@@ -237,6 +243,93 @@ ALI_API int64_t ali_tm1650_get(void *c, int field) {
     case 9: return t.key_hold;
     case 10: return (int64_t)t.key_reads_answered;
     case 11: case 12: case 13: case 14: return t.digits[field - 11];
+  }
+  return 0;
+}
+ALI_API void ali_tm1628_config(void *c, int on, uint32_t clk_off, uint32_t clk_bit, uint32_t dio_off,
+                               uint32_t dio_bit, uint32_t stb_off, uint32_t stb_bit, int cb_all,
+                               void *cb, void *user) {
+  Core *k = (Core *)c;
+  k->tm1628_config(on != 0, clk_off, clk_bit, dio_off, dio_bit, stb_off, stb_bit, cb_all != 0);
+  k->tm1628_cb_ = (I2cCb)cb;
+  k->tm1628_user_ = user;
+}
+ALI_API void ali_tm1628_set_key(void *c, const uint8_t *key_bytes, uint32_t hold_reads) {
+  Core *k = (Core *)c;
+  if (key_bytes) memcpy(k->tm1628_.key_bytes, key_bytes, 5);
+  else memset(k->tm1628_.key_bytes, 0, 5);
+  k->tm1628_.key_hold = hold_reads;
+}
+ALI_API int64_t ali_tm1628_get(void *c, int field) {
+  Core *k = (Core *)c;
+  Core::Tm1628 &t = k->tm1628_;
+  switch (field) {
+    case 0: return k->tm1628_dio_in();
+    case 1: return t.in_frame ? 1 : 0;
+    case 2: return t.key_read ? 1 : 0;
+    case 3: return (int64_t)t.events;
+    case 4: return (int64_t)t.frame_count;
+    case 5: return t.prev_clk;
+    case 6: return t.prev_stb;
+    case 7: return (int64_t)t.key_read_count;
+    case 8: return (int64_t)t.key_reads_answered;
+    case 9: return t.key_hold;
+    case 10: return t.address;
+  }
+  return 0;
+}
+ALI_API void ali_hc164_config(void *c, int on, uint32_t clk_off, uint32_t clk_bit,
+                              uint32_t data_off, uint32_t data_bit,
+                              const uint32_t *dig_offs, const uint32_t *dig_bits, uint32_t n_digits,
+                              int active_low_segs, int active_low_digs, I2cCb cb, void *user) {
+  Core *k = (Core *)c;
+  k->hc164_cb_ = cb;
+  k->hc164_user_ = user;
+  k->hc164_config(on != 0, clk_off, clk_bit, data_off, data_bit, dig_offs, dig_bits, n_digits,
+                  active_low_segs != 0, active_low_digs != 0);
+}
+ALI_API int64_t ali_hc164_get(void *c, int field) {
+  Core *k = (Core *)c;
+  Core::Hc164 &h = k->hc164_;
+  switch (field) {
+    case 0: return (int64_t)h.events;
+    case 1: return (int64_t)h.frame_count;
+    case 2: return h.sr;
+    case 3: return h.clk;
+    case 4: return h.data;
+    default:
+      if (field >= 10 && field < 18) return h.raw[field - 10];
+      break;
+  }
+  return 0;
+}
+ALI_API void ali_lemontree_config(void *c, int on, uint32_t scl_off, uint32_t scl_bit,
+                                  uint32_t sda_off, uint32_t sda_bit, int cb_all, I2cCb cb, void *user) {
+  Core *k = (Core *)c;
+  k->lemontree_cb_ = cb;
+  k->lemontree_user_ = user;
+  k->lemontree_config(on != 0, scl_off, scl_bit, sda_off, sda_bit, cb_all != 0);
+}
+ALI_API void ali_lemontree_set_key(void *c, uint32_t key_byte, uint32_t hold_reads) {
+  Core *k = (Core *)c;
+  k->lemontree_.key_byte = (uint8_t)key_byte;
+  k->lemontree_.key_hold = hold_reads;
+}
+ALI_API int64_t ali_lemontree_get(void *c, int field) {
+  Core *k = (Core *)c;
+  Core::Lemontree &lt = k->lemontree_;
+  switch (field) {
+    case 0: return k->lemontree_sda_out();
+    case 1: return lt.state;
+    case 2: return lt.phase;
+    case 3: return (int64_t)lt.events;
+    case 4: return (int64_t)lt.frame_count;
+    case 5: return (int64_t)lt.tx_count;
+    case 6: return (int64_t)lt.key_read_count;
+    case 7: return (int64_t)lt.key_reads_answered;
+    case 8: return lt.key_hold;
+    case 9: return lt.scl;
+    case 10: return lt.sda;
   }
   return 0;
 }
@@ -395,6 +488,8 @@ ALI_API uint64_t ali_get(void *c, int field) {
     case F_GE_RESUME: return k->ge_.resume_valid ? (uint64_t)k->ge_.resume_idx : ~0ull;
     case F_DEMOD_LOCKED: return k->demod_locked_;
     case F_DEMOD_READS: return k->demod_reads_;
+    case F_GE_IC_LINE: return k->ge_.ic_line;
+    case F_GE_M3602_CMDS: return k->ge_.m3602_cmds;
     case 100: case 101: case 102: case 103: case 104: case 105: return k->spin_dbg[field - 100];
   }
   return 0;
@@ -456,8 +551,113 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_GE_RESUME: k->ge_.resume_valid = (v != ~0ull); k->ge_.resume_idx = w; break;
     case F_DEMOD_LOCKED: k->demod_locked_ = v != 0; break;
     case F_DEMOD_READS: k->demod_reads_ = v; break;
+    case F_GE_IC_LINE: k->ge_.ic_line = w; break;
+    case F_GE_M3602_CMDS: k->ge_.m3602_cmds = v; break;
   }
   k->poke_events();
+}
+
+ALI_API void ali_scb_config(void *c, int idx, int ic_line, int reset) {
+  Core *k = (Core *)c;
+  if (idx < 0 || idx >= 4) return;
+  if (reset) k->scb_[idx].reset();
+  k->scb_[idx].ic_line = (ic_line < 0) ? 0xFFu : (uint8_t)ic_line;
+}
+
+ALI_API uint32_t ali_scb_pull_tx(void *c, int idx, uint8_t *meta8, uint8_t *tx_out) {
+  Core *k = (Core *)c;
+  if (idx < 0 || idx >= 4) return 0;
+  Core::ScbI2c &s = k->scb_[idx];
+  meta8[0] = s.slave;
+  meta8[1] = s.length;
+  meta8[2] = s.length_hi;
+  meta8[3] = s.sub[0];
+  meta8[4] = s.sub[1];
+  meta8[5] = s.sub[2];
+  meta8[6] = s.sub[3];
+  meta8[7] = s.sub_extra;
+  uint32_t n = s.tx_len;
+  if (n && tx_out) memcpy(tx_out, s.tx, n);
+  s.tx_len = 0;
+  return n;
+}
+
+ALI_API void ali_scb_push_rx(void *c, int idx, const uint8_t *rx_in, uint32_t rx_len, uint8_t flags, uint8_t isr1) {
+  Core *k = (Core *)c;
+  if (idx < 0 || idx >= 4) return;
+  Core::ScbI2c &s = k->scb_[idx];
+  for (uint32_t i = 0; i < rx_len; i++) {
+    if ((uint16_t)(s.rx_tail - s.rx_head) < 256u) {
+      s.rx[s.rx_tail++ & 0xFFu] = rx_in[i];
+    }
+  }
+  s.flags = flags;
+  s.isr1 = isr1;
+  k->scb_sync_irq(idx);
+}
+
+ALI_API void ali_osd_pal(void *c, uint32_t *out512) {
+  Core *k = (Core *)c;
+  if (out512) memcpy(out512, k->osd_pal_, 512 * sizeof(uint32_t));
+  else memset(k->osd_pal_, 0, sizeof(k->osd_pal_));
+}
+
+// Single-pass code scanner for LzmaDecode() (kind 1), RTOS delay() (kind 2),
+// and dual-CPU mailbox poll loops (kind 3).
+ALI_API uint32_t ali_scan_code(const void *buf, uint32_t len, uint32_t *out_offs,
+                               uint8_t *out_kinds, uint32_t max_out, uint32_t mask) {
+  if (!buf || len < 20) return 0;
+  const uint8_t *b = (const uint8_t *)buf;
+  const uint32_t *words = (const uint32_t *)buf;
+  uint32_t n_words = len >> 2;
+  uint32_t count = 0;
+  static const uint8_t M16_LZMA[12] = {
+    0xF3, 0x63, 0x18, 0x62, 0x17, 0xD1, 0x16, 0xD0, 0x1C, 0xD6, 0xED, 0xE6
+  };
+  auto emit = [&](uint32_t off, uint8_t kind) {
+    if (count < max_out) {
+      out_offs[count] = off;
+      out_kinds[count] = kind;
+    }
+    count++;
+  };
+  for (uint32_t i = 0; i + 4 < n_words; i++) {
+    uint32_t w0 = words[i];
+    if (mask & 1u) {
+      if ((w0 == 0x27BDFF78u && words[i + 1] == 0xAFBF0084u) ||
+          (w0 == 0x27BDFF98u && words[i + 1] == 0xAFBF0064u) ||
+          (w0 == 0x27BDFF50u && (words[i + 1] == 0xAFBF00A8u || words[i + 1] == 0xAFBF00ACu))) {
+        if ((i << 2) + 108u <= len) emit(i << 2, 1);
+      }
+      if ((w0 & 0xFFFFu) == 0x63F3u && (i << 2) + 108u <= len &&
+          memcmp(b + (i << 2), M16_LZMA, 12) == 0) {
+        emit(i << 2, 1);
+      }
+      if ((w0 >> 16) == 0x63F3u && (i << 2) + 110u <= len &&
+          memcmp(b + (i << 2) + 2, M16_LZMA, 12) == 0) {
+        emit((i << 2) + 2, 1);
+      }
+    }
+    if ((mask & 2u) && w0 == 0x27BDFFE0u && (i << 2) + 72u <= len) {
+      uint32_t w1 = words[i + 1], w2 = words[i + 2], w3 = words[i + 3];
+      if ((w1 == 0xAFBF0018u && w2 == 0xAFB10014u && w3 == 0xAFB00010u) ||
+          (w1 == 0xAFBF001Cu && w2 == 0xAFB20018u && w3 == 0xAFB10014u)) {
+        emit(i << 2, 2);
+      }
+    }
+    if ((mask & 4u) && (w0 & 0xFC00FFFBu) == 0x34000200u && (i << 2) + 20u <= len) {
+      uint32_t rs = (w0 >> 16) & 31u;
+      uint32_t j_end = std::min<uint32_t>((len - 16u) >> 2, i + 36u);
+      for (uint32_t j = i + 1; j <= j_end; j++) {
+        uint32_t lw = words[j];
+        if ((lw & 0xFC00FFFFu) == 0x8C000000u && ((lw >> 21) & 31u) == rs) {
+          emit(i << 2, 3);
+          break;
+        }
+      }
+    }
+  }
+  return count;
 }
 
 // ------------------------------------------------------------------

@@ -17,8 +17,19 @@ def word_after_store(old, address, base, size, value):
     return (old & ~mask) | ((value << shift) & mask)
 
 
+def _image_key(image):
+    n = len(image)
+    mid = n // 4
+    return (n, bytes(image[:256]), bytes(image[mid:mid + 256]), bytes(image[max(0, n - 256):]))
+
+
 def count_lui(code, hi_val):
     """Count aligned MIPS `lui $r, hi_val` instructions in `code`."""
+    import sys
+    np = sys.modules.get("numpy")
+    if np is not None and len(code) >= 4:
+        words = np.frombuffer(code, dtype="<u4", count=len(code) // 4)
+        return int(np.count_nonzero((words & np.uint32(0xFC00FFFF)) == np.uint32(0x3C000000 | (hi_val & 0xFFFF))))
     hi = hi_val.to_bytes(2, "little")
     n = 0
     pos = code.find(hi)
@@ -29,15 +40,27 @@ def count_lui(code, hi_val):
     return n
 
 
+_256m_cache = {}
+
+
 def uses_256m_ddr(image):
     """Whether a dual-CPU M3503 / C3505 image targets a 256 MB DDR layout: it
     has a `seecode` / `secseecode` chunk and compiles `SYS_FLASH_BASE_ADDR` as
     `0xBFC00000` instead of `0xAFC00000` so `0x0F000000..0x0FFFFFFF` can be
     remapped to DDR (240..256 MB) via `0xB8000220` bit 24."""
+    key = _image_key(image)
+    cached = _256m_cache.get(key)
+    if cached is not None:
+        return cached
     if not any(name.lower() in ("seecode", "secseecode") for _o, name, _v in chunk_chain(image)):
-        return False
-    mc = maincode(image)
-    return count_lui(mc, 0xBFC0) > count_lui(mc, 0xAFC0)
+        res = False
+    else:
+        mc = maincode(image)
+        res = count_lui(mc, 0xBFC0) > count_lui(mc, 0xAFC0)
+    if len(_256m_cache) >= 32:
+        _256m_cache.pop(next(iter(_256m_cache)))
+    _256m_cache[key] = res
+    return res
 
 
 def chunk_chain(image, limit=40):
@@ -68,9 +91,7 @@ def maincode(image):
     """The image's maincode chunk unpacked (its LZMA-alone payload after the
     0x80-byte chunk header), b"" when there is none or it does not unpack.
     Recent results are kept: several families may ask about one image."""
-    n = len(image)
-    mid = n // 4
-    key = (n, bytes(image[:256]), bytes(image[mid:mid + 256]), bytes(image[max(0, n - 256):]))
+    key = _image_key(image)
     cached = _maincode_cache.get(key)
     if cached is not None:
         return cached

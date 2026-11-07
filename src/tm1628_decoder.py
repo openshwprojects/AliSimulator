@@ -83,7 +83,7 @@ class TM1628Decoder(PanelDecoder):
         self.brightness = 0
         self.mode = None
         self.auto_increment = True
-        self.address = 0
+        self._address = 0
 
         # Key scan: the 5 bytes the chip answers a key read with (see
         # press_key / dio_in).  All zero: no key.
@@ -91,12 +91,54 @@ class TM1628Decoder(PanelDecoder):
         self._press_reads_left = 0
         self._answer = [0x00] * self.KEY_BYTES
         self._answered_frame = -1
-        self.key_reads_answered = 0
+        self._key_reads_answered = 0
 
         # Stats
-        self.frame_count = 0
-        self.key_read_count = 0
+        self._frame_count = 0
+        self._key_read_count = 0
         self._frame_serial = 0
+        self.native = None
+        self.native_press = None
+
+    @property
+    def gpio_event_count(self):
+        return self.native(3) if self.native is not None else self._gpio_event_count
+
+    @gpio_event_count.setter
+    def gpio_event_count(self, v):
+        self._gpio_event_count = v
+
+    @property
+    def frame_count(self):
+        return self.native(4) if self.native is not None else self._frame_count
+
+    @frame_count.setter
+    def frame_count(self, v):
+        self._frame_count = v
+
+    @property
+    def key_read_count(self):
+        return self.native(7) if self.native is not None else self._key_read_count
+
+    @key_read_count.setter
+    def key_read_count(self, v):
+        self._key_read_count = v
+
+    @property
+    def key_reads_answered(self):
+        return self.native(8) if self.native is not None else self._key_reads_answered
+
+    @key_reads_answered.setter
+    def key_reads_answered(self, v):
+        self._key_reads_answered = v
+
+    @property
+    def address(self):
+        return self.native(10) if self.native is not None else self._address
+
+    @address.setter
+    def address(self, v):
+        self._address = v
 
     def gpio_watch(self):
         if self.dump_enabled:
@@ -177,6 +219,42 @@ class TM1628Decoder(PanelDecoder):
             self.brightness = cmd & 0x07
             self.log(f"[TM1628] Display {'ON' if self.display_on else 'OFF'}, brightness={self.brightness}")
 
+    def native_frame(self, frame):
+        """Handle a decoded TM1628 frame from the C++ core."""
+        if not frame:
+            return
+        if self.on_frame:
+            self.on_frame(frame)
+        cmd = frame[0]
+        kind = cmd & 0xC0
+        if kind == 0x00:
+            self.mode = cmd & 0x03
+            self.log(f"[TM1628] Display mode {self.mode} ({(4, 5, 6, 7)[self.mode]} grids)")
+        elif kind == 0x40:
+            if cmd & 0x02:
+                pass
+            elif cmd & 0x01:
+                if len(frame) > 1:
+                    self.leds = frame[1]
+                self.log(f"[TM1628] LED port = 0x{self.leds:02X}")
+            else:
+                self.auto_increment = not (cmd & 0x04)
+                self.log(f"[TM1628] Data command 0x{cmd:02X}: write display, "
+                         f"{'auto-increment' if self.auto_increment else 'fixed'} address")
+        elif kind == 0xC0:
+            self._address = cmd & 0x3F
+            for i, byte in enumerate(frame[1:]):
+                addr = self._address + (i if self.auto_increment else 0)
+                if addr < self.RAM_SIZE:
+                    self.ram[addr] = byte
+            if len(frame) > 1:
+                self.log(f"[TM1628] RAM[{self._address}..] = {' '.join(f'{b:02X}' for b in frame[1:])}"
+                         f"  display [{self.get_display_text()}]")
+        elif kind == 0x80:
+            self.display_on = bool(cmd & 0x08)
+            self.brightness = cmd & 0x07
+            self.log(f"[TM1628] Display {'ON' if self.display_on else 'OFF'}, brightness={self.brightness}")
+
     # ---- the chip side: key reads answered on DIO -----------------------------
     @staticmethod
     def key_code(ks, k):
@@ -192,16 +270,20 @@ class TM1628Decoder(PanelDecoder):
         self.key_bytes = [0x00] * self.KEY_BYTES
         self.key_bytes[code // 8] |= 1 << (code % 8)
         self._press_reads_left = hold_reads
+        if self.native_press is not None:
+            self.native_press(self.key_bytes, hold_reads)
 
     def dio_in(self):
         """Level the chip drives on DIO now: during a key read the bit the CPU
         is clocking in (it reads DI while CLK is low, before the rising edge
         that shifts the next bit; LSB first, 5 bytes), else 0."""
+        if self.native is not None:
+            return self.native(0)
         if not self._key_read or self.frame is None:
             return 0
         if self._answered_frame != self._frame_serial:   # first bit of this read: latch the answer
             self._answered_frame = self._frame_serial
-            self.key_reads_answered += 1
+            self._key_reads_answered += 1
             self._answer = list(self.key_bytes)
             if self._press_reads_left > 0:
                 self._press_reads_left -= 1
@@ -216,8 +298,12 @@ class TM1628Decoder(PanelDecoder):
         """Called by the simulator for every GPIO DI read: sets the DIO bit of
         the read value to the level the chip drives, for the bank that holds
         DIO (DI register = DO register - 4)."""
-        if di_offset == self.dio_offset - 4 and self._key_read and self.frame is not None:
-            return (di_value & ~(1 << self.dio_bit)) | (self.dio_in() << self.dio_bit)
+        if di_offset == self.dio_offset - 4:
+            if self.native is not None:
+                if self.native(2) and self.native(1):
+                    return (di_value & ~(1 << self.dio_bit)) | (self.dio_in() << self.dio_bit)
+            elif self._key_read and self.frame is not None:
+                return (di_value & ~(1 << self.dio_bit)) | (self.dio_in() << self.dio_bit)
         return di_value
 
     # ---- what the display shows ------------------------------------------------

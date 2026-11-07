@@ -5,6 +5,7 @@ import re
 import struct
 import threading
 import time
+import zlib
 _np = False
 
 
@@ -4591,7 +4592,7 @@ class AliMipsSimulator:
             if in_ram:
                 ram = self._ram_view[phys:phys + length]            # (the RAM buffer itself, no copy)
                 if length >= self._VIRGIN_CHUNK:
-                    ram_bytes = bytes(ram)
+                    ram_bytes = zlib.crc32(ram)
                     if self._scanned_ram_chunks.get((phys, length) if full else (phys, length, False)) == ram_bytes:
                         continue
             else:
@@ -5545,7 +5546,7 @@ class AliMipsSimulator:
             c_lo = 0 if out_phys <= 0x1000 else ((out_phys + chunk - 1) & ~(chunk - 1))
             c_hi = (out_phys + len(out)) & ~(chunk - 1)
             for c in range(c_lo, c_hi, chunk):
-                cb = bytes(self._ram_view[c:c + chunk])
+                cb = zlib.crc32(self._ram_view[c:c + chunk])
                 self._scanned_ram_chunks[(c, chunk)] = cb
                 self._scanned_ram_chunks[(c, chunk, False)] = cb
         if rate_scale > 0:

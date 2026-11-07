@@ -37,10 +37,13 @@ class C3505(UpperRamMixin, M3821):
     def matches(cls, image):
         if len(image) < 0x80C or not any(sp in (bytes(image[0x804:0x808]), bytes(image[0x808:0x80C])) for sp in BOOTROM_SP):
             return False                # not a boot-ROM bootloader
-        if not any(name == "seecode" for _o, name, _v in chunk_chain(image)):
-            return False                # (unpacking the main code is for the dual-CPU images only)
-        mc = maincode(image)
-        return any(tag in mc for tag in (b"ALI_C3505", b"NIM_C3505_0", b"NIM_S3505", b"DECV_HEVC_0"))
+        if bytes(image[0x20:0x25]) == b"M3821":
+            return False
+        chunks = chunk_chain(image)
+        if not any(name == "seecode" for _o, name, _v in chunks):
+            return False                # dual-CPU boot-ROM images
+        return any(name.lower().startswith("maincode") or (struct.unpack_from(">I", image, o)[0] >> 16) == 0x01FE
+                   for o, name, _v in chunks)
 
     def variant(self):
         if self.chip_id == 0x3821:
@@ -73,7 +76,7 @@ class C3505(UpperRamMixin, M3821):
 
     def start(self):
         self._configure_memory()
-        if self.sim.rom_image and maincode(self.sim.rom_image):
+        if self.sim.rom_image:
             for offset, name, _ver in chunk_chain(self.sim.rom_image):
                 cid, _len, _nxt, crc = struct.unpack_from(">IIII", self.sim.rom_image, offset)
                 if (name.lower().startswith("maincode") or (cid >> 16) == 0x01FE) and crc != 0x4E435243:

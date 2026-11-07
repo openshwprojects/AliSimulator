@@ -145,7 +145,7 @@ class Core {
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
   enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_GPIO_DI = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64, DF_GE = 128 };
-  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8 };
+  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8, DR_VPO = 16, DR_SCB = 32 };
   enum : uint32_t {
     RULE_DEMOD = 1,
     RULE_DEMOD_COUNT = 2,
@@ -154,6 +154,15 @@ class Core {
     RULE_EXACT_OFF = 16,
     RULE_VE_STATUS = 32,
     RULE_MAC_MDIO = 64,
+    RULE_VPO_WRITE = 128,
+    RULE_VPO_M36F_WRITE = 256,
+    RULE_VE_STATUS_WRITE = 512,
+    RULE_GE3602_WRITE = 1024,
+    RULE_OSD_PAL_WRITE = 2048,
+    RULE_MIRROR = 4096,
+    RULE_DDR_TRAINING = 8192,
+    RULE_SDRAM_CMD = 16384,
+    RULE_TRNG_WRITE = 32768,
   };
   struct MmioRule {
     uint32_t offset;
@@ -203,6 +212,9 @@ class Core {
   void set_ic_lines(uint64_t lines) { ic_lines_ = lines; poke_events(); }
   void set_ic_lines_hi(uint64_t lines) { ic_lines_hi_ = lines; poke_events(); }
   void ic_set_line(uint32_t line, bool on);
+  void ic_set_line_enabled(uint32_t line, bool on);
+  bool vpo_rule_store(uint32_t off, uint32_t size, uint64_t value);
+  Core *peer_core_ = nullptr;
   void set_doorbell(int32_t offset, int32_t shift) { doorbell_off_ = offset; doorbell_shift_ = shift; poke_events(); }
   bool ic_ip3() const;
 
@@ -293,7 +305,37 @@ class Core {
   uint32_t loop_passes_ = 0;
   uint64_t loop_stores_ = 0, loop_ustores_ = 0, loop_slow_ = 0, loop_icount_ = 0;
   bool loop_snap_ = false;
-  uint32_t loop_regs_[34];
+  uint32_t loop_regs_[35];
+  enum { DIRTY_MAX = 64, OUTER_SLOTS = 16 };
+  bool dirty_rec_ = false, dirty_over_ = false;
+  uint32_t dirty_head_ = 0xFFFFFFFFu, dirty_n_ = 0, dirty_status_ = 0;
+  uint64_t dirty_icount_ = 0, dirty_slow_ = 0, dirty_creads_ = 0;
+  uint32_t dirty_regs_[34];
+  struct DirtyWord {
+    uint32_t *ptr;
+    uint32_t orig;
+  } dirty_words_[DIRTY_MAX];
+  struct OuterLoop {
+    uint32_t key = 0xFFFFFFFFu;
+    uint32_t status = 0;
+    uint32_t regs[34] = {};
+    uint64_t icount = 0, slow = 0, creads = 0, ustores = 0;
+    bool verified = false;
+  } outer_[OUTER_SLOTS];
+  void record_dirty(uint8_t *byte_ptr) {
+    uint32_t *wp = (uint32_t *)((uintptr_t)byte_ptr & ~(uintptr_t)3);
+    for (uint32_t i = 0; i < dirty_n_; i++) {
+      if (dirty_words_[i].ptr == wp) return;
+    }
+    if (dirty_n_ >= DIRTY_MAX) {
+      dirty_over_ = true;
+      dirty_rec_ = false;
+      return;
+    }
+    uint32_t orig;
+    memcpy(&orig, wp, 4);
+    dirty_words_[dirty_n_++] = {wp, orig};
+  }
   void spin_check();
   // Count-polling loops (a delay(), a timeout): the same, but the passes read Count,
   // so the loop ends at a time of its own, not at the next event.  One pass is
@@ -307,14 +349,16 @@ class Core {
   uint64_t poll_skipped = 0, poll_skips = 0;   // instructions / loops skipped that way
   bool probe_ = false;             // replaying a pass (no slow access may happen)
   bool loop_regs_match() const {
-    return memcmp(loop_regs_, gpr, sizeof(gpr)) == 0 && loop_regs_[32] == hi && loop_regs_[33] == lo;
+    return memcmp(loop_regs_, gpr, sizeof(gpr)) == 0 && loop_regs_[32] == hi && loop_regs_[33] == lo &&
+           loop_regs_[34] == status;
   }
   // the same, but for the registers in ign (bits 0..31, 32 HI, 33 LO)
   bool loop_regs_match_mask(uint64_t ign) const {
     if (!ign) return loop_regs_match();
     for (int r = 1; r < 32; r++)
       if (!(ign >> r & 1) && loop_regs_[r] != gpr[r]) return false;
-    return ((ign >> 32 & 1) || loop_regs_[32] == hi) && ((ign >> 33 & 1) || loop_regs_[33] == lo);
+    return ((ign >> 32 & 1) || loop_regs_[32] == hi) && ((ign >> 33 & 1) || loop_regs_[33] == lo) &&
+           loop_regs_[34] == status;
   }
   // A Count-polling pass may leave a register different from pass to pass when the
   // pass writes it before reading it, and before it can leave the loop (a value
@@ -360,8 +404,8 @@ class Core {
     bool render = true;
     uint8_t *ram = nullptr;
     uint32_t ram_size = 0, phys_mask = 0x07FFFFFFu;
-    uint32_t status = 0;
-    uint64_t ops = 0, primitives = 0;
+    uint32_t status = 0, ic_line = 4;
+    uint64_t ops = 0, primitives = 0, m3602_cmds = 0;
     uint32_t regs[64] = {};
     bool resume_valid = false;
     uint32_t resume_idx = 0;
@@ -422,12 +466,127 @@ class Core {
   bool tm1650_chip_owns_sda() const;
   int tm1650_sda_in();
 
+  // TM1628 / PT6312 / uPD16312 3-wire serial front-panel LED/VFD + key-scan controller
+  struct Tm1628 {
+    bool on = false, cb_all = false;
+    uint32_t clk_off = 0, dio_off = 0, stb_off = 0;
+    uint32_t clk_mask = 0, dio_mask = 0, stb_mask = 0;
+    uint8_t prev_clk = 1, prev_stb = 1;
+    bool in_frame = false, key_read = false;
+    uint32_t nbits = 0, rises = 0;
+    uint8_t cur_byte = 0;
+    std::vector<uint8_t> frame;
+    uint8_t ram[48] = {};
+    uint8_t leds = 0;
+    bool display_on = false, auto_increment = true;
+    uint8_t brightness = 0, address = 0;
+    int32_t mode = -1;
+    uint8_t key_bytes[5] = {};
+    uint8_t answer[5] = {};
+    uint32_t key_hold = 0;
+    uint64_t frame_serial = 0, answered_frame = ~0ull;
+    uint64_t key_reads_answered = 0, frame_count = 0, key_read_count = 0, events = 0;
+    uint32_t reg_val[3] = {0, 0, 0};
+    uint32_t dio_levels = 0;
+  } tm1628_;
+  I2cCb tm1628_cb_ = nullptr;
+  void *tm1628_user_ = nullptr;
+  void tm1628_config(bool on, uint32_t clk_off, uint32_t clk_bit, uint32_t dio_off, uint32_t dio_bit,
+                     uint32_t stb_off, uint32_t stb_bit, bool cb_all);
+  void tm1628_levels(uint32_t do_off, uint32_t levels);
+  void tm1628_end_frame();
+  int tm1628_dio_in();
+
+  // 74HC164 2-wire shift-register + GPIO digit-strobe multiplexed LED panel (hc164_decoder.py)
+  struct Hc164 {
+    bool on = false, active_low_segs = true, active_low_digs = true;
+    uint32_t clk_off = 0, data_off = 0, clk_bit = 0, data_bit = 0;
+    uint32_t clk_mask = 0, data_mask = 0;
+    uint32_t n_digits = 0;
+    uint32_t dig_off[8] = {}, dig_bit[8] = {}, dig_mask[8] = {};
+    uint8_t raw[8] = {};
+    uint8_t sr = 0xFF, clk = 1, data = 1;
+    uint8_t dig_levels[8] = {};
+    bool fast_bank = false, prev_masked_ok = false;
+    uint32_t fast_off = 0, all_dig_mask = 0, watch_mask = 0, prev_masked = 0;
+    uint32_t prev_levels[16] = {};
+    uint8_t prev_ok[16] = {};
+    uint64_t frame_count = 0, events = 0;
+  } hc164_;
+  I2cCb hc164_cb_ = nullptr;
+  void *hc164_user_ = nullptr;
+  void hc164_config(bool on, uint32_t clk_off, uint32_t clk_bit, uint32_t data_off, uint32_t data_bit,
+                    const uint32_t *dig_offs, const uint32_t *dig_bits, uint32_t n_digits,
+                    bool active_low_segs, bool active_low_digs);
+  void hc164_levels(uint32_t do_off, uint32_t levels);
+
+  // Globo / Opticum "Lemontree" front-panel and EuP standby MCU at I2C 0x28 (lemontree_decoder.py)
+  struct Lemontree {
+    bool on = false, cb_all = false;
+    uint32_t scl_off = 0, sda_off = 0, scl_bit = 0, sda_bit = 0;
+    uint32_t scl_mask = 0, sda_mask = 0;
+    uint8_t scl = 1, sda = 1;
+    uint8_t state = 0, phase = 0;
+    uint32_t nbits = 0;
+    uint8_t byte = 0, out = 0, cur_addr = 0;
+    bool reading = false, master_ack = false;
+    std::vector<uint8_t> written;
+    uint8_t raw[4] = {0, 0, 0, 0};
+    uint8_t tm1650_digits[4] = {0, 0, 0, 0};
+    bool has_tm1650 = false, has_vfd = false;
+    uint8_t vfd_ram[24] = {};
+    uint8_t resp[8] = {};
+    uint32_t resp_idx = 0;
+    uint8_t key_byte = 0;
+    uint32_t key_hold = 0;
+    uint32_t prev_reg[2] = {0, 0};
+    uint8_t prev_ok[2] = {0, 0};
+    uint64_t events = 0, frame_count = 0, tx_count = 0, key_read_count = 0, key_reads_answered = 0;
+  } lemontree_;
+  I2cCb lemontree_cb_ = nullptr;
+  void *lemontree_user_ = nullptr;
+  void lemontree_config(bool on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off, uint32_t sda_bit, bool cb_all);
+  void lemontree_levels(uint32_t do_off, uint32_t levels);
+  int lemontree_sda_out() const;
+  void lemontree_finish_write();
+
   // Native MMIO read/write rules (DemodulatorLock, InternalDemod, ReadyBits, VE, MAC, UART idle)
   bool demod_locked_ = false;
   uint64_t demod_reads_ = 0;
   enum { MMIO_RULES_MAX = 256 };
   MmioRule mmio_rules_[MMIO_RULES_MAX];
   uint32_t mmio_rule_count_ = 0;
+  uint64_t trng_state_ = 0x5EEACE5512345678ull;
+  uint32_t osd_pal_[2][256];
+
+  // Hardware I2C Master blocks (SCB0..SCB3 at 0x18200, 0x18700, 0x18B00, 0x18D00: i2c_scb.py)
+  struct ScbI2c {
+    uint8_t ic_line = 0xFF;
+    uint8_t control = 0, status = 0, ier = 0, flags = 0, slave = 0;
+    uint8_t sub[4] = {0, 0, 0, 0}, sub_extra = 0;
+    uint8_t length = 0, length_hi = 0, ier1 = 0, isr1 = 0;
+    bool irq_active = false;
+    uint16_t tx_len = 0, rx_head = 0, rx_tail = 0;
+    uint8_t tx[256] = {}, rx[256] = {};
+    void reset() {
+      control = status = ier = flags = slave = sub_extra = length = length_hi = ier1 = isr1 = 0;
+      memset(sub, 0, 4);
+      irq_active = false;
+      tx_len = rx_head = rx_tail = 0;
+    }
+  } scb_[4];
+  static int scb_slot(uint32_t off) {
+    uint32_t b = off & 0xFFFF00u;
+    if (b == 0x18200u) return 0;
+    if (b == 0x18700u) return 1;
+    if (b == 0x18B00u) return 2;
+    if (b == 0x18D00u) return 3;
+    return -1;
+  }
+  void scb_sync_irq(int idx);
+  uint8_t scb_load_byte(int idx, uint32_t o, uint32_t abs_off);
+  uint64_t scb_load(uint32_t off, uint32_t size);
+  void scb_store(uint32_t off, uint32_t size, uint64_t value);
   // Profile (ali_prof): instructions run per block start / per instruction outside
   // blocks (pc | m16), and the device accesses handled in Python per instruction.
   std::unordered_map<uint32_t, uint64_t> *prof_insns_ = nullptr, *prof_dev_ = nullptr;
@@ -588,6 +747,7 @@ class Core {
       T oldv; memcpy(&oldv, p + (va & 0xFFF), sizeof(T));
       if (oldv == v) { unchanged_stores_++; return; }
       if (ALI_UNLIKELY(probe_)) throw Fault{ERR_EXCEPTION};
+      if (ALI_UNLIKELY(dirty_rec_)) record_dirty(p + (va & 0xFFF));
       memcpy(p + (va & 0xFFF), &v, sizeof(T));
       return;
     }

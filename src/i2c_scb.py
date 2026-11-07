@@ -34,6 +34,7 @@ RegisterSlave is the usual chip: a register file addressed by the first byte
 written, auto-incrementing, read back from the address last written.
 """
 import collections
+import ctypes
 
 
 class RegisterSlave:
@@ -73,14 +74,33 @@ class I2cMaster:
     LOG_FIRST, LOG_EVERY = 64, 256          # transactions logged: the first ones, then one in N
     IC_LINES = {0x18200: 18, 0x18700: 25, 0x18B00: 26, 0x18D00: 43}
     C3507_IC_LINES = {0x18200: 20, 0x18700: 21, 0x18B00: 25, 0x18D00: 26}
+    SCB_SLOTS = {0x18200: 0, 0x18700: 1, 0x18B00: 2, 0x18D00: 3}
 
     def __init__(self, sim, base, name):
         self.sim, self.base, self.name = sim, base, name
-        self.ic_line = self.IC_LINES.get(base)
+        self._scb_slot = self.SCB_SLOTS.get(base, -1)
+        self._cpp_active = False
+        self._ic_line = self.IC_LINES.get(base)
         self.transactions = 0
         self.reset()
         sim._mmio_on('w', self._write, base, base + self.SIZE - 1)
         sim._mmio_on('r', self._read, base, base + self.SIZE - 1)
+
+    @property
+    def ic_line(self):
+        return self._ic_line
+
+    @ic_line.setter
+    def ic_line(self, value):
+        self._ic_line = value
+        self._cpp_sync_config(reset=False)
+
+    def _cpp_sync_config(self, reset=False):
+        core = getattr(self.sim, "_core", None)
+        if core is not None and self._scb_slot >= 0:
+            import cpp_core
+            line = -1 if self._ic_line is None else int(self._ic_line)
+            cpp_core.lib().ali_scb_config(core.handle, self._scb_slot, line, 1 if reset else 0)
 
     def remove(self):
         self.sim._mmio_off('w', self._write, self.base, self.base + self.SIZE - 1)
@@ -101,6 +121,7 @@ class I2cMaster:
         self.ier1 = 0                       # +0x20
         self.isr1 = 0                       # +0x21
         self._irq_active = False
+        self._cpp_sync_config(reset=True)
 
     def _sync_irq(self):
         if self.ic_line is not None:
@@ -192,6 +213,22 @@ class I2cMaster:
 
     def _transfer(self, control):
         sim = self.sim
+        core = getattr(sim, "_core", None) if self._cpp_active else None
+        if core is not None:
+            import cpp_core
+            L = cpp_core.lib()
+            meta = (ctypes.c_uint8 * 8)()
+            tx_buf = (ctypes.c_uint8 * 256)()
+            tx_len = L.ali_scb_pull_tx(core.handle, self._scb_slot, meta, tx_buf)
+            self.slave = meta[0]
+            self.length = meta[1]
+            self.length_hi = meta[2]
+            self.sub[0] = meta[3]
+            self.sub[1] = meta[4]
+            self.sub[2] = meta[5]
+            self.sub[3] = meta[6]
+            self.sub_extra = meta[7]
+            self.tx = bytearray(bytes(tx_buf)[:tx_len])
         read, combined = bool(control & 0x04), bool(control & 0x08)
         addr7 = self.slave >> 1
         n = self.length | (self.length_hi << 5)
@@ -212,10 +249,15 @@ class I2cMaster:
         self.tx.clear()
         if ack and (read or combined):
             got = (got or b"")[:n] + bytes(max(0, n - len(got or b"")))
-            self.rx.extend(got)
+            if core is None:
+                self.rx.extend(got)
         self.flags = 0x01 if ack else 0x02          # (+1 stays clear: the transfer is over)
         self.isr1 = 0x01 if ack else 0x00
-        self._sync_irq()
+        if core is not None:
+            rx_bytes = got if (ack and (read or combined)) else b""
+            L.ali_scb_push_rx(core.handle, self._scb_slot, rx_bytes, len(rx_bytes), self.flags, self.isr1)
+        else:
+            self._sync_irq()
         self.transactions += 1
         if self.transactions <= self.LOG_FIRST or self.transactions % self.LOG_EVERY == 0:
             what = "W" if not (read or combined) else ("WR" if combined else "R")

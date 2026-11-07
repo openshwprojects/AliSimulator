@@ -96,13 +96,15 @@ class _Device:
         return cores
 
     def _set_line(self, line, on):
+        w_off = line >> 5
+        bit = line & 31
         for core in self._cores():
             if on:
-                enables = int.from_bytes(core.peek(core._ic_en + 4 * (line // 32), 4), 'little')
-                on_here = bool(enables >> (line % 32) & 1)
+                enables = core._mmio_words[((core._ic_en & 0xFFFFFF) >> 2) + w_off]
+                on_here = bool((enables >> bit) & 1)
             else:
                 on_here = False
-            if on_here or core._ic_lines >> line & 1:
+            if on_here or (core._ic_lines >> line) & 1:
                 core._ic_set_line(line, on_here)
 
 
@@ -307,13 +309,22 @@ def decode_mpeg2_slices(data, mb_width, mb_height):
 class VideoEngine(_Device):
     def __init__(self, sim, line=VE_LINE, reset=None, base=VE):
         self.base = base
+        self._st_widx = ((base & 0xFFFFFF) + VE_STATUS) >> 2
         self.line = line                # (the M3329's DECV_M3327 is the same engine on line 9; M3329E moves it to 0xB8013200 on line 12)
         self.reset = reset              # (device-reset register offset, the engine's bit) or None
-        self.status = 0
         self.pictures = 0
         self.resets = 0
         self.last_picture = None
         super().__init__(sim)
+        self.status = 0
+
+    @property
+    def status(self):
+        return int(self.sim._mmio_words[self._st_widx])
+
+    @status.setter
+    def status(self, val):
+        self.sim._mmio_words[self._st_widx] = val & 0xFFFFFFFF
 
     def wire(self, core):
         off = self.base & 0xFFFFFF
@@ -323,10 +334,10 @@ class VideoEngine(_Device):
             core._mmio_on('w', self._write_reset, self.reset[0], self.reset[0] + 3)
 
     def _rd(self, offset):
-        return int.from_bytes(self.sim.peek(self.base + offset, 4), 'little')
+        return int(self.sim._mmio_words[((self.base & 0xFFFFFF) + offset) >> 2])
 
     def _wr(self, offset, value):
-        self.sim.poke(self.base + offset, struct.pack("<I", value & 0xFFFFFFFF))
+        self.sim._mmio_words[((self.base & 0xFFFFFF) + offset) >> 2] = value & 0xFFFFFFFF
 
     def _write_start(self, uc, access, address, size, value, user_data):
         base, word, shift, mask = _merge(uc, address, size, value)
@@ -341,8 +352,7 @@ class VideoEngine(_Device):
         mb_w, mb_h = (size >> 8) & 0xFF, size & 0xFF
         self._wr(VE_MBS, mb_w * mb_h)
         self._advance_vld(mb_w, mb_h)
-        self.status |= 1
-        self._wr(VE_STATUS, self.status)
+        self.status = self.status | 1
         self._set_line(self.line, True)
 
     def _advance_vld(self, mb_w=0, mb_h=0):
@@ -410,9 +420,9 @@ class VideoOutput(_Device):
     SD output's (DEO_INT, DEO_LINE, DEO_FIELD_BIT)."""
 
     def __init__(self, sim, register=VPO_INT, line=VPO_LINE, field_bit=VPO_FIELD_BIT, reset=None):
-        self.register, self.line, self.field_bit = register, line, field_bit
+        self.register, self._line_v, self.field_bit = register, line, field_bit
+        self._widx = (register & 0xFFFFFF) >> 2
         self.reset = reset              # (device-reset register offset, the output's bit) or None
-        self.status = 0                 # bits 0..5 of the status (register bits 8..13)
         self.field = 0
         self.fields = 0
         self.resets = 0
@@ -420,6 +430,26 @@ class VideoOutput(_Device):
         self._mid = None                # when status bit 0 comes in this field
         super().__init__(sim)
         sim.slice_services.append(self.service)
+
+    @property
+    def line(self):
+        return self._line_v
+
+    @line.setter
+    def line(self, val):
+        self._line_v = val
+        sim = getattr(self, 'sim', None)
+        if sim is not None and hasattr(sim, '_mmio_version'):
+            sim._mmio_version += 1
+
+    @property
+    def status(self):
+        return (int(self.sim._mmio_words[self._widx]) >> 8) & 0x3F
+
+    @status.setter
+    def status(self, val):
+        w = int(self.sim._mmio_words[self._widx])
+        self.sim._mmio_words[self._widx] = (w & ~0x3F00 & ~self.field_bit) | ((val & 0x3F) << 8) | (self.field and self.field_bit)
 
     def wire(self, core):
         offset = self.register & 0xFFFFFF
@@ -432,24 +462,23 @@ class VideoOutput(_Device):
         reset -- interrupt enables and pending status cleared, line dropped."""
         if (value << (address & 3) * 8) & self.reset[1]:
             self.resets += 1
-            self.status = 0
             self.field = 0
-            self.sim.poke(self.register, b"\x00\x00\x00\x00")
-            self._set_line(self.line, False)
+            self.sim._mmio_words[self._widx] = 0
+            self._set_line(self._line_v, False)
         return None
 
     def _word(self, enables_from=None):
-        word = int.from_bytes(self.sim.peek(self.register, 4), 'little') if enables_from is None else enables_from
+        word = int(self.sim._mmio_words[self._widx]) if enables_from is None else enables_from
         return (word & ~0x3F00 & ~self.field_bit) | (self.status << 8) | (self.field and self.field_bit)
 
     def _line(self, word):
-        self._set_line(self.line, bool(self.status & word & 0x3F))
+        self._set_line(self._line_v, bool(self.status & word & 0x3F))
 
     def _write(self, uc, access, address, size, value, user_data):
         base, word, shift, mask = _merge(uc, address, size, value)
-        self.status &= ~(((value << shift) & mask) >> 8) & 0x3F
-        landed = self._word(enables_from=word)
-        self._line(landed)
+        st = self.status & ~(((value << shift) & mask) >> 8) & 0x3F
+        landed = (word & ~0x3F00 & ~self.field_bit) | (st << 8) | (self.field and self.field_bit)
+        self._set_line(self._line_v, bool(st & landed & 0x3F))
         return (landed & mask) >> shift
 
     def due(self):
@@ -474,15 +503,16 @@ class VideoOutput(_Device):
         self._mid = now + FIELD_S / 2
         self.fields += 1
         self.field ^= 1
-        word = int.from_bytes(self.sim.peek(self.register, 4), 'little')
+        word = int(self.sim._mmio_words[self._widx])
         field_status = 0x20 if (self.field and (word & 0x20)) else VPO_FIELD_START
         self._post(VPO_BLANK | field_status)
 
     def _post(self, bits):
-        self.status |= bits
-        word = self._word()
-        self.sim.poke(self.register, struct.pack("<I", word))
-        self._line(word)
+        w = int(self.sim._mmio_words[self._widx])
+        st = ((w >> 8) & 0x3F) | bits
+        word = (w & ~0x3F00 & ~self.field_bit) | (st << 8) | (self.field and self.field_bit)
+        self.sim._mmio_words[self._widx] = word
+        self._set_line(self._line_v, bool(st & word & 0x3F))
 
 
 class VideoOutputM36F(_Device):
@@ -492,6 +522,7 @@ class VideoOutputM36F(_Device):
     bottom field.  Used by C3505 / M3526A bootloaders and applications when
     decoding and displaying the MPEG-2 boot logo."""
     REGS = (0xB8006288, 0xB8006488)
+    WIDXS = ((0x6288 >> 2), (0x6488 >> 2))
 
     def __init__(self, sim, line=VPO_LINE):
         self.line = line
@@ -503,24 +534,33 @@ class VideoOutputM36F(_Device):
         sim.slice_services.append(self.service)
 
     def wire(self, core):
-        for idx, reg in enumerate(self.REGS):
-            off = reg & 0xFFFFFF
-            core._mmio_on('w', lambda uc, a, addr, sz, val, ud, i=idx: self._write(i, uc, addr, sz, val), off, off + 3)
+        core._mmio_on('w', self._write0, 0x6288, 0x628B)
+        core._mmio_on('w', self._write1, 0x6488, 0x648B)
+
+    def _write0(self, uc, access, address, size, value, user_data):
+        return self._write(0, uc, address, size, value)
+
+    def _write1(self, uc, access, address, size, value, user_data):
+        return self._write(1, uc, address, size, value)
 
     def _enables(self, idx):
-        word = int.from_bytes(self.sim.peek(self.REGS[idx], 4), 'little')
-        return (word >> 16) & 0x1FF
+        return (int(self.sim._mmio_words[self.WIDXS[idx]]) >> 16) & 0x1FF
 
     def _update_line(self):
-        active = any(self.status[i] & self._enables(i) for i in range(2))
+        w0 = int(self.sim._mmio_words[self.WIDXS[0]])
+        w1 = int(self.sim._mmio_words[self.WIDXS[1]])
+        self.status[0] = w0 & 0x1FF
+        self.status[1] = w1 & 0x1FF
+        active = bool(((w0 & (w0 >> 16)) | (w1 & (w1 >> 16))) & 0x1FF)
         self._set_line(self.line, active)
 
     def _write(self, idx, uc, address, size, value):
         base, word, shift, mask = _merge(uc, address, size, value)
         written_low = ((value << shift) & mask) & 0x1FF
-        self.status[idx] &= ~written_low
-        landed = (word & ~0x1FF) | (self.status[idx] & 0x1FF)
-        self.sim.poke(self.REGS[idx], struct.pack("<I", landed))
+        st = (int(self.sim._mmio_words[self.WIDXS[idx]]) & 0x1FF) & ~written_low
+        self.status[idx] = st
+        landed = (word & ~0x1FF) | (st & 0x1FF)
+        self.sim._mmio_words[self.WIDXS[idx]] = landed
         self._update_line()
         return (landed & mask) >> shift
 
@@ -537,9 +577,10 @@ class VideoOutputM36F(_Device):
         self.fields += 1
         self.field ^= 1
         bits = 0x04 | (0x20 if self.field else 0x10)
-        for i, reg in enumerate(self.REGS):
-            self.status[i] = (self.status[i] & ~0x34) | bits
-            word = int.from_bytes(self.sim.peek(reg, 4), 'little')
-            self.sim.poke(reg, struct.pack("<I", (word & ~0x1FF) | (self.status[i] & 0x1FF)))
+        for i, widx in enumerate(self.WIDXS):
+            word = int(self.sim._mmio_words[widx])
+            st = ((word & 0x1FF) & ~0x34) | bits
+            self.status[i] = st
+            self.sim._mmio_words[widx] = (word & ~0x1FF) | (st & 0x1FF)
         self._update_line()
 

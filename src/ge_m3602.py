@@ -83,11 +83,28 @@ class GeM3602:
     def __init__(self, sim, base=BASE):
         self.sim = sim
         self.base = base
-        self.commands = 0
+        self._commands = 0
         self.unsupported = {}
         self._ram = None
+        core = getattr(sim, "_core", None)
+        if core is not None and _cpp_core is not None:
+            core.set(_cpp_core.F_GE_M3602_CMDS, 0)
         sim._mmio_on('w', self._write_control, self.base, self.base + 3)
         sim._mmio_on('w', self._write_status, self.base + 8, self.base + 0xB)
+
+    @property
+    def commands(self):
+        core = getattr(self.sim, "_core", None)
+        if core is not None and _cpp_core is not None:
+            return self._commands + int(core.get(_cpp_core.F_GE_M3602_CMDS))
+        return self._commands
+
+    @commands.setter
+    def commands(self, value):
+        self._commands = int(value)
+        core = getattr(self.sim, "_core", None)
+        if core is not None and _cpp_core is not None:
+            core.set(_cpp_core.F_GE_M3602_CMDS, 0)
 
     def _rd(self, offset):
         return int.from_bytes(self.sim.peek(0xB8000000 + self.base + offset, 4), 'little')
@@ -148,30 +165,30 @@ class GeM3602:
                 status = lib.ali_ge_m3602_run(ram_ptr, self.sim.ram_size,
                                               ctypes.byref(c_addr), ctypes.byref(c_mask), ctypes.byref(c_cmds))
                 if status == 0:
-                    self.commands += int(c_cmds.value)
+                    self._commands += int(c_cmds.value)
                     return
                 address, mask = int(c_addr.value), int(c_mask.value)
                 a = address % self.sim.ram_size
                 if a + 40 * 4 > ram_arr.size:
-                    self.commands += int(c_cmds.value)
+                    self._commands += int(c_cmds.value)
                     return
                 words = ram_arr[a:a + 40 * 4].view('<u4').tolist()
                 c_cmds.value += 1
                 self._execute(words, mask)
                 link = words[0]
                 if not link:
-                    self.commands += int(c_cmds.value)
+                    self._commands += int(c_cmds.value)
                     return
                 c_addr.value = (address & 0x0F000000) | (link & 0xFFFFFF)
                 c_mask.value = link >> 24
-            self.commands += int(c_cmds.value)
+            self._commands += int(c_cmds.value)
             return
         for _ in range(MAX_COMMANDS):
             a = address % self.sim.ram_size
             if a + 40 * 4 > self.ram.size:
                 return
             words = self.ram[a:a + 40 * 4].view('<u4').tolist()
-            self.commands += 1
+            self._commands += 1
             self._execute(words, mask)
             link = words[0]
             if not link:

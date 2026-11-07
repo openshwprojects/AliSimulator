@@ -1598,6 +1598,7 @@ void Core::run_blocks(Block *b) {
       T oldv; memcpy(&oldv, p + (a & 0xFFF), sizeof(T));                                      \
       if (oldv == v) { unchanged_stores_++; break; }                                          \
       if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }               \
+      if (ALI_UNLIKELY(dirty_rec_)) record_dirty(p + (a & 0xFFF));                            \
       memcpy(p + (a & 0xFFF), &v, sizeof(T));                                                 \
       break;                                                                                  \
     }                                                                                         \
@@ -1656,6 +1657,7 @@ void Core::run_blocks(Block *b) {
             memcpy(&oldw, pw + (wa & 0xFFF), 4);
             if (oldw == nw) { unchanged_stores_++; break; }
             if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
+            if (ALI_UNLIKELY(dirty_rec_)) record_dirty(pw + (wa & 0xFFF));
             memcpy(pw + (wa & 0xFFF), &nw, 4);
             break;
           }
@@ -1686,6 +1688,7 @@ void Core::run_blocks(Block *b) {
             memcpy(&oldw, pw + (wa & 0xFFF), 4);
             if (oldw == nw) { unchanged_stores_++; break; }
             if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
+            if (ALI_UNLIKELY(dirty_rec_)) record_dirty(pw + (wa & 0xFFF));
             memcpy(pw + (wa & 0xFFF), &nw, 4);
             break;
           }
@@ -1781,6 +1784,7 @@ void Core::run_blocks(Block *b) {
             uint32_t oldv; memcpy(&oldv, p + (a & 0xFFF), 4);
             if (oldv == v) { unchanged_stores_++; break; }
             if (ALI_UNLIKELY(probe_)) { cur_pc_ = u2.pc; throw Fault{ERR_EXCEPTION}; }
+            if (ALI_UNLIKELY(dirty_rec_)) record_dirty(p + (a & 0xFFF));
             memcpy(p + (a & 0xFFF), &v, 4);
             break;
           }
@@ -1820,7 +1824,10 @@ void Core::run_blocks(Block *b) {
             uint32_t oldv; memcpy(&oldv, p + (a & 0xFFF), 4);
             if (oldv == v) unchanged_stores_++;
             else if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
-            else memcpy(p + (a & 0xFFF), &v, 4);
+            else {
+              if (ALI_UNLIKELY(dirty_rec_)) record_dirty(p + (a & 0xFFF));
+              memcpy(p + (a & 0xFFF), &v, 4);
+            }
           }
           const Uop &u2 = b->ops[++i];
           uint32_t a2 = R[u2.s] + u2.imm;
@@ -1832,6 +1839,7 @@ void Core::run_blocks(Block *b) {
             uint32_t oldv2; memcpy(&oldv2, p2 + (a2 & 0xFFF), 4);
             if (oldv2 == v2) { unchanged_stores_++; break; }
             if (ALI_UNLIKELY(probe_)) { cur_pc_ = u2.pc; throw Fault{ERR_EXCEPTION}; }
+            if (ALI_UNLIKELY(dirty_rec_)) record_dirty(p2 + (a2 & 0xFFF));
             memcpy(p2 + (a2 & 0xFFF), &v2, 4);
             break;
           }
@@ -1877,17 +1885,17 @@ void Core::run_blocks(Block *b) {
         // ---- Status (as exec32's COP0 path: still counted as slow ops, so no
         // loop pass with one is replayed or skipped, as before they ran in blocks) ----
         case U_MFC0_STATUS:
-          slow_++;
+          if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
           if (u.d) R[u.d] = status;
           break;
         case U_MTC0_STATUS:
-          slow_++;
+          if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
           status = (status & ~0x3678FF1Fu) | (R[u.t] & 0x3678FF1Fu);
           status_events(icount + i + 1);
           goto check_slow;
         case U_DI:
         case U_EI: {
-          slow_++;
+          if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
           uint32_t old = status;
           if (u.op == U_EI) status |= 1; else status &= ~1u;
           if (u.d) R[u.d] = old;
@@ -2137,6 +2145,33 @@ void Core::spin_check() {
   uint32_t key = pc | (m16 ? 1u : 0u);
   bool same = key == loop_key_ && (stores_ - unchanged_stores_) == (loop_stores_ - loop_ustores_) && slow_ == loop_slow_;
   spin_dbg[0]++;
+  if (ALI_UNLIKELY(dirty_rec_)) {
+    if (slow_ != dirty_slow_ || count_reads_ != dirty_creads_ || (icount - dirty_icount_) > 65536) {
+      dirty_rec_ = false;
+    } else if (key == dirty_head_) {
+      dirty_rec_ = false;
+      uint64_t pass = icount - dirty_icount_;
+      if (!dirty_over_ && pass && status == dirty_status_ &&
+          memcmp(dirty_regs_, gpr, sizeof(gpr)) == 0 && dirty_regs_[32] == hi && dirty_regs_[33] == lo) {
+        bool clean = true;
+        for (uint32_t i = 0; i < dirty_n_; i++) {
+          uint32_t cur;
+          memcpy(&cur, dirty_words_[i].ptr, 4);
+          if (cur != dirty_words_[i].orig) { clean = false; break; }
+        }
+        if (clean) {
+          OuterLoop &ol = outer_[((key * 0x9E3779B1u) >> 28) & (OUTER_SLOTS - 1)];
+          ol.verified = true;
+          if (next_event_ != ~0ull && next_event_ > icount + pass) {
+            spin_dbg[5]++;
+            uint64_t k = (next_event_ - icount - 1) / pass;
+            icount += k * pass;
+            spin_skipped += k * pass;
+          }
+        }
+      }
+    }
+  }
   if (rec_on_) {
     // a pass of a loop that reads Count was recorded: if it goes round with the
     // same registers (but those it sets before it reads them), skip whole passes
@@ -2177,11 +2212,66 @@ void Core::spin_check() {
       memcpy(loop_regs_, gpr, sizeof(gpr));
       loop_regs_[32] = hi;
       loop_regs_[33] = lo;
+      loop_regs_[34] = status;
       memcpy(rec_, pl.seq, sizeof(Block *) * pl.n);
       rec_n_ = pl.n;
       rec_ign_ = pl.ign;
       uint64_t k = poll_skip(key, pl.last_k);
       if (k) pl.last_k = k;       // (a guess only: 0 -- the loop ending at once -- keeps the last one)
+    } else if (!dirty_rec_) {
+      OuterLoop &ol = outer_[((key * 0x9E3779B1u) >> 28) & (OUTER_SLOTS - 1)];
+      uint64_t cur_ustores = stores_ - unchanged_stores_;
+      bool regs_eq = (ol.key == key && status == ol.status &&
+                      memcmp(ol.regs, gpr, sizeof(gpr)) == 0 && ol.regs[32] == hi && ol.regs[33] == lo);
+      if (regs_eq && slow_ == ol.slow && count_reads_ == ol.creads) {
+        uint64_t pass = icount - ol.icount;
+        if (pass > 0 && pass <= 65536) {
+          if (cur_ustores == ol.ustores) {
+            ol.verified = true;
+            if (next_event_ != ~0ull && next_event_ > icount + pass) {
+              spin_dbg[5]++;
+              uint64_t k = (next_event_ - icount - 1) / pass;
+              icount += k * pass;
+              spin_skipped += k * pass;
+            }
+          } else if (cur_ustores - ol.ustores <= 256 && next_event_ != ~0ull && next_event_ > icount + 2 * pass) {
+            dirty_rec_ = true;
+            dirty_over_ = false;
+            dirty_head_ = key;
+            dirty_n_ = 0;
+            dirty_icount_ = icount;
+            dirty_slow_ = slow_;
+            dirty_creads_ = count_reads_;
+            dirty_status_ = status;
+            memcpy(dirty_regs_, gpr, sizeof(gpr));
+            dirty_regs_[32] = hi;
+            dirty_regs_[33] = lo;
+          }
+        }
+      } else if (regs_eq && ol.verified) {
+        dirty_rec_ = true;
+        dirty_over_ = false;
+        dirty_head_ = key;
+        dirty_n_ = 0;
+        dirty_icount_ = icount;
+        dirty_slow_ = slow_;
+        dirty_creads_ = count_reads_;
+        dirty_status_ = status;
+        memcpy(dirty_regs_, gpr, sizeof(gpr));
+        dirty_regs_[32] = hi;
+        dirty_regs_[33] = lo;
+      } else if (ol.key != key) {
+        ol.verified = false;
+      }
+      ol.key = key;
+      ol.icount = icount;
+      ol.slow = slow_;
+      ol.creads = count_reads_;
+      ol.ustores = cur_ustores;
+      ol.status = status;
+      memcpy(ol.regs, gpr, sizeof(gpr));
+      ol.regs[32] = hi;
+      ol.regs[33] = lo;
     }
     loop_key_ = key;
     loop_stores_ = stores_;
@@ -2205,6 +2295,7 @@ void Core::spin_check() {
       memcpy(loop_regs_, gpr, sizeof(gpr));
       loop_regs_[32] = hi;
       loop_regs_[33] = lo;
+      loop_regs_[34] = status;
       memcpy(rec_, pl.seq, sizeof(Block *) * pl.n);
       rec_n_ = pl.n;
       rec_ign_ = pl.ign;
@@ -2216,6 +2307,7 @@ void Core::spin_check() {
       memcpy(loop_regs_, gpr, sizeof(gpr));
       loop_regs_[32] = hi;
       loop_regs_[33] = lo;
+      loop_regs_[34] = status;
       rec_on_ = true;
       rec_over_ = false;
       rec_n_ = 0;
@@ -2241,6 +2333,7 @@ void Core::spin_check() {
   memcpy(loop_regs_, gpr, sizeof(gpr));
   loop_regs_[32] = hi;
   loop_regs_[33] = lo;
+  loop_regs_[34] = status;
   loop_snap_ = true;
   loop_icount_ = icount;
   loop_passes_ = 0;

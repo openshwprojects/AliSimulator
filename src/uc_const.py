@@ -400,7 +400,11 @@ _ERR_STRINGS = {
 }
 
 
-class _LocalUcError(Exception):
+class _BaseUcError(Exception):
+    pass
+
+
+class _LocalUcError(_BaseUcError):
     def __init__(self, errno: int, *args):
         super().__init__(errno, *args)
         self.errno = errno
@@ -410,8 +414,8 @@ class _LocalUcError(Exception):
 
 
 class _UcErrorMeta(type):
-    """Makes `except UcError:` catch both _LocalUcError and unicorn.UcError
-    (when unicorn is loaded before or after uc_const)."""
+    """Makes `except UcError:` and `isinstance(..., UcError)` match both
+    _LocalUcError and unicorn.UcError."""
     def __instancecheck__(cls, instance):
         if super().__instancecheck__(instance):
             return True
@@ -427,27 +431,32 @@ class _UcErrorMeta(type):
         return real_cls is not None and issubclass(subclass, real_cls)
 
 
-_combined_cls = None
-
-
 class UcError(_LocalUcError, metaclass=_UcErrorMeta):
-    def __new__(cls, errno: int, *args):
-        global _combined_cls
-        if cls is UcError:
-            uc_mod = sys.modules.get("unicorn")
-            real_cls = getattr(uc_mod, "UcError", None) if uc_mod is not None else None
-            if real_cls is not None and real_cls is not UcError:
-                if _combined_cls is None:
-                    class _CombinedUcError(UcError, real_cls):
-                        pass
-                    _combined_cls = _CombinedUcError
-                cls = _combined_cls
-        return super().__new__(cls, errno, *args)
+    pass
 
+
+def _bind_real_uc_error():
+    uc_mod = sys.modules.get("unicorn")
+    if uc_mod is None:
+        return
+    real_cls = getattr(uc_mod, "UcError", None)
+    if real_cls is not None and real_cls is not UcError and not issubclass(UcError, real_cls):
+        try:
+            _LocalUcError.__bases__ = (real_cls,)
+        except TypeError:
+            pass
+        uc_mod.UcError = UcError
+        sub_mod = sys.modules.get("unicorn.unicorn_py3.unicorn") or sys.modules.get("unicorn.unicorn")
+        if sub_mod is not None:
+            sub_mod.UcError = UcError
+
+
+_bind_real_uc_error()
 
 
 def Uc(*args, **kwargs):
     """Lazy wrapper around unicorn.Uc so unicorn.dll is loaded only when a
     Unicorn engine instance is actually created."""
     from unicorn import Uc as _RealUc
+    _bind_real_uc_error()
     return _RealUc(*args, **kwargs)

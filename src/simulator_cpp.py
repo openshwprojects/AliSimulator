@@ -35,6 +35,7 @@ import os
 import struct
 import sys
 import threading
+import zlib
 
 from uc_const import (UcError, UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED, UC_HOOK_MEM_FETCH_PROT,
                       UC_HOOK_MEM_READ_PROT, UC_HOOK_MEM_WRITE_PROT, UC_PROT_ALL,
@@ -47,12 +48,16 @@ from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_
                       F_IRQS_ENABLED, F_M16, F_DS_ACTIVE, F_IDLE_SKIPPED, F_FAULT_PC, F_FAULT_ADDR,
                       F_STEP_OVER_BP, F_IRQ_DELIVERABLE, F_IC_IP3, F_TIMER_ANCHOR, F_LAST_ERROR,
                       F_PC_MODE, F_COUNT_OBSERVED, F_COUNT_OBSERVED_VALID, F_COUNT_RAW_WRITE,
-                      F_COMPARE_WRITE, F_DEMOD_LOCKED, F_DEMOD_READS, STOP_ERROR, STOP_BREAKPOINT, STOP_REQUEST,
+                      F_COMPARE_WRITE, F_DEMOD_LOCKED, F_DEMOD_READS, F_GE_IC_LINE, F_GE_M3602_CMDS,
+                      STOP_ERROR, STOP_BREAKPOINT, STOP_REQUEST,
                       STOP_COUNT, EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ, DF_READ, DF_WRITE,
                       DF_GPIO_DI, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE, F_UART_IRQS,
-                      DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE,
+                      DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE, DR_VPO, DR_SCB,
                       RULE_DEMOD, RULE_DEMOD_COUNT, RULE_DEMOD_CLR3F, RULE_DEMOD_IFZERO,
-                      RULE_EXACT_OFF, RULE_VE_STATUS, RULE_MAC_MDIO)
+                      RULE_EXACT_OFF, RULE_VE_STATUS, RULE_MAC_MDIO,
+                      RULE_VPO_WRITE, RULE_VPO_M36F_WRITE, RULE_VE_STATUS_WRITE,
+                      RULE_GE3602_WRITE, RULE_OSD_PAL_WRITE, RULE_MIRROR, RULE_DDR_TRAINING,
+                      RULE_SDRAM_CMD, RULE_TRNG_WRITE)
 from simulator import AliMipsSimulator, ISAMode
 
 
@@ -231,6 +236,12 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._gi2c_cb = None
         self._tm1650_dec = None         # the tm1650_decoder.TM1650Decoder the core runs (_cpp_gpio_sync)
         self._tm1650_cb = None
+        self._tm1628_dec = None         # the tm1628_decoder.TM1628Decoder the core runs (_cpp_gpio_sync)
+        self._tm1628_cb = None
+        self._hc164_dec = None          # the hc164_decoder.HC164Decoder the core runs (_cpp_gpio_sync)
+        self._hc164_cb = None
+        self._lemontree_dec = None      # the lemontree_decoder.LemontreeDecoder the core runs (_cpp_gpio_sync)
+        self._lemontree_cb = None
         self._gpio_sync_key = None
         self._gpio_watch_pushed = None
         self._gpio_di_high_pushed = None
@@ -398,6 +409,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._orig_emu_stop = cpp_core.CppUc.emu_stop.__get__(core)
         # the core's interrupt controller (EBase and Status: the shadow attributes, set before)
         L.ali_set_ic(core.handle, self.ic_base, self.ic_base + 8, self.ic_base)
+        if self._shared is not None and hasattr(self._shared, '_core'):
+            L.ali_set_peer_core(core.handle, self._shared._core.handle)
         # first-execution reports of the RAM's 1 MB chunks (LzmaDecode found in new code)
         L.ali_set_chunks(core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
         L.ali_ge_config(core.handle, ram_ptr, self.ram_size)
@@ -505,6 +518,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
         seen_ready = []
         seen_demod_lock = []
         seen_idemod = []
+        seen_mirrors = []
+        seen_ddr_tr = False
         sc_read = self._hook_selfcomplete_read
         mac_rst = self._hook_mac_reset_read
         mac_mdio = self._hook_mac_mdio_read
@@ -538,6 +553,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
                     rules.append((off, 0, 0x00, 0x00, 0, RULE_EXACT_OFF))
             else:
                 owner = getattr(fn, '__self__', None)
+                t_name = type(owner).__name__
                 if isinstance(owner, ReadyBits) and fn == owner._read:
                     rflags[off] = rflags.get(off, 0) | DR_READ
                     if owner not in seen_ready:
@@ -547,10 +563,19 @@ class CppAliMipsSimulator(AliMipsSimulator):
                     rflags[off] = rflags.get(off, 0) | DR_READ
                     if owner not in seen_demod_lock:
                         seen_demod_lock.append(owner)
-                elif type(owner).__name__ == 'InternalDemod' and fn == getattr(owner, '_read_status', None):
+                elif t_name == 'InternalDemod' and fn == getattr(owner, '_read_status', None):
                     rflags[off] = rflags.get(off, 0) | DR_READ
                     if owner not in seen_idemod:
                         seen_idemod.append(owner)
+                elif t_name == 'DmaRings' and fn == getattr(owner, '_read_done', None):
+                    rflags[off] = rflags.get(off, 0) | DR_READ
+                elif t_name == 'MirrorRegisters' and fn == getattr(owner, '_read', None):
+                    rflags[off] = rflags.get(off, 0) | DR_READ
+                    if owner not in seen_mirrors:
+                        seen_mirrors.append(owner)
+                elif t_name == 'DdrTraining' and fn in (getattr(owner, '_read_status', None), getattr(owner, '_read_capture', None)):
+                    rflags[off] = rflags.get(off, 0) | DR_READ
+                    seen_ddr_tr = True
         if seen_selfcomp:
             for reg, (start, done, clear) in self._SELF_COMPLETING.items():
                 rules.append((reg, start or 0, (~clear) & 0xFF, done & 0xFF, 0, 0))
@@ -559,6 +584,13 @@ class CppAliMipsSimulator(AliMipsSimulator):
         for rb in seen_ready:
             for b_off, mask in rb.bits.items():
                 rules.append((b_off, 0, 0xFF, mask & 0xFF, 0, 0))
+        for mr in seen_mirrors:
+            for target, (source, n) in mr.mirrors.items():
+                for i in range(n):
+                    t_i, s_i = target + i, source + i
+                    rules.append((t_i, 1, s_i & 0xFF, (s_i >> 8) & 0xFF, (s_i >> 16) & 0xFF, RULE_MIRROR))
+        if seen_ddr_tr:
+            rules.append((0x3E08C, 0, 0, 0, 0, RULE_DDR_TRAINING))
         for dl in seen_demod_lock:
             for reg, lfn in dl.LOCKED.items():
                 v0 = lfn(0) & 0xFF
@@ -578,6 +610,14 @@ class CppAliMipsSimulator(AliMipsSimulator):
                         rules.append((idmd.base + reg, 0, 0xFF, val & 0xFF, 0, RULE_DEMOD | RULE_DEMOD_IFZERO))
         chip_id_store = self._hook_chip_id_store
         uart_write = self._hook_uart_write
+        sdram_cmd = getattr(self.chip, '_sdram_command', None)
+        seen_vpo = []
+        seen_vpo_m36f = []
+        seen_ve_st = []
+        seen_ge3602 = []
+        seen_osd_pal = False
+        seen_sdram_cmd = []
+        seen_trng = []
         for off, handlers in self._mmio_wr.items():
             if len(handlers) != 1 or off in wr_obs or not (want.get(off, 0) & DF_WRITE):
                 continue
@@ -586,6 +626,64 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_WRITE_IGNORE
             elif fn == uart_write and (off & 0xF) != 0:
                 rflags[off] = rflags.get(off, 0) | DR_WRITE
+            elif sdram_cmd is not None and fn == sdram_cmd:
+                rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                if off not in seen_sdram_cmd:
+                    seen_sdram_cmd.append(off)
+            else:
+                owner = getattr(fn, '__self__', None)
+                t_name = type(owner).__name__
+                if t_name == 'VideoOutput' and fn == getattr(owner, '_write', None):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    if owner not in seen_vpo:
+                        seen_vpo.append(owner)
+                elif t_name == 'VideoOutputM36F' and fn in (getattr(owner, '_write0', None), getattr(owner, '_write1', None)):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    if owner not in seen_vpo_m36f:
+                        seen_vpo_m36f.append(owner)
+                elif t_name == 'VideoEngine' and fn == getattr(owner, '_write_status', None):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    if owner not in seen_ve_st:
+                        seen_ve_st.append(owner)
+                elif t_name == 'GeM3602' and fn in (getattr(owner, '_write_control', None), getattr(owner, '_write_status', None)):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    if owner not in seen_ge3602:
+                        seen_ge3602.append(owner)
+                elif t_name == 'Osd' and fn in (getattr(owner, '_write0', None), getattr(owner, '_write1', None)):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    seen_osd_pal = True
+                elif t_name == 'Trng' and fn == getattr(owner, '_write', None):
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
+                    if off not in seen_trng:
+                        seen_trng.append(off)
+        for vo in seen_vpo:
+            fb_code = (1 if (vo.field_bit & (1 << 18)) else 0) | (2 if (vo.field_bit & (1 << 19)) else 0)
+            rules.append((vo.register & 0xFFFFFF, vo.line & 0xFF, fb_code, 0, 0, RULE_VPO_WRITE))
+        for vm in seen_vpo_m36f:
+            rules.append((0x6288, vm.line & 0xFF, 0, 0, 0, RULE_VPO_M36F_WRITE))
+        for ve in seen_ve_st:
+            rules.append(((ve.base & 0xFFFFFF) + 0x18, ve.line & 0xFF, 0, 0, 0, RULE_VE_STATUS_WRITE))
+        for ge36 in seen_ge3602:
+            rules.append((ge36.base & 0xFFFFFF, 0, 0, 0, 0, RULE_GE3602_WRITE))
+        if seen_osd_pal:
+            rules.append((0x41AC, 0, 0, 0, 0, RULE_OSD_PAL_WRITE))
+        for sc_off in seen_sdram_cmd:
+            rules.append((sc_off, 0, 0, 0, 0, RULE_SDRAM_CMD))
+        for tr_off in seen_trng:
+            rules.append((tr_off, 0, 0, 0, 0, RULE_TRNG_WRITE))
+        if self._shared is None:
+            for m in getattr(self, 'i2c_masters', ()):
+                if getattr(m, '_scb_slot', -1) >= 0 and all(
+                    o not in rd_obs and o not in wr_obs
+                    and self._mmio_rd.get(o) == [m._read] and self._mmio_wr.get(o) == [m._write]
+                    and (want.get(o, 0) & (DF_READ | DF_WRITE)) == (DF_READ | DF_WRITE)
+                    for o in range(m.base, m.base + m.SIZE)
+                ):
+                    m._cpp_active = True
+                    for o in range(m.base, m.base + m.SIZE):
+                        rflags[o] = rflags.get(o, 0) | DR_SCB
+                else:
+                    m._cpp_active = False
         rules_key = (tuple(rules), tuple(sorted(rflags.items())))
         if rules_key != self._dev_rules_pushed:
             self._dev_rules_pushed = rules_key
@@ -672,10 +770,14 @@ class CppAliMipsSimulator(AliMipsSimulator):
         cb, devices = self.gpio_callback, self.gpio_devices
         bus = self._gi2c_bus
         tm_dec = self._tm1650_dec
-        if tm_dec is not None and cb is not None and getattr(cb, '__self__', None) is tm_dec:
+        tm28_dec = self._tm1628_dec
+        hc_dec = self._hc164_dec
+        lt_dec = self._lemontree_dec
+        native_decs = (tm_dec, tm28_dec, hc_dec, lt_dec)
+        if cb is not None and getattr(cb, '__self__', None) in native_decs and getattr(cb, '__self__', None) is not None:
             cb = None
-        if (bus is not None or tm_dec is not None) and devices:
-            devices = [d for d in devices if d is not bus and d is not tm_dec]
+        if (bus is not None or any(d is not None for d in native_decs)) and devices:
+            devices = [d for d in devices if d is not bus and d not in native_decs]
         if not cb:
             ndev = len(devices)
             if ndev == 0:
@@ -791,7 +893,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
     def _ic_lines(self):
         if '_core' not in self.__dict__:
             return self.__dict__.get('_ic_lines_v', 0)
-        return (self.__dict__.get('_ic_lines_hi_pushed', 0) << 64) | self._core.get(F_IC_LINES)
+        hi = self._core.get(F_IC_LINES_HI)
+        self.__dict__['_ic_lines_hi_pushed'] = hi
+        return (hi << 64) | self._core.get(F_IC_LINES)
 
     @_ic_lines.setter
     def _ic_lines(self, value):
@@ -805,6 +909,15 @@ class CppAliMipsSimulator(AliMipsSimulator):
     def set_ic_layout(self, status, enable):
         super().set_ic_layout(status, enable)
         cpp_core.lib().ali_set_ic(self._core.handle, status, enable, self.ic_base)
+
+    @property
+    def _IC_GE(self):
+        return int(self._core.get(F_GE_IC_LINE)) if '_core' in self.__dict__ else 4
+
+    @_IC_GE.setter
+    def _IC_GE(self, value):
+        if '_core' in self.__dict__:
+            self._core.set(F_GE_IC_LINE, int(value))
 
     @property
     def doorbell_in(self):
@@ -1070,25 +1183,27 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._cpp_spi_sync()
         self._cpp_dev_flags()
         self._cpp_demod_sync()
-        wanted = set(self.breakpoints)
-        if self.stop_instr is not None:
-            wanted.add(self.stop_instr)
-        if wanted != self._bp_pushed:
-            self._bp_pushed = set(wanted)
-            arr = (ctypes.c_uint32 * max(1, len(wanted)))(*sorted(a & 0xFFFFFFFF for a in wanted))
-            cpp_core.lib().ali_set_breakpoints(self._core.handle, arr, len(wanted))
+        if self.breakpoints or self.stop_instr is not None or self._bp_pushed:
+            wanted = set(self.breakpoints)
+            if self.stop_instr is not None:
+                wanted.add(self.stop_instr)
+            if wanted != self._bp_pushed:
+                self._bp_pushed = set(wanted)
+                arr = (ctypes.c_uint32 * max(1, len(wanted)))(*sorted(a & 0xFFFFFFFF for a in wanted))
+                cpp_core.lib().ali_set_breakpoints(self._core.handle, arr, len(wanted))
         full = self._want_full_hook()
-        if full and self._exact_hook is None:
-            self._exact_hook = self._core.hook_add(UC_HOOK_CODE, self._cpp_hook_code)
-            self._code_hook_h = self._exact_hook
-            self._core.set(F_EXACT, 1)
-            self._apply_count_ratio()
-        elif not full and self._exact_hook is not None:
-            self._core.hook_del(self._exact_hook)
-            self._exact_hook = None
-            self._code_hook_h = None
-            self._core.set(F_EXACT, 0)
-            self._apply_count_ratio()
+        if full != (self._exact_hook is not None):
+            if full:
+                self._exact_hook = self._core.hook_add(UC_HOOK_CODE, self._cpp_hook_code)
+                self._code_hook_h = self._exact_hook
+                self._core.set(F_EXACT, 1)
+                self._apply_count_ratio()
+            else:
+                self._core.hook_del(self._exact_hook)
+                self._exact_hook = None
+                self._code_hook_h = None
+                self._core.set(F_EXACT, 0)
+                self._apply_count_ratio()
         if self._flash_hooks_pending:
             self._update_flash_read_hooks()
         self._cpp_gpio_sync()
@@ -1117,7 +1232,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
             tuple(id(d) for d in devices),
             getattr(cb_owner, 'dump_enabled', None),
             getattr(cb_owner, 'on_transaction', None) is not None,
-            tuple((getattr(d, 'dump_enabled', None), getattr(d, 'on_transaction', None) is not None) for d in devices),
+            getattr(cb_owner, 'on_frame', None) is not None,
+            tuple((getattr(d, 'dump_enabled', None), getattr(d, 'on_transaction', None) is not None,
+                   getattr(d, 'on_frame', None) is not None) for d in devices),
         )
         if sync_key == self._gpio_sync_key:
             if self._gpio_di_owners:
@@ -1126,15 +1243,33 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._gpio_sync_key = sync_key
         from gpio_i2c import GpioI2cBus
         from tm1650_decoder import TM1650Decoder
+        from tm1628_decoder import TM1628Decoder
+        from hc164_decoder import HC164Decoder
+        from lemontree_decoder import LemontreeDecoder
         L, h = cpp_core.lib(), self._core.handle
         bus = None
         tm_dec = None
+        tm28_dec = None
+        hc_dec = None
+        lt_dec = None
         if use_native_gpio:
             bus = next((d for d in devices if isinstance(d, GpioI2cBus)), None)
             if isinstance(cb_owner, TM1650Decoder) and not cb_owner.dump_enabled:
                 tm_dec = cb_owner
             else:
                 tm_dec = next((d for d in devices if isinstance(d, TM1650Decoder) and not d.dump_enabled), None)
+            if isinstance(cb_owner, TM1628Decoder) and not cb_owner.dump_enabled:
+                tm28_dec = cb_owner
+            else:
+                tm28_dec = next((d for d in devices if isinstance(d, TM1628Decoder) and not d.dump_enabled), None)
+            if isinstance(cb_owner, HC164Decoder) and not cb_owner.dump_enabled:
+                hc_dec = cb_owner
+            else:
+                hc_dec = next((d for d in devices if isinstance(d, HC164Decoder) and not d.dump_enabled), None)
+            if isinstance(cb_owner, LemontreeDecoder) and not cb_owner.dump_enabled:
+                lt_dec = cb_owner
+            else:
+                lt_dec = next((d for d in devices if isinstance(d, LemontreeDecoder) and not d.dump_enabled), None)
         if bus is not self._gi2c_bus:
             if self._gi2c_bus is not None:
                 self._gi2c_bus.native = None
@@ -1169,9 +1304,73 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 if tm_dec._key_byte or tm_dec._press_reads_left_v:
                     set_key(h, tm_dec._key_byte, tm_dec._press_reads_left_v)
             self._tm1650_dec = tm_dec
+        if tm28_dec is not self._tm1628_dec:
+            if self._tm1628_dec is not None:
+                self._tm1628_dec.native = None
+                self._tm1628_dec.native_press = None
+            if tm28_dec is None:
+                L.ali_tm1628_config(h, 0, 0, 0, 0, 0, 0, 0, 0, None, None)
+            else:
+                if self._tm1628_cb is None:
+                    self._tm1628_cb = cpp_core._I2C_CB(self._cpp_tm1628)
+                L.ali_tm1628_config(
+                    h, 1, tm28_dec.clk_offset, tm28_dec.clk_bit, tm28_dec.dio_offset, tm28_dec.dio_bit,
+                    tm28_dec.stb_offset, tm28_dec.stb_bit, 1 if tm28_dec.on_frame is not None else 0,
+                    ctypes.cast(self._tm1628_cb, ctypes.c_void_p), None
+                )
+                get_tm28 = L.ali_tm1628_get
+                set_key28 = L.ali_tm1628_set_key
+                tm28_dec.native = lambda field, _get=get_tm28, _h=h: _get(_h, field)
+                def _press28(kb, hold, _sk=set_key28, _h=h):
+                    arr = (ctypes.c_uint8 * 5)(*(kb[:5]))
+                    _sk(_h, arr, hold)
+                tm28_dec.native_press = _press28
+                if any(tm28_dec.key_bytes) or tm28_dec._press_reads_left:
+                    _press28(tm28_dec.key_bytes, tm28_dec._press_reads_left)
+            self._tm1628_dec = tm28_dec
+        if hc_dec is not self._hc164_dec:
+            if self._hc164_dec is not None:
+                self._hc164_dec.native = None
+            if hc_dec is None:
+                L.ali_hc164_config(h, 0, 0, 0, 0, 0, None, None, 0, 0, 0, None, None)
+            else:
+                if self._hc164_cb is None:
+                    self._hc164_cb = cpp_core._I2C_CB(self._cpp_hc164)
+                ndig = len(hc_dec.digit_pins)
+                doffs = (ctypes.c_uint32 * max(1, ndig))(*[off for off, _ in hc_dec.digit_pins])
+                dbits = (ctypes.c_uint32 * max(1, ndig))(*[bit for _, bit in hc_dec.digit_pins])
+                L.ali_hc164_config(
+                    h, 1, hc_dec.clk_offset, hc_dec.clk_bit, hc_dec.data_offset, hc_dec.data_bit,
+                    doffs, dbits, ndig, int(hc_dec.active_low_segments), int(hc_dec.active_low_digits),
+                    ctypes.cast(self._hc164_cb, ctypes.c_void_p), None
+                )
+                get_hc = L.ali_hc164_get
+                hc_dec.native = lambda field, _get=get_hc, _h=h: _get(_h, field)
+            self._hc164_dec = hc_dec
+        if lt_dec is not self._lemontree_dec:
+            if self._lemontree_dec is not None:
+                self._lemontree_dec.native = None
+                self._lemontree_dec.native_press = None
+            if lt_dec is None:
+                L.ali_lemontree_config(h, 0, 0, 0, 0, 0, 0, None, None)
+            else:
+                if self._lemontree_cb is None:
+                    self._lemontree_cb = cpp_core._I2C_CB(self._cpp_lemontree)
+                L.ali_lemontree_config(
+                    h, 1, lt_dec.scl_offset, lt_dec.scl_bit, lt_dec.sda_offset, lt_dec.sda_bit,
+                    0, ctypes.cast(self._lemontree_cb, ctypes.c_void_p), None
+                )
+                get_lt = L.ali_lemontree_get
+                set_key_lt = L.ali_lemontree_set_key
+                lt_dec.native = lambda field, _get=get_lt, _h=h: _get(_h, field)
+                lt_dec.native_press = lambda kb, hold, _sk=set_key_lt, _h=h: _sk(_h, kb, hold)
+                if lt_dec.key_byte or lt_dec._press_reads_left:
+                    set_key_lt(h, lt_dec.key_byte, lt_dec._press_reads_left)
+            self._lemontree_dec = lt_dec
+        native_decs = tuple(d for d in (tm_dec, tm28_dec, hc_dec, lt_dec) if d is not None)
         watch = {}
-        owners = [d for d in devices if d is not bus and d is not tm_dec]
-        if callback and cb_owner is not tm_dec:
+        owners = [d for d in devices if d is not bus and d not in native_decs]
+        if callback and (cb_owner is None or cb_owner not in native_decs):
             owners.append(cb_owner)   # (a plain function: none)
         for owner in owners:
             fn = getattr(owner, 'gpio_watch', None)
@@ -1192,11 +1391,28 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 masks = (ctypes.c_uint32 * max(1, n))(*[m & 0xFFFFFFFF for _, m in key])
                 L.ali_gpio_watch(h, 1, offs, masks, n)
         di_owners = [o for o in owners if o is not None and hasattr(o, 'di_override')]
+        if callback and cb_owner is None:
+            for cell in getattr(callback, '__closure__', None) or ():
+                try:
+                    val = cell.cell_contents
+                except ValueError:
+                    continue
+                if hasattr(val, 'di_override') and val not in di_owners and val not in native_decs:
+                    di_owners.append(val)
+            gdict = getattr(callback, '__globals__', None)
+            code = getattr(callback, '__code__', None)
+            if isinstance(gdict, dict) and code is not None:
+                for name in getattr(code, 'co_names', ()):
+                    val = gdict.get(name)
+                    if val is not None and hasattr(val, 'di_override') and val not in di_owners and val not in native_decs:
+                        di_owners.append(val)
         self._gpio_di_owners = tuple(di_owners)
         di_high = {}
         all_di_owners = list(di_owners)
         if tm_dec is not None:
             all_di_owners.append(tm_dec)
+        if lt_dec is not None:
+            all_di_owners.append(lt_dec)
         for o in all_di_owners:
             t = type(o).__name__
             if t == 'TM1650Decoder' or t == 'LemontreeDecoder':
@@ -1271,6 +1487,39 @@ class CppAliMipsSimulator(AliMipsSimulator):
             self.mu._catch(e)
             return 0
 
+    def _cpp_tm1628(self, user, kind, arg, data, n):
+        """The core's TM1628 decoder at a completed frame."""
+        try:
+            dec = self._tm1628_dec
+            if dec is not None and n:
+                dec.native_frame(list(ctypes.string_at(data, n)))
+            return 0
+        except BaseException as e:
+            self.mu._catch(e)
+            return 0
+
+    def _cpp_hc164(self, user, kind, arg, data, n):
+        """The core's HC164 decoder at a digit update."""
+        try:
+            dec = self._hc164_dec
+            if dec is not None and n:
+                dec.native_update(list(ctypes.string_at(data, n)))
+            return 0
+        except BaseException as e:
+            self.mu._catch(e)
+            return 0
+
+    def _cpp_lemontree(self, user, kind, arg, data, n):
+        """The core's Lemontree decoder at a display update frame."""
+        try:
+            dec = self._lemontree_dec
+            if dec is not None and n:
+                dec.native_frame(int(arg), ctypes.string_at(data, n))
+            return 0
+        except BaseException as e:
+            self.mu._catch(e)
+            return 0
+
     def _cpp_after_start(self, executed):
         if self._rom_dirty:
             self._rom_restore()
@@ -1289,7 +1538,10 @@ class CppAliMipsSimulator(AliMipsSimulator):
             self._rom_image_ref = None
             self._spi_key = None
         super().loadFile(filename, chip=chip)
+        self._gpio_di_high_pushed = None
+        self._gpio_sync_key = None
         self._cpp_spi_sync()
+        self._cpp_gpio_sync()
 
     def _rescan_all(self):
         """A new image: LzmaDecode() in the flash, every RAM chunk's first execution
@@ -1298,24 +1550,71 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._rescan_cp0_sites(None)
         cpp_core.lib().ali_set_chunks(self._core.handle, 20, min(self.ram_size, 0x10000000) >> 20)
 
+    def _cpp_scan_code(self, data, base, views, ptr=None, want_lzma=True, want_delay=True, want_poll=True):
+        """Scan `data` in a single C++ pass for LzmaDecode() (kind 1), delay()
+        (kind 2), and mailbox poll loops (kind 3), and verify only candidate slices."""
+        n = len(data)
+        if n < 20:
+            return
+        mask = ((1 if (want_lzma and self.lzma_hle) else 0) |
+                (2 if (want_delay and self.delay_hle) else 0) |
+                (4 if (want_poll and self.poll_skip) else 0))
+        if not mask:
+            return
+        c_buf = None
+        if ptr is None:
+            if isinstance(data, bytearray):
+                c_buf = (ctypes.c_char * n).from_buffer(data)
+                ptr = ctypes.addressof(c_buf)
+            else:
+                c_buf = bytes(data)
+                ptr = c_buf
+        max_out = 512
+        offs = (ctypes.c_uint32 * max_out)()
+        kinds = (ctypes.c_uint8 * max_out)()
+        cnt = cpp_core.lib().ali_scan_code(ptr, n, offs, kinds, max_out, mask)
+        if cnt > max_out:
+            if mask & 1:
+                self._find_lzma_decoders(data, base, views)
+            if mask & 2:
+                self._find_delay_routines(data, base, views)
+            if mask & 4:
+                self._find_poll_loops(data, base, views)
+            return
+        for i in range(cnt):
+            off = int(offs[i])
+            k = int(kinds[i])
+            sub = data[off:min(n, off + 256)]
+            if k == 1:
+                self._find_lzma_decoders(sub, base + off, views)
+            elif k == 2:
+                self._find_delay_routines(sub, base + off, views)
+            elif k == 3:
+                self._find_poll_loops(sub, base + off, views)
+
     def _rescan_cp0_sites(self, ranges=None):
         """No CP0 sites on this core: only LzmaDecode() (and the RTOS's delay(), when
         delay_hle is on) is looked for, in the flash image or the given ranges."""
         if ranges is None:
             if self._rom_sites_dirty:
                 self._rom_sites_dirty = False
-                if self.__dict__.get('_rom_scanned_bytes') != self.rom_image:
-                    self._rom_scanned_bytes = bytes(self.rom_image)
-                    self._find_lzma_decoders(self.rom_image, 0, (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000))
+                rom_crc = (len(self.rom_image), zlib.crc32(self.rom_image))
+                if self.__dict__.get('_rom_scanned_crc') != rom_crc:
+                    self._rom_scanned_crc = rom_crc
+                    self._cpp_scan_code(self.rom_image, 0, (0xAFC00000, 0xBFC00000, 0x8FC00000, 0x9FC00000),
+                                        want_lzma=True, want_delay=False, want_poll=False)
             ranges = self.chip.code_ranges()
+        ram_base_ptr = ctypes.addressof(self.ram_buffer)
         for start, length in ranges:
             phys = start & 0x1FFFFFFF
             in_ram = (start >> 29) in (0, 4, 5) and phys + length <= self._mapped_ram_size
             ram_bytes = None
+            ptr = None
             if in_ram:
                 data = self._ram_view[phys:phys + length]
+                ptr = ram_base_ptr + phys
                 if length >= self._VIRGIN_CHUNK:
-                    ram_bytes = bytes(data)
+                    ram_bytes = zlib.crc32(data)
                     if self._scanned_ram_chunks.get((phys, length, False)) == ram_bytes:
                         continue
             else:
@@ -1324,9 +1623,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 except UcError:
                     continue
             if (start >> 29) in (4, 5):
-                self._find_lzma_decoders(data, phys, (0x80000000, 0xA0000000))
-                self._find_delay_routines(data, phys, (0x80000000, 0xA0000000))
-                self._find_poll_loops(data, phys, (0x80000000, 0xA0000000))
+                self._cpp_scan_code(data, phys, (0x80000000, 0xA0000000), ptr=ptr)
             if ram_bytes is not None:
                 self._scanned_ram_chunks[(phys, length, False)] = ram_bytes
 
@@ -1391,8 +1688,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
             self.max_instructions = max_instructions
         core = self._core
         cur_pc = self.mu.reg_read(UC_MIPS_REG_PC)
-        note = "" if self._want_full_hook() else " [C++ core: instruction counts follow emulation time]"
-        self.log(f"Starting emulation at {hex(cur_pc)} ({'MIPS16' if self.is_mips16_mode() else 'MIPS32'})...{note}")
+        if self._shared is None or max_vtime is None:
+            note = "" if self._want_full_hook() else " [C++ core: instruction counts follow emulation time]"
+            self.log(f"Starting emulation at {hex(cur_pc)} ({'MIPS16' if self.is_mips16_mode() else 'MIPS32'})...{note}")
         self._in_run = True
         self._run_tid = threading.get_ident()
         self._external_stop = False
