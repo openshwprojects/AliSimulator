@@ -152,6 +152,8 @@ class TM1650Decoder(PanelDecoder):
 
     def __init__(self, scl_gpio=61, sda_gpio=74, log_handler=None, on_transaction=None,
                  digit_order=(0, 1, 2, 3), seg_map=PanelDecoder.STANDARD_SEG_MAP):
+        self.native = None
+        self.native_press = None
         super().__init__(log_handler)
         self.digit_order = tuple(digit_order)
         self.seg_map = tuple(seg_map)
@@ -160,9 +162,9 @@ class TM1650Decoder(PanelDecoder):
         self.on_transaction = on_transaction
 
         # I2C state
-        self.prev_scl = 1
-        self.prev_sda = 1
-        self.state = 'IDLE'
+        self._prev_scl = 1
+        self._prev_sda = 1
+        self._state = 'IDLE'
         self.bit_count = 0
         self.current_byte = 0
         self.bytes_received = []
@@ -174,18 +176,92 @@ class TM1650Decoder(PanelDecoder):
         # Key scan: the byte the chip answers a key read (address 0x4F / 0x49)
         # with, driven onto SDA bit by bit while the CPU clocks the data byte
         # (see di_override / press_key).  0x00: no key.
-        self.key_byte = 0x00
-        self._press_reads_left = 0
-        self.key_reads_answered = 0
+        self._key_byte = 0x00
+        self._press_reads_left_v = 0
+        self._key_reads_answered = 0
         self._tx_serial = 0             # counts I2C STARTs (one answer byte per transaction)
         self._answer_tx = -1
         self._answer = 0x00
 
         # Stats
-        self.i2c_transaction_count = 0
-        self.key_read_count = 0
+        self._i2c_tx_count = 0
+        self._key_read_count = 0
         self._last_key_value = None
         self._i2c_trace_count = 0
+
+    @property
+    def gpio_event_count(self):
+        return self.native(3) if self.native is not None else self._gpio_event_count
+
+    @gpio_event_count.setter
+    def gpio_event_count(self, v):
+        self._gpio_event_count = v
+
+    @property
+    def i2c_transaction_count(self):
+        return self.native(4) if self.native is not None else self._i2c_tx_count
+
+    @i2c_transaction_count.setter
+    def i2c_transaction_count(self, v):
+        self._i2c_tx_count = v
+
+    @property
+    def key_read_count(self):
+        return self.native(7) if self.native is not None else self._key_read_count
+
+    @key_read_count.setter
+    def key_read_count(self, v):
+        self._key_read_count = v
+
+    @property
+    def key_reads_answered(self):
+        return self.native(10) if self.native is not None else self._key_reads_answered
+
+    @key_reads_answered.setter
+    def key_reads_answered(self, v):
+        self._key_reads_answered = v
+
+    @property
+    def key_byte(self):
+        return self.native(8) if self.native is not None else self._key_byte
+
+    @key_byte.setter
+    def key_byte(self, v):
+        self._key_byte = v & 0xFF
+        if self.native_press is not None:
+            self.native_press(self._key_byte, self.native(9))
+
+    @property
+    def _press_reads_left(self):
+        return self.native(9) if self.native is not None else self._press_reads_left_v
+
+    @_press_reads_left.setter
+    def _press_reads_left(self, v):
+        self._press_reads_left_v = v
+
+    @property
+    def state(self):
+        return ('IDLE' if self.native(1) == 0 else 'DATA') if self.native is not None else self._state
+
+    @state.setter
+    def state(self, v):
+        self._state = v
+
+    @property
+    def prev_scl(self):
+        return self.native(5) if self.native is not None else self._prev_scl
+
+    @prev_scl.setter
+    def prev_scl(self, v):
+        self._prev_scl = v
+
+    @property
+    def prev_sda(self):
+        return self.native(6) if self.native is not None else self._prev_sda
+
+    @prev_sda.setter
+    def prev_sda(self, v):
+        self._prev_sda = v
 
     def gpio_watch(self):
         """The pins on_gpio_write follows, {DO register offset: pin mask}: a
@@ -386,6 +462,32 @@ class TM1650Decoder(PanelDecoder):
         else:
             self.log(f"[TM1650] I2C write: addr=0x{addr:02X} data=0x{data:02X}")
 
+    def native_tx(self, addr, data):
+        """Handle a decoded TM1650 transaction from the C++ core."""
+        if self.on_transaction:
+            self.on_transaction(addr, data)
+        if addr == self.ADDR_DISPLAY_CTRL:
+            on = bool(data & 0x01)
+            brightness = (data >> 4) & 0x07
+            self.log(f"[TM1650] Display {'ON' if on else 'OFF'}, brightness={brightness}")
+        elif addr in self.DIGIT_ADDRS:
+            idx = self.DIGIT_ADDRS[addr]
+            self.raw[idx] = data
+            char = self.SEG_TO_CHAR.get(self._segments(data) & 0x7F, '?')
+            self.log(f"[TM1650] Digit {idx+1}: 0x{data:02X} = '{char}'")
+            if addr == self.ADDR_DIG4:
+                display = ''.join(
+                    self.SEG_TO_CHAR.get(d & 0x7F, '?') for d in self.digits
+                )
+                self.log(f"[TM1650] Display: [{display}]")
+        elif addr in self.KEY_READ_ADDRS:
+            if data != self._last_key_value:
+                self._last_key_value = data
+                self.log(f"[TM1650] Key read: {self.parse_key_byte(data)} "
+                         f"(read #{self.key_read_count}, identical reads suppressed)")
+        else:
+            self.log(f"[TM1650] I2C write: addr=0x{addr:02X} data=0x{data:02X}")
+
     # ---- key scan: the chip drives SDA during the data byte of a key read ----
     @staticmethod
     def key_code(ki, dig, pressed=True):
@@ -399,8 +501,10 @@ class TM1650Decoder(PanelDecoder):
         by key_code() (the pressed bit is added here).  Any thread may call it.
         dump_maciej's panel driver turns every poll that sees the key pressed
         into a key event, so hold_reads=1 is one press."""
-        self._press_reads_left = hold_reads
-        self.key_byte = (code | 0x40) & 0xFF
+        self._press_reads_left_v = hold_reads
+        self._key_byte = (code | 0x40) & 0xFF
+        if self.native_press is not None:
+            self.native_press(self._key_byte, hold_reads)
 
     def _key_byte_on_bus(self):
         """Whether the byte on the bus is the chip's: the data byte of a key read."""
@@ -423,6 +527,8 @@ class TM1650Decoder(PanelDecoder):
         SCL is high, the next one while it is low), else 1 -- released, the
         pull-up.  The key byte is latched at the first read of the line in a
         key read (press_key)."""
+        if self.native is not None:
+            return self.native(0)
         if not self._chip_owns_sda():
             return 1
         if self._ack or not self._key_byte_on_bus():

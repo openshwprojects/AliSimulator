@@ -104,12 +104,27 @@ class DemodulatorLock:
     def __init__(self, sim):
         self.sim = sim
         self.signal = False
-        self.lock_reads = 0             # reads of those registers: a test can tell the driver asked
+        self._lock_reads = 0            # reads of those registers: a test can tell the driver asked
+        self._cpp_core = None
         for reg in self.LOCKED:
             sim._mmio_on('r', self._read, self.BASE + reg, self.BASE + reg)
 
+    @property
+    def lock_reads(self):
+        if self._cpp_core is not None:
+            from cpp_core import F_DEMOD_READS
+            return self._lock_reads + int(self._cpp_core.get(F_DEMOD_READS))
+        return self._lock_reads
+
+    @lock_reads.setter
+    def lock_reads(self, val):
+        self._lock_reads = val
+        if self._cpp_core is not None:
+            from cpp_core import F_DEMOD_READS
+            self._cpp_core.set(F_DEMOD_READS, 0)
+
     def _read(self, uc, access, address, size, value, user_data):
-        self.lock_reads += 1
+        self._lock_reads += 1
         if not self.signal or not self.sim.tuned_to_signal():
             return
         off = address & 0xFFFFFF

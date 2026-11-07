@@ -23,6 +23,7 @@ enum Field : int {
   F_TIMER_CHECK_AT, F_COUNT_RAW_WRITE, F_HOST_ACCESS_COST, F_BLOCKS_ON, F_BLOCK_RUNS, F_BLOCK_BUILDS,
   F_NEXT_EVENT, F_LIMIT, F_SPIN_SKIPPED, F_SPIN_SKIP, F_POLL_SKIPPED, F_POLL_SKIPS, F_FF_SKIPPED, F_IC_LINES_HI,
   F_GPIO_DI_BUSY, F_GE_STATUS, F_GE_OPS, F_GE_RENDER, F_GE_PRIMS, F_GE_RESUME,
+  F_DEMOD_LOCKED, F_DEMOD_READS,
 };
 
 ALI_API void *ali_new() { return new Core(); }
@@ -120,6 +121,10 @@ ALI_API void ali_set_dev_flags(void *c, uint32_t offset, uint32_t count, uint8_t
 ALI_API void ali_set_dev_flags_list(void *c, const uint32_t *offsets, const uint8_t *flags, int n) {
   for (int i = 0; i < n; i++) ((Core *)c)->set_dev_flags(offsets[i], 1, flags[i]);
 }
+ALI_API void ali_set_mmio_rules(void *c, const void *rules, uint32_t n_rules, const uint32_t *offsets,
+                                const uint8_t *rflags, uint32_t n_offs) {
+  ((Core *)c)->set_mmio_rules((const Core::MmioRule *)rules, n_rules, offsets, rflags, n_offs);
+}
 ALI_API void ali_set_event_cb(void *c, void *cb, void *user) {
   ((Core *)c)->event_cb = (EventCb)cb;
   ((Core *)c)->event_user = user;
@@ -201,6 +206,37 @@ ALI_API int64_t ali_gpio_i2c_get(void *c, int field) {
     case 4: return (int64_t)g.edges;
     case 5: return g.scl;
     case 6: return g.sda;
+  }
+  return 0;
+}
+ALI_API void ali_tm1650_config(void *c, int on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off,
+                               uint32_t sda_bit, int cb_all, void *cb, void *user) {
+  Core *k = (Core *)c;
+  k->tm1650_config(on != 0, scl_off, scl_bit, sda_off, sda_bit, cb_all != 0);
+  k->tm1650_cb_ = (I2cCb)cb;
+  k->tm1650_user_ = user;
+}
+ALI_API void ali_tm1650_set_key(void *c, uint32_t key_byte, uint32_t hold_reads) {
+  Core *k = (Core *)c;
+  k->tm1650_.key_byte = (uint8_t)(key_byte & 0xFFu);
+  k->tm1650_.key_hold = hold_reads;
+}
+ALI_API int64_t ali_tm1650_get(void *c, int field) {
+  Core *k = (Core *)c;
+  Core::Tm1650 &t = k->tm1650_;
+  switch (field) {
+    case 0: return k->tm1650_sda_in();
+    case 1: return t.state;
+    case 2: return t.nbits;
+    case 3: return (int64_t)t.events;
+    case 4: return (int64_t)t.tx_count;
+    case 5: return t.scl;
+    case 6: return t.sda;
+    case 7: return (int64_t)t.key_read_count;
+    case 8: return t.key_byte;
+    case 9: return t.key_hold;
+    case 10: return (int64_t)t.key_reads_answered;
+    case 11: case 12: case 13: case 14: return t.digits[field - 11];
   }
   return 0;
 }
@@ -357,6 +393,8 @@ ALI_API uint64_t ali_get(void *c, int field) {
     case F_GE_RENDER: return k->ge_.render;
     case F_GE_PRIMS: return k->ge_.primitives;
     case F_GE_RESUME: return k->ge_.resume_valid ? (uint64_t)k->ge_.resume_idx : ~0ull;
+    case F_DEMOD_LOCKED: return k->demod_locked_;
+    case F_DEMOD_READS: return k->demod_reads_;
     case 100: case 101: case 102: case 103: case 104: case 105: return k->spin_dbg[field - 100];
   }
   return 0;
@@ -416,6 +454,8 @@ ALI_API void ali_set(void *c, int field, uint64_t v) {
     case F_GE_RENDER: k->ge_.render = v != 0; break;
     case F_GE_PRIMS: k->ge_.primitives = v; break;
     case F_GE_RESUME: k->ge_.resume_valid = (v != ~0ull); k->ge_.resume_idx = w; break;
+    case F_DEMOD_LOCKED: k->demod_locked_ = v != 0; break;
+    case F_DEMOD_READS: k->demod_reads_ = v; break;
   }
   k->poke_events();
 }

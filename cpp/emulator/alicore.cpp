@@ -53,6 +53,7 @@ Core::~Core() {
   delete[] code_hook_page_;
   delete[] mem_hook_page_;
   delete[] devflags_;
+  delete[] devrules_;
   flush_blocks();
   free_retired();
   delete[] btab_;
@@ -236,6 +237,9 @@ void Core::set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevC
   dev_user_ = user;
   delete[] devflags_;
   devflags_ = new uint8_t[size]();
+  delete[] devrules_;
+  devrules_ = new uint8_t[size]();
+  mmio_rule_count_ = 0;
   // the window is a region of its own (host accesses go through the same path)
   bool have = false;
   for (auto &r : regions_)
@@ -252,6 +256,17 @@ void Core::set_dev_flags(uint32_t offset, uint32_t count, uint8_t flags) {
   if (!devflags_ || offset >= dev_size_) return;
   count = std::min(count, dev_size_ - offset);
   memset(devflags_ + offset, flags, count);
+}
+
+void Core::set_mmio_rules(const MmioRule *rules, uint32_t n_rules, const uint32_t *offsets, const uint8_t *rflags,
+                          uint32_t n_offs) {
+  if (!devrules_) return;
+  memset(devrules_, 0, dev_size_);
+  mmio_rule_count_ = std::min<uint32_t>(n_rules, MMIO_RULES_MAX);
+  if (mmio_rule_count_ && rules) memcpy(mmio_rules_, rules, mmio_rule_count_ * sizeof(MmioRule));
+  for (uint32_t i = 0; i < n_offs; i++) {
+    if (offsets[i] < dev_size_) devrules_[offsets[i]] = rflags[i];
+  }
 }
 
 void Core::set_flash_cmd(bool on, const uint32_t *windows, int n) {
@@ -608,8 +623,75 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
           else di_val |= gi2c_.sda_mask;
         }
       }
+      if (tm1650_.on) {
+        if ((do_off & 0xFFFu) == tm1650_.scl_off) di_val |= tm1650_.scl_mask;
+        if ((do_off & 0xFFFu) == tm1650_.sda_off) {
+          if (tm1650_sda_in() == 0) di_val &= ~tm1650_.sda_mask;
+          else di_val |= tm1650_.sda_mask;
+        }
+      }
       di_val = (di_val & ~dir_val) | (do_val & dir_val);
       memcpy(dev_buf_ + off, &di_val, 4);
+    }
+    icount += host_access_cost;
+    poke_events();
+    uint64_t v = 0;
+    memcpy(&v, dev_buf_ + off, size);
+    return v;
+  }
+  if ((devflags_[off] & DF_READ) && devrules_ && (devrules_[off] & DR_READ) &&
+      (!(devrules_[off] & DR_UART_IDLE) || (!uart_pending_ && !uart_ip3))) {
+    bool counted_demod = false;
+    for (uint32_t k = 0; k < mmio_rule_count_; k++) {
+      const MmioRule &r = mmio_rules_[k];
+      if (r.flags & RULE_EXACT_OFF) {
+        if (r.offset != off) continue;
+      } else {
+        if (r.offset < off || r.offset >= off + size) continue;
+      }
+      if (r.offset >= dev_size_) continue;
+      if (r.flags & RULE_VE_STATUS) {
+        uint32_t w_off = r.offset & ~3u;
+        if (w_off + 4 <= dev_size_) {
+          uint32_t cur;
+          memcpy(&cur, dev_buf_ + w_off, 4);
+          if (cur & 0x037FFF00u) {
+            cur &= ~0x037FFF00u;
+            memcpy(dev_buf_ + w_off, &cur, 4);
+          }
+        }
+      } else if (r.flags & RULE_MAC_MDIO) {
+        if (0x2C084u <= dev_size_) {
+          uint32_t v;
+          memcpy(&v, dev_buf_ + 0x2C07Cu, 4);
+          if (v & 0x80000000u) {
+            uint32_t nv = v & 0x7FFFFFFFu;
+            memcpy(dev_buf_ + 0x2C07Cu, &nv, 4);
+            if (v & 0x08000000u) {
+              dev_buf_[0x2C082u] = 0xFFu;
+              dev_buf_[0x2C083u] = 0xFFu;
+            }
+          }
+        }
+      } else if (r.flags & RULE_DEMOD) {
+        if ((r.flags & RULE_DEMOD_COUNT) && !counted_demod) {
+          demod_reads_++;
+          counted_demod = true;
+        }
+        if (demod_locked_) {
+          uint8_t b = dev_buf_[r.offset];
+          if (r.flags & RULE_DEMOD_IFZERO) {
+            if (b == 0) dev_buf_[r.offset] = r.or_mask;
+          } else if (!r.req_mask || (b & r.req_mask)) {
+            dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
+          }
+        } else if (r.flags & RULE_DEMOD_CLR3F) {
+          dev_buf_[r.offset] &= ~0x3Fu;
+        }
+      } else {
+        uint8_t b = dev_buf_[r.offset];
+        if (!r.req_mask || (b & r.req_mask)) dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
+      }
     }
     icount += host_access_cost;
     poke_events();
@@ -679,8 +761,12 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     }
     // (after the log: the host's decoders got each store before the bus, in its order)
     if (gi2c_.on && (do_off == gi2c_.scl_off || do_off == gi2c_.sda_off)) gi2c_levels(do_off, levels);
+    if (tm1650_.on && (do_off == tm1650_.scl_off || do_off == tm1650_.sda_off)) tm1650_levels(do_off, levels);
     icount += host_access_cost;
   } else if ((f & (DF_GE | DF_WRITE)) == (DF_GE | DF_WRITE) && ge_store(off, size, value)) {
+  } else if ((f & DF_WRITE) && devrules_ && (devrules_[off] & DR_WRITE)) {
+    if (!(devrules_[off] & DR_WRITE_IGNORE)) memcpy(dev_buf_ + off, &value, size);
+    icount += host_access_cost;
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
     if (!gpio_dev_drains_) host_sync();
@@ -845,6 +931,184 @@ void Core::gi2c_levels(uint32_t off, uint32_t levels) {
         g.nbits = 0;
         g.byte = 0;
       }
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+// Native TM1650 / FD650 2-wire LED + key-scan controller (tm1650_decoder.py)
+// ------------------------------------------------------------------
+void Core::tm1650_config(bool on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off, uint32_t sda_bit, bool cb_all) {
+  host_sync();
+  Tm1650 &t = tm1650_;
+  t.on = on;
+  t.cb_all = cb_all;
+  t.scl_off = scl_off;
+  t.sda_off = sda_off;
+  t.scl_mask = 1u << (scl_bit & 31);
+  t.sda_mask = 1u << (sda_bit & 31);
+  t.scl = t.sda = 1;
+  t.state = TM_IDLE;
+  t.nbits = 0;
+  t.byte = 0;
+  t.ack = false;
+  t.key_byte = t.answer = t.last_key_value = 0;
+  t.has_last_key = false;
+  t.key_hold = 0;
+  t.tx_serial = 0;
+  t.answer_tx = ~0ull;
+  t.key_reads_answered = t.key_read_count = 0;
+  memset(t.digits, 0, sizeof(t.digits));
+  memset(t.last_reg, 0, sizeof(t.last_reg));
+  memset(t.last_ok, 0, sizeof(t.last_ok));
+  t.bytes.clear();
+  t.events = t.tx_count = 0;
+}
+
+bool Core::tm1650_chip_owns_sda() const {
+  const Tm1650 &t = tm1650_;
+  if (t.state != TM_DATA) return false;
+  bool key_addr = (!t.bytes.empty() && (t.bytes[0] == 0x4F || t.bytes[0] == 0x49));
+  if (t.ack) return t.bytes.size() == 1 || !key_addr;
+  return (t.bytes.size() == 1 && key_addr) || t.nbits == 8;
+}
+
+int Core::tm1650_sda_in() {
+  Tm1650 &t = tm1650_;
+  if (!tm1650_chip_owns_sda()) return 1;
+  bool key_bus = (t.bytes.size() == 1 && (t.bytes[0] == 0x4F || t.bytes[0] == 0x49));
+  if (t.ack || !key_bus) return 0;
+  if (t.answer_tx != t.tx_serial) {
+    t.answer_tx = t.tx_serial;
+    t.key_reads_answered++;
+    t.answer = t.key_byte;
+    if (t.key_hold > 0) {
+      if (--t.key_hold == 0) t.key_byte &= ~0x40u;
+    }
+  }
+  int bit = t.scl ? (8 - (int)t.nbits) : (7 - (int)t.nbits);
+  return (bit >= 0 && bit <= 7) ? ((t.answer >> bit) & 1) : 1;
+}
+
+void Core::tm1650_decode() {
+  Tm1650 &t = tm1650_;
+  if (t.bytes.size() < 2) return;
+  t.tx_count++;
+  uint8_t addr = t.bytes[0], data = t.bytes[1];
+  bool notify = t.cb_all;
+  if (addr == 0x68 || addr == 0x6A || addr == 0x6C || addr == 0x6E) {
+    uint32_t idx = (addr - 0x68) >> 1;
+    t.digits[idx] = data;
+    notify = true;
+  } else if (addr == 0x4F || addr == 0x49) {
+    t.key_read_count++;
+    if (t.answer_tx == t.tx_serial) data = t.answer;
+    if (!t.has_last_key || data != t.last_key_value) {
+      t.has_last_key = true;
+      t.last_key_value = data;
+      notify = true;
+    }
+  } else {
+    notify = true;
+  }
+  if (notify && tm1650_cb_) {
+    uint8_t pair[2] = {addr, data};
+    host_sync();
+    enter_callback();
+    tm1650_cb_(tm1650_user_, 0, ((uint32_t)addr << 8) | data, pair, 2);
+    leave_callback();
+  }
+}
+
+void Core::tm1650_process(uint8_t scl, uint8_t sda, bool scl_changed, bool sda_changed) {
+  Tm1650 &t = tm1650_;
+  if (t.state == TM_DATA) {
+    if (scl_changed && scl == 0) t.ack = false;
+    else if (sda_changed && scl == 1 && !scl_changed && tm1650_chip_owns_sda()) return;
+  }
+  if (t.state == TM_IDLE) {
+    if (sda_changed && sda == 0 && scl == 1) {
+      t.state = TM_DATA;
+      t.nbits = 0;
+      t.byte = 0;
+      t.bytes.clear();
+      t.ack = false;
+      t.tx_serial++;
+    }
+    return;
+  }
+  if (t.state == TM_DATA) {
+    if (scl_changed && scl == 1) {
+      if (t.nbits < 8) {
+        t.byte = (uint8_t)((t.byte << 1) | sda);
+        t.nbits++;
+      } else {
+        t.bytes.push_back(t.byte);
+        t.nbits = 0;
+        t.byte = 0;
+        t.ack = true;
+      }
+      return;
+    }
+    if (sda_changed && sda == 1 && scl == 1) {
+      if (!t.bytes.empty()) {
+        tm1650_decode();
+        t.state = TM_IDLE;
+        return;
+      }
+      t.nbits = 0;
+      t.byte = 0;
+      return;
+    }
+    if (sda_changed && sda == 0 && scl == 1) {
+      if (!t.bytes.empty()) tm1650_decode();
+      t.nbits = 0;
+      t.byte = 0;
+      t.bytes.clear();
+      t.ack = false;
+      t.tx_serial++;
+      return;
+    }
+  }
+}
+
+void Core::tm1650_levels(uint32_t do_off, uint32_t levels) {
+  Tm1650 &t = tm1650_;
+  uint32_t mask = (do_off == t.scl_off ? t.scl_mask : 0u) | (do_off == t.sda_off ? t.sda_mask : 0u);
+  int slot = (do_off == t.scl_off) ? 0 : 1;
+  if (t.last_ok[slot] && ((levels ^ t.last_reg[slot]) & mask) == 0) return;
+  if (!t.last_ok[slot] && levels == 0) {
+    t.last_reg[slot] = 0;
+    t.last_ok[slot] = 1;
+    return;
+  }
+  t.last_reg[slot] = levels;
+  t.last_ok[slot] = 1;
+  t.events++;
+  uint8_t scl = t.scl, sda = t.sda;
+  bool scl_changed = false, sda_changed = false;
+  if (do_off == t.scl_off) {
+    uint8_t nscl = (levels & t.scl_mask) ? 1 : 0;
+    if (nscl != t.scl) { scl = nscl; scl_changed = true; }
+  }
+  if (do_off == t.sda_off) {
+    uint8_t nsda = (levels & t.sda_mask) ? 1 : 0;
+    if (nsda != t.sda) { sda = nsda; sda_changed = true; }
+  }
+  if (scl_changed || sda_changed) {
+    if (scl_changed && sda_changed) {
+      if (scl == 1 && sda == 0 && t.sda == 1) {
+        t.scl = scl; t.sda = sda;
+        tm1650_process(scl, sda, false, true);
+      } else if (scl == 1 && sda == 1 && t.sda == 0) {
+        t.scl = scl; t.sda = sda;
+        tm1650_process(scl, sda, false, true);
+      } else {
+        t.scl = scl; t.sda = sda;
+      }
+    } else {
+      tm1650_process(scl, sda, scl_changed, sda_changed);
+      t.scl = scl; t.sda = sda;
     }
   }
 }

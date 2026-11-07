@@ -98,6 +98,14 @@ class TM1628Decoder(PanelDecoder):
         self.key_read_count = 0
         self._frame_serial = 0
 
+    def gpio_watch(self):
+        if self.dump_enabled:
+            return None
+        watch = {self.clk_offset: 1 << self.clk_bit}
+        watch[self.dio_offset] = watch.get(self.dio_offset, 0) | (1 << self.dio_bit)
+        watch[self.stb_offset] = watch.get(self.stb_offset, 0) | (1 << self.stb_bit)
+        return watch
+
     # ---- the CPU side: GPIO DO writes ----------------------------------------
     def on_gpio_write(self, address, size, value):
         """Called for every GPIO DO register write (any bank)."""

@@ -130,6 +130,13 @@ class LemontreeDecoder(PanelDecoder):
         return super().get_display_text()
 
     # ---- GPIO pin transitions ------------------------------------------------
+    def gpio_watch(self):
+        if self.dump_enabled:
+            return None
+        watch = {self.scl_offset: 1 << self.scl_bit}
+        watch[self.sda_offset] = watch.get(self.sda_offset, 0) | (1 << self.sda_bit)
+        return watch
+
     def on_gpio_write(self, address, size, levels):
         offset = address & 0xFFF
         if not self._gpio_changed(offset, levels):

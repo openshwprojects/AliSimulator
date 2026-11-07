@@ -145,7 +145,23 @@ class Core {
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
   enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_GPIO_DI = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64, DF_GE = 128 };
+  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8 };
+  enum : uint32_t {
+    RULE_DEMOD = 1,
+    RULE_DEMOD_COUNT = 2,
+    RULE_DEMOD_CLR3F = 4,
+    RULE_DEMOD_IFZERO = 8,
+    RULE_EXACT_OFF = 16,
+    RULE_VE_STATUS = 32,
+    RULE_MAC_MDIO = 64,
+  };
+  struct MmioRule {
+    uint32_t offset;
+    uint8_t req_mask, and_mask, or_mask, pad;
+    uint32_t flags;
+  };
   void set_dev_flags(uint32_t offset, uint32_t count, uint8_t flags);   // replace
+  void set_mmio_rules(const MmioRule *rules, uint32_t n_rules, const uint32_t *offsets, const uint8_t *rflags, uint32_t n_offs);
   uint8_t *devflags() { return devflags_; }
 
   // ---- registers ----
@@ -270,11 +286,12 @@ class Core {
   bool spin_skip = true;
   uint64_t spin_skipped = 0;       // instructions skipped that way
   uint64_t stores_ = 0;            // guest stores so far
+  uint64_t unchanged_stores_ = 0;  // fast-path RAM stores that wrote the value already in memory
   uint64_t slow_ = 0;              // instructions not run in blocks, slow-path accesses
   uint32_t back_key_ = 0xFFFFFFFFu;  // where the last taken backward branch went (pc | m16)
   uint32_t loop_key_ = 0xFFFFFFFFu;
   uint32_t loop_passes_ = 0;
-  uint64_t loop_stores_ = 0, loop_slow_ = 0, loop_icount_ = 0;
+  uint64_t loop_stores_ = 0, loop_ustores_ = 0, loop_slow_ = 0, loop_icount_ = 0;
   bool loop_snap_ = false;
   uint32_t loop_regs_[34];
   void spin_check();
@@ -376,6 +393,41 @@ class Core {
   void gi2c_rising();
   void gi2c_falling();
   void gi2c_load();
+  // TM1650 / FD650 2-wire front-panel LED + key-scan controller on GPIO pins
+  enum : uint8_t { TM_IDLE = 0, TM_DATA = 1 };
+  struct Tm1650 {
+    bool on = false, cb_all = false;
+    uint32_t scl_off = 0, sda_off = 0, scl_mask = 0, sda_mask = 0;
+    uint8_t scl = 1, sda = 1, state = TM_IDLE;
+    uint32_t nbits = 0;
+    uint8_t byte = 0;
+    bool ack = false;
+    uint8_t key_byte = 0, answer = 0, last_key_value = 0;
+    bool has_last_key = false;
+    uint32_t key_hold = 0;
+    uint64_t tx_serial = 0, answer_tx = ~0ull;
+    uint64_t key_reads_answered = 0, key_read_count = 0;
+    uint8_t digits[4] = {0, 0, 0, 0};
+    uint32_t last_reg[2] = {0, 0};
+    uint8_t last_ok[2] = {0, 0};
+    std::vector<uint8_t> bytes;
+    uint64_t events = 0, tx_count = 0;
+  } tm1650_;
+  I2cCb tm1650_cb_ = nullptr;
+  void *tm1650_user_ = nullptr;
+  void tm1650_config(bool on, uint32_t scl_off, uint32_t scl_bit, uint32_t sda_off, uint32_t sda_bit, bool cb_all);
+  void tm1650_levels(uint32_t do_off, uint32_t levels);
+  void tm1650_process(uint8_t scl, uint8_t sda, bool scl_changed, bool sda_changed);
+  void tm1650_decode();
+  bool tm1650_chip_owns_sda() const;
+  int tm1650_sda_in();
+
+  // Native MMIO read/write rules (DemodulatorLock, InternalDemod, ReadyBits, VE, MAC, UART idle)
+  bool demod_locked_ = false;
+  uint64_t demod_reads_ = 0;
+  enum { MMIO_RULES_MAX = 256 };
+  MmioRule mmio_rules_[MMIO_RULES_MAX];
+  uint32_t mmio_rule_count_ = 0;
   // Profile (ali_prof): instructions run per block start / per instruction outside
   // blocks (pc | m16), and the device accesses handled in Python per instruction.
   std::unordered_map<uint32_t, uint64_t> *prof_insns_ = nullptr, *prof_dev_ = nullptr;
@@ -470,6 +522,7 @@ class Core {
   uint32_t dev_phys_ = 0x18000000, dev_size_ = 0;
   uint8_t *dev_buf_ = nullptr;
   uint8_t *devflags_ = nullptr;
+  uint8_t *devrules_ = nullptr;
   DevCb dev_cb_ = nullptr;
   void *dev_user_ = nullptr;
   // A pointer mapping outside the device window may expose its bytes as code.
@@ -531,7 +584,13 @@ class Core {
     if (ALI_UNLIKELY(va & (sizeof(T) - 1))) fault_unaligned(va, MEM_WRITE);
     stores_++;
     uint8_t *p = vw_[va >> 12];
-    if (ALI_LIKELY(p != nullptr)) { memcpy(p + (va & 0xFFF), &v, sizeof(T)); return; }
+    if (ALI_LIKELY(p != nullptr)) {
+      T oldv; memcpy(&oldv, p + (va & 0xFFF), sizeof(T));
+      if (oldv == v) { unchanged_stores_++; return; }
+      if (ALI_UNLIKELY(probe_)) throw Fault{ERR_EXCEPTION};
+      memcpy(p + (va & 0xFFF), &v, sizeof(T));
+      return;
+    }
     store_slow(va, sizeof(T), (uint64_t)v);
   }
   ALI_INLINE uint32_t fetch32(uint32_t va) {

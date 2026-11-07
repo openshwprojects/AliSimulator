@@ -75,6 +75,15 @@ class HC164Decoder(PanelDecoder):
     def di_override(self, di_offset, di_value):
         return di_value
 
+    def gpio_watch(self):
+        if self.dump_enabled:
+            return None
+        watch = {self.clk_offset: 1 << self.clk_bit}
+        watch[self.data_offset] = watch.get(self.data_offset, 0) | (1 << self.data_bit)
+        for doff, dbit in self.digit_pins:
+            watch[doff] = watch.get(doff, 0) | (1 << dbit)
+        return watch
+
     def on_gpio_write(self, address, size, levels):
         offset = address & 0xFFF
         if self._fast_offset is not None:

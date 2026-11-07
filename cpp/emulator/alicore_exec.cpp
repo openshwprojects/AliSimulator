@@ -817,11 +817,13 @@ ALI_INLINE void Core::exec16() {
 // ------------------------------------------------------------------
 enum UopKind : uint8_t {
   U_NOP, U_GEN32, U_GEN16,
-  U_ADDIU, U_ADDU, U_SUBU, U_AND, U_OR, U_XOR, U_NOR, U_SLT, U_SLTU, U_SLTI, U_SLTIU, U_ANDI, U_ORI, U_XORI, U_LI,
+  U_ADDIU, U_ADDU, U_SUBU, U_ADD, U_ADDI, U_SUB,
+  U_AND, U_OR, U_XOR, U_NOR, U_SLT, U_SLTU, U_SLTI, U_SLTIU, U_ANDI, U_ORI, U_XORI, U_LI,
   U_SLL, U_SRL, U_SRA, U_ROTR, U_SLLV, U_SRLV, U_SRAV, U_ROTRV, U_MOVZ, U_MOVN, U_MFHI, U_MFLO, U_MTHI, U_MTLO,
   U_MUL, U_MULT, U_MULTU, U_DIV, U_DIVU, U_MADD, U_MADDU, U_MSUB, U_MSUBU, U_CLZ, U_CLO, U_SEB, U_SEH, U_WSBH,
   U_EXT, U_INS,
-  U_LB, U_LBU, U_LH, U_LHU, U_LW, U_SB, U_SH, U_SW,
+  U_LB, U_LBU, U_LH, U_LHU, U_LW, U_LWL, U_LWR, U_SB, U_SH, U_SW, U_SWL, U_SWR,
+  U16_SAVE, U16_RESTORE,
   U_MFC0_COUNT, U_TRAP,
   U_MFC0_STATUS, U_MTC0_STATUS, U_DI, U_EI,      // (the RTOS's interrupt disable / enable)
   // fused two-op superinstructions (ops[i + 1] keeps its original Uop)
@@ -872,7 +874,8 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
         case 0x19: if (rd) uop(u, U_GEN32, 0, 0, 0, insn); else uop(u, U_MULTU, 0, rs, rt, 0); return K_OP;
         case 0x1A: uop(u, U_DIV, 0, rs, rt, 0); return K_OP;
         case 0x1B: uop(u, U_DIVU, 0, rs, rt, 0); return K_OP;
-        case 0x20: case 0x22: uop(u, U_GEN32, 0, 0, 0, insn); return K_OP;            // ADD / SUB (overflow)
+        case 0x20: uop(u, U_ADD, rd, rs, rt, 0); return K_OP;
+        case 0x22: uop(u, U_SUB, rd, rs, rt, 0); return K_OP;
         case 0x21: case 0x23: case 0x24: case 0x25: case 0x26: case 0x27: case 0x2A: case 0x2B: {
           static const uint8_t M[12] = {0, U_ADDU, 0, U_SUBU, U_AND, U_OR, U_XOR, U_NOR, 0, 0, U_SLT, U_SLTU};
           if (!rd) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, M[(insn & 0x3F) - 0x20], rd, rs, rt, 0);
@@ -904,7 +907,7 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
     case 0x05: uop(u, U_BNE, 0, rs, rt, btarget); return K_DS;
     case 0x06: uop(u, U_BLEZ, 0, rs, 0, btarget); return K_DS;
     case 0x07: uop(u, U_BGTZ, 0, rs, 0, btarget); return K_DS;
-    case 0x08: uop(u, U_GEN32, 0, 0, 0, insn); return K_OP;                            // ADDI
+    case 0x08: uop(u, U_ADDI, rt, rs, 0, simm); return K_OP;
     case 0x09: if (!rt) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_ADDIU, rt, rs, 0, simm); return K_OP;
     case 0x0A: if (!rt) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_SLTI, rt, rs, 0, simm); return K_OP;
     case 0x0B: if (!rt) uop(u, U_NOP, 0, 0, 0, 0); else uop(u, U_SLTIU, rt, rs, 0, simm); return K_OP;
@@ -960,7 +963,11 @@ static int decode32(uint32_t insn, uint32_t pc, Core::Uop &u) {
     case 0x28: uop(u, U_SB, 0, rs, rt, simm); return K_OP;
     case 0x29: uop(u, U_SH, 0, rs, rt, simm); return K_OP;
     case 0x2B: uop(u, U_SW, 0, rs, rt, simm); return K_OP;
-    case 0x22: case 0x26: case 0x2A: case 0x2E: case 0x30: case 0x38:               // LWL / LWR / SWL / SWR / LL / SC
+    case 0x22: uop(u, U_LWL, rt, rs, 0, simm); return K_OP;
+    case 0x26: uop(u, U_LWR, rt, rs, 0, simm); return K_OP;
+    case 0x2A: uop(u, U_SWL, 0, rs, rt, simm); return K_OP;
+    case 0x2E: uop(u, U_SWR, 0, rs, rt, simm); return K_OP;
+    case 0x30: case 0x38:                                                             // LL / SC
     case 0x31: case 0x35: case 0x39: case 0x3D:                                      // LWC1 / LDC1 / SWC1 / SDC1
       uop(u, U_GEN32, 0, 0, 0, insn);
       return K_OP;
@@ -1051,7 +1058,37 @@ static int decode16(const uint8_t *page, uint32_t a, uint32_t limit, Core::Uop &
         }
         case 2: uop(u, U_SW, 0, 29, 31, ext ? eimm : ((hw & 0xFF) << 2)); return K_OP;
         case 3: uop(u, U_ADDIU, 29, 29, 0, ext ? eimm : ((uint32_t)sext8(hw) << 3)); return K_OP;
-        case 4: uop(u, U_GEN16, 0, 0, 0, 0); return K_OP;                            // SAVE / RESTORE
+        case 4: {
+          uint32_t xsregs = 0, aregs = 0, framesize;
+          if (ext) {
+            xsregs = (e >> 8) & 7;
+            aregs = e & 0xF;
+            framesize = ((((e >> 4) & 0xF) << 4) | (hw & 0xF)) << 3;
+          } else {
+            framesize = hw & 0xF;
+            framesize = framesize ? framesize << 3 : 128;
+          }
+          uint32_t args, astatic;
+          switch (aregs) {
+            case 0: case 1: case 2: case 3: case 11: args = 0; break;
+            case 4: case 5: case 6: case 7: args = 1; break;
+            case 8: case 9: case 10: args = 2; break;
+            case 12: case 13: args = 3; break;
+            case 14: args = 4; break;
+            default: return K_BARRIER;
+          }
+          switch (aregs) {
+            case 0: case 4: case 8: case 12: case 14: astatic = 0; break;
+            case 1: case 5: case 9: case 13: astatic = 1; break;
+            case 2: case 6: case 10: astatic = 2; break;
+            case 3: case 7: astatic = 3; break;
+            case 11: astatic = 4; break;
+            default: return K_BARRIER;
+          }
+          uint32_t mask = ((hw & 0x40) ? 1u : 0u) | ((hw & 0x20) ? 2u : 0u) | ((hw & 0x10) ? 4u : 0u) | (xsregs << 3);
+          uop(u, (hw & 0x80) ? U16_SAVE : U16_RESTORE, mask, args, astatic, framesize);
+          return K_OP;
+        }
         case 5: {
           if (ext) return K_BARRIER;
           uint32_t r32 = ((hw >> 5) & 7) | (((hw >> 3) & 3) << 3);
@@ -1460,6 +1497,24 @@ void Core::run_blocks(Block *b) {
         case U_ADDIU: R[u.d] = R[u.s] + u.imm; break;
         case U_ADDU: R[u.d] = R[u.s] + R[u.t]; break;
         case U_SUBU: R[u.d] = R[u.s] - R[u.t]; break;
+        case U_ADD: {
+          uint32_t a = R[u.s], c = R[u.t], r = a + c;
+          if (ALI_UNLIKELY(((a ^ r) & (c ^ r)) >> 31)) { cur_pc_ = u.pc; exception(EXC_OV); }
+          if (u.d) R[u.d] = r;
+          break;
+        }
+        case U_ADDI: {
+          uint32_t a = R[u.s], c = u.imm, r = a + c;
+          if (ALI_UNLIKELY(((a ^ r) & (c ^ r)) >> 31)) { cur_pc_ = u.pc; exception(EXC_OV); }
+          if (u.d) R[u.d] = r;
+          break;
+        }
+        case U_SUB: {
+          uint32_t a = R[u.s], c = R[u.t], r = a - c;
+          if (ALI_UNLIKELY(((a ^ c) & (a ^ r)) >> 31)) { cur_pc_ = u.pc; exception(EXC_OV); }
+          if (u.d) R[u.d] = r;
+          break;
+        }
         case U_AND: R[u.d] = R[u.s] & R[u.t]; break;
         case U_OR: R[u.d] = R[u.s] | R[u.t]; break;
         case U_XOR: R[u.d] = R[u.s] ^ R[u.t]; break;
@@ -1539,7 +1594,13 @@ void Core::run_blocks(Block *b) {
     uint8_t *p = vw_[a >> 12];                                                                \
     T v = (T)R[u.t];                                                                          \
     stores_++;                                                                                \
-    if (ALI_LIKELY(p != nullptr)) { memcpy(p + (a & 0xFFF), &v, sizeof(T)); break; }          \
+    if (ALI_LIKELY(p != nullptr)) {                                                           \
+      T oldv; memcpy(&oldv, p + (a & 0xFFF), sizeof(T));                                      \
+      if (oldv == v) { unchanged_stores_++; break; }                                          \
+      if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }               \
+      memcpy(p + (a & 0xFFF), &v, sizeof(T));                                                 \
+      break;                                                                                  \
+    }                                                                                         \
     cur_pc_ = u.pc; store_slow(a, sizeof(T), (uint64_t)v);                                    \
     goto check_slow;                                                                          \
   }
@@ -1547,6 +1608,131 @@ void Core::run_blocks(Block *b) {
         case U_SH: BLK_STORE(uint16_t)
         case U_SW: BLK_STORE(uint32_t)
 #undef BLK_STORE
+        case U_LWL: {
+          uint32_t a = R[u.s] + u.imm, b_off = a & 3, wa = a & ~3u;
+          uint8_t *p = vr_[wa >> 12];
+          uint32_t w;
+          bool slow = (p == nullptr);
+          if (ALI_LIKELY(!slow)) memcpy(&w, p + (wa & 0xFFF), 4);
+          else { cur_pc_ = u.pc; w = (uint32_t)load_slow(wa, 4); }
+          if (u.d) {
+            uint32_t sh = 8 * (3 - b_off);
+            uint32_t keep = sh ? (R[u.d] & ((1u << sh) - 1)) : 0;
+            R[u.d] = (w << sh) | keep;
+          }
+          if (ALI_UNLIKELY(slow)) goto check_slow;
+          break;
+        }
+        case U_LWR: {
+          uint32_t a = R[u.s] + u.imm, b_off = a & 3, wa = a & ~3u;
+          uint8_t *p = vr_[wa >> 12];
+          uint32_t w;
+          bool slow = (p == nullptr);
+          if (ALI_LIKELY(!slow)) memcpy(&w, p + (wa & 0xFFF), 4);
+          else { cur_pc_ = u.pc; w = (uint32_t)load_slow(wa, 4); }
+          if (u.d) {
+            uint32_t sh = 8 * b_off;
+            uint32_t keep = sh ? (R[u.d] & ~(0xFFFFFFFFu >> sh)) : 0;
+            R[u.d] = (w >> sh) | keep;
+          }
+          if (ALI_UNLIKELY(slow)) goto check_slow;
+          break;
+        }
+        case U_SWL: {
+          uint32_t a = R[u.s] + u.imm, b_off = a & 3, wa = a & ~3u;
+          uint32_t sh = 8 * (3 - b_off);
+          uint32_t v = R[u.t] >> sh;
+          uint8_t *pw = vw_[wa >> 12], *pr = vr_[wa >> 12];
+          if (ALI_LIKELY(pw != nullptr && (b_off == 3 || pr != nullptr))) {
+            uint32_t nw = v;
+            if (b_off != 3) {
+              uint32_t m;
+              memcpy(&m, pr + (wa & 0xFFF), 4);
+              uint32_t mask = 0xFFFFFFFFu >> sh;
+              nw = (m & ~mask) | v;
+            }
+            stores_++;
+            uint32_t oldw;
+            memcpy(&oldw, pw + (wa & 0xFFF), 4);
+            if (oldw == nw) { unchanged_stores_++; break; }
+            if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
+            memcpy(pw + (wa & 0xFFF), &nw, 4);
+            break;
+          }
+          cur_pc_ = u.pc;
+          if (b_off == 3) { store<uint32_t>(wa, v); }
+          else {
+            uint32_t m = load<uint32_t>(wa);
+            uint32_t mask = 0xFFFFFFFFu >> sh;
+            store<uint32_t>(wa, (m & ~mask) | v);
+          }
+          goto check_slow;
+        }
+        case U_SWR: {
+          uint32_t a = R[u.s] + u.imm, b_off = a & 3, wa = a & ~3u;
+          uint32_t sh = 8 * b_off;
+          uint32_t v = R[u.t] << sh;
+          uint8_t *pw = vw_[wa >> 12], *pr = vr_[wa >> 12];
+          if (ALI_LIKELY(pw != nullptr && (b_off == 0 || pr != nullptr))) {
+            uint32_t nw = v;
+            if (b_off != 0) {
+              uint32_t m;
+              memcpy(&m, pr + (wa & 0xFFF), 4);
+              uint32_t mask = 0xFFFFFFFFu << sh;
+              nw = (m & ~mask) | v;
+            }
+            stores_++;
+            uint32_t oldw;
+            memcpy(&oldw, pw + (wa & 0xFFF), 4);
+            if (oldw == nw) { unchanged_stores_++; break; }
+            if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
+            memcpy(pw + (wa & 0xFFF), &nw, 4);
+            break;
+          }
+          cur_pc_ = u.pc;
+          if (b_off == 0) { store<uint32_t>(wa, v); }
+          else {
+            uint32_t m = load<uint32_t>(wa);
+            uint32_t mask = 0xFFFFFFFFu << sh;
+            store<uint32_t>(wa, (m & ~mask) | v);
+          }
+          goto check_slow;
+        }
+        case U16_SAVE: {
+          cur_pc_ = u.pc;
+          static const uint8_t XS[7] = {18, 19, 20, 21, 22, 23, 30};
+          uint32_t mask = u.d, xsregs = mask >> 3, args = u.s, astatic = u.t, framesize = u.imm;
+          uint32_t sp = R[29];
+          uint64_t s0 = slow_;
+          for (int k = (int)args; k >= 1; k--) store<uint32_t>(sp + 4 * (k - 1), R[3 + k]);
+          uint32_t t = sp;
+          if (mask & 1) { t -= 4; store<uint32_t>(t, R[31]); }
+          for (int k = (int)xsregs; k >= 1; k--) { t -= 4; store<uint32_t>(t, R[XS[k - 1]]); }
+          if (mask & 4) { t -= 4; store<uint32_t>(t, R[17]); }
+          if (mask & 2) { t -= 4; store<uint32_t>(t, R[16]); }
+          for (uint32_t k = 0; k < astatic; k++) { t -= 4; store<uint32_t>(t, R[7 - k]); }
+          R[29] = sp - framesize;
+          if (ALI_UNLIKELY(slow_ != s0)) goto check_slow;
+          break;
+        }
+        case U16_RESTORE: {
+          cur_pc_ = u.pc;
+          static const uint8_t XS[7] = {18, 19, 20, 21, 22, 23, 30};
+          uint32_t mask = u.d, xsregs = mask >> 3, astatic = u.t, framesize = u.imm;
+          uint32_t t = R[29] + framesize;
+          uint32_t vals[16];
+          int regs[16], nr = 0;
+          uint64_t s0 = slow_;
+          if (mask & 1) { t -= 4; regs[nr] = 31; vals[nr++] = load<uint32_t>(t); }
+          for (int k = (int)xsregs; k >= 1; k--) { t -= 4; regs[nr] = XS[k - 1]; vals[nr++] = load<uint32_t>(t); }
+          if (mask & 4) { t -= 4; regs[nr] = 17; vals[nr++] = load<uint32_t>(t); }
+          if (mask & 2) { t -= 4; regs[nr] = 16; vals[nr++] = load<uint32_t>(t); }
+          for (uint32_t k = 0; k < astatic; k++) { t -= 4; regs[nr] = (int)(7 - k); vals[nr++] = load<uint32_t>(t); }
+          for (int k = 0; k < nr; k++) R[regs[k]] = vals[k];
+          R[29] += framesize;
+          if (ALI_UNLIKELY(slow_ != s0)) goto check_slow;
+          break;
+        }
         // ---- fused two-op superinstructions ----
         case U_LI_ADDIU: {
           R[u.d] = u.imm;
@@ -1591,7 +1777,13 @@ void Core::run_blocks(Block *b) {
           uint8_t *p = vw_[a >> 12];
           uint32_t v = R[u2.t];
           stores_++;
-          if (ALI_LIKELY(p != nullptr)) { memcpy(p + (a & 0xFFF), &v, 4); break; }
+          if (ALI_LIKELY(p != nullptr)) {
+            uint32_t oldv; memcpy(&oldv, p + (a & 0xFFF), 4);
+            if (oldv == v) { unchanged_stores_++; break; }
+            if (ALI_UNLIKELY(probe_)) { cur_pc_ = u2.pc; throw Fault{ERR_EXCEPTION}; }
+            memcpy(p + (a & 0xFFF), &v, 4);
+            break;
+          }
           cur_pc_ = u2.pc; store_slow(a, 4, (uint64_t)v);
           goto check_slow;
         }
@@ -1624,14 +1816,25 @@ void Core::run_blocks(Block *b) {
             cur_pc_ = u.pc; store_slow(a, 4, (uint64_t)v);
             goto check_slow;
           }
-          memcpy(p + (a & 0xFFF), &v, 4);
+          {
+            uint32_t oldv; memcpy(&oldv, p + (a & 0xFFF), 4);
+            if (oldv == v) unchanged_stores_++;
+            else if (ALI_UNLIKELY(probe_)) { cur_pc_ = u.pc; throw Fault{ERR_EXCEPTION}; }
+            else memcpy(p + (a & 0xFFF), &v, 4);
+          }
           const Uop &u2 = b->ops[++i];
           uint32_t a2 = R[u2.s] + u2.imm;
           if (ALI_UNLIKELY(a2 & 3)) { cur_pc_ = u2.pc; fault_unaligned(a2, MEM_WRITE); }
           uint8_t *p2 = vw_[a2 >> 12];
           uint32_t v2 = R[u2.t];
           stores_++;
-          if (ALI_LIKELY(p2 != nullptr)) { memcpy(p2 + (a2 & 0xFFF), &v2, 4); break; }
+          if (ALI_LIKELY(p2 != nullptr)) {
+            uint32_t oldv2; memcpy(&oldv2, p2 + (a2 & 0xFFF), 4);
+            if (oldv2 == v2) { unchanged_stores_++; break; }
+            if (ALI_UNLIKELY(probe_)) { cur_pc_ = u2.pc; throw Fault{ERR_EXCEPTION}; }
+            memcpy(p2 + (a2 & 0xFFF), &v2, 4);
+            break;
+          }
           cur_pc_ = u2.pc; store_slow(a2, 4, (uint64_t)v2);
           goto check_slow;
         }
@@ -1825,11 +2028,14 @@ static bool uop_rw(const Core::Uop &u, uint64_t &rd, uint64_t &wr, bool &link) {
   link = false;
   switch (u.op) {
     case U_NOP: return true;
-    case U_ADDIU: case U_ADDIU2: case U_SLTI: case U_SLTIU: case U_ANDI: case U_ORI: case U_XORI:
+    case U_ADDIU: case U_ADDIU2: case U_ADDI: case U_SLTI: case U_SLTIU: case U_ANDI: case U_ORI: case U_XORI:
     case U_CLZ: case U_CLO: case U_EXT:
     case U_LB: case U_LBU: case U_LH: case U_LHU: case U_LW: case U_LW2:
       rd = R(u.s); wr = R(u.d); return true;
-    case U_ADDU: case U_ADDU2: case U_SUBU: case U_AND: case U_OR: case U_XOR: case U_NOR: case U_SLT: case U_SLTU:
+    case U_LWL: case U_LWR:
+      rd = R(u.s) | R(u.d); wr = R(u.d); return true;
+    case U_ADDU: case U_ADDU2: case U_SUBU: case U_ADD: case U_SUB:
+    case U_AND: case U_OR: case U_XOR: case U_NOR: case U_SLT: case U_SLTU:
     case U_SLLV: case U_SRLV: case U_SRAV: case U_ROTRV: case U_MUL:
       rd = R(u.s) | R(u.t); wr = R(u.d); return true;
     case U_LI: case U_LI_ADDIU: case U_LI_ORI: case U_LI_LW: case U_LI_SW: case U_MFC0_COUNT:
@@ -1846,8 +2052,29 @@ static bool uop_rw(const Core::Uop &u, uint64_t &rd, uint64_t &wr, bool &link) {
       rd = R(u.s) | R(u.t); wr = HI | LO; return true;
     case U_MADD: case U_MADDU: case U_MSUB: case U_MSUBU:
       rd = R(u.s) | R(u.t) | HI | LO; wr = HI | LO; return true;
-    case U_SB: case U_SH: case U_SW: case U_SW2: case U_TRAP:
+    case U_SB: case U_SH: case U_SW: case U_SW2: case U_SWL: case U_SWR: case U_TRAP:
       rd = R(u.s) | R(u.t); return true;
+    case U16_SAVE: {
+      static const uint8_t XS[7] = {18, 19, 20, 21, 22, 23, 30};
+      rd = R(29); wr = R(29);
+      if (u.d & 1) rd |= R(31);
+      if (u.d & 2) rd |= R(16);
+      if (u.d & 4) rd |= R(17);
+      for (uint32_t i = 0; i < (u.d >> 3); i++) rd |= R(XS[i]);
+      for (uint32_t i = 0; i < u.s; i++) rd |= R(4 + i);
+      for (uint32_t i = 0; i < u.t; i++) rd |= R(7 - i);
+      return true;
+    }
+    case U16_RESTORE: {
+      static const uint8_t XS[7] = {18, 19, 20, 21, 22, 23, 30};
+      rd = R(29); wr = R(29);
+      if (u.d & 1) wr |= R(31);
+      if (u.d & 2) wr |= R(16);
+      if (u.d & 4) wr |= R(17);
+      for (uint32_t i = 0; i < (u.d >> 3); i++) wr |= R(XS[i]);
+      for (uint32_t i = 0; i < u.t; i++) wr |= R(7 - i);
+      return true;
+    }
     case U_BEQ: case U_BNE: case U_BEQL: case U_BNEL:
       rd = R(u.s) | R(u.t); return true;
     case U_BLEZ: case U_BGTZ: case U_BLTZ: case U_BGEZ: case U_BLEZL: case U_BGTZL: case U_BLTZL: case U_BGEZL:
@@ -1908,35 +2135,38 @@ uint64_t Core::pass_ignorable(bool &ok) const {
 
 void Core::spin_check() {
   uint32_t key = pc | (m16 ? 1u : 0u);
-  bool same = key == loop_key_ && stores_ == loop_stores_ && slow_ == loop_slow_;
+  bool same = key == loop_key_ && (stores_ - unchanged_stores_) == (loop_stores_ - loop_ustores_) && slow_ == loop_slow_;
   spin_dbg[0]++;
   if (rec_on_) {
     // a pass of a loop that reads Count was recorded: if it goes round with the
     // same registers (but those it sets before it reads them), skip whole passes
     rec_on_ = false;
-    if (same && !rec_over_ && rec_n_ > 0) {
-      bool ok;
-      uint64_t ign = pass_ignorable(ok);
-      if (ok && loop_regs_match_mask(ign)) {
-        rec_ign_ = ign;
-        PollLoop &pl = poll_cache_[poll_slot(key)];
-        uint64_t guess = pl.key == key ? pl.last_k : 0;
-        pl.key = key;
-        pl.n = rec_n_;
-        pl.ign = ign;
-        memcpy(pl.seq, rec_, sizeof(Block *) * rec_n_);
-        for (int j = 0; j < rec_n_; j++) pl.keys[j] = rec_[j]->key;
-        pl.last_k = poll_skip(key, guess);
-        loop_poll_tried_ = false;
+    if (same) {
+      if (!rec_over_ && rec_n_ > 0) {
+        bool ok;
+        uint64_t ign = pass_ignorable(ok);
+        if (ok && loop_regs_match_mask(ign)) {
+          rec_ign_ = ign;
+          PollLoop &pl = poll_cache_[poll_slot(key)];
+          uint64_t guess = pl.key == key ? pl.last_k : 0;
+          pl.key = key;
+          pl.n = rec_n_;
+          pl.ign = ign;
+          memcpy(pl.seq, rec_, sizeof(Block *) * rec_n_);
+          for (int j = 0; j < rec_n_; j++) pl.keys[j] = rec_[j]->key;
+          pl.last_k = poll_skip(key, guess);
+          loop_poll_tried_ = false;
+        }
       }
+      loop_key_ = key;
+      loop_stores_ = stores_;
+      loop_ustores_ = unchanged_stores_;
+      loop_slow_ = slow_;
+      loop_creads_ = count_reads_;
+      loop_passes_ = 0;
+      loop_snap_ = false;
+      return;
     }
-    loop_key_ = key;
-    loop_stores_ = stores_;
-    loop_slow_ = slow_;
-    loop_creads_ = count_reads_;
-    loop_passes_ = 0;
-    loop_snap_ = false;
-    return;
   }
   if (!same) {
     spin_dbg[1]++;
@@ -1955,6 +2185,7 @@ void Core::spin_check() {
     }
     loop_key_ = key;
     loop_stores_ = stores_;
+    loop_ustores_ = unchanged_stores_;
     loop_slow_ = slow_;
     loop_creads_ = count_reads_;
     loop_passes_ = 0;
@@ -2023,6 +2254,7 @@ bool Core::poll_probe(uint64_t k, uint32_t pass, uint32_t head) {
   uint32_t save_hi = hi, save_lo = lo, save_pc = pc, save_back = back_key_;
   bool save_m16 = m16;
   uint64_t save_icount = icount, save_executed = executed, save_runs = block_runs, save_creads = count_reads_;
+  uint64_t save_stores = stores_, save_ustores = unchanged_stores_;
   auto *save_prof = prof_insns_;
   prof_insns_ = nullptr;
   icount += k * pass;
@@ -2044,12 +2276,13 @@ bool Core::poll_probe(uint64_t k, uint32_t pass, uint32_t head) {
   memcpy(gpr, save_gpr, sizeof(gpr));
   hi = save_hi; lo = save_lo; pc = save_pc; m16 = save_m16; back_key_ = save_back;
   icount = save_icount; executed = save_executed; block_runs = save_runs; count_reads_ = save_creads;
+  stores_ = save_stores; unchanged_stores_ = save_ustores;
   prof_insns_ = save_prof;
   return ok;
 }
 
 // Whether a cached pass can be replayed: each block still the table's for its
-// PC (so not freed), still the code in memory, with no store or generic op.
+// PC (so not freed), still the code in memory, with no generic or status op.
 bool Core::poll_seq_valid(const PollLoop &pl) {
   if (!btab_) return false;
   for (int j = 0; j < pl.n; j++) {
@@ -2060,7 +2293,7 @@ bool Core::poll_seq_valid(const PollLoop &pl) {
     if (!page || !same_code(page + (pc0 & 0xFFF), b->raw, b->bytes)) return false;
     for (int i = 0; i < b->n; i++) {
       uint8_t op = b->ops[i].op;
-      if (op == U_SB || op == U_SH || op == U_SW || op == U_SW2 || op == U_LI_SW || op == U_GEN32 || op == U_GEN16 ||
+      if (op == U_GEN32 || op == U_GEN16 ||
           op == U_MFC0_STATUS || op == U_MTC0_STATUS || op == U_DI || op == U_EI) return false;
     }
   }
