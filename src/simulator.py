@@ -5413,6 +5413,10 @@ class AliMipsSimulator:
         "0dd20169016b0ed30fd310d311d21e92916784eaff4c12d4516744efff4a13d2"
         "c43243ed0460026a5111016a4f11006b092600f4006c64320a95a9e280ca014b"
         "c3ebf9619d67104c1f952096")
+    # MIPS16e LZMA SDK 9.x LzmaDecode() entry (Ferguson Ariva 160 Combo bootloader
+    # at 0x81C022A8: save $a0-$a2,56,$ra,$s0-$s1,s2-s4 -> sw $a3,56($sp) -> JAL LzmaDec_InitDicAndState).
+    _LZMA_DECODE_9_M16_SIG = bytes.fromhex(
+        "609d1cf0f464006c22d3609f80df80dd23d32f93066a80db2393055b2c61256707672c952d9630970bd40ad4")
 
     def _find_lzma_decoders(self, data, base, views):
         """Hook LzmaDecode() wherever data -- code at physical offset `base` --
@@ -5422,7 +5426,7 @@ class AliMipsSimulator:
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
         for sig, align, head_len in ((self._LZMA_DECODE_SIG, 4, 4), (self._LZMA_DECODE_O2_SIG, 4, 4),
                                      (self._LZMA_DECODE_9_SIG, 4, 4), (self._LZMA_DECODE_9B_SIG, 4, 4),
-                                     (self._LZMA_DECODE_M16_SIG, 2, 12)):
+                                     (self._LZMA_DECODE_M16_SIG, 2, 12), (self._LZMA_DECODE_9_M16_SIG, 2, 12)):
             head = sig[:head_len]
             n = len(sig)
             i = data.find(head)
@@ -5470,7 +5474,12 @@ class AliMipsSimulator:
             else:
                 sig = self._LZMA_DECODE_SIG
         elif size == 2:
-            sig = self._LZMA_DECODE_M16_SIG
+            if self._guest_bytes(address, 12) == self._LZMA_DECODE_9_M16_SIG[:12]:
+                sig = self._LZMA_DECODE_9_M16_SIG
+                rate_scale = 0.3
+                sdk9 = True
+            else:
+                sig = self._LZMA_DECODE_M16_SIG
         else:
             return
         if not self.lzma_hle or self._code_hook_h is not None or self.is_stepping:

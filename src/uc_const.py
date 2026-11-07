@@ -400,11 +400,19 @@ _ERR_STRINGS = {
 }
 
 
+_uc_error_bound = False
+
+
 class _BaseUcError(Exception):
     pass
 
 
 class _LocalUcError(_BaseUcError):
+    def __new__(cls, *args, **kwargs):
+        if not _uc_error_bound and "unicorn" in sys.modules:
+            _bind_real_uc_error()
+        return super().__new__(cls)
+
     def __init__(self, errno: int, *args):
         super().__init__(errno, *args)
         self.errno = errno
@@ -436,9 +444,11 @@ class UcError(_LocalUcError, metaclass=_UcErrorMeta):
 
 
 def _bind_real_uc_error():
+    global _uc_error_bound
     uc_mod = sys.modules.get("unicorn")
     if uc_mod is None:
         return
+    _uc_error_bound = True
     real_cls = getattr(uc_mod, "UcError", None)
     if real_cls is not None and real_cls is not UcError and not issubclass(UcError, real_cls):
         try:

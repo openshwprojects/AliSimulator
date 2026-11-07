@@ -145,7 +145,7 @@ class Core {
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
   enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_GPIO_DI = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64, DF_GE = 128 };
-  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8, DR_VPO = 16, DR_SCB = 32 };
+  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8, DR_VPO = 16, DR_SCB = 32, DR_HAS_RULE = 64 };
   enum : uint32_t {
     RULE_DEMOD = 1,
     RULE_DEMOD_COUNT = 2,
@@ -363,7 +363,7 @@ class Core {
   // A Count-polling pass may leave a register different from pass to pass when the
   // pass writes it before reading it, and before it can leave the loop (a value
   // like `now` the poll keeps): such registers (rec_ign_) are not compared.
-  uint64_t rec_ign_ = 0;
+  uint64_t rec_ign_ = 0, rec_chk_ = 0;
   bool loop_poll_tried_ = false;   // this loop's pass was recorded already
   bool poll_done_ = false;         // a skip in this loop found its last pass (no later one can skip more)
   uint32_t count_at(uint64_t ic) const {
@@ -554,8 +554,10 @@ class Core {
   bool demod_locked_ = false;
   uint64_t demod_reads_ = 0;
   enum { MMIO_RULES_MAX = 256 };
-  MmioRule mmio_rules_[MMIO_RULES_MAX];
-  uint32_t mmio_rule_count_ = 0;
+  MmioRule read_rules_[MMIO_RULES_MAX];
+  uint32_t read_rule_count_ = 0;
+  MmioRule write_rules_[MMIO_RULES_MAX];
+  uint32_t write_rule_count_ = 0;
   uint64_t trng_state_ = 0x5EEACE5512345678ull;
   uint32_t osd_pal_[2][256];
 
@@ -816,6 +818,7 @@ class Core {
     uint16_t bytes;               // code bytes they cover
     uint32_t end_pc;              // the PC after the block when it falls through
     bool loopy;                   // it ends in a branch / jump that can close a loop (not a call or return)
+    bool poll_ok = true;          // no generic or status op inside
     // A loop of its own that only counts (a cache-maintenance loop: CACHE is a no-op
     // here): no-ops, induction steps (addiu r, r, c), at most one compare flag
     // (slt / sltu / slti / sltiu), then bne / beq back to its start.  How many more
@@ -850,11 +853,11 @@ class Core {
   struct PollLoop {
     uint32_t key = 0xFFFFFFFFu;
     int n = 0;
-    uint64_t last_k = 0, ign = 0;
+    uint64_t last_k = 0, ign = 0, chk = 0;
     Block *seq[REC_MAX];
     uint32_t keys[REC_MAX];        // (their PCs: whether the table still holds them)
   };
-  uint64_t pass_ignorable(bool &ok) const;
+  uint64_t pass_ignorable(bool &ok, uint64_t &all_wr) const;
   enum { POLL_CACHE = 256 };
   PollLoop poll_cache_[POLL_CACHE];
   static uint32_t poll_slot(uint32_t key) { return (key * 0x9E3779B1u) >> 24; }

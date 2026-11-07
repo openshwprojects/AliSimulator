@@ -132,19 +132,31 @@ EXPECTED = [
     ("flash ECHOLINK EL700FTA mx29lv160.bin", "M3329"),           # Echolink EL-700 FTA: 2 MB parallel NOR M3329C ("SMT01---0.9.6", PAN_SMTM51_0)
 ]
 
+from concurrent.futures import ThreadPoolExecutor
+
 print("=== Test: chips.detect() picks each image's chip family ===")
 failures = 0
 detected_by_path = {}
 seen_expected = set()
 duplicate_expected = []
+
+def _detect_file(path):
+    with open(path, "rb") as f:
+        return chips.detect(f.read()).__name__
+
+expected_resolved = []
 for dump, family in EXPECTED:
     resolved = resolve_dump(dump)
     norm = os.path.normcase(os.path.abspath(resolved))
     if norm in seen_expected:
         duplicate_expected.append(dump)
     seen_expected.add(norm)
-    with open(resolved, "rb") as f:
-        got = chips.detect(f.read()).__name__
+    expected_resolved.append((dump, family, resolved, norm))
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    expected_results = list(pool.map(lambda item: _detect_file(item[2]), expected_resolved))
+
+for (dump, family, _resolved, norm), got in zip(expected_resolved, expected_results):
     detected_by_path[norm] = got
     ok = got == family
     failures += not ok
@@ -161,15 +173,18 @@ print(f"  [{'PASS' if ok_short else 'FAIL'}] short / empty buffers safely fall b
 
 catalog_entries = dump_catalog.catalog()
 catalog_mismatches = []
+missing_catalog = [(path, os.path.normcase(os.path.abspath(path)))
+                   for path, data in catalog_entries
+                   if data is not None and os.path.normcase(os.path.abspath(path)) not in detected_by_path]
+if missing_catalog:
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for (_path, norm), got in zip(missing_catalog, pool.map(lambda item: _detect_file(item[0]), missing_catalog)):
+            detected_by_path[norm] = got
 for path, data in catalog_entries:
     if data is None:
         continue
     norm = os.path.normcase(os.path.abspath(path))
-    got = detected_by_path.get(norm)
-    if got is None:
-        with open(path, "rb") as f:
-            got = chips.detect(f.read()).__name__
-        detected_by_path[norm] = got
+    got = detected_by_path[norm]
     want_fam = data["device"]["family"].split()[0]
     if got != want_fam:
         catalog_mismatches.append((os.path.basename(path), got, want_fam))

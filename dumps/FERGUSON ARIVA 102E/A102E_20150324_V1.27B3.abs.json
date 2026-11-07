@@ -1,0 +1,57 @@
+{
+  "file": "A102E_20150324_V1.27B3.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 102E",
+    "type": "DVB-S2 Full HD satellite receiver with smartcard reader, Ethernet, USB PVR and internet apps",
+    "board": "bootloader chunk \"HS17\", version \"37017-01047\"",
+    "soc": "ALi M3606-class dual-CPU chip (chip ID 0x3603; seecode chunk runs on the SEE core at 0xA6000200)",
+    "family": "M3602 (chips/m3602.py), matched by the bootloader chunk's version \"37017-01047\"; chip ID 0x3603 (chipId)",
+    "demod": "internal DVB-S2 (NIM_S3501_0)",
+    "tuner": "Airoha AV2011 / AV7306 DVB-S2 tuner",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "PT6964 (TM1628-class 3-wire)",
+      "clk": 38,
+      "dio": 40,
+      "stb": 39
+    },
+    "irCoding": "nec",
+    "chipId": "0x3603",
+    "gpioI2c": {
+      "scl": 44,
+      "sda": 43
+    },
+    "demodModel": {
+      "chip": "s3501",
+      "address": 51
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.27B3 (maincode \"V1.27B3*\" 2015-03-24; bootloader HS17 37017-01047, Libcore 1.1.6@Auto_20100413)",
+    "date": "2015-03-24",
+    "size": 8388608,
+    "sha1": "54aa2f355489d6c70a2319b7edbc073824224f69",
+    "layout": "bootloader 0x000000 (HS17 37017-01047, 2014-01-06), maincode 0x020000 (V1.27B3*, 2015-03-24), seecode 0x3E0000 (V1.27B3, 2015-03-24), radioback 0x540000 (1.0.0), ARIVA102E 0x560000 (1.0.0), seeback 0x57FF80 (1.0.0), data1 0x590000 (1.0.0), data2 0x5A0000 (1.0.0), defaultdb 0x680000 (1.0.0, 2014-09-18), userdb 0x6DFF80 (1.0.0, 2015-03-24)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A102E_20150324_V1.27B3.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ferguson%20Ariva%20102E",
+    "site": "satedu.cba.pl",
+    "author": "Ferguson",
+    "date": "2015-03-24",
+    "login": false,
+    "note": "Archive A102E_20150324_V1.27B3.zip from the Ferguson Ariva 102E directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": null,
+    "note": "The bootloader runs (run_dump_a102e_security_ic.py): it prints \"APP  init!\", parks the SEE through its boot code at 0xA1E90C60, writes the PT6964 front panel on STB=39 / CLK=38 / DIO=40 and unpacks the SEE's program, then has the board's security IC (I2C 0x62 on GPIO 44 / 43) decrypt the first 1 KB of the main code in 64 blocks of 16 bytes (each with a CRC-16/BUYPASS checksum).  Without the security IC's unknown key, LzmaDecode() receives an empty buffer and jumps to 0x80000200."
+  },
+  "desc": [
+    "Ferguson Ariva 102E official firmware V1.27B3 (2015-03-24) for the Full HD DVB-S2 satellite receiver with smartcard reader on the dual-CPU ALi M3606 (0x3603) platform.",
+    "Uses bootloader \"HS17\" (version 37017-01047), drives a 3-wire PT6964 front-panel controller on GPIO 38..40 (CLK=38, STB=39, DIO=40), and exchanges 64 CRC-16/BUYPASS-protected 16-byte maincode blocks with the board's security IC at I2C 0x62 over GPIO 44 / 43 (SCL=44, SDA=43)."
+  ]
+}

@@ -241,7 +241,8 @@ void Core::set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevC
   devflags_ = new uint8_t[size]();
   delete[] devrules_;
   devrules_ = new uint8_t[size]();
-  mmio_rule_count_ = 0;
+  read_rule_count_ = 0;
+  write_rule_count_ = 0;
   // the window is a region of its own (host accesses go through the same path)
   bool have = false;
   for (auto &r : regions_)
@@ -264,10 +265,28 @@ void Core::set_mmio_rules(const MmioRule *rules, uint32_t n_rules, const uint32_
                           uint32_t n_offs) {
   if (!devrules_) return;
   memset(devrules_, 0, dev_size_);
-  mmio_rule_count_ = std::min<uint32_t>(n_rules, MMIO_RULES_MAX);
-  if (mmio_rule_count_ && rules) memcpy(mmio_rules_, rules, mmio_rule_count_ * sizeof(MmioRule));
   for (uint32_t i = 0; i < n_offs; i++) {
     if (offsets[i] < dev_size_) devrules_[offsets[i]] = rflags[i];
+  }
+  read_rule_count_ = 0;
+  write_rule_count_ = 0;
+  if (!rules) return;
+  const uint32_t WRITE_MASK = RULE_VPO_WRITE | RULE_VPO_M36F_WRITE | RULE_VE_STATUS_WRITE |
+                              RULE_GE3602_WRITE | RULE_OSD_PAL_WRITE | RULE_SDRAM_CMD | RULE_TRNG_WRITE;
+  for (uint32_t i = 0; i < n_rules; i++) {
+    const MmioRule &r = rules[i];
+    if (r.flags & WRITE_MASK) {
+      if (write_rule_count_ < MMIO_RULES_MAX) write_rules_[write_rule_count_++] = r;
+    } else {
+      if (read_rule_count_ < MMIO_RULES_MAX) read_rules_[read_rule_count_++] = r;
+      if (r.flags & RULE_DDR_TRAINING) {
+        for (uint32_t o = 0x3E08Cu; o < 0x3E110u && o < dev_size_; o++) devrules_[o] |= DR_HAS_RULE;
+      } else if ((r.flags & RULE_MIRROR) && r.req_mask > 1) {
+        for (uint32_t o = r.offset; o < r.offset + r.req_mask && o < dev_size_; o++) devrules_[o] |= DR_HAS_RULE;
+      } else if (r.offset < dev_size_) {
+        devrules_[r.offset] |= DR_HAS_RULE;
+      }
+    }
   }
 }
 
@@ -663,77 +682,83 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
   }
   if ((devflags_[off] & DF_READ) && devrules_ && (devrules_[off] & DR_READ) &&
       (!(devrules_[off] & DR_UART_IDLE) || (!uart_pending_ && !uart_ip3))) {
-    bool counted_demod = false;
-    for (uint32_t k = 0; k < mmio_rule_count_; k++) {
-      const MmioRule &r = mmio_rules_[k];
-      if (r.flags & RULE_DDR_TRAINING) {
-        if (off < 0x3E08Cu || off >= 0x3E110u) continue;
-      } else if (r.flags & RULE_EXACT_OFF) {
-        if (r.offset != off) continue;
-      } else {
-        if (r.offset < off || r.offset >= off + size) continue;
-      }
-      if (r.offset >= dev_size_) continue;
-      if (r.flags & RULE_VE_STATUS) {
-        uint32_t w_off = r.offset & ~3u;
-        if (w_off + 4 <= dev_size_) {
-          uint32_t cur;
-          memcpy(&cur, dev_buf_ + w_off, 4);
-          if (cur & 0x037FFF00u) {
-            cur &= ~0x037FFF00u;
-            memcpy(dev_buf_ + w_off, &cur, 4);
-          }
+    uint8_t dr = devrules_[off];
+    if (size > 1 && off + size <= dev_size_) {
+      for (uint32_t i = 1; i < size; i++) dr |= devrules_[off + i];
+    }
+    if (dr & DR_HAS_RULE) {
+      bool counted_demod = false;
+      for (uint32_t k = 0; k < read_rule_count_; k++) {
+        const MmioRule &r = read_rules_[k];
+        if (r.flags & RULE_DDR_TRAINING) {
+          if (off < 0x3E08Cu || off >= 0x3E110u) continue;
+        } else if (r.flags & RULE_EXACT_OFF) {
+          if (r.offset != off) continue;
+        } else {
+          if (r.offset < off || r.offset >= off + size) continue;
         }
-      } else if (r.flags & RULE_MAC_MDIO) {
-        if (0x2C084u <= dev_size_) {
-          uint32_t v;
-          memcpy(&v, dev_buf_ + 0x2C07Cu, 4);
-          if (v & 0x80000000u) {
-            uint32_t nv = v & 0x7FFFFFFFu;
-            memcpy(dev_buf_ + 0x2C07Cu, &nv, 4);
-            if (v & 0x08000000u) {
-              dev_buf_[0x2C082u] = 0xFFu;
-              dev_buf_[0x2C083u] = 0xFFu;
+        if (r.offset >= dev_size_) continue;
+        if (r.flags & RULE_VE_STATUS) {
+          uint32_t w_off = r.offset & ~3u;
+          if (w_off + 4 <= dev_size_) {
+            uint32_t cur;
+            memcpy(&cur, dev_buf_ + w_off, 4);
+            if (cur & 0x037FFF00u) {
+              cur &= ~0x037FFF00u;
+              memcpy(dev_buf_ + w_off, &cur, 4);
             }
           }
-        }
-      } else if (r.flags & RULE_MIRROR) {
-        uint32_t src = (uint32_t)r.and_mask | ((uint32_t)r.or_mask << 8) | ((uint32_t)r.pad << 16);
-        if (r.offset + r.req_mask <= dev_size_ && src + r.req_mask <= dev_size_)
-          memcpy(dev_buf_ + r.offset, dev_buf_ + src, r.req_mask);
-      } else if (r.flags & RULE_DDR_TRAINING) {
-        static const uint32_t P0[8] = {0x0FF00FF0u, 0xFF00FF00u, 0x00FF00FFu, 0xF00FF00Fu,
-                                       0x0FF00FF0u, 0x00FF00FFu, 0xFF00FF00u, 0x0FF00FF0u};
-        static const uint32_t P1[8] = {0xA55AA55Au, 0xFF00FF00u, 0x00FF00FFu, 0x5AA55AA5u,
-                                       0xA55AA55Au, 0x00FF00FFu, 0xFF00FF00u, 0xA55AA55Au};
-        uint32_t w_off = off & ~3u;
-        if (w_off == 0x3E08Cu && w_off + 4u <= dev_size_) {
-          uint32_t w = 0xC0000040u;
-          memcpy(dev_buf_ + w_off, &w, 4);
-        } else if (w_off >= 0x3E090u && w_off < 0x3E110u && w_off + 4u <= dev_size_) {
-          uint32_t rel = w_off - 0x3E090u;
-          uint32_t lane = rel >> 5, word = (rel & 0x1Fu) >> 2;
-          uint32_t w = (lane == 0) ? P0[word] : P1[word];
-          memcpy(dev_buf_ + w_off, &w, 4);
-        }
-      } else if (r.flags & RULE_DEMOD) {
-        if ((r.flags & RULE_DEMOD_COUNT) && !counted_demod) {
-          demod_reads_++;
-          counted_demod = true;
-        }
-        if (demod_locked_) {
-          uint8_t b = dev_buf_[r.offset];
-          if (r.flags & RULE_DEMOD_IFZERO) {
-            if (b == 0) dev_buf_[r.offset] = r.or_mask;
-          } else if (!r.req_mask || (b & r.req_mask)) {
-            dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
+        } else if (r.flags & RULE_MAC_MDIO) {
+          if (0x2C084u <= dev_size_) {
+            uint32_t v;
+            memcpy(&v, dev_buf_ + 0x2C07Cu, 4);
+            if (v & 0x80000000u) {
+              uint32_t nv = v & 0x7FFFFFFFu;
+              memcpy(dev_buf_ + 0x2C07Cu, &nv, 4);
+              if (v & 0x08000000u) {
+                dev_buf_[0x2C082u] = 0xFFu;
+                dev_buf_[0x2C083u] = 0xFFu;
+              }
+            }
           }
-        } else if (r.flags & RULE_DEMOD_CLR3F) {
-          dev_buf_[r.offset] &= ~0x3Fu;
+        } else if (r.flags & RULE_MIRROR) {
+          uint32_t src = (uint32_t)r.and_mask | ((uint32_t)r.or_mask << 8) | ((uint32_t)r.pad << 16);
+          if (r.offset + r.req_mask <= dev_size_ && src + r.req_mask <= dev_size_)
+            memcpy(dev_buf_ + r.offset, dev_buf_ + src, r.req_mask);
+        } else if (r.flags & RULE_DDR_TRAINING) {
+          static const uint32_t P0[8] = {0x0FF00FF0u, 0xFF00FF00u, 0x00FF00FFu, 0xF00FF00Fu,
+                                         0x0FF00FF0u, 0x00FF00FFu, 0xFF00FF00u, 0x0FF00FF0u};
+          static const uint32_t P1[8] = {0xA55AA55Au, 0xFF00FF00u, 0x00FF00FFu, 0x5AA55AA5u,
+                                         0xA55AA55Au, 0x00FF00FFu, 0xFF00FF00u, 0xA55AA55Au};
+          uint32_t w_off = off & ~3u;
+          if (w_off == 0x3E08Cu && w_off + 4u <= dev_size_) {
+            uint32_t w = 0xC0000040u;
+            memcpy(dev_buf_ + w_off, &w, 4);
+          } else if (w_off >= 0x3E090u && w_off < 0x3E110u && w_off + 4u <= dev_size_) {
+            uint32_t rel = w_off - 0x3E090u;
+            uint32_t lane = rel >> 5, word = (rel & 0x1Fu) >> 2;
+            uint32_t w = (lane == 0) ? P0[word] : P1[word];
+            memcpy(dev_buf_ + w_off, &w, 4);
+          }
+        } else if (r.flags & RULE_DEMOD) {
+          if ((r.flags & RULE_DEMOD_COUNT) && !counted_demod) {
+            demod_reads_++;
+            counted_demod = true;
+          }
+          if (demod_locked_) {
+            uint8_t b = dev_buf_[r.offset];
+            if (r.flags & RULE_DEMOD_IFZERO) {
+              if (b == 0) dev_buf_[r.offset] = r.or_mask;
+            } else if (!r.req_mask || (b & r.req_mask)) {
+              dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
+            }
+          } else if (r.flags & RULE_DEMOD_CLR3F) {
+            dev_buf_[r.offset] &= ~0x3Fu;
+          }
+        } else {
+          uint8_t b = dev_buf_[r.offset];
+          if (!r.req_mask || (b & r.req_mask)) dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
         }
-      } else {
-        uint8_t b = dev_buf_[r.offset];
-        if (!r.req_mask || (b & r.req_mask)) dev_buf_[r.offset] = (b & r.and_mask) | r.or_mask;
       }
     }
     icount += host_access_cost;
@@ -817,7 +842,10 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     icount += host_access_cost;
   } else if ((f & DF_WRITE) && devrules_ && (devrules_[off] & DR_WRITE) &&
              (!(devrules_[off] & DR_VPO) || vpo_rule_store(off, size, value))) {
-    if (!(devrules_[off] & (DR_VPO | DR_WRITE_IGNORE))) memcpy(dev_buf_ + off, &value, size);
+    if (!(devrules_[off] & DR_VPO)) {
+      for (uint32_t i = 0; i < size && off + i < dev_size_; i++)
+        if (!(devrules_[off + i] & DR_WRITE_IGNORE)) dev_buf_[off + i] = (uint8_t)(value >> (8 * i));
+    }
     icount += host_access_cost;
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
@@ -2133,8 +2161,8 @@ bool Core::vpo_rule_store(uint32_t off, uint32_t size, uint64_t value) {
   uint32_t mask = (size >= 4 ? 0xFFFFFFFFu : ((1u << (size * 8u)) - 1u)) << shift;
   uint32_t written = ((uint32_t)value << shift) & mask;
   uint32_t word = (old_word & ~mask) | written;
-  for (uint32_t k = 0; k < mmio_rule_count_; k++) {
-    const MmioRule &r = mmio_rules_[k];
+  for (uint32_t k = 0; k < write_rule_count_; k++) {
+    const MmioRule &r = write_rules_[k];
     if ((r.flags & RULE_VPO_WRITE) && r.offset == base) {
       uint32_t field_mask = (r.and_mask & 1u ? (1u << 18) : 0u) | (r.and_mask & 2u ? (1u << 19) : 0u);
       uint32_t status = ((old_word >> 8) & 0x3Fu) & ~((written >> 8) & 0x3Fu);
@@ -2357,7 +2385,7 @@ bool Core::ge_store(uint32_t off, uint32_t size, uint64_t value) {
           uint32_t o = (cmd == 2u) ? 0x10u : 0x18u;
           uint32_t start = live_regs[o >> 2] & 0x1FFFFFFFu;
           uint32_t end = live_regs[(o >> 2) + 1u] & 0x1FFFFFFFu;
-          if (start <= end && end < start + 0x400000u && (uint64_t)end + 4ull <= ge_.ram_size) {
+          if ((start != 0u || end != 0u) && start <= end && end < start + 0x400000u && (uint64_t)end + 4ull <= ge_.ram_size) {
             if ((start & 3u) != 0) return false;
             uint32_t n_words = ((end + 4u) - start) >> 2;
             const uint32_t *words = (const uint32_t *)(ge_.ram + start);
@@ -2546,10 +2574,12 @@ void Core::status_events(uint64_t now) {
     return;
   }
   dev_callback_dirty_ = false;
-  uint64_t save = icount;
-  icount = now;
-  schedule();
-  icount = save;
+  if (ALI_UNLIKELY(ds_active || (uart_pending_ && !uart_delivered_))) {
+    uint64_t save = icount;
+    icount = now;
+    schedule();
+    icount = save;
+  }
 }
 
 bool Core::events() {

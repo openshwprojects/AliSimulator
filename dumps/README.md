@@ -484,6 +484,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `EDISION PICCOLLINO S2/Piccollino_S2_v.1375.abs` | Edision Piccollino S2 (System ID 6B000100, v.1375 build) | ALi M3521A / C3505 (bootloader "M3521A 1.1.1", seecode "M3606 SEE", 128 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Piccollino_S2_v.1375.zip&directory=Firmware%20for%20to%20all%20receivers/Edison), Edision |
 | `EDISION PICCOLLO 3IN1 PLUS CI/piccollo_3in1_PLUS_CI_2475.abs` | Edision Piccollo 3in1 Plus CI (System ID 14000800, v.2475 build) | ALi M3516A / M3503 with 256 MB DDR3 (bootloader "M3516A 1.2.1", seecode "M3606 SEE" at 0xAE000200) | Airoha AV2012 at I2C 0x61 (DVB-S2) + MaxLinear MxL608 at... | CH455 (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=piccollo_3in1_PLUS_CI_2475.zip&directory=Firmware%20for%20to%20all%20receivers/Edison), Edision |
 | `EDISION PICCOLLO S2+T2C/piccollo_S2+T2C_v.1539.abs` | Edision Piccollo S2+T2/C (System ID 6C000100, v.1539 build) | ALi M3529A / C3505 (bootloader "M3529A 1.1.1", seecode "M3606 SEE", 256 MB DDR3) | - | CH455 (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [satedu.cba.pl (a mirror of the Edision firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=piccollo_S2T2C_v.1539.zip&directory=Firmware%20for%20to%20all%20receivers/Edison), Edision |
+| `FERGUSON ARIVA 102E/A102E_20150324_V1.27B3.abs` | Ferguson Ariva 102E | ALi M3606-class dual-CPU chip (chip ID 0x3603; seecode chunk runs on the SEE core at 0xA6000200) | Airoha AV2011 / AV7306 DVB-S2 tuner | PT6964 (TM1628-class 3-wire) (CLK 38, DIO 40, STB 39) | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A102E_20150324_V1.27B3.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ferguson%20Ariva%20102E), Ferguson |
 | `FERGUSON ARIVA 104/A104_20190910_V1.3B1.abs` | Ferguson Ariva 104 | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A104_20190910_V1.3B1.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20104_Ariva%20204), Ferguson |
 | `FERGUSON ARIVA 104/A104_20190926_V1.3B1_PATCH.abs` | Ferguson Ariva 104 | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A104_20190926_V1.3B1_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20104_Ariva%20204), Ferguson |
 | `FERGUSON ARIVA 104/Ferguson_A104_V1.3B1_30072020.abs` | Ferguson Ariva 104 | ALi C3505 (the maincode's "ALI_C3505:0x%x" chip-id print, seecode "M3505 SEE") | ALi M3031 at I2C 0x20 | FD650K (TM1650-compatible) (SCL 107, SDA 110) | yes / yes / yes | [ferguson-digital.eu (official manufacturer download)](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_104/firmware/Ferguson_A104_V1.3B1_30072020.zip), Ferguson |
@@ -512,6 +513,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `FERGUSON ARIVA 255 COMBO S/Ferguson_A255 Slim_V1.30B4_20231103_EU.abs` | Ferguson Ariva 255 Combo S | ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) | RDA Microelectronics RDA5816 at I2C 0x0C (DVB-S2) + Rafae... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo_s/software/Ferguson_Ariva_255_Combo_S_20231103-EU_version.zip), Ferguson |
 | `FERGUSON ARIVA 255 COMBO/Ferguson_A255_V1.32B4.abs` | Ferguson Ariva 255 Combo | ALi C3505 with 256 MB DDR3 (maincode "ALI_C3505:0x%x", seecode "M3505 SEE" at 0xAE000200) | ALi M3031 at I2C 0x20 (DVB-S2) + Rafael Micro R836 at I2C... | FD650K (TM1650-compatible) (SCL 107, SDA 108) | yes / yes / yes | [ferguson-digital.eu](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_255Combo/software/Ferguson_A255_V1.32B4.zip), Ferguson |
 | `FERGUSON ARIVA 52E/A52E_20160812_V1.31B2.abs` | Ferguson Ariva 52E | ALi M3606-class dual-CPU chip (the main code's strings name the M3601E / M3606 platform, the seecode chunk is the SEE's program; Application SDK4.0ba.7.20_SAB_S2_20130314) | unknown (the main code carries an nim_av7306 driver) | PT6964 (TM1628-class 3-wire) (CLK 65, DIO 66, STB 64) | yes / no / no | [ferguson-digital.eu (the manufacturer's download area)](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_52E/firmware/A52E_20160812_V1.31B2.zip), Ferguson |
+| `FERGUSON ARIVA 53/A53_20160602_V1.30B8.abs` | Ferguson Ariva 53 | ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5) | ALi M3031 at I2C 0x20 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A53_20160602_V1.30B8.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ferguson%20Ariva%2053), Ferguson |
 | `FERGUSON ARIVA 53/A53_20180528_V1.33B5_PATCH.abs` | Ferguson Ariva 53 (V1.33B5 PATCH build) | ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5) | ALi M3031 at I2C 0x20 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A53_20180528_V1.33B5_patch.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%2053), Ferguson / patch |
 | `FERGUSON ARIVA 53/A53_20190315_V1.33B6_PATCH.abs` | Ferguson Ariva 53 (V1.33B6 PATCH build) | ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5) | ALi M3031 at I2C 0x20 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A53_20190315_V1.33B6_PATCH.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%2053), Ferguson / patch |
 | `FERGUSON ARIVA 53/A53_20190813_V1.33B7.abs` | Ferguson Ariva 53 | ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5) | ALi M3031 at I2C 0x20 | - | yes / yes / yes | [ferguson-digital.eu (official Ferguson download)](https://ferguson-digital.eu/download/dvb-s/series_Ariva/Ariva_53/firmware/A53_20190813_V1.33B7.zip), Ferguson |
@@ -553,6 +555,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `KRUGER MATZ KM0186/KM00186_v1.0.6.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v106.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0186/KM00186_V1.0.9.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v109.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
 | `KRUGER MATZ KM0186/KM00186_V1.1.1.abs` | Kruger&Matz KM0186 ("KM00186") | ALi M3606 (the Cabletech URZ0086's twin) | MaxLinear MxL101SF at I2C 0x60 | - | yes / yes / yes | [gutek.com.pl](https://www.gutek.com.pl/pobierz/softy/urz0086/km00186_v111.rar), Lechpol (Cabletech / Kruger&Matz), mirrored by Gutek |
+| `OPENBOX S10/C2HS2-12-06-18_05E3CMT.ABS` | Openbox S10 HD PVR (C2HS2-12-06-18:05E3CMT) | ALi M3602 (single-CPU build without seecode chunk; chip ID 0x3602) | Sharp / Airoha DVB-S2 tuner at I2C 0x60 on SCB0 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=C2HS2-12-06-18_05E3CMT.ABS.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S10), Openbox / Skybox |
 | `OPENBOX S16/OPENBOX-S16-PATCH_AZ_2.6.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
 | `OPENBOX S16/OPENBOX-S16_Eu1129.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
 | `OPENBOX S16/S16_134OK_0808.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
@@ -560,6 +563,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `OPENBOX S16/S16_CHN_2.8.abs` | Openbox S16 HD PVR | ALi M3601S (the main-code chunk's version "M3601S"; the main code is the SDK's "M3602 HD STB" / "S3602 HD STB" platform build, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | - | TM1650-compatible (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Openbox_S16_v2.8.rar&directory=Firmware%20for%20to%20all%20receivers/Inne%20tunerki/Openbox), Openbox |
 | `OPENBOX S16/S16_EN2.11.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
 | `OPENBOX S16/S16_ENG_2.7.abs` | Openbox S16 HD PVR (EU ALi 3606C) | ALi S3606H / M3606C (dual-CPU C3603-family DVB-S2 SoC, chip ID 0x3603; Libcore 7.3.0@SDK4.0ba.7.3_20120215, Application 1.0.0@SDK4.0ba.7.1_SAB_S2_20111227bynbree) | Airoha AV2011 on SCB1 at I2C 0x63 | tm1650 (SCL 62, SDA 63) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX-S16_Eu1129.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S16%20Ali%203606C), Openbox |
+| `OPENBOX V5S/OPENBOX_V5S_3601HD_CMT_15051903A3.abs` | Openbox V5S (3601HD CMT 15051903A3) | ALi M3601S / M3602 dual-CPU (chip ID 0x3602; seecode runs on the SEE core at 0xA6000200) | Sharp / Airoha DVB-S2 tuner | - | yes / yes / no | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX_V5S_3601HD_CMT_15051903A3.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20V5S), Openbox / Skybox |
 | `OPENBOX X6 HD/20130614-openbox-x6-biss.abs` | Openbox X6 HD | ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) | Airoha AV2011 DVB-S2 | - | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox |
 | `OPENBOX X6 HD/Openbox X6 HD.abs` | Openbox X6 HD | ALi M3606 / M3602 (dual-CPU MIPS32, seecode "M3606 SEE" at 0xA6000200, maincode at 0x8020C9B8) | Airoha AV2011 DVB-S2 | - | yes / no / no | [satedu.cba.pl](http://www.satedu.cba.pl/), Openbox |
 | `OPTICUM 4000A/DumpFlash Opticum4000a(Globo7xxx)4,5w.bin` | Opticum / Globo Opticum 4000A / Globo 7010A | ALi M3329C / M3101 (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, VPO_M3327, SND_M3327, OSD_M3327_0 / OSD_M3327_1, PAN_COMMON_0) | - | 74HC164 shift register + 4-digit multiplexed LED (PAN_COMMON_0) (CLK 16) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=DumpFlash-Opticum4000a-Globo7xxx45w.zip&directory=J-Tag_Dump_Flash), satedu.cba.pl J-Tag_Dump_Flash archive |
@@ -649,6 +653,7 @@ Rendered by `tools/dump_table.py` from the `<image>.json` sidecar next to each i
 | `OPTICUM X80 PREMIUM/dump opticum x80 premium.bin` | Opticum X80 Premium | ALi M3329C / M3101C (M3327-platform DVB-S SoC reading chip ID 0x3101, revision 0xF0; NIM_M3327_0, DMX_M3327_0, DECV_M3327, DECA_M3327, VPO_M3327, SND_M3327, OSD_M3327C; Libcore 1.3.4@Libcore_20100121) | - | CH455 / TM1650-compatible (SCL 30, SDA 31) | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=dump%20opticum%20x80%20premium.zip&directory=J-Tag_Dump_Flash), satedu.cba.pl J-Tag_Dump_Flash archive |
 | `OPTICUM XS65 COMBO/140_M3515-COMBO-RETAIL-PL.abs` | Opticum / Globo XS65 Combo (Polish retail build) | ALi M3515 (the uppercase BOOTLOADER chunk's version "M3503---0.1.0"; 256 MB DDR3 with the SEE partition at 224..256 MB, 0xAE000200, and revision B variant 0x0001) | Airoha AV2011 at I2C 0x60 | FD650K (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20xs65_140_M3515-COMBO-RETAIL-PL.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum) |
 | `OPTICUM XS65 TWIN/140_TWIN_RETAIL_PL.abs` | Opticum / Globo XS65 Twin (Polish retail build) | ALi M3511 / M3503 (the uppercase BOOTLOADER chunk's version "M3503---0.1.0"; 256 MB DDR3 with the SEE partition at 224..256 MB, 0xAE000200, and revision B variant 0x0001) | Airoha AV2011 at I2C 0x60 | FD650K (TM1650-compatible) (SCL 135, SDA 134) | yes / yes / yes | [satedu.cba.pl (a mirror of the official download)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20XS65%20TWIN_140_TWIN_RETAIL_PL.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum) |
+| `OPTICUM XS65/140_M3511-RETAIL_PL.abs` | Opticum / Globo XS65 (M3511 Polish retail build) | ALi M3511 / M3503 (bootloader version "M3503---0.1.0"; 128 MB DDR3 with the SEE partition at 96..128 MB, 0x86000200) | Airoha AV2011 at I2C 0x60 | - | yes / yes / yes | [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20XS65_140_M3511-RETAIL_PL.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum), Opticum / Globo |
 | `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN` | Echosonic Mini ESR-250 | ALi M3510A | RDA Microelectronics RDA5815 at I2C 0x60 | TM1650-compatible (SCL 135, SDA 134) | yes / yes / yes | not recorded |
 | `other/sat_main_ali3329-s15125_dump_eeprom_by_h2h_ok.bin` | satellite receiver main board "s15125" | ALi M3329 (an M3327-platform chip: the SDK's NIM_M3327, DMX_M3327, DECV_M3327, VPO_M3327, SND_M3327 and OSD_M3327C drivers) | - | TM1650-compatible (SCL 15, SDA 16) | yes / yes / yes | not recorded |
 | `PROTON HD/globo_x4_rc1.2_proton_lemontree_1.5.41.vi.abs` | Proton / Opticum Proton HD (Lemontree GUI 1.5.12 build for Opticum HD X402p/X403p) | ALi M3602B (bootloader "M3602B 1.1.6", 128 MB DDR2) | Airoha AV2011 DVB-S2 on SCB0/SCB1 at I2C 0x60 | lemontree (SCL 62, SDA 171) | yes / yes / yes | [satedu.cba.pl (a mirror of the Opticum / Globo firmware archive)](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=lemontree_proton_1.5.12_x4_newoldremote.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum/Opticum%20HD%20X402-X403-X4-X7), Proton / Fulansoft (Opticum X4 port) |
@@ -10439,6 +10444,27 @@ Edision Piccollo S2+T2/C (System ID 6C000100) firmware v.1539 (2021-01-19) on an
 Pairs dual-CPU C3505 maincode + seecode ("M3606 SEE" at 0xAE000200) with a CH455 4-digit LED panel on GPIO 107 / 108 (" ON " -> " on ") and a 60-entry 0x60xx remote control table ("necfirst" coding).
 
 
+## `FERGUSON ARIVA 102E/A102E_20150324_V1.27B3.abs`
+
+* **Box:** Ferguson Ariva 102E
+* **Type:** DVB-S2 Full HD satellite receiver with smartcard reader, Ethernet, USB PVR and internet apps
+* **Board:** bootloader chunk "HS17", version "37017-01047"
+* **SoC:** ALi M3606-class dual-CPU chip (chip ID 0x3603; seecode chunk runs on the SEE core at 0xA6000200) (M3602 (chips/m3602.py), matched by the bootloader chunk's version "37017-01047"; chip ID 0x3603 (chipId))
+* **Demodulator:** internal DVB-S2 (NIM_S3501_0)
+* **Tuner:** Airoha AV2011 / AV7306 DVB-S2 tuner
+* **Flash:** 8 MB SPI
+* **Front panel:** PT6964 (TM1628-class 3-wire) (CLK 38, DIO 40, STB 39)
+* **IR coding:** nec
+* **Image:** update, V1.27B3 (maincode "V1.27B3*" 2015-03-24; bootloader HS17 37017-01047, Libcore 1.1.6@Auto_20100413), 2015-03-24, 8388608 bytes, SHA-1 54aa2f355489d6c70a2319b7edbc073824224f69
+* **Layout:** bootloader 0x000000 (HS17 37017-01047, 2014-01-06), maincode 0x020000 (V1.27B3*, 2015-03-24), seecode 0x3E0000 (V1.27B3, 2015-03-24), radioback 0x540000 (1.0.0), ARIVA102E 0x560000 (1.0.0), seeback 0x57FF80 (1.0.0), data1 0x590000 (1.0.0), data2 0x5A0000 (1.0.0), defaultdb 0x680000 (1.0.0, 2014-09-18), userdb 0x6DFF80 (1.0.0, 2015-03-24)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A102E_20150324_V1.27B3.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ferguson%20Ariva%20102E), Ferguson (2015-03-24). Archive A102E_20150324_V1.27B3.zip from the Ferguson Ariva 102E directory on satedu.cba.pl; fetched 2026-11-07.
+* **Simulator:** boots yes, application no, display no. The bootloader runs (run_dump_a102e_security_ic.py): it prints "APP  init!", parks the SEE through its boot code at 0xA1E90C60, writes the PT6964 front panel on STB=39 / CLK=38 / DIO=40 and unpacks the SEE's program, then has the board's security IC (I2C 0x62 on GPIO 44 / 43) decrypt the first 1 KB of the main code in 64 blocks of 16 bytes (each with a CRC-16/BUYPASS checksum).  Without the security IC's unknown key, LzmaDecode() receives an empty buffer and jumps to 0x80000200.
+
+Ferguson Ariva 102E official firmware V1.27B3 (2015-03-24) for the Full HD DVB-S2 satellite receiver with smartcard reader on the dual-CPU ALi M3606 (0x3603) platform.
+
+Uses bootloader "HS17" (version 37017-01047), drives a 3-wire PT6964 front-panel controller on GPIO 38..40 (CLK=38, STB=39, DIO=40), and exchanges 64 CRC-16/BUYPASS-protected 16-byte maincode blocks with the board's security IC at I2C 0x62 over GPIO 44 / 43 (SCL=44, SDA=43).
+
+
 ## `FERGUSON ARIVA 104/A104_20190910_V1.3B1.abs`
 
 * **Box:** Ferguson Ariva 104
@@ -11027,6 +11053,26 @@ The main code is encrypted at its start, and the decryption is done by a chip on
 Front panel: the 3-wire PT6964 on GPIO bank 2 (0xB80000F4) bits 0..2 -- STB = GPIO 64, CLK = GPIO 65, DIO = GPIO 66 --; the bootloader writes 0x13 0x03 to RAM 2-3 and 0x33 0x03 to RAM 6-7, whose segment wiring is not known (the font is the application's).  The remote's coding is not known either (irCoding "nec" is the default, untested).
 
 The bootloader's progress depends on the slice length: in slices of 100 k instructions it stays in a MIPS16 loop of its own (0x81E868A6..) for more than 60 M instructions, in slices of 500 k and more it reaches the security IC after ~2 M instructions and LzmaDecode() at ~4.5 M (not looked into).
+
+
+## `FERGUSON ARIVA 53/A53_20160602_V1.30B8.abs`
+
+* **Box:** Ferguson Ariva 53
+* **Type:** DVB-S2 Full HD compact satellite receiver
+* **Board:** bootloader chunk "HAS71", version "39072-01047"
+* **SoC:** ALi C3503C (chip word 0x3503C000, SDK chip code 0x10050, OTP product 5) (C3503 (chips/c3503.py))
+* **Demodulator:** internal DVB-S2 (NIM_S3505_0 at 0xB804C000)
+* **Tuner:** ALi M3031 at I2C 0x20
+* **Flash:** 8 MB SPI
+* **IR coding:** ext00
+* **Image:** update, V1.30B8 (maincode "V1.30B8*" 20160602-135755; << SDK4.0ba.4.0_20101217 >>), 2016-06-02, 8388608 bytes, SHA-1 82db9a1f980e1f673585005ef2cf8287465c72be
+* **Layout:** HAS71 0x000000 (39072-01047, 20160506-143841), HDCPKey 0x02FE00 (00000001), ota_loader 0x030000 (1.0.0), maincode 0x130000 (V1.30B8*, 20160602-135755, LZMA), osd_string 0x590900 (1.1.0), Ariva53 0x5B0000 (1.0.0), seeback 0x5CFF80 (1.0.0), defaultdb 0x6C0000 (1.0.0), userdb 0x6FFF80 (1.0.0)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A53_20160602_V1.30B8.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ferguson%20Ariva%2053), Ferguson (2016-06-02). Archive A53_20160602_V1.30B8.zip from the Ferguson Ariva 53 directory on satedu.cba.pl; fetched 2026-11-07.
+* **Simulator:** boots yes, application yes, display yes. Boots as the single-CPU C3503 family (chips/c3503.py, run_dump_a53_130b8_app_starts.py, chip word 0x3503C000 -> SDK chip code 0x10050): its boot-ROM bootloader inherits $sp = 0x9FE07F00 from the boot ROM, calibrates DDR delay from the ring-oscillator count in 0xB8000300 ("RingOSDelay=296.29600(ns)"), prints "CRC Check Result : Pass", and unpacks the maincode ("V1.30B8*") to 0x80000200.  Passes the C3503C (0x10050) / OTP product 5 board check, initializes the internal DVB-S2 demodulator at 0xB804C000 and the ALi M3031 tuner at I2C 0x20 ("M3031" on UART), and starts its application tasks.
+
+Ferguson Ariva 53 official firmware V1.30B8 (2016-06-02) for the compact Full HD DVB-S2 satellite receiver on the single-CPU ALi C3503C SoC.
+
+Earlier 2016 release alongside V1.33B7 (2019-08-13): uses bootloader chunk "HAS71" (39072-01047, 2016-05-06), maincode "V1.30B8*" at 0x130000, and osd_string at 0x590900.
 
 
 ## `FERGUSON ARIVA 53/A53_20180528_V1.33B5_PATCH.abs`
@@ -11918,6 +11964,26 @@ Gutek's review of the URZ0083 and URZ0086 (https://www.gutek.com.pl/tunery_cable
 Its second tuner's I2C bus is bit-banged (2026-10-13): the application drives GPIO 44 (SCL) and 43 (SDA) open-drain and sends the same MaxLinear sequences there (0x60: 0xFF 0x00, 0x02 0x01, reads through the 0xFB prefix) as to the first tuner on the hardware master SCB0 -- the board's two front ends (device.gpioI2c, gpio_i2c.py; no tuner model answers on either yet).
 
 
+## `OPENBOX S10/C2HS2-12-06-18_05E3CMT.ABS`
+
+* **Box:** Openbox S10 HD PVR (C2HS2-12-06-18:05E3CMT)
+* **Type:** DVB-S2 Full HD satellite PVR receiver with CA card slot, CI slot, Ethernet and USB PVR
+* **Board:** SMT---1.0.0 / SMT 1.0.0 (4 MB SPI M3602 single-CPU DVB-S2 platform)
+* **SoC:** ALi M3602 (single-CPU build without seecode chunk; chip ID 0x3602) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 at I2C 0x33 on SCB0
+* **Tuner:** Sharp / Airoha DVB-S2 tuner at I2C 0x60 on SCB0
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, C2HS2-12-06-18:05E3CMT (bootloader "SMT---1.0.0", maincode "SMT 1.0.0"), 2012-06-20, 4194304 bytes, SHA-1 fb30058bbb5b36b80f65f86f7b1a532acabcf56c
+* **Layout:** bootloader 0x000000 (SMT---1.0.0, 2009-08-27), maincode 0x010000 (SMT 1.0.0, 2009-08-27, LZMA -> 5.88 MB), Radioback 0x1E0000 (1.0.0), Bootback 0x1F0000 (1.0.0), upgcode 0x200000 (upg 1.0.0), defaultdb 0x210000 (1.1.0, 2011-5-6), userdb 0x22FF80 (1.0.0, 2012-6-20)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=C2HS2-12-06-18_05E3CMT.ABS.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S10), Openbox / Skybox (2012-06-20). Archive C2HS2-12-06-18_05E3CMT.ABS.zip from the Openbox / Openbox S10 directory on satedu.cba.pl; fetched 2026-11-07.
+* **Simulator:** boots yes, application yes, display yes. Boots as a single-CPU M3602 board (chips/m3602.py, run_dump_openbox_s10_app_starts.py): the bootloader ("SMT---1.0.0") probes DDR at 0xA800AA68, unpacks maincode ("SMT 1.0.0", 5.88 MB) to 0x80000200 and starts the application, which prints "APP  init ok" on UART, configures its external ALi S3501 DVB-S2 demodulator at I2C 0x33 and tuner at I2C 0x60 on SCB0, and issues graphics engine commands at 0xB800A000 and 0xB800C000.
+
+Openbox S10 HD PVR firmware C2HS2-12-06-18:05E3CMT (2012-06-20) for the single-CPU ALi M3602 DVB-S2 satellite PVR receiver with 4 MB SPI flash.
+
+Uses "SMT---1.0.0" / "SMT 1.0.0" chunk versions without a separate seecode image, an external ALi S3501 DVB-S2 demodulator at I2C 0x33 on SCB0, and a DVB-S2 tuner at I2C 0x60.
+
+
 ## `OPENBOX S16/OPENBOX-S16-PATCH_AZ_2.6.abs`
 
 * **Box:** Openbox S16 HD PVR (EU ALi 3606C)
@@ -12055,6 +12121,26 @@ Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx
 Openbox S16 EU firmware Eu1129 (OPENBOX-S16_Eu1129.abs, 2012-11-28) for the European ALi S3606H / M3606C dual-CPU hardware revision of the Openbox S16 HD PVR on a 4 MB SPI flash.
 
 Unlike the single-CPU M3601S Chinese build (S16_CHN_2.8.abs, remote table 0x01xx with preloaded channels), this dual-CPU S3606H European build runs its 2.42 MB "M3606 SEE" co-processor image on the second core at 0xA6000200, ships an empty user database ("noCH"), and uses a 54-key European remote table at 0x80xx.
+
+
+## `OPENBOX V5S/OPENBOX_V5S_3601HD_CMT_15051903A3.abs`
+
+* **Box:** Openbox V5S (3601HD CMT 15051903A3)
+* **Type:** DVB-S2 Full HD satellite PVR receiver with CA slot, Ethernet and USB WiFi/3G
+* **Board:** DVBS2---0.1.0 / M3601 Demo / MSEE Demo (4 MB SPI dual-CPU M3601S / M3602 platform)
+* **SoC:** ALi M3601S / M3602 dual-CPU (chip ID 0x3602; seecode runs on the SEE core at 0xA6000200) (M3602 (chips/m3602.py))
+* **Demodulator:** ALi S3501 DVB-S2 at I2C 0x33
+* **Tuner:** Sharp / Airoha DVB-S2 tuner
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, 15051903A3 (bootloader "DVBS2---0.1.0", maincode "M3601 Demo" 2015-05-19, seecode "MSEE Demo" 2015-05-19), 2015-05-19, 4194304 bytes, SHA-1 dc13d09e1e6c55bd9718123859b34396cda04de8
+* **Layout:** bootloader 0x000000 (DVBS2---0.1.0, 2010-03-11), upgcode 0x01FE00 (upg 1.0.0), maincode 0x020000 (M3601 Demo, 2015-5-19, LZMA), seecode 0x210000 (MSEE Demo, 2015-5-19, LZMA), BOOTLOG 0x2D0000 (1.0.0), Radioback 0x2E0000 (1.0.0), defaultdb 0x2F0000 (1.1.0, 2014-6-7), userdb 0x30FF80 (1.0.0, 2013-7-12)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX_V5S_3601HD_CMT_15051903A3.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20V5S), Openbox / Skybox (2015-05-19). Archive OPENBOX_V5S_3601HD_CMT_15051903A3.zip from the Openbox / Openbox V5S directory on satedu.cba.pl; fetched 2026-11-07.
+* **Simulator:** boots yes, application yes, display no. Boots as a dual-CPU M3602 board (chips/m3602.py, run_dump_openbox_v5s_app_starts.py): the bootloader ("DVBS2---0.1.0") parks the SEE boot stub at 0xA1E92ECC, unpacks seecode ("MSEE Demo") to 0xA6000200 and maincode ("M3601 Demo") to 0x80000200, starts both cores, prints "\x01\x02" on UART, and exchanges bidirectional remote calls between the main CPU and the SEE co-processor (29 main->SEE calls, 16 SEE->main calls).
+
+Openbox V5S (Skybox V5S) firmware 15051903A3 (2015-05-19) for the compact Full HD DVB-S2 satellite receiver on the dual-CPU ALi M3601S / M3602 platform with 4 MB SPI flash.
+
+Pairs bootloader "DVBS2---0.1.0" with "M3601 Demo" maincode (0x020000) and "MSEE Demo" seecode (0x210000), parking the SEE at 0xA1E92ECC before launching the SEE core at 0xA6000200.
 
 
 ## `OPENBOX X6 HD/20130614-openbox-x6-biss.abs`
@@ -13873,6 +13959,26 @@ Unlike the 4 MB 128 MB single-tuner Blue XS65 / Globo HD-XS2 build (140_M3511-RE
 The 1.4.0 Polish retail update (140_TWIN_RETAIL_PL.abs, 2016-04-13) for the Opticum XS65 Twin dual-DVB-S2 HD satellite receiver on the 256 MB ALi M3511 / M3503 platform with 8 MB SPI flash.
 
 Twin-satellite sibling of the Opticum XS65 Combo (140_M3515-COMBO-RETAIL-PL.abs): pairs the SoC's internal NIM_S3503_0 DVB-S2 demodulator with a second external ALi S3501 DVB-S2 demodulator at I2C 0x33 on bit-banged GPIO 6 (SCL) / GPIO 7 (SDA), monitors two USB port power switches (outputs GPIO 72 / 70, active-low fault inputs GPIO 67 / 71), and drives an FD650K 4-digit LED panel on GPIO 135 / 134.
+
+
+## `OPTICUM XS65/140_M3511-RETAIL_PL.abs`
+
+* **Box:** Opticum / Globo XS65 (M3511 Polish retail build)
+* **Type:** Single-tuner DVB-S2 HD satellite PVR receiver
+* **Board:** 112003000202162 (4 MB SPI, 128 MB DDR3 M3511 / M3503 platform)
+* **SoC:** ALi M3511 / M3503 (bootloader version "M3503---0.1.0"; 128 MB DDR3 with the SEE partition at 96..128 MB, 0x86000200) (M3503 (chips/m3503.py: 128 MB DDR3 M3503 with XIP cache-as-RAM bootloader and CryptoEngine SHA-256))
+* **Demodulator:** internal DVB-S2 (NIM_S3503_0 at 0xB8028000)
+* **Tuner:** Airoha AV2011 at I2C 0x60
+* **Flash:** 4 MB SPI
+* **IR coding:** nec
+* **Image:** update, 1.4.0 "M3511-RETAIL_PL" (maincode chunk "112003000202162", version 00000140, 2016-04-13; seecode 00000140), 2016-04-13, 4194304 bytes, SHA-1 03fd65e480a62b8e2a92cf95fee28ff7a27c8a68
+* **Layout:** bootloader 0x000000 (M3503---0.1.0, 2012-07-24), HDCPKey 0x02EE00 (00000001), MemCfg 0x02F000 (00000001, 2016-4-13), 112003000202162 0x030000 (00000140, 2016-4-13, LZMA -> 5.9 MB), seecode 0x1D0000 (00000140, 2016-4-13, LZMA -> 2.8 MB), storage_part 0x2B0000 (00000001), Radioback 0x2D0000 (1.0.0), ca 0x2DFF80 (00000001), defaultdb 0x2F0000 (1.1.0), userdb 0x2FFF80 (1.0.0)
+* **Source:** [satedu.cba.pl](http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20XS65_140_M3511-RETAIL_PL.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum), Opticum / Globo (2016-04-13). Archive Opticum XS65_140_M3511-RETAIL_PL.zip from the Opticum directory on satedu.cba.pl; fetched 2026-11-07.
+* **Simulator:** boots yes, application yes, display yes. Boots as a 128 MB DDR3 M3503 board (chips/m3503.py, run_dump_xs65_m3511_app_starts.py): runs XIP with its stack in cache-as-RAM (0x8FFF8000..0x8FFFFFFF), switches to RAM at 0x81016BCC, parks the SEE boot stub at 0xA1016804, unpacks seecode ("00000140") to 0x86000200 and maincode ("112003000202162") to 0x80000200, starts both cores (main EBase 0x80002000, SEE EBase 0x86002001), and renders its OSD through the graphics engine (241 GE commands).
+
+Opticum XS65 Polish retail firmware 1.4.0 (140_M3511-RETAIL_PL.abs, 2016-04-13) for the single-tuner DVB-S2 HD satellite receiver on the 128 MB ALi M3511 / M3503 platform with 4 MB SPI flash.
+
+Unlike the 8 MB / 256 MB XS65 Twin and XS65 Combo builds, this 4 MB single-tuner build runs in 128 MB DDR3 without upper-DDR remapping, placing its SEE co-processor image at 0x86000200 (EBase 0x86002001).
 
 
 ## `other/Echosonic_Mini_ESR-250__GD25Q32B--DVBS2-M3510A-A3__OK--OK.BIN`

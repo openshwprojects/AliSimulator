@@ -1,0 +1,43 @@
+{
+  "file": "OPENBOX_V5S_3601HD_CMT_15051903A3.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "V5S (3601HD CMT 15051903A3)",
+    "type": "DVB-S2 Full HD satellite PVR receiver with CA slot, Ethernet and USB WiFi/3G",
+    "board": "DVBS2---0.1.0 / M3601 Demo / MSEE Demo (4 MB SPI dual-CPU M3601S / M3602 platform)",
+    "soc": "ALi M3601S / M3602 dual-CPU (chip ID 0x3602; seecode runs on the SEE core at 0xA6000200)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 at I2C 0x33",
+    "tuner": "Sharp / Airoha DVB-S2 tuner",
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "15051903A3 (bootloader \"DVBS2---0.1.0\", maincode \"M3601 Demo\" 2015-05-19, seecode \"MSEE Demo\" 2015-05-19)",
+    "date": "2015-05-19",
+    "size": 4194304,
+    "sha1": "dc13d09e1e6c55bd9718123859b34396cda04de8",
+    "layout": "bootloader 0x000000 (DVBS2---0.1.0, 2010-03-11), upgcode 0x01FE00 (upg 1.0.0), maincode 0x020000 (M3601 Demo, 2015-5-19, LZMA), seecode 0x210000 (MSEE Demo, 2015-5-19, LZMA), BOOTLOG 0x2D0000 (1.0.0), Radioback 0x2E0000 (1.0.0), defaultdb 0x2F0000 (1.1.0, 2014-6-7), userdb 0x30FF80 (1.0.0, 2013-7-12)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX_V5S_3601HD_CMT_15051903A3.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20V5S",
+    "site": "satedu.cba.pl",
+    "author": "Openbox / Skybox",
+    "date": "2015-05-19",
+    "login": false,
+    "note": "Archive OPENBOX_V5S_3601HD_CMT_15051903A3.zip from the Openbox / Openbox V5S directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": null,
+    "note": "Boots as a dual-CPU M3602 board (chips/m3602.py, run_dump_openbox_v5s_app_starts.py): the bootloader (\"DVBS2---0.1.0\") parks the SEE boot stub at 0xA1E92ECC, unpacks seecode (\"MSEE Demo\") to 0xA6000200 and maincode (\"M3601 Demo\") to 0x80000200, starts both cores, prints \"\\x01\\x02\" on UART, and exchanges bidirectional remote calls between the main CPU and the SEE co-processor (29 main->SEE calls, 16 SEE->main calls)."
+  },
+  "desc": [
+    "Openbox V5S (Skybox V5S) firmware 15051903A3 (2015-05-19) for the compact Full HD DVB-S2 satellite receiver on the dual-CPU ALi M3601S / M3602 platform with 4 MB SPI flash.",
+    "Pairs bootloader \"DVBS2---0.1.0\" with \"M3601 Demo\" maincode (0x020000) and \"MSEE Demo\" seecode (0x210000), parking the SEE at 0xA1E92ECC before launching the SEE core at 0xA6000200."
+  ]
+}

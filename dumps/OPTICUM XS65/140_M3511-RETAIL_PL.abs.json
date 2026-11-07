@@ -1,0 +1,47 @@
+{
+  "file": "140_M3511-RETAIL_PL.abs",
+  "device": {
+    "brand": "Opticum / Globo",
+    "model": "XS65 (M3511 Polish retail build)",
+    "type": "Single-tuner DVB-S2 HD satellite PVR receiver",
+    "board": "112003000202162 (4 MB SPI, 128 MB DDR3 M3511 / M3503 platform)",
+    "soc": "ALi M3511 / M3503 (bootloader version \"M3503---0.1.0\"; 128 MB DDR3 with the SEE partition at 96..128 MB, 0x86000200)",
+    "family": "M3503 (chips/m3503.py: 128 MB DDR3 M3503 with XIP cache-as-RAM bootloader and CryptoEngine SHA-256)",
+    "demod": "internal DVB-S2 (NIM_S3503_0 at 0xB8028000)",
+    "tuner": "Airoha AV2011 at I2C 0x60",
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec",
+    "tunerModel": {
+      "chip": "av2011",
+      "address": 96
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "1.4.0 \"M3511-RETAIL_PL\" (maincode chunk \"112003000202162\", version 00000140, 2016-04-13; seecode 00000140)",
+    "date": "2016-04-13",
+    "size": 4194304,
+    "sha1": "03fd65e480a62b8e2a92cf95fee28ff7a27c8a68",
+    "layout": "bootloader 0x000000 (M3503---0.1.0, 2012-07-24), HDCPKey 0x02EE00 (00000001), MemCfg 0x02F000 (00000001, 2016-4-13), 112003000202162 0x030000 (00000140, 2016-4-13, LZMA -> 5.9 MB), seecode 0x1D0000 (00000140, 2016-4-13, LZMA -> 2.8 MB), storage_part 0x2B0000 (00000001), Radioback 0x2D0000 (1.0.0), ca 0x2DFF80 (00000001), defaultdb 0x2F0000 (1.1.0), userdb 0x2FFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=Opticum%20XS65_140_M3511-RETAIL_PL.zip&directory=Firmware%20for%20to%20all%20receivers/Opticum",
+    "site": "satedu.cba.pl",
+    "author": "Opticum / Globo",
+    "date": "2016-04-13",
+    "login": false,
+    "note": "Archive Opticum XS65_140_M3511-RETAIL_PL.zip from the Opticum directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots as a 128 MB DDR3 M3503 board (chips/m3503.py, run_dump_xs65_m3511_app_starts.py): runs XIP with its stack in cache-as-RAM (0x8FFF8000..0x8FFFFFFF), switches to RAM at 0x81016BCC, parks the SEE boot stub at 0xA1016804, unpacks seecode (\"00000140\") to 0x86000200 and maincode (\"112003000202162\") to 0x80000200, starts both cores (main EBase 0x80002000, SEE EBase 0x86002001), and renders its OSD through the graphics engine (241 GE commands)."
+  },
+  "desc": [
+    "Opticum XS65 Polish retail firmware 1.4.0 (140_M3511-RETAIL_PL.abs, 2016-04-13) for the single-tuner DVB-S2 HD satellite receiver on the 128 MB ALi M3511 / M3503 platform with 4 MB SPI flash.",
+    "Unlike the 8 MB / 256 MB XS65 Twin and XS65 Combo builds, this 4 MB single-tuner build runs in 128 MB DDR3 without upper-DDR remapping, placing its SEE co-processor image at 0x86000200 (EBase 0x86002001)."
+  ]
+}

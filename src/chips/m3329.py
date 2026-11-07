@@ -254,7 +254,7 @@ class M3329(ChipFamily):
         directly to 0xAFC00000 (`STO_FLASH_0`)."""
         chain = chunk_chain(image, limit=2)
         bl_end = chain[1][0] if len(chain) > 1 and 0 < chain[1][0] <= len(image) else min(len(image), 0x10000)
-        bl = bytes(image[:bl_end])
+        bl = bytes(memoryview(image)[:bl_end])
         if b"STO_FLASH_0" in bl:
             return False
         if b"STO_SFLASH_0" in bl:
@@ -274,7 +274,7 @@ class M3329(ChipFamily):
         (`addiu $at, $zero, 0x3329` in the first 8 KB); M3329C / M3101C
         bootloaders only accept 0x0000, 0x3327 or 0x3101 there (hitting sdbbp
         or returning chip ID 0 on 0x3329)."""
-        if b"\x29\x33\x01\x24" in bytes(self.sim.rom_image[:0x2000]):
+        if b"\x29\x33\x01\x24" in bytes(memoryview(self.sim.rom_image)[:0x2000]):
             return 0x3329
         return 0x3101
 

@@ -113,6 +113,7 @@ PANELS = [
     # known (the application, which has the font, never runs: its main code is decrypted by the
     # board's security IC, see the sidecar), so the digits come out as "?" in the standard layout.
     ("A52E_", dict(chip="tm1628", clk=65, dio=66, stb=64, digit_addrs=(0, 2, 4, 6), labels={})),
+    ("A102E_", dict(chip="tm1628", clk=38, dio=40, stb=39, digit_addrs=(0, 2, 4, 6), labels={})),
     # Ferguson Ariva T650i: an FD650K ("PAN_FD650K"), TM1650-compatible, on the usual pins; its
     # digits are registers 0x6C, 0x6E, 0x6A, 0x68 from the left and its segments a..g, DP sit on
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:

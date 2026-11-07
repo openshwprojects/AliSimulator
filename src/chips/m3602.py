@@ -98,7 +98,7 @@ class M3602(ChipFamily):
             # bootloaders ("HS11" / "HS17" / "HS18" / "HS1C" / "HSJ2") start their version with
             # "350" or "370" ("35003-01047", "37017-01047").  ("M3612" / "Demo M3612" is NOT
             # M3602: its single-CPU silicon reads S3811 chip ID 0x3811 -> m3801.py.)
-            if version.startswith(("M3601", "M3602", "M3606", "350", "370")):
+            if version.startswith(("M3601", "M3602", "M3606", "350", "370", "SMT---", "SMT ")):
                 return True
         return False
 
@@ -158,11 +158,15 @@ class M3602(ChipFamily):
         return C3603_PRODUCT if self.chip_id == C3603 else self.chip_variant
 
     def write_chip_id(self):
-        """The board's chip ID word, and on a C3603 a fresh S3501 (plus the
-        board's tuner model when its sidecar names one) on the I2C bus."""
+        """The board's chip ID word, and on a C3603 (or M3602 'SMT' satellite
+        builds) a fresh S3501 (plus the board's tuner model when its sidecar
+        names one) on the I2C bus."""
         super().write_chip_id()
         self._remove_demod()
-        if self.chip_id == C3603:
+        has_smt = bool(self.sim.rom_image) and any(
+            version.startswith(("SMT---", "SMT ")) for _o, _n, version in chunk_chain(self.sim.rom_image)
+        )
+        if self.chip_id == C3603 or has_smt:
             self._c3603_demod = self.demod = S3501(tuned=self.sim.tuned_to_signal)
             self.sim.i2c_devices[S3501.ADDRESS] = self._c3603_demod
             self.sim.attach_tuner()

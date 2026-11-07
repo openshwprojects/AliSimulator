@@ -1,0 +1,43 @@
+{
+  "file": "C2HS2-12-06-18_05E3CMT.ABS",
+  "device": {
+    "brand": "Openbox",
+    "model": "S10 HD PVR (C2HS2-12-06-18:05E3CMT)",
+    "type": "DVB-S2 Full HD satellite PVR receiver with CA card slot, CI slot, Ethernet and USB PVR",
+    "board": "SMT---1.0.0 / SMT 1.0.0 (4 MB SPI M3602 single-CPU DVB-S2 platform)",
+    "soc": "ALi M3602 (single-CPU build without seecode chunk; chip ID 0x3602)",
+    "family": "M3602 (chips/m3602.py)",
+    "demod": "ALi S3501 DVB-S2 at I2C 0x33 on SCB0",
+    "tuner": "Sharp / Airoha DVB-S2 tuner at I2C 0x60 on SCB0",
+    "flash": "4 MB SPI",
+    "panel": null,
+    "irCoding": "nec"
+  },
+  "image": {
+    "kind": "update",
+    "version": "C2HS2-12-06-18:05E3CMT (bootloader \"SMT---1.0.0\", maincode \"SMT 1.0.0\")",
+    "date": "2012-06-20",
+    "size": 4194304,
+    "sha1": "fb30058bbb5b36b80f65f86f7b1a532acabcf56c",
+    "layout": "bootloader 0x000000 (SMT---1.0.0, 2009-08-27), maincode 0x010000 (SMT 1.0.0, 2009-08-27, LZMA -> 5.88 MB), Radioback 0x1E0000 (1.0.0), Bootback 0x1F0000 (1.0.0), upgcode 0x200000 (upg 1.0.0), defaultdb 0x210000 (1.1.0, 2011-5-6), userdb 0x22FF80 (1.0.0, 2012-6-20)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=C2HS2-12-06-18_05E3CMT.ABS.zip&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S10",
+    "site": "satedu.cba.pl",
+    "author": "Openbox / Skybox",
+    "date": "2012-06-20",
+    "login": false,
+    "note": "Archive C2HS2-12-06-18_05E3CMT.ABS.zip from the Openbox / Openbox S10 directory on satedu.cba.pl; fetched 2026-11-07."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": null,
+    "note": "Boots as a single-CPU M3602 board (chips/m3602.py, run_dump_openbox_s10_app_starts.py): the bootloader (\"SMT---1.0.0\") probes DDR at 0xA800AA68, unpacks maincode (\"SMT 1.0.0\", 5.88 MB) to 0x80000200 and starts the application, which prints \"APP  init ok\" on UART, configures its external ALi S3501 DVB-S2 demodulator at I2C 0x33 and tuner at I2C 0x60 on SCB0, and issues graphics engine commands at 0xB800A000 and 0xB800C000."
+  },
+  "desc": [
+    "Openbox S10 HD PVR firmware C2HS2-12-06-18:05E3CMT (2012-06-20) for the single-CPU ALi M3602 DVB-S2 satellite PVR receiver with 4 MB SPI flash.",
+    "Uses \"SMT---1.0.0\" / \"SMT 1.0.0\" chunk versions without a separate seecode image, an external ALi S3501 DVB-S2 demodulator at I2C 0x33 on SCB0, and a DVB-S2 tuner at I2C 0x60."
+  ]
+}

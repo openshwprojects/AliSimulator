@@ -455,8 +455,19 @@ class CppAliMipsSimulator(AliMipsSimulator):
         native_ge = ge_obj is None or (ge_obj.fast_paths and ge_obj.trace is None)
         uart_idle = len(self._uart_rx_queue) == 0 and not self._dev_replays
         ve_status = bool(getattr(self.chip, 've_status', True))
+        smc = getattr(self, 'smc', None)
+        smc_idle = (smc is not None and not smc.inserted and not smc.rx_fifo and not smc.tx_buf
+                    and smc.isr0 == 0 and smc.isr1 == 0)
+        dmx_attr = getattr(self.chip, 'dmx', None)
+        if isinstance(dmx_attr, (list, tuple)):
+            dmx_list = dmx_attr
+        else:
+            dmx_list = tuple(d for d in (dmx_attr, getattr(self.chip, 'dmx1', None), getattr(self.chip, 'dmx2', None)) if d is not None)
+        dmx_idle = tuple(d.mux is None and d.status == 0 and not any(d.write_ptr) for d in dmx_list)
+        u2 = getattr(self.chip, 'uart2', None)
+        u2_idle = u2 is not None and not u2.rx_queue and not self._dev_replays
         sig = (self._mmio_version, id(self._mmio_rd), len(self._mmio_rd), id(self._mmio_wr), len(self._mmio_wr),
-               len(self._mmio_observers), native_spi, native_ge, uart_idle, ve_status)
+               len(self._mmio_observers), native_spi, native_ge, uart_idle, ve_status, smc_idle, dmx_idle, u2_idle)
         if sig == self._dev_sig:
             return
         self._dev_sig = sig
@@ -576,6 +587,36 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 elif t_name == 'DdrTraining' and fn in (getattr(owner, '_read_status', None), getattr(owner, '_read_capture', None)):
                     rflags[off] = rflags.get(off, 0) | DR_READ
                     seen_ddr_tr = True
+                elif t_name == 'SmartCard' and fn == getattr(owner, '_r_reg', None) and smc_idle:
+                    rflags[off] = rflags.get(off, 0) | DR_READ
+                    ro = off - owner.base
+                    if ro in (0x08, 0x0A, 0x14):
+                        rules.append((off, 0xFF, 0x00, 0x00, 0, 0))
+                    elif ro == 0x2C:
+                        rules.append((off, 0x01, 0xFE, 0x00, 0, 0))
+                elif t_name == 'Uart16550' and fn == getattr(owner, '_read', None) and not owner.rx_queue and not self._dev_replays:
+                    ro = (off - owner.base) & 0xF
+                    if ro >= 2:
+                        rflags[off] = rflags.get(off, 0) | DR_READ
+                        if ro == 2:
+                            rules.append((off, 0, 0x00, 0x01, 0, RULE_EXACT_OFF))
+                        elif ro == 5:
+                            rules.append((off, 0, 0x00, 0x60, 0, RULE_EXACT_OFF))
+                elif t_name == 'Demux':
+                    d_idle = owner.mux is None and owner.status == 0 and not any(owner.write_ptr)
+                    if fn == getattr(owner, '_r_control', None):
+                        rflags[off] = rflags.get(off, 0) | DR_READ
+                        rules.append((off, 0x01, 0xFE, 0x00, 0, 0))
+                    elif fn == getattr(owner, '_r_ram_port', None):
+                        rflags[off] = rflags.get(off, 0) | DR_READ
+                        rules.append((off, 0x02, 0xFD, 0x00, 0, 0))
+                    elif d_idle and fn == getattr(owner, '_r_pointers', None):
+                        rflags[off] = rflags.get(off, 0) | DR_READ
+                        if (off & 3) < 2:
+                            rules.append((off, 0xFF, 0x00, 0x00, 0, 0))
+                    elif d_idle and fn == getattr(owner, '_r_status', None):
+                        rflags[off] = rflags.get(off, 0) | DR_READ
+                        rules.append((off, 0xFF, 0x00, 0x00, 0, 0))
         if seen_selfcomp:
             for reg, (start, done, clear) in self._SELF_COMPLETING.items():
                 rules.append((reg, start or 0, (~clear) & 0xFF, done & 0xFF, 0, 0))
@@ -656,6 +697,19 @@ class CppAliMipsSimulator(AliMipsSimulator):
                     rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
                     if off not in seen_trng:
                         seen_trng.append(off)
+                elif t_name == 'SmartCard' and fn == getattr(owner, '_w_reg', None) and smc_idle:
+                    ro = off - owner.base
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | (DR_WRITE_IGNORE if ro in (0x06, 0x07) else 0)
+                elif t_name == 'InternalDemod' and fn == getattr(owner, '_write', None):
+                    ro = (off - owner.base) & 0xFFF
+                    rflags[off] = rflags.get(off, 0) | DR_WRITE | (DR_WRITE_IGNORE if ro >= 0xA3 else 0)
+                elif t_name == 'Uart16550' and fn == getattr(owner, '_write', None):
+                    ro = (off - owner.base) & 0xF
+                    if ro >= 4:
+                        rflags[off] = rflags.get(off, 0) | DR_WRITE | (DR_WRITE_IGNORE if ro == 5 else 0)
+                elif t_name == 'Demux' and fn == getattr(owner, '_w_pointers', None):
+                    if owner.mux is None and owner.status == 0 and not any(owner.write_ptr):
+                        rflags[off] = rflags.get(off, 0) | DR_WRITE | (DR_WRITE_IGNORE if (off & 3) < 2 else 0)
         for vo in seen_vpo:
             fb_code = (1 if (vo.field_bit & (1 << 18)) else 0) | (2 if (vo.field_bit & (1 << 19)) else 0)
             rules.append((vo.register & 0xFFFFFF, vo.line & 0xFF, fb_code, 0, 0, RULE_VPO_WRITE))
@@ -719,7 +773,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
         else:
             o = 0x10 if command == 2 else 0x18
             start, end = int(regs_arr[o >> 2]) & 0x1FFFFFFF, int(regs_arr[(o >> 2) + 1]) & 0x1FFFFFFF
-            if start <= end < start + 0x400000 and end + 4 <= self.ram_size:
+            if (start != 0 or end != 0) and start <= end < start + 0x400000 and end + 4 <= self.ram_size:
                 words_view = self.ge.ram[start:end + 4].view('<u4')
                 if resume != 0xFFFFFFFFFFFFFFFF and resume < len(words_view):
                     words_view = words_view[resume:]

@@ -614,6 +614,9 @@ ALI_API uint32_t ali_scan_code(const void *buf, uint32_t len, uint32_t *out_offs
   static const uint8_t M16_LZMA[12] = {
     0xF3, 0x63, 0x18, 0x62, 0x17, 0xD1, 0x16, 0xD0, 0x1C, 0xD6, 0xED, 0xE6
   };
+  static const uint8_t M16_LZMA_9[12] = {
+    0x60, 0x9D, 0x1C, 0xF0, 0xF4, 0x64, 0x00, 0x6C, 0x22, 0xD3, 0x60, 0x9F
+  };
   auto emit = [&](uint32_t off, uint8_t kind) {
     if (count < max_out) {
       out_offs[count] = off;
@@ -635,6 +638,14 @@ ALI_API uint32_t ali_scan_code(const void *buf, uint32_t len, uint32_t *out_offs
       }
       if ((w0 >> 16) == 0x63F3u && (i << 2) + 110u <= len &&
           memcmp(b + (i << 2) + 2, M16_LZMA, 12) == 0) {
+        emit((i << 2) + 2, 1);
+      }
+      if ((w0 & 0xFFFFu) == 0x9D60u && (i << 2) + 44u <= len &&
+          memcmp(b + (i << 2), M16_LZMA_9, 12) == 0) {
+        emit(i << 2, 1);
+      }
+      if ((w0 >> 16) == 0x9D60u && (i << 2) + 46u <= len &&
+          memcmp(b + (i << 2) + 2, M16_LZMA_9, 12) == 0) {
         emit((i << 2) + 2, 1);
       }
     }
