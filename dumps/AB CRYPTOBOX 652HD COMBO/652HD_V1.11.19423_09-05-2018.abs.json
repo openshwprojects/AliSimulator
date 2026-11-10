@@ -1,0 +1,54 @@
+{
+  "file": "652HD_V1.11.19423_09-05-2018.abs",
+  "device": {
+    "brand": "AB CryptoBox",
+    "model": "652HD Combo",
+    "type": "DVB-S2 / DVB-T2 / DVB-C HD combo receiver",
+    "board": "652HD Combo",
+    "soc": "ALi M3516 (M3503 family rev B dual-CPU MIPS32 + SEE)",
+    "family": "M3503 (chips/m3503.py: chip ID 0x35030001)",
+    "chipFamily": "M3503",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 DVB-S2 + DVB-T2/C combo demodulator",
+    "tuner": "av2012 / mxl603",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "PT6315",
+      "clk": 135,
+      "dio": 134,
+      "stb": 133
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.11.19423 (bootloader \"DVBS2---0.2.0\"; SDK4.0fa.13.8c)",
+    "date": "2018-05-09",
+    "size": 8388608,
+    "sha1": "aa2262409d546920a64175271f7a0ad765fd5696",
+    "layout": "bootloader 0x000000 (DVBS2---0.2.0), MemCfg 0x01EF00, maincode and SEE chunks -- 8 MB flash"
+  },
+  "source": {
+    "url": "http://satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2018-05-09",
+    "login": false,
+    "note": "AB CryptoBox 652HD Combo official firmware."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as M3503 with rev-B chip ID: sets up cache-as-RAM stack, unpacks split SEE and maincode, prints 'model = 4:652HD COMBO' and 'MC: APP  init ok'."
+  },
+  "desc": [
+    "The V1.11.19423 firmware for the AB CryptoBox 652HD Combo receiver built on the ALi M3516 dual-core SoC.",
+    "Supports satellite DVB-S2 and terrestrial/cable DVB-T2/C reception."
+  ]
+}

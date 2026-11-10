@@ -1,0 +1,52 @@
+{
+  "file": "A153Combo_20150320_V1.28B3.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 153 Combo",
+    "type": "DVB-S2 + DVB-T2/C Full HD combo receiver with CI slot, smartcard reader, Ethernet and USB PVR",
+    "board": "bootloader chunk \"HSJU\", version \"39015-01047\"",
+    "soc": "ALi M3503 (M3516 class dual-CPU DVB-S2 SoC, chip word 0x35030001; SND_S3503 in the SEE program, Libcore 1.1.5a@SDK_20111126)",
+    "family": "M3503 (chips/m3503.py), matched by the bootloader chunk's version \"39015-01047\"",
+    "demod": "internal DVB-S2 (NIM_S3503) + external DVB-T2/C combo demodulator",
+    "tuner": "unknown (maincode is encrypted by the board's security IC)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "ext00",
+    "gpioI2c": {
+      "scl": 7,
+      "sda": 8
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.28B3 (maincode \"V1.28B3*\" 20150320-190041; bootloader HSJU 39015-01047, 20131106-104733)",
+    "date": "2015-03-20",
+    "size": 8388608,
+    "sha1": "0934d87240a850be242d0cce09b5249ee7c3bfe1",
+    "layout": "HSJU 0x000000 (39015-01047, 20131106-104733), MemCfg 0x02F000 (00000001, 20131106-105744), maincode 0x030000 (V1.28B3*, 20150320-190041), seecode 0x450000 (V1.28B3, 20150320-190040, LZO1X), radioback 0x600000 (1.0.0), seeback 0x61FF80 (1.0.0), ARIVA153COMBO 0x630000 (1.0.0), data 0x64FF80 (1.0.0), defaultdb 0x6A0000 (1.0.0), userdb 0x6FFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A153Combo_20150320_V1.28B3.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20153combo%20Ariva253combo",
+    "site": "satedu.cba.pl",
+    "author": "Ferguson",
+    "date": "2015-03-20",
+    "login": false,
+    "note": "Archive A153Combo_20150320_V1.28B3.zip from the Ferguson Ariva 153combo Ariva253combo directory on satedu.cba.pl; fetched 2026-11-09."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": [" On "],
+    "note": "The bootloader runs as M3503 revision B (run_dump_a153_combo_security_ic.py): it executes from the flash window with cache-as-RAM stack at 0x8FFF8000..0x8FFFFFFF, jumps into its RAM copy at 0x80C985C4, writes \" On \" to its FD650K front panel on GPIO 135 (SCL) / 134 (SDA), unpacks the LZO1X-compressed SEE program (0x1599CA -> 0x2D6B5C bytes at 0x81202000 via lzo1x_decompress_safe at 0x80C86348), and starts the parked SEE at 0xA0C938F8 to copy it to 0xA6000200 (entry 0x86001000) and park again.  It then sends the first 1 KB of the main code (0x030080) in 64 blocks of 16 bytes over bit-banged I2C on GPIO 7 (SCL) / 8 (SDA) to the board's security IC at 0x62 (command 0xA2, 7 fixed bytes 42 29 14 e6 fa 9f 15, 16 encrypted bytes, CRC-16/BUYPASS).  Without the chip's plaintext, LzmaDecode() at 0x80C9B780 yields 0 bytes and the bootloader jumps to an empty 0x80000200."
+  },
+  "desc": [
+    "Ferguson Ariva 153 Combo official firmware V1.28B3 (2015-03-20) for the Full HD DVB-S2 + DVB-T2/C combo receiver on the dual-CPU ALi M3503 (M3516) platform (sharing the \"HSJU\" board family with the Opticum AX 502 Combo).",
+    "Chunk chain: bootloader 0x000000 (\"HSJU\", version 39015-01047, 2013-11-06), MemCfg 0x02F000, maincode 0x030000 (\"V1.28B3*\", 4.03 MB, first 1 KB encrypted for the board's security IC), seecode 0x450000 (\"V1.28B3\", 1.35 MB LZO1X-compressed -> 2.84 MB, SND_S3503 / DECV_S3601 / DECA_S3601, Libcore 1.1.5a@SDK_20111126), radioback 0x600000, seeback 0x61FF80, ARIVA153COMBO 0x630000 (boot logo), data 0x64FF80, defaultdb 0x6A0000, userdb 0x6FFF80.",
+    "Front panel: FD650K (\"PAN_FD650K\" / \"PAN_CH455_0\" in the bootloader) on GPIO bank 4 (0xB8000454) bits 7 / 6 -- SCL = GPIO 135, SDA = GPIO 134 -- displaying \" On \" during boot; the security IC sits at I2C 0x62 on GPIO bank 0 (0xB8000054) bits 7 / 8 -- SCL = GPIO 7, SDA = GPIO 8."
+  ]
+}

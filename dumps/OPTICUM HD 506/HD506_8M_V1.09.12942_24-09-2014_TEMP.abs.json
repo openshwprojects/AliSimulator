@@ -1,0 +1,53 @@
+{
+  "file": "HD506_8M_V1.09.12942_24-09-2014_TEMP.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD 506",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "HD506",
+    "soc": "ALi M3511 (M3503 family rev B dual-CPU MIPS32 + SEE)",
+    "family": "M3503 (chips/m3503.py: chip ID 0x35030001)",
+    "chipFamily": "M3503",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 DVB-S2 demodulator",
+    "tuner": "av2011@0x60",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.09.12942 TEMP (bootloader \"DVBS2---0.2.0\"; SDK4.0fa.13.2)",
+    "date": "2014-09-24",
+    "size": 8388608,
+    "sha1": "ef081cce2e66b4f0e006b7633005dbd6ac1342ff",
+    "layout": "bootloader 0x000000 (DVBS2---0.2.0), MemCfg 0x01E800, maincode and SEE chunks -- 8 MB flash"
+  },
+  "source": {
+    "url": "http://satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2014-09-24",
+    "login": false,
+    "note": "Opticum HD 506 8MB flash firmware update."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as M3503: initializes DDR3 memory controller, unpacks maincode and SEE, prints 'model = 25:HD506' and 'MC: APP  init ok'."
+  },
+  "desc": [
+    "The V1.09.12942 firmware update for the Opticum HD 506 8MB satellite receiver powered by the ALi M3511 SoC.",
+    "Features DDR3 memory controller initialization and dual-core MIPS32 + SEE architecture."
+  ]
+}

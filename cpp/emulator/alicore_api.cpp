@@ -617,6 +617,15 @@ ALI_API uint32_t ali_scan_code(const void *buf, uint32_t len, uint32_t *out_offs
   static const uint8_t M16_LZMA_9[12] = {
     0x60, 0x9D, 0x1C, 0xF0, 0xF4, 0x64, 0x00, 0x6C, 0x22, 0xD3, 0x60, 0x9F
   };
+  static const uint8_t M16_LZMA_9B[12] = {
+    0x1C, 0xF0, 0xF4, 0x64, 0x27, 0x67, 0x40, 0x9F, 0x22, 0xD2, 0x60, 0x9D
+  };
+  static const uint8_t M16_LZO1X[12] = {
+    0x0E, 0xF0, 0xB1, 0x64, 0x26, 0x67, 0xA1, 0xE4, 0x40, 0x9F, 0x49, 0xE6
+  };
+  static const uint8_t M16_LZMA_TOBUF[12] = {
+    0x0E, 0xF0, 0xF7, 0x64, 0x40, 0x9E, 0x07, 0xD2, 0x12, 0x93, 0x60, 0x9B
+  };
   auto emit = [&](uint32_t off, uint8_t kind) {
     if (count < max_out) {
       out_offs[count] = off;
@@ -646,6 +655,22 @@ ALI_API uint32_t ali_scan_code(const void *buf, uint32_t len, uint32_t *out_offs
       }
       if ((w0 >> 16) == 0x9D60u && (i << 2) + 46u <= len &&
           memcmp(b + (i << 2) + 2, M16_LZMA_9, 12) == 0) {
+        emit((i << 2) + 2, 1);
+      }
+      if ((w0 & 0xFFFFu) == 0xF01Cu && (i << 2) + 44u <= len &&
+          memcmp(b + (i << 2), M16_LZMA_9B, 12) == 0) {
+        emit(i << 2, 1);
+      }
+      if ((w0 >> 16) == 0xF01Cu && (i << 2) + 46u <= len &&
+          memcmp(b + (i << 2) + 2, M16_LZMA_9B, 12) == 0) {
+        emit((i << 2) + 2, 1);
+      }
+      if ((w0 & 0xFFFFu) == 0xF00Eu && (i << 2) + 36u <= len &&
+          (memcmp(b + (i << 2), M16_LZO1X, 12) == 0 || memcmp(b + (i << 2), M16_LZMA_TOBUF, 12) == 0)) {
+        emit(i << 2, 1);
+      }
+      if ((w0 >> 16) == 0xF00Eu && (i << 2) + 38u <= len &&
+          (memcmp(b + (i << 2) + 2, M16_LZO1X, 12) == 0 || memcmp(b + (i << 2) + 2, M16_LZMA_TOBUF, 12) == 0)) {
         emit((i << 2) + 2, 1);
       }
     }
@@ -710,4 +735,136 @@ ALI_API void ali_gma_scale_u8(const void *src, uint32_t sw, uint32_t sh, uint32_
                               void *dst, const int32_t *rows, uint32_t dh,
                               const int32_t *cols, uint32_t dw) {
   ali_gfx::gma_scale_u8_cpp((const uint8_t *)src, sw, sh, channels, (uint8_t *)dst, rows, dh, cols, dw);
+}
+
+ALI_API int ali_lzo1x_decompress_safe(const void *src_p, uint32_t src_len,
+                                      void *dst_p, uint32_t *dst_len) {
+  if (!src_p || !dst_p || !dst_len) return -1;
+  const uint8_t *const src = (const uint8_t *)src_p;
+  uint8_t *const dst = (uint8_t *)dst_p;
+  const uint8_t *ip = src;
+  const uint8_t *const ip_end = src + src_len;
+  uint8_t *op = dst;
+  uint8_t *const op_end = dst + *dst_len;
+  *dst_len = 0;
+
+  uint32_t t;
+  const uint8_t *m_pos;
+
+  if (ip < ip_end && *ip > 17) {
+    t = *ip++ - 17;
+    if (t < 4) goto match_next;
+    if ((uint32_t)(op_end - op) < t) goto output_overrun;
+    if ((uint32_t)(ip_end - ip) < t + 1) goto input_overrun;
+    do { *op++ = *ip++; } while (--t > 0);
+    goto first_literal_run;
+  }
+
+  while (ip < ip_end) {
+    t = *ip++;
+    if (t >= 16) goto match;
+    if (t == 0) {
+      if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+      while (*ip == 0) {
+        t += 255;
+        ip++;
+        if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+      }
+      t += 15 + *ip++;
+    }
+    if ((uint32_t)(op_end - op) < t + 3) goto output_overrun;
+    if ((uint32_t)(ip_end - ip) < t + 4) goto input_overrun;
+    *op++ = *ip++; *op++ = *ip++; *op++ = *ip++;
+    do { *op++ = *ip++; } while (--t > 0);
+
+first_literal_run:
+    t = *ip++;
+    if (t >= 16) goto match;
+    m_pos = op - (1 + 0x0800);
+    m_pos -= t >> 2;
+    m_pos -= (uint32_t)(*ip++) << 2;
+    if (m_pos < dst) goto lookbehind_overrun;
+    if ((uint32_t)(op_end - op) < 3) goto output_overrun;
+    *op++ = *m_pos++; *op++ = *m_pos++; *op++ = *m_pos;
+    goto match_done;
+
+    for (;;) {
+match:
+      if (t >= 64) {
+        m_pos = op - 1;
+        m_pos -= (t >> 2) & 7;
+        m_pos -= (uint32_t)(*ip++) << 3;
+        t = (t >> 5) - 1;
+        if (m_pos < dst) goto lookbehind_overrun;
+        if ((uint32_t)(op_end - op) < t + 2) goto output_overrun;
+        goto copy_match;
+      } else if (t >= 32) {
+        t &= 31;
+        if (t == 0) {
+          if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+          while (*ip == 0) {
+            t += 255;
+            ip++;
+            if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+          }
+          t += 31 + *ip++;
+        }
+        m_pos = op - 1;
+        m_pos -= (ip[0] >> 2) + ((uint32_t)ip[1] << 6);
+        ip += 2;
+      } else if (t >= 16) {
+        m_pos = op;
+        m_pos -= (t & 8) << 11;
+        t &= 7;
+        if (t == 0) {
+          if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+          while (*ip == 0) {
+            t += 255;
+            ip++;
+            if ((uint32_t)(ip_end - ip) < 1) goto input_overrun;
+          }
+          t += 7 + *ip++;
+        }
+        m_pos -= (ip[0] >> 2) + ((uint32_t)ip[1] << 6);
+        ip += 2;
+        if (m_pos == op) goto eof_found;
+        m_pos -= 0x4000;
+      } else {
+        m_pos = op - 1;
+        m_pos -= t >> 2;
+        m_pos -= (uint32_t)(*ip++) << 2;
+        if (m_pos < dst) goto lookbehind_overrun;
+        if ((uint32_t)(op_end - op) < 2) goto output_overrun;
+        *op++ = *m_pos++; *op++ = *m_pos;
+        goto match_done;
+      }
+      if (m_pos < dst) goto lookbehind_overrun;
+      if ((uint32_t)(op_end - op) < t + 2) goto output_overrun;
+copy_match:
+      *op++ = *m_pos++; *op++ = *m_pos++;
+      do { *op++ = *m_pos++; } while (--t > 0);
+match_done:
+      t = ip[-2] & 3;
+      if (t == 0) break;
+match_next:
+      if ((uint32_t)(op_end - op) < t) goto output_overrun;
+      if ((uint32_t)(ip_end - ip) < t + 1) goto input_overrun;
+      do { *op++ = *ip++; } while (--t > 0);
+      t = *ip++;
+    }
+  }
+  *dst_len = (uint32_t)(op - dst);
+  return -7;
+eof_found:
+  *dst_len = (uint32_t)(op - dst);
+  return (ip == ip_end ? 0 : (ip < ip_end ? -8 : -4));
+input_overrun:
+  *dst_len = (uint32_t)(op - dst);
+  return -4;
+output_overrun:
+  *dst_len = (uint32_t)(op - dst);
+  return -5;
+lookbehind_overrun:
+  *dst_len = (uint32_t)(op - dst);
+  return -6;
 }

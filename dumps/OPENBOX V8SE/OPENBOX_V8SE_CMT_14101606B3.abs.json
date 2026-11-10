@@ -1,0 +1,53 @@
+{
+  "file": "OPENBOX_V8SE_CMT_14101606B3.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "V8Se",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "CMT",
+    "soc": "ALi M3511 (the maincode chunk's version \"M3511 Demo\" with bootloader \"DVBS2---0.1.0\")",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the revision-B chip ID 0x35030001 and the XIP bootloader's cache-as-RAM stack)",
+    "demod": "internal DVB-S2 (NIM_S3503)",
+    "tuner": "AV2011 / M88TS2022",
+    "flash": "8 MB SPI (7 MB image)",
+    "panel": {
+      "chip": "TM1628 / FD620 (3-wire LED)",
+      "clk": 135,
+      "dio": 134,
+      "stb": 19
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "14101606B3 (bootloader \"DVBS2---0.1.0\" 2010-03-11; maincode chunk 0x01FE0101 \"M3511 Demo\" 2014-10-16)",
+    "date": "2014-10-16",
+    "size": 7340032,
+    "sha1": "d9022236f6929706ed2f8e84709525cc749a7502",
+    "layout": "bootloader 0x000000 (\"DVBS2---0.1.0\" 2010-03-11), MemCfg 0x01EE00 (00000001), upgcode 0x01FE00 (upg 1.0.0), maincode 0x030000 (M3511 Demo, 13-byte XOR + LZMA 0x260BF9 bytes -> 8.67 MB), seecode 0x3D0000 (MSEE Demo, 13-byte XOR + LZMA 0x0DFAEE bytes -> 2.84 MB), BOOTLOG 0x4D0000 (1.0.0), Radioback 0x4E0000 (1.0.0), defaultdb 0x4F0000 (1.1.0), userdb 0x50FF80 (1.0.0, 0x0E0070 bytes)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=OPENBOX_V8SE_CMT_14101606B3.rar&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20Skybox%20V8",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2014-10-16",
+    "login": false,
+    "note": "Unpacked from OPENBOX_V8SE_CMT_14101606B3.rar in the mirror's Openbox/Openbox Skybox V8 folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "LoAd",
+      "LOO1",
+      "LO93"
+    ],
+    "note": "Boots as the M3503 family with revision-B chip ID 0x35030001 (run_dump_openbox_v8se_app_starts.py): the \"DVBS2---0.1.0\" XIP bootloader runs from the flash window with its stack in the cache-as-RAM range (0x8FFF8000), copies its MIPS16e payload into RAM at 0x81080000, unscrambles the 13-byte rolling-XOR-obfuscated seecode and maincode chunks in 64 KB blocks and decompresses them via LzmaDec_DecodeToBuf (0x8108EB54) to 0x81444000 (2.84 MB) and 0x80000200 (8.67 MB), parks the SEE at 0xA10977DC, and jumps to 0x80000200.  The application moves its exception vectors to EBase 0x80002000, starts the SEE's program at 0xAE000200 on the second core (EBase 0x8E002001), exchanges remote calls with the SEE core, and drives the TM1628-compatible 3-wire LED front panel on CLK = GPIO 135, DIO = GPIO 134, STB = GPIO 19 through \"LoAd\" and the \"LOO1\"..\"LO93\" boot progress counter."
+  },
+  "desc": [
+    "The 14101606B3 firmware update of the Openbox V8Se DVB-S2 HD satellite receiver (board \"CMT\", 2014-10-16), built on the ALi M3511 (M3503 rev B) dual-CPU platform.",
+    "Like the Openbox V8S, its bootloader unscrambles the 13-byte rolling-XOR-obfuscated seecode and maincode chunks in 64 KB windows and unpacks them via LZMA SDK 9.x `LzmaDec_DecodeToBuf` before starting both cores and animating `LoAd` -> `LOO1`..`LO93` on the 3-wire TM1628 front panel."
+  ]
+}

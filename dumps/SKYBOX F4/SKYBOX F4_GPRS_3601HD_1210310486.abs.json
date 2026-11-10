@@ -1,0 +1,53 @@
+{
+  "file": "SKYBOX F4_GPRS_3601HD_1210310486.abs",
+  "device": {
+    "brand": "Skybox",
+    "model": "F4",
+    "type": "DVB-S2 HD satellite receiver with built-in GPRS modem",
+    "board": "3601HD_GPRS",
+    "soc": "ALi M3601E (the maincode chunk's version \"M3601 Demo\" with bootloader \"DVBS2---0.1.0\")",
+    "family": "M3602 (chips/m3602.py: the M36xx family with chip ID 0x3602)",
+    "demod": "ALi S3501",
+    "tuner": "Sharp BS2S7VZ7306A / M88TS2022",
+    "flash": "4 MB SPI (W25Q32 / EN25Q32)",
+    "panel": {
+      "chip": "TM1628 / PT6964 (PAN_PT_0 3-wire LED)",
+      "clk": 62,
+      "dio": 63,
+      "stb": 64
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "1210310486 (bootloader \"DVBS2---0.1.0\" 2010-03-11; maincode chunk 0x01FE0101 \"M3601 Demo\" 2012-10-31)",
+    "date": "2012-10-31",
+    "size": 4194304,
+    "sha1": "f51852e8144cde6820d073d5620aa84f542084a1",
+    "layout": "bootloader 0x000000 (\"DVBS2---0.1.0\" 2010-03-11), upgcode 0x01FE00 (upg 1.0.0), maincode 0x020000 (M3601 Demo, 13-byte XOR + LZMA 0x1BE094 bytes -> 6.54 MB), seecode 0x210000 (MSEE Demo, 13-byte XOR + LZMA 0x0A3259 bytes -> 2.00 MB), BOOTLOG 0x2D0000 (1.0.0), Radioback 0x2E0000 (1.0.0), defaultdb 0x2F0000 (1.1.0), userdb 0x30FF80 (1.0.0, 0x0E0070 bytes)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=SKYBOX%20F4_GPRS_3601HD_1210310486.rar&directory=Firmware%20for%20to%20all%20receivers/Openbox/Skybox%20F3-F4-F5-M3",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2012-10-31",
+    "login": false,
+    "note": "Unpacked from SKYBOX F4_GPRS_3601HD_1210310486.rar in the mirror's Openbox/Skybox F3-F4-F5-M3 folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "LoAd",
+      "LOO1",
+      "LO93"
+    ],
+    "note": "Boots as the M3602 family with chip ID 0x3602 (run_dump_skybox_f4_app_starts.py): the \"DVBS2---0.1.0\" bootloader copies its MIPS16e payload into RAM at 0x81E80000, unscrambles the 13-byte rolling-XOR-obfuscated seecode and maincode chunks in 64 KB blocks and decompresses them via LzmaDec_DecodeToBuf (0x81E8823C) to 0xA1A00200 (2.00 MB) and 0x80000200 (6.54 MB), parks the SEE at 0xA1E92ECC, and jumps to 0x80000200.  The application starts the SEE's program at 0xA6000200 on the second core, exchanges remote calls with the SEE core, probes the GPRS/MCU UART, and drives the open-drain 3-wire TM1628 / PT6964 front panel (PAN_PT_0) on CLK = GPIO 62, DIO = GPIO 63, STB = GPIO 64 through \"LoAd\" and the \"LOO1\"..\"LO93\" boot progress counter."
+  },
+  "desc": [
+    "The 1210310486 firmware update of the Skybox F4 GPRS HD satellite receiver (board \"3601HD_GPRS\", 2012-10-31), built on the dual-CPU ALi M3601E (M3602 family) platform with an integrated GPRS module.",
+    "The \"DVBS2---0.1.0\" bootloader unscrambles the 13-byte rolling-XOR-obfuscated `seecode` and `maincode` chunks in 64 KB windows and unpacks them via LZMA SDK 9.x `LzmaDec_DecodeToBuf` before starting both cores and animating `LoAd` -> `LOO1`..`LO93` on the open-drain 3-wire PT6964 / TM1628 front panel."
+  ]
+}

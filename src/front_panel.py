@@ -114,6 +114,31 @@ PANELS = [
     # board's security IC, see the sidecar), so the digits come out as "?" in the standard layout.
     ("A52E_", dict(chip="tm1628", clk=65, dio=66, stb=64, digit_addrs=(0, 2, 4, 6), labels={})),
     ("A102E_", dict(chip="tm1628", clk=38, dio=40, stb=39, digit_addrs=(0, 2, 4, 6), labels={})),
+    # Openbox V8S / V8Se (M3511 / M3503 rev B, bootloader "DVBS2---0.1.0"): TM1628-class 3-wire LED
+    # controller on CLK = GPIO 135, DIO = GPIO 134, STB = GPIO 19 ("LoAd" -> "L000".."L099").
+    ("OPENBOX_V8S", dict(chip="tm1628", clk=135, dio=134, stb=19, digit_addrs=(4, 6, 2, 8),
+                         seg_map=(0, 4, 7, 5, 6, 1, 3, 2), labels={})),
+    # Openbox S9 HD PVR (M3602, bootloader "HACK S9"): PAN_PT_0 TM1628-class 3-wire LED controller on
+    # CLK = GPIO 171 (0x0E8 bit 11), DIO = GPIO 62 (0x0D4 bit 30), STB = GPIO 170 (0x0E8 bit 10)
+    # ("    " -> "AHAH" -> "1N1t" -> "OOO2").
+    ("HDS2_S9", dict(chip="tm1628", clk=171, dio=62, stb=170, digit_addrs=(4, 6, 2, 8),
+                     seg_map=(0, 4, 7, 5, 6, 1, 3, 2), labels={})),
+    # Skybox S12 (M3602, bootloader "SMT---1.0.0"): PAN_PT_0 TM1628-class 3-wire LED controller on
+    # CLK = GPIO 171 (0x0E8 bit 11), DIO = GPIO 62 (0x0D4 bit 30), STB = GPIO 170 (0x0E8 bit 10)
+    # ("boot" -> "Strt" -> "OOO7").
+    ("skybox s12", dict(chip="tm1628", clk=171, dio=62, stb=170, digit_addrs=(4, 6, 2, 8),
+                        seg_map=(0, 4, 7, 5, 6, 1, 3, 2), labels={})),
+    # Skybox F4 GPRS / Openbox X3 (M3601E / M3602, bootloader "DVBS2---0.1.0"): PAN_PT_0 TM1628-class
+    # 3-wire LED controller driven open-drain on CLK = GPIO 62, DIO = GPIO 63, STB = GPIO 64 ("LoAd" -> "LOO1".."LO93").
+    ("SKYBOX F4", dict(chip="tm1628", clk=62, dio=63, stb=64, digit_addrs=(4, 6, 2, 8),
+                       seg_map=(0, 4, 7, 5, 6, 1, 3, 2), labels={})),
+    ("X3_OPENBOX", dict(chip="tm1628", clk=62, dio=63, stb=64, digit_addrs=(4, 6, 2, 8),
+                        seg_map=(0, 4, 7, 5, 6, 1, 3, 2), labels={})),
+    # Skybox A3 / A4 / M5 (M3606 / M3602, bootloader "DVBS2---0.1.0"): PT6315 / uPD16315 24-byte VFD
+    # controller (display mode 0x04: 8 grids x 20 segments, 3 RAM bytes per grid, grids 2..5 at RAM 6, 9, 12, 15)
+    # on CLK = GPIO 62, DIO = GPIO 63, STB = GPIO 64 ("LOAD" -> "LOO1".."LO93").
+    ("SKYBOX_A3", dict(chip="tm1628", clk=62, dio=63, stb=64, digit_addrs=(6, 9, 12, 15),
+                       seg_map=(19, 14, 6, 5, 10, 18, 12, 7), labels={})),
     # Ferguson Ariva T650i: an FD650K ("PAN_FD650K"), TM1650-compatible, on the usual pins; its
     # digits are registers 0x6C, 0x6E, 0x6A, 0x68 from the left and its segments a..g, DP sit on
     # bits 1, 5, 6, 0, 7, 2, 4, 3 (read off the font table its application builds in RAM:
@@ -128,6 +153,8 @@ PANELS = [
     # PAN_FD650K drivers switch on the key byte (key - 0x5C, a jump table: _FERGUSON_KEYS)
     ("T750i", _fd650k(128, 129)),
     ("T760i", _fd650k(107, 110)),
+    ("A103_", _fd650k(135, 134)),
+    ("A153Combo_", _fd650k(135, 134)),
     ("A104_", _fd650k(107, 110)),
     ("A204_", _fd650k(107, 108)),
     ("A154", _fd650k(107, 108)),

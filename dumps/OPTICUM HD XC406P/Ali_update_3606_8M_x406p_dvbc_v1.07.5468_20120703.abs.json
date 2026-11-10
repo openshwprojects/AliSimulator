@@ -1,0 +1,54 @@
+{
+  "file": "Ali_update_3606_8M_x406p_dvbc_v1.07.5468_20120703.abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "HD XC406p",
+    "type": "DVB-C HD cable receiver",
+    "board": "XC406p",
+    "soc": "ALi M3606 (M3602 family with dual-CPU MIPS32 + SEE co-processor)",
+    "family": "M3602 (chips/m3602.py: chip ID 0x3603)",
+    "chipFamily": "M3602",
+    "chipId": "0x3603",
+    "demod": "internal DVB-C demodulator",
+    "tuner": "tuner@0x60",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "TM1628",
+      "clk": 45,
+      "dio": 44,
+      "stb": 43
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "v1.07.5468 (bootloader \"DVBS2---0.2.0\"; maincode 0x01FE0101; SDK4.0ba.4.2_20110225)",
+    "date": "2012-07-03",
+    "size": 8388608,
+    "sha1": "6cb69a680f9bb232dc51618b91aeca704dd83a4c",
+    "layout": "bootloader 0x000000 (DVBS2---0.2.0), maincode container 0x020000 (LZMA -> 5.51 MB maincode at 0x80000200, 2.30 MB SEE at 0xA1A00200) -- the whole 8 MB flash"
+  },
+  "source": {
+    "url": "http://satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2012-07-03",
+    "login": false,
+    "note": "Opticum / Globo HD XC406p DVB-C official firmware."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as M3602 family with chip ID 0x3603: the bootloader starts the SEE at 0xA1E90290, unpacks maincode to 0x80000200 and SEE to 0xA6000200, prints 'model = HD X406p' and 'MC: APP  init ok'."
+  },
+  "desc": [
+    "The v1.07.5468 firmware of the Opticum HD XC406p DVB-C HD cable receiver built on the dual-core ALi M3606 SoC.",
+    "Features a dual-CPU architecture (main MIPS32 application core and secondary SEE co-processor) running SDK4.0ba.4.2."
+  ]
+}

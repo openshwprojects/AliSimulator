@@ -90,7 +90,13 @@ def flash_size_for(path):
 
 def default_engine():
     """The engine a simulator gets when none is asked for: ALISIM_ENGINE from the
-    environment ('unicorn', the default, or 'cpp': the C++ core, simulator_cpp.py)."""
+    environment ('unicorn', the default, or 'cpp': the C++ core, simulator_cpp.py)
+    or --engine <name> on the command line."""
+    if "--engine" in sys.argv:
+        try:
+            return sys.argv[sys.argv.index("--engine") + 1].strip().lower()
+        except IndexError:
+            pass
     return (os.environ.get("ALISIM_ENGINE") or os.environ.get("ALI_EMU_BACKEND") or "unicorn").strip().lower() or "unicorn"
 
 
@@ -356,6 +362,8 @@ class AliMipsSimulator:
         self._delay_routines = {}            # ... -> (its code, the clock's gp offset, its get_count(), its build)
         self._delay_code_views = {}          # ... -> RAM memoryview slice of its code (when in RAM)
         self._delay_loops = {}               # its loop's get_count() call -> its entry
+        self._sflash_read_hooks = {}         # sflash_read() entry -> hook handle (_hook_sflash_read)
+        self._sflash_read_views = {}         # ... -> RAM memoryview slice of its prologue
         self.delay_calls = 0                 # delay() calls returned from at their entry
         self.delay_jumps = 0                 # time moves in their loops (longer waits)
         self.delay_skipped = 0.0             # the emulation time both moved on (seconds)
@@ -1624,6 +1632,7 @@ class AliMipsSimulator:
             self.mu.mem_unmap(base, old_low)
         self.ge = None
         self._delay_code_views.clear()
+        self._sflash_read_views.clear()
         self._vector_page = None
         self._scanned_ram_chunks.clear()
         for h in self._virgin_hooks.values():
@@ -5330,7 +5339,13 @@ class AliMipsSimulator:
         emulated call took, its interrupts included (lzma_insns_per_byte).
         Returns whether it moved."""
         now = self._vtime()
-        step = min(self.busy_pending, self.batch_timeout_us / 1e6)
+        step = self.busy_pending
+        if self._irc_frames or any(
+            (o.pending is not None if type(o).__name__ == 'SeeStart'
+             else type(o).__name__ not in ('VideoOutput', 'VideoOutputM36F'))
+            for s in self.slice_services if (o := getattr(s, '__self__', None)) is not None
+        ):
+            step = min(step, self.batch_timeout_us / 1e6)
         if max_vtime is not None:
             step = min(step, max_vtime - now)
         budget = self._budget()
@@ -5417,16 +5432,31 @@ class AliMipsSimulator:
     # at 0x81C022A8: save $a0-$a2,56,$ra,$s0-$s1,s2-s4 -> sw $a3,56($sp) -> JAL LzmaDec_InitDicAndState).
     _LZMA_DECODE_9_M16_SIG = bytes.fromhex(
         "609d1cf0f464006c22d3609f80df80dd23d32f93066a80db2393055b2c61256707672c952d9630970bd40ad4")
+    # MIPS16e LZMA SDK 9.x LzmaDecode() entry in "DVBS2---0.1.0" bootloaders
+    # (Openbox V8S / V8Se / V5S / X3, Skybox F4 / A3: save $a0-$a2,0xa0,$ra,$s0-$s4 at entry).
+    _LZMA_DECODE_9B_M16_SIG = bytes.fromhex(
+        "1cf0f4642767409f22d2609d23d3006a40dd40df2292055a0260066a2d10006a0bd20ad206042c952d96")
+    # MIPS16e lzo1x_decompress_safe(src, src_len, dst, &dst_len, wrkmem) entry in "390xx"
+    # bootloaders (Opticum AX 502 Combo, Ferguson Ariva 103, Ferguson Ariva 153 Combo).
+    _LZO1X_DECODE_M16_SIG = bytes.fromhex(
+        "0ef0b1642667a1e4409f49e63a65006a40df40a4125a1761a267ef4d8144045d")
+    # MIPS16e LZMA SDK 9.x LzmaDec_DecodeToBuf(CLzmaDec *p, Byte *dest, SizeT *destLen,
+    # const Byte *src, SizeT *srcLen, ELzmaFinishMode finishMode, ELzmaStatus *status)
+    # entry in "DVBS2---0.1.0" bootloaders (Openbox V8S / V8Se / X3, Skybox F4 / A3).
+    _LZMA_DEC_TOBUF_M16_SIG = bytes.fromhex(
+        "0ef0f764409e07d21293609b08d3006a40de129440dc089206d20e93499b6a9b6eea022a")
 
     def _find_lzma_decoders(self, data, base, views):
-        """Hook LzmaDecode() wherever data -- code at physical offset `base` --
-        holds it, at that offset in each view (segment base)."""
+        """Hook LzmaDecode() / lzo1x_decompress_safe() wherever data -- code at
+        physical offset `base` -- holds it, at that offset in each view (segment base)."""
         if not self.lzma_hle:
             return
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
         for sig, align, head_len in ((self._LZMA_DECODE_SIG, 4, 4), (self._LZMA_DECODE_O2_SIG, 4, 4),
                                      (self._LZMA_DECODE_9_SIG, 4, 4), (self._LZMA_DECODE_9B_SIG, 4, 4),
-                                     (self._LZMA_DECODE_M16_SIG, 2, 12), (self._LZMA_DECODE_9_M16_SIG, 2, 12)):
+                                     (self._LZMA_DECODE_M16_SIG, 2, 12), (self._LZMA_DECODE_9_M16_SIG, 2, 12),
+                                     (self._LZMA_DECODE_9B_M16_SIG, 2, 12), (self._LZO1X_DECODE_M16_SIG, 2, 12),
+                                     (self._LZMA_DEC_TOBUF_M16_SIG, 2, 12)):
             head = sig[:head_len]
             n = len(sig)
             i = data.find(head)
@@ -5453,33 +5483,158 @@ class AliMipsSimulator:
                 break
         return bytes(out)
 
+    @staticmethod
+    def _lzo1x_decompress_py(src, max_out):
+        """Pure-Python fallback for lzo1x_decompress_safe(src, len(src), dst, &max_out)."""
+        ip, ip_end = 0, len(src)
+        out = bytearray()
+        gt_first_literal_run = False
+        gt_match = False
+        if ip < ip_end and src[ip] > 17:
+            t = src[ip] - 17
+            ip += 1
+            if len(out) + t > max_out or ip + t + 1 > ip_end:
+                return None
+            out.extend(src[ip:ip + t])
+            ip += t
+            if t < 4:
+                t = src[ip]
+                ip += 1
+                gt_match = True
+            else:
+                gt_first_literal_run = True
+        while ip < ip_end or gt_match or gt_first_literal_run:
+            if not gt_match:
+                if not gt_first_literal_run:
+                    t = src[ip]
+                    ip += 1
+                    if t >= 16:
+                        gt_match = True
+                    else:
+                        if t == 0:
+                            while src[ip] == 0:
+                                t += 255
+                                ip += 1
+                            t += 15 + src[ip]
+                            ip += 1
+                        n = t + 3
+                        if len(out) + n > max_out or ip + n + 1 > ip_end:
+                            return None
+                        out.extend(src[ip:ip + n])
+                        ip += n
+                        gt_first_literal_run = True
+                if gt_first_literal_run:
+                    gt_first_literal_run = False
+                    t = src[ip]
+                    ip += 1
+                    if t >= 16:
+                        gt_match = True
+                    else:
+                        m_pos = len(out) - 0x801 - (t >> 2) - (src[ip] << 2)
+                        ip += 1
+                        if m_pos < 0 or len(out) + 3 > max_out:
+                            return None
+                        for _ in range(3):
+                            out.append(out[m_pos])
+                            m_pos += 1
+            while True:
+                if gt_match:
+                    gt_match = False
+                    if t >= 64:
+                        m_pos = len(out) - 1 - ((t >> 2) & 7) - (src[ip] << 3)
+                        ip += 1
+                        m_len = (t >> 5) + 1
+                    elif t >= 32:
+                        t &= 31
+                        if t == 0:
+                            while src[ip] == 0:
+                                t += 255
+                                ip += 1
+                            t += 31 + src[ip]
+                            ip += 1
+                        m_pos = len(out) - 1 - (src[ip] >> 2) - (src[ip + 1] << 6)
+                        ip += 2
+                        m_len = t + 2
+                    elif t >= 16:
+                        m_pos = len(out) - ((t & 8) << 11)
+                        t &= 7
+                        if t == 0:
+                            while src[ip] == 0:
+                                t += 255
+                                ip += 1
+                            t += 7 + src[ip]
+                            ip += 1
+                        m_pos -= (src[ip] >> 2) + (src[ip + 1] << 6)
+                        ip += 2
+                        if m_pos == len(out):
+                            return bytes(out) if ip == ip_end else None
+                        m_pos -= 0x4000
+                        m_len = t + 2
+                    else:
+                        m_pos = len(out) - 1 - (t >> 2) - (src[ip] << 2)
+                        ip += 1
+                        m_len = 2
+                    if m_pos < 0 or len(out) + m_len > max_out:
+                        return None
+                    if len(out) - m_pos >= m_len:
+                        out.extend(out[m_pos:m_pos + m_len])
+                    else:
+                        for _ in range(m_len):
+                            out.append(out[m_pos])
+                            m_pos += 1
+                t = src[ip - 2] & 3
+                if t == 0:
+                    break
+                if len(out) + t > max_out or ip + t + 1 > ip_end:
+                    return None
+                for _ in range(t):
+                    out.append(src[ip])
+                    ip += 1
+                t = src[ip]
+                ip += 1
+                gt_match = True
+        return None
+
     def _hook_lzma(self, uc, address, size, user_data):
-        """LzmaDecode()'s entry: decode the stream with the lzma module and
-        return to the caller, or leave the call to the emulated decoder."""
+        """LzmaDecode() / lzo1x_decompress_safe() entry: decode the stream in
+        Python/C++ and return to the caller, or leave the call to the emulated decoder."""
         rate_scale = 1.0
         sdk9 = False
-        if size == 4:
-            head = self._guest_bytes(address, 8)
-            if head[:4] == self._LZMA_DECODE_O2_SIG[:4]:
+        lzo1x = False
+        tobuf = False
+        if size in (2, 4):
+            head12 = self._guest_bytes(address, 12)
+            if head12[:4] == self._LZMA_DECODE_O2_SIG[:4]:
                 sig = self._LZMA_DECODE_O2_SIG
                 rate_scale = 0.3
-            elif head == self._LZMA_DECODE_9_SIG[:8]:
+            elif head12[:8] == self._LZMA_DECODE_9_SIG[:8]:
                 sig = self._LZMA_DECODE_9_SIG
                 rate_scale = 0.3
                 sdk9 = True
-            elif head == self._LZMA_DECODE_9B_SIG[:8]:
+            elif head12[:8] == self._LZMA_DECODE_9B_SIG[:8]:
                 sig = self._LZMA_DECODE_9B_SIG
                 rate_scale = 0.0
                 sdk9 = True
-            else:
-                sig = self._LZMA_DECODE_SIG
-        elif size == 2:
-            if self._guest_bytes(address, 12) == self._LZMA_DECODE_9_M16_SIG[:12]:
+            elif head12 == self._LZMA_DECODE_9_M16_SIG[:12]:
                 sig = self._LZMA_DECODE_9_M16_SIG
                 rate_scale = 0.3
                 sdk9 = True
-            else:
+            elif head12 == self._LZMA_DECODE_9B_M16_SIG[:12]:
+                sig = self._LZMA_DECODE_9B_M16_SIG
+                rate_scale = 0.3
+                sdk9 = True
+            elif head12 == self._LZO1X_DECODE_M16_SIG[:12]:
+                sig = self._LZO1X_DECODE_M16_SIG
+                rate_scale = 0.08
+                lzo1x = True
+            elif head12 == self._LZMA_DEC_TOBUF_M16_SIG[:12]:
+                sig = self._LZMA_DEC_TOBUF_M16_SIG
+                rate_scale = 0.0
+                tobuf = True
+            elif size == 2:
                 sig = self._LZMA_DECODE_M16_SIG
+            else:
+                sig = self._LZMA_DECODE_SIG
         else:
             return
         if not self.lzma_hle or self._code_hook_h is not None or self.is_stepping:
@@ -5493,6 +5648,139 @@ class AliMipsSimulator:
             if self._guest_bytes(address, len(sig)) != sig:
                 return                              # (code changed since the scan)
             sp, ra = self._reg_read(UC_MIPS_REG_SP), self._reg_read(UC_MIPS_REG_RA)
+            if tobuf:
+                p_addr, out_addr, done_ptr, in_addr = (
+                    self._reg_read(self.gpr_map[n]) for n in (4, 5, 6, 7))
+                src_len_ptr, _finish_mode, status_ptr = struct.unpack("<3I", uc.mem_read(sp + 16, 12))
+                out_size = struct.unpack("<I", uc.mem_read(done_ptr, 4))[0]
+                in_size = struct.unpack("<I", uc.mem_read(src_len_ptr, 4))[0]
+                uc.mem_read(status_ptr, 4)          # (mapped)
+                lc, lp, pb, raw_dict = struct.unpack("<4I", uc.mem_read(p_addr, 16))
+                need_flush = struct.unpack("<I", uc.mem_read(p_addr + 0x4C, 4))[0]
+                out_phys = out_addr & 0x1FFFFFFF
+                if lc > 8 or lp > 4 or pb > 4 or raw_dict > (1 << 27) \
+                        or (out_addr >> 29) not in (0, 4, 5) or out_phys + out_size > self._mapped_ram_size:
+                    return
+                decs = self.__dict__.setdefault("_lzma_tobuf_decs", {})
+                if need_flush or p_addr not in decs:
+                    dict_size = max(1 << 12, raw_dict)
+                    dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
+                        "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": dict_size}])
+                    decs[p_addr] = [dec, in_addr, out_addr, 0]
+                else:
+                    dec = decs[p_addr][0]
+                if dec.needs_input:
+                    raw_in = self._guest_bytes(in_addr, min(in_size, 1 << 26))
+                    out = dec.decompress(raw_in, max_length=out_size)
+                else:
+                    out = dec.decompress(b"", max_length=out_size)
+                finished = dec.eof or (_finish_mode == 1 and len(out) == out_size)
+                consumed = (in_size - len(dec.unused_data)) if dec.eof else (in_size if (finished or dec.needs_input) else 0)
+                status = 1 if dec.eof else (4 if finished else (3 if dec.needs_input else 2))
+                if need_flush:
+                    uc.mem_write(p_addr + 0x4C, b"\x00\x00\x00\x00")
+                decs[p_addr][3] += len(out)
+                self._ram_view[out_phys:out_phys + len(out)] = out
+                uc.mem_write(done_ptr, struct.pack("<I", len(out)))
+                uc.mem_write(src_len_ptr, struct.pack("<I", consumed))
+                uc.mem_write(status_ptr, struct.pack("<I", status))
+                self._reg_write(self.gpr_map[2], 0)
+                if not finished:
+                    if getattr(self, "engine", None) == "cpp":
+                        self._write_pc(ra)
+                    else:
+                        if self._stop_reason is None:
+                            self._stop_reason = 'lzma'
+                        self._orig_emu_stop()
+                        self._reg_write(UC_MIPS_REG_PC, ra)
+                    return
+                _, stream_in, stream_out, stream_len = decs.pop(p_addr)
+                if self._stop_reason is None:
+                    self._stop_reason = 'lzma'
+                self._orig_emu_stop()
+                self._reg_write(UC_MIPS_REG_PC, ra)
+                stream_phys = stream_out & 0x1FFFFFFF
+                in_code_range = stream_phys < self._RAM_CODE_LIMIT or any(
+                    (s & 0x1FFFFFFF) <= stream_phys < (s & 0x1FFFFFFF) + length
+                    for s, length in self.chip.code_ranges()
+                )
+                if in_code_range:
+                    self._tb_flush_needed = True
+                    self._rescan_cp0_sites([(0x80000000 | stream_phys, stream_len)])
+                    self._update_short_block_hook()
+                    chunk = self._VIRGIN_CHUNK
+                    c_lo = 0 if stream_phys <= 0x1000 else ((stream_phys + chunk - 1) & ~(chunk - 1))
+                    c_hi = (stream_phys + stream_len) & ~(chunk - 1)
+                    for c in range(c_lo, c_hi, chunk):
+                        cb = zlib.crc32(self._ram_view[c:c + chunk])
+                        self._scanned_ram_chunks[(c, chunk)] = cb
+                        self._scanned_ram_chunks[(c, chunk, False)] = cb
+                self.log(f"[LZMA] LzmaDec_DecodeToBuf at 0x{address:08X} (from 0x{ra:08X}): "
+                         f"0x{stream_in:08X} -> 0x{stream_out:08X}, {stream_len} bytes decoded in Python "
+                         f"(lc {lc}, lp {lp}, pb {pb})")
+                return
+            if lzo1x:
+                in_addr, in_size, out_addr, done_ptr = (
+                    self._reg_read(self.gpr_map[n]) for n in (4, 5, 6, 7))
+                out_size = struct.unpack("<I", uc.mem_read(done_ptr, 4))[0]
+                out_phys = out_addr & 0x1FFFFFFF
+                if in_size < 4 or (out_addr >> 29) not in (0, 4, 5) or out_phys >= self._mapped_ram_size:
+                    return
+                cap = min(out_size, self._mapped_ram_size - out_phys)
+                out_len = None
+                ret_v0 = 0
+                try:
+                    import cpp_core
+                    in_phys = in_addr & 0x1FFFFFFF
+                    if (in_addr >> 29) in (0, 4, 5) and in_phys + in_size <= self._mapped_ram_size:
+                        in_ptr = ctypes.addressof(self.ram_buffer) + in_phys
+                        raw_keep = None
+                    else:
+                        raw_keep = self._guest_bytes(in_addr, min(in_size, 1 << 26))
+                        if len(raw_keep) < in_size:
+                            return
+                        in_ptr = raw_keep
+                    c_len = ctypes.c_uint32(cap)
+                    out_ptr = ctypes.addressof(self.ram_buffer) + out_phys
+                    rc = int(cpp_core.lib().ali_lzo1x_decompress_safe(in_ptr, in_size, out_ptr, ctypes.byref(c_len)))
+                    if rc in (0, -8) and c_len.value > 0:
+                        out_len = int(c_len.value)
+                        ret_v0 = rc & 0xFFFFFFFF
+                except Exception:
+                    raw_in = self._guest_bytes(in_addr, min(in_size, 1 << 26))
+                    out = self._lzo1x_decompress_py(raw_in, cap)
+                    if out is not None:
+                        out_len = len(out)
+                        self._ram_view[out_phys:out_phys + out_len] = out
+                if out_len is None:
+                    return
+                if self._stop_reason is None:
+                    self._stop_reason = 'lzma'
+                self._orig_emu_stop()
+                uc.mem_write(done_ptr, struct.pack("<I", out_len))
+                self._reg_write(self.gpr_map[2], ret_v0)
+                self._reg_write(UC_MIPS_REG_PC, ra)
+                in_code_range = out_phys < self._RAM_CODE_LIMIT or any(
+                    (s & 0x1FFFFFFF) <= out_phys < (s & 0x1FFFFFFF) + length
+                    for s, length in self.chip.code_ranges()
+                )
+                if in_code_range:
+                    self._tb_flush_needed = True
+                    self._rescan_cp0_sites([(0x80000000 | out_phys, out_len)])
+                    self._update_short_block_hook()
+                    chunk = self._VIRGIN_CHUNK
+                    c_lo = 0 if out_phys <= 0x1000 else ((out_phys + chunk - 1) & ~(chunk - 1))
+                    c_hi = (out_phys + out_len) & ~(chunk - 1)
+                    for c in range(c_lo, c_hi, chunk):
+                        cb = zlib.crc32(self._ram_view[c:c + chunk])
+                        self._scanned_ram_chunks[(c, chunk)] = cb
+                        self._scanned_ram_chunks[(c, chunk, False)] = cb
+                if rate_scale > 0:
+                    self.busy_pending += out_len * (self.lzma_insns_per_byte * rate_scale) / self._insn_rate
+                self.__dict__.setdefault("lzo1x_decodes", []).append((address, in_addr, out_addr, out_len))
+                self.log(f"[LZO1X] lzo1x_decompress_safe at 0x{address:08X} (from 0x{ra:08X}): "
+                         f"0x{in_addr:08X} -> 0x{out_addr:08X}, {out_len} bytes decoded")
+                return
             if sdk9:
                 out_addr, done_ptr, in_addr, src_len_ptr = (
                     self._reg_read(self.gpr_map[n]) for n in (4, 5, 6, 7))
@@ -5511,7 +5799,7 @@ class AliMipsSimulator:
                     return
                 lc, d = d % 9, d // 9
                 lp, pb = d % 5, d // 5
-                dict_size = max(1 << 12, raw_dict)
+                dict_size = max(1 << 12, min(raw_dict, out_size))
             else:
                 buf_size, lc, lp = (self._reg_read(self.gpr_map[n]) for n in (5, 6, 7))
                 pb, in_addr, in_size, out_addr, out_size, done_ptr = struct.unpack("<6I", uc.mem_read(sp + 16, 24))
@@ -5522,12 +5810,23 @@ class AliMipsSimulator:
                     return
                 dict_size = max(1 << 12, out_size)
             raw_in = self._guest_bytes(in_addr, min(in_size, 1 << 26))
-            dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
-                "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": dict_size}])
-            out = dec.decompress(raw_in, max_length=out_size)
+            small_key = (lc, lp, pb, out_size, len(raw_in), zlib.crc32(raw_in)) if len(raw_in) <= 0x40000 and out_size <= 0x40000 else None
+            small_cache = self.__dict__.setdefault("_lzma_small_cache", {}) if small_key is not None else None
+            if small_cache is not None and small_key in small_cache:
+                out, consumed_len, is_eof = small_cache[small_key]
+            else:
+                dec = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[{
+                    "id": lzma.FILTER_LZMA1, "lc": lc, "lp": lp, "pb": pb, "dict_size": dict_size}])
+                out = dec.decompress(raw_in, max_length=out_size)
+                consumed_len = len(raw_in) - len(dec.unused_data)
+                is_eof = dec.eof
+                if small_cache is not None and (len(out) >= out_size or is_eof):
+                    if len(small_cache) >= 16:
+                        small_cache.clear()
+                    small_cache[small_key] = (out, consumed_len, is_eof)
         except (lzma.LZMAError, UcError, ValueError, struct.error):
             return
-        if len(out) < out_size and not dec.eof:
+        if len(out) < out_size and not is_eof:
             return                                  # (the input ran out: the decoder's error)
         if self._stop_reason is None:
             self._stop_reason = 'lzma'
@@ -5539,8 +5838,8 @@ class AliMipsSimulator:
         self._ram_view[out_phys:out_phys + len(out)] = out
         uc.mem_write(done_ptr, struct.pack("<I", len(out)))
         if sdk9:
-            uc.mem_write(src_len_ptr, struct.pack("<I", len(raw_in) - len(dec.unused_data)))
-            uc.mem_write(status_ptr, struct.pack("<I", 1 if dec.eof else 4))
+            uc.mem_write(src_len_ptr, struct.pack("<I", consumed_len))
+            uc.mem_write(status_ptr, struct.pack("<I", 1 if is_eof else 4))
         self._reg_write(self.gpr_map[2], 0)
         self._reg_write(UC_MIPS_REG_PC, ra)
         in_code_range = out_phys < self._RAM_CODE_LIMIT or any(
@@ -5674,6 +5973,486 @@ class AliMipsSimulator:
                             self.mu.hook_add(UC_HOOK_CODE, self._hook_delay, begin=a, end=a),
                             self.mu.hook_add(UC_HOOK_CODE, self._hook_delay_loop, begin=loop, end=loop))
                         self._tb_flush_needed = True
+        sig = self._SFLASH_READ_SIG
+        sig_len = len(sig)
+        pos = 0
+        while True:
+            idx = data.find(sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 4
+            if idx % 4:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + sig_len]
+                                              if (a >> 29) in (4, 5) and phys + sig_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_sflash_read, begin=a, end=a)
+                    self._tb_flush_needed = True
+        sbox_sig = self._SBOX16_SIG
+        sbox_len = len(sbox_sig)
+        pos = 0
+        while True:
+            idx = data.find(sbox_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 2
+            if idx % 2:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + sbox_len]
+                                              if (a >> 29) in (4, 5) and phys + sbox_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_sbox16, begin=a, end=a)
+                    self._tb_flush_needed = True
+        xor13_sig = self._XOR13_M16_SIG
+        xor13_len = len(xor13_sig)
+        pos = 0
+        while True:
+            idx = data.find(xor13_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 2
+            if idx % 2:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + xor13_len]
+                                              if (a >> 29) in (4, 5) and phys + xor13_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_xor13, begin=a, end=a)
+                    self._tb_flush_needed = True
+        copy16u_sig = self._COPY16U_M16_SIG
+        copy16u_len = len(copy16u_sig)
+        pos = 0
+        while True:
+            idx = data.find(copy16u_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 2
+            if idx % 2:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + copy16u_len]
+                                              if (a >> 29) in (4, 5) and phys + copy16u_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_copy16u, begin=a, end=a)
+                    self._tb_flush_needed = True
+        memset16_sig = self._MEMSET16_M16_SIG
+        memset16_len = len(memset16_sig)
+        pos = 0
+        while True:
+            idx = data.find(memset16_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 2
+            if idx % 2:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + memset16_len]
+                                              if (a >> 29) in (4, 5) and phys + memset16_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_memset16, begin=a, end=a)
+                    self._tb_flush_needed = True
+        crc32_sig = self._CRC32_SIG
+        crc32_len = len(crc32_sig)
+        pos = 0
+        while True:
+            idx = data.find(crc32_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 4
+            if idx % 4:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + crc32_len]
+                                              if (a >> 29) in (4, 5) and phys + crc32_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_crc32, begin=a, end=a)
+                    self._tb_flush_needed = True
+        bzero32_sig = self._BZERO32_SIG
+        bzero32_len = len(bzero32_sig)
+        pos = 0
+        while True:
+            idx = data.find(bzero32_sig, pos)
+            if idx < 0:
+                break
+            pos = idx + 4
+            if idx % 4:
+                continue
+            for view in views:
+                a = view + base + idx
+                phys = a & 0x1FFFFFFF
+                self._sflash_read_views[a] = (self._ram_view[phys:phys + bzero32_len]
+                                              if (a >> 29) in (4, 5) and phys + bzero32_len <= self._mapped_ram_size else None)
+                if a not in self._sflash_read_hooks:
+                    self._sflash_read_hooks[a] = self.mu.hook_add(UC_HOOK_CODE, self._hook_bzero32, begin=a, end=a)
+                    self._tb_flush_needed = True
+
+    _CRC32_SIG = bytes.fromhex(
+        "0000829026104700ff0042308010020021104900021a0700"
+        "0000428c26386200010008252a100501f5ff401401008424"
+    )
+
+    def _hook_crc32(self, uc, address, size, user_data):
+        """MIPS32 12-instruction reflected CRC32 table lookup loop (`0x8006115C..0x80061188`,
+        ~3M instructions per boot)."""
+        if size != 4 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 48 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._CRC32_SIG:
+                return
+        elif self._guest_bytes(address, 48) != self._CRC32_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            buf_addr, i_end, crc, i_cur, tab_base = u32[4], u32[5], u32[7], u32[8], u32[9]
+        else:
+            buf_addr, i_end, crc, i_cur, tab_base = (
+                self._reg_read(self.gpr_map[n]) for n in (4, 5, 7, 8, 9))
+        s_cur = i_cur - 0x100000000 if i_cur & 0x80000000 else i_cur
+        s_end = i_end - 0x100000000 if i_end & 0x80000000 else i_end
+        if s_cur >= s_end:
+            return
+        ln = s_end - s_cur
+        pb = buf_addr & 0x1FFFFFFF
+        pt = tab_base & 0x1FFFFFFF
+        if ((buf_addr >> 29) not in (4, 5) or (tab_base >> 29) not in (4, 5) or (tab_base & 3)
+                or pb + ln > self._mapped_ram_size or pt + 1024 > self._mapped_ram_size):
+            return
+        if int.from_bytes(self._ram_view[pt:pt + 8], 'little') != 0x7707309600000000:
+            return
+        init = (~crc) & 0xFFFFFFFF
+        if ln > 1:
+            prev_crc = (~zlib.crc32(self._ram_view[pb:pb + ln - 1], init)) & 0xFFFFFFFF
+        else:
+            prev_crc = crc
+        last_shifted = prev_crc >> 8
+        final_crc = (~zlib.crc32(self._ram_view[pb:pb + ln], init)) & 0xFFFFFFFF
+        new_a0 = (buf_addr + ln) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[2], u32[3], u32[4], u32[7], u32[8] = 0, last_shifted, new_a0, final_crc, i_end
+        else:
+            self._reg_write(self.gpr_map[2], 0)
+            self._reg_write(self.gpr_map[3], last_shifted)
+            self._reg_write(self.gpr_map[4], new_a0)
+            self._reg_write(self.gpr_map[7], final_crc)
+            self._reg_write(self.gpr_map[8], i_end)
+        self._write_pc(address + 48)
+
+    _BZERO32_SIG = bytes.fromhex(
+        "000080ac040080ac080080ac0c0080ac100084242b088500f9ff201400000000"
+    )
+
+    def _hook_bzero32(self, uc, address, size, user_data):
+        """MIPS32 CRT0 16-byte .bss zeroing loop (`sw $zero, 0..12($a0); addiu $a0, 16; sltu $at, $a0, $a1; bnez`)."""
+        if size != 4 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 32 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._BZERO32_SIG:
+                return
+        elif self._guest_bytes(address, 32) != self._BZERO32_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            a0_cur, a1_end = u32[4], u32[5]
+        else:
+            a0_cur = self._reg_read(UC_MIPS_REG_A0)
+            a1_end = self._reg_read(UC_MIPS_REG_A1)
+        if (a0_cur & 3) or a0_cur >= a1_end:
+            return
+        k = (a1_end - a0_cur + 15) // 16
+        total_bytes = 16 * k
+        pa = a0_cur & 0x1FFFFFFF
+        if (a0_cur >> 29) not in (4, 5) or pa + total_bytes > self._mapped_ram_size:
+            return
+        self._ram_view[pa:pa + total_bytes] = b"\x00" * total_bytes
+        new_a0 = (a0_cur + total_bytes) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[1], u32[4] = 0, new_a0
+        else:
+            self._reg_write(self.gpr_map[1], 0)
+            self._reg_write(self.gpr_map[4], new_a0)
+        self._write_pc(address + 32)
+
+    _MEMSET16_M16_SIG = bytes.fromhex("69e7a0c26143c3ebfb61")
+
+    def _hook_memset16(self, uc, address, size, user_data):
+        """MIPS16 5-instruction memset byte-fill loop (`dst[i] = val` for `i = v1..a2-1`,
+        850K+ instructions per boot across DVBS2---0.1.0 bootloaders)."""
+        if size != 2 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 10 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._MEMSET16_M16_SIG:
+                return
+        elif self._guest_bytes(address, 10) != self._MEMSET16_M16_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            i_cur, val, i_end, dst_base = u32[3], u32[5] & 0xFF, u32[6], u32[7]
+        else:
+            i_cur = self._reg_read(UC_MIPS_REG_V1)
+            val = self._reg_read(UC_MIPS_REG_A1) & 0xFF
+            i_end = self._reg_read(UC_MIPS_REG_A2)
+            dst_base = self._reg_read(UC_MIPS_REG_A3)
+        if i_cur >= i_end:
+            return
+        ln = i_end - i_cur
+        da = (dst_base + i_cur) & 0xFFFFFFFF
+        pd = da & 0x1FFFFFFF
+        if (da >> 29) not in (4, 5) or pd + ln > self._mapped_ram_size:
+            return
+        self._ram_view[pd:pd + ln] = bytes([val]) * ln
+        last_v0 = (dst_base + i_end - 1) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[2], u32[3], u32[24] = last_v0, i_end, 0
+        else:
+            self._reg_write(self.gpr_map[2], last_v0)
+            self._reg_write(self.gpr_map[3], i_end)
+            self._reg_write(self.gpr_map[24], 0)
+        self._write_pc((address + 10) | 1)
+
+    _COPY16U_M16_SIG = bytes.fromhex("a9e1809a0a92ade280c3823241c3423242c300f6823243c3a445c3edf161")
+
+    def _hook_copy16u(self, uc, address, size, user_data):
+        """MIPS16 unaligned 4-byte flash-to-RAM copy loop (`0x81E8BC32..0x81E8BC4E`,
+        9M instructions per boot across DVBS2---0.1.0 bootloaders)."""
+        if size != 2 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if (self._spi_dump_enabled or self._rom_dirty or self.flash_device is not None
+                or self._flash_read_hooks or (self._spi_stream is not None and self._spi_stream.active)):
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 30 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._COPY16U_M16_SIG:
+                return
+        elif self._guest_bytes(address, 30) != self._COPY16U_M16_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            i_cur, i_end, src_base, sp = u32[5], u32[6], u32[17], u32[29]
+        else:
+            i_cur = self._reg_read(UC_MIPS_REG_A1)
+            i_end = self._reg_read(UC_MIPS_REG_A2)
+            src_base = self._reg_read(UC_MIPS_REG_S1)
+            sp = self._reg_read(UC_MIPS_REG_SP)
+        if (src_base & 3) or (i_cur & 3) or (i_end & 3) or i_cur >= i_end:
+            return
+        sp_a = (sp + 0x28) & 0xFFFFFFFF
+        psp = sp_a & 0x1FFFFFFF
+        if (sp_a >> 29) not in (4, 5) or (psp & 3) or psp + 4 > self._mapped_ram_size:
+            return
+        dst_base = int.from_bytes(self._ram_view[psp:psp + 4], 'little')
+        ln = i_end - i_cur
+        sa = (src_base + i_cur) & 0xFFFFFFFF
+        da = (dst_base + i_cur) & 0xFFFFFFFF
+        pd = da & 0x1FFFFFFF
+        fl = (sa + 0x50400000) & 0xFFFFFFFF
+        if (da >> 29) not in (4, 5) or pd + ln > self._mapped_ram_size or fl + ln > self.rom_size:
+            return
+        if pd < psp + 4 and psp < pd + ln:
+            return
+        self._ram_view[pd:pd + ln] = self._rom_view[fl:fl + ln]
+        last_w = int.from_bytes(self._rom_view[fl + ln - 4:fl + ln], 'little')
+        last_da = (da + ln - 4) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[2], u32[3], u32[4] = last_w >> 24, last_da, last_w
+            u32[5], u32[24] = i_end, 0
+        else:
+            self._reg_write(self.gpr_map[2], last_w >> 24)
+            self._reg_write(self.gpr_map[3], last_da)
+            self._reg_write(self.gpr_map[4], last_w)
+            self._reg_write(self.gpr_map[5], i_end)
+            self._reg_write(self.gpr_map[24], 0)
+        self._write_pc((address + 30) | 1)
+
+    _XOR13_M16_SIG = bytes.fromhex(
+        "04f0b16405673e652767006f17250d500260d06701100d6e006dc2ed0d60"
+        "5967f1e20293e9e3ade140a260a36eea40c4e147a145c2edf361c3e0e9283164a0e8"
+    )
+
+    def _hook_xor13(self, uc, address, size, user_data):
+        """MIPS16 13-byte rolling XOR unscramble function (`dst[i] = src[i] ^ key[i % 13]`,
+        64 KB per call / 46M instructions per boot in DVBS2---0.1.0 bootloaders)."""
+        if size != 4 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 64 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._XOR13_M16_SIG:
+                return
+        elif self._guest_bytes(address, 64) != self._XOR13_M16_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            src, ln, dst, key_a, ra = u32[4], u32[5], u32[6], u32[7], u32[31]
+        else:
+            src = self._reg_read(UC_MIPS_REG_A0)
+            ln = self._reg_read(UC_MIPS_REG_A1)
+            dst = self._reg_read(UC_MIPS_REG_A2)
+            key_a = self._reg_read(UC_MIPS_REG_A3)
+            ra = self._reg_read(UC_MIPS_REG_RA)
+        if ln == 0:
+            if u32 is not None:
+                u32[25], u32[7] = dst, 0
+            else:
+                self._reg_write(self.gpr_map[25], dst)
+                self._reg_write(self.gpr_map[7], 0)
+            self._write_pc(ra)
+            return
+        ps, pd, pk = src & 0x1FFFFFFF, dst & 0x1FFFFFFF, key_a & 0x1FFFFFFF
+        if ((src >> 29) not in (4, 5) or (dst >> 29) not in (4, 5) or (key_a >> 29) not in (4, 5)
+                or ps + ln > self._mapped_ram_size or pd + ln > self._mapped_ram_size
+                or pk + 13 > self._mapped_ram_size):
+            return
+        k13 = bytes(self._ram_view[pk:pk + 13])
+        rep = (k13 * ((ln // 13) + 2))[:ln]
+        s_bytes = bytes(self._ram_view[ps:ps + ln])
+        out = (int.from_bytes(s_bytes, 'little') ^ int.from_bytes(rep, 'little')).to_bytes(ln, 'little')
+        self._ram_view[pd:pd + ln] = out
+        rem = ((ln - 1) % 13) + 1
+        last_v0 = out[-1]
+        last_v1 = k13[rem - 1]
+        last_a0 = (dst + ln - 1) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[2], u32[3], u32[4] = last_v0, last_v1, last_a0
+            u32[5], u32[6], u32[7] = rem, rem, ln
+            u32[24], u32[25] = 0, dst
+        else:
+            self._reg_write(self.gpr_map[2], last_v0)
+            self._reg_write(self.gpr_map[3], last_v1)
+            self._reg_write(self.gpr_map[4], last_a0)
+            self._reg_write(self.gpr_map[5], rem)
+            self._reg_write(self.gpr_map[6], rem)
+            self._reg_write(self.gpr_map[7], ln)
+            self._reg_write(self.gpr_map[24], 0)
+            self._reg_write(self.gpr_map[25], dst)
+        self._write_pc(ra)
+
+    _SBOX16_SIG = bytes.fromhex("8de540a3c9e240a240c3814403ecf861")
+
+    def _hook_sbox16(self, uc, address, size, user_data):
+        """MIPS16 S-box byte-substitution loop (`buf[i] = sbox[buf[i]]`, 1.6 MB /
+        12.8M instructions in SMT---1.0.0 bootloaders): translate the slice in
+        place with `bytes.translate`."""
+        if size != 2 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 16 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._SBOX16_SIG:
+                return
+        elif self._guest_bytes(address, 16) != self._SBOX16_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            i_cur, buf_base, sbox_base, i_lim = u32[4], u32[5], u32[6], u32[16]
+        else:
+            i_cur = self._reg_read(UC_MIPS_REG_A0)
+            buf_base = self._reg_read(UC_MIPS_REG_A1)
+            sbox_base = self._reg_read(UC_MIPS_REG_A2)
+            i_lim = self._reg_read(UC_MIPS_REG_S0)
+        if i_cur >= i_lim:
+            return
+        ln = i_lim - i_cur
+        buf_a = (buf_base + i_cur) & 0xFFFFFFFF
+        phys_buf = buf_a & 0x1FFFFFFF
+        phys_sbox = sbox_base & 0x1FFFFFFF
+        if ((buf_a >> 29) not in (4, 5) or (sbox_base >> 29) not in (4, 5)
+                or phys_buf + ln > self._mapped_ram_size or phys_sbox + 256 > self._mapped_ram_size):
+            return
+        tbl = bytes(self._ram_view[phys_sbox:phys_sbox + 256])
+        out = bytes(self._ram_view[phys_buf:phys_buf + ln]).translate(tbl)
+        self._ram_view[phys_buf:phys_buf + ln] = out
+        last_v0 = out[-1]
+        last_v1 = (buf_base + i_lim - 1) & 0xFFFFFFFF
+        if u32 is not None:
+            u32[2], u32[3], u32[4] = last_v0, last_v1, i_lim
+        else:
+            self._reg_write(self.gpr_map[2], last_v0)
+            self._reg_write(self.gpr_map[3], last_v1)
+            self._reg_write(self.gpr_map[4], i_lim)
+        self._write_pc((address + 16) | 1)
+
+    _SFLASH_READ_SIG = bytes.fromhex(
+        "d0ffbd272c00bfaf2800b6af2400b5af2000b4af1c00b3af1800b2af1400b1af"
+        "1000b0af21a0800021a8c000c0af113c4050023c2190a200d400c01021100000")
+
+    def _hook_sflash_read(self, uc, address, size, user_data):
+        """sflash_read(buffer, flash_addr, len) in flash_raw_sl_c.c: copy `len`
+        bytes from the SPI flash image at `flash_addr - 0xAFC00000` into RAM at
+        `buffer` and return 0 (SUCCESS), skipping the per-read mutex lock/unlock
+        and 28 SPI controller MMIO accesses (52,600+ calls on Skybox S12)."""
+        if size != 4 or not self.delay_hle or self._code_hook_h is not None or self.is_stepping:
+            return
+        if (self._spi_dump_enabled or self._rom_dirty or self.flash_device is not None
+                or self._flash_read_hooks or (self._spi_stream is not None and self._spi_stream.active)):
+            return
+        if self.breakpoints or self._stop_instr is not None:
+            stops = set(self.breakpoints) | {self._stop_instr}
+            if any(s is not None and address <= s < address + 0x3B4 for s in stops):
+                return
+        code_view = self._sflash_read_views.get(address)
+        if code_view is not None:
+            if code_view != self._SFLASH_READ_SIG:
+                return
+        elif self._guest_bytes(address, len(self._SFLASH_READ_SIG)) != self._SFLASH_READ_SIG:
+            return
+        u32 = self._env_u32
+        if u32 is not None:
+            buf, a1, ln, ra = u32[4], u32[5], u32[6], u32[31]
+        else:
+            buf = self._reg_read(UC_MIPS_REG_A0)
+            a1 = self._reg_read(UC_MIPS_REG_A1)
+            ln = self._reg_read(UC_MIPS_REG_A2)
+            ra = self._reg_read(UC_MIPS_REG_RA)
+        fl = (a1 + 0x50400000) & 0xFFFFFFFF
+        phys = buf & 0x1FFFFFFF
+        if (buf >> 29) not in (4, 5) or phys + ln > self._mapped_ram_size or fl + ln > self.rom_size:
+            return
+        if ln:
+            self._ram_view[phys:phys + ln] = self._rom_view[fl:fl + ln]
+        if u32 is not None:
+            u32[2] = 0
+        else:
+            self._reg_write(self.gpr_map[2], 0)
+        self._write_pc(ra)
 
     def _is_get_count(self, address):
         """Whether a get_count() is at address: mfc0 v0, Count, NOPs / EHBs,

@@ -189,6 +189,7 @@ def lib():
         "ali_gma_diff_rgb": (u32, [vp, vp, u32, ctypes.POINTER(u32)]),
         "ali_gma_blend": (None, [vp, u32, u32, vp, u32, u32, ctypes.c_int32, ctypes.c_int32]),
         "ali_gma_scale_u8": (None, [vp, u32, u32, u32, vp, vp, u32, vp, u32]),
+        "ali_lzo1x_decompress_safe": (i32, [vp, u32, vp, ctypes.POINTER(u32)]),
     }
     for name, (res, args) in sig.items():
         f = getattr(L, name)

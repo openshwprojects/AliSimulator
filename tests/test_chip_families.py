@@ -130,6 +130,16 @@ EXPECTED = [
     ("OPENBOX-S16_Eu1129.abs", "M3602"),                          # Openbox S16 EU: 4 MB SPI dual-CPU S3606H / M3606C (chip ID 0x3603)
     ("DumpFlash Opticum4000a(Globo7xxx)4,5w.bin", "M3329"),       # Opticum 4000A / Globo 7010A: 2 MB parallel NOR M3329 (STO_FLASH_0)
     ("flash ECHOLINK EL700FTA mx29lv160.bin", "M3329"),           # Echolink EL-700 FTA: 2 MB parallel NOR M3329C ("SMT01---0.9.6", PAN_SMTM51_0)
+    ("AX502Combo_HSJU_V1.28B22_PVR+mcas+sharing_170410..abs", "M3503"),  # Opticum AX 502 Combo: 8 MB SPI 128 MB DDR3 M3516A / M3503 ("HSJU" bootloader, LZO1X)
+    ("A103_20141204_V1.27B8.abs", "M3503"),                       # Ferguson Ariva 103: 8 MB SPI 128 MB DDR3 M3511 / M3503 ("HSM9" bootloader, LZO1X + AT88SC)
+    ("A153Combo_20150320_V1.28B3.abs", "M3503"),                  # Ferguson Ariva 153 Combo: 8 MB SPI 128 MB DDR3 M3516 / M3503 ("HSJN" bootloader, LZO1X + AT88SC)
+    ("OPENBOX_V8S_3511HD_CMT_150519039D.abs", "M3503"),           # Openbox V8S: 8 MB SPI 128 MB DDR3 M3511 / M3503 ("DVBS2---0.1.0", 13-byte XOR + LZMA SDK 9.x)
+    ("OPENBOX_V8SE_CMT_14101606B3.abs", "M3503"),                 # Openbox V8Se: 8 MB SPI 128 MB DDR3 M3511 / M3503 ("DVBS2---0.1.0", 13-byte XOR + LZMA SDK 9.x)
+    ("AMIKO_HD8250_2.4.58_emu.abs", "M3503"),                     # Amiko HD8250+: 8 MB SPI 256 MB DDR3 M3516A / M3503 ("M3516A 1.1.7", SEE at 0xAE000200)
+    ("skybox s12.abs", "M3602"),                                  # Skybox S12: 4 MB SPI M3602 ("SMT---1.0.0", 256-byte S-box + LZMA SDK 9.x)
+    ("SKYBOX F4_GPRS_3601HD_1210310486.abs", "M3602"),            # Skybox F4 GPRS: 4 MB SPI M3601E / M3602 ("DVBS2---0.1.0", 13-byte XOR + LZMA SDK 9.x)
+    ("SKYBOX_A3_A4_M5_3606HD_CMT_14012005F1.abs", "M3602"),       # Skybox A3 / A4 / M5: 4 MB SPI M3606 / M3602 ("DVBS2---0.1.0", 13-byte XOR + LZMA SDK 9.x)
+    ("X3_OPENBOX_USBWifi_Europe_120726.abs", "M3602"),            # Openbox X3 / Q3: 4 MB SPI M3601E / M3602 ("DVBS2---0.1.0", 13-byte XOR + LZMA SDK 9.x)
 ]
 
 from concurrent.futures import ThreadPoolExecutor

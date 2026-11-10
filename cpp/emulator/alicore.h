@@ -838,7 +838,10 @@ class Core {
     alignas(8) uint8_t raw[BLOCK_MAX * 4];
     Uop ops[BLOCK_MAX];
   };
-  enum { FF_NE = 1, FF_FLAG = 2 };
+  enum {
+    FF_NE = 1, FF_FLAG = 2, FF_CRC16 = 3, FF_COPY16 = 4, FF_XOR16 = 5,
+    FF_SBOX16 = 6, FF_COPY16U = 7, FF_CRC32 = 8, FF_MEMSET16 = 9, FF_BZERO32 = 10
+  };
   uint64_t ff_skipped = 0;         // instructions such loops took, done at once
   uint64_t ff_passes(const Block *b) const;
   bool blocks_on = true;

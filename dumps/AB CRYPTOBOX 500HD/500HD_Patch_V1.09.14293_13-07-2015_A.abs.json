@@ -1,0 +1,54 @@
+{
+  "file": "500HD_Patch_V1.09.14293_13-07-2015_A.abs",
+  "device": {
+    "brand": "AB CryptoBox",
+    "model": "500HD",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "500HD",
+    "soc": "ALi M3606 (M3602 family with dual-CPU MIPS32 + SEE co-processor)",
+    "family": "M3602 (chips/m3602.py: chip ID 0x3603)",
+    "chipFamily": "M3602",
+    "chipId": "0x3603",
+    "demod": "internal ALi S3501 DVB-S2 demodulator",
+    "tuner": "av2011@0x60",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "PT6315",
+      "clk": 45,
+      "dio": 44,
+      "stb": 43
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.09.14293 (bootloader \"DVBS2---0.2.0\"; encrypted LZMA chunk; SDK4.0ba.4.2)",
+    "date": "2015-07-13",
+    "size": 4194304,
+    "sha1": "397e9c13d44f7f916b93104d44fc603294109ef9",
+    "layout": "bootloader 0x000000 (DVBS2---0.2.0), encrypted maincode container 0x020000 (LZMA maincode + SEE) -- 4 MB flash"
+  },
+  "source": {
+    "url": "http://satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2015-07-13",
+    "login": false,
+    "note": "AB CryptoBox 500HD patch firmware."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as M3602 with chip ID 0x3603: decrypts and unpacks maincode and SEE, prints 'model = 2:500HD', 'Soft Version = 14293' and 'MC: APP  init ok'."
+  },
+  "desc": [
+    "The V1.09.14293 patch firmware for the AB CryptoBox 500HD satellite receiver powered by the ALi M3606 SoC.",
+    "Uses the standard ALi dual-core architecture with front panel driven via GPIO 43/44/45."
+  ]
+}

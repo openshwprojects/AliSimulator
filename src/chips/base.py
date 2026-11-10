@@ -56,7 +56,11 @@ def uses_256m_ddr(image):
         res = False
     else:
         mc = maincode(image)
-        res = count_lui(mc, 0xBFC0) > count_lui(mc, 0xAFC0)
+        if mc:
+            res = count_lui(mc, 0xBFC0) > count_lui(mc, 0xAFC0)
+        else:
+            bl = bytes(image[:0x30000])
+            res = b"\x00\x02\x00\xae" in bl or b"\x00\x02\x00\x8e" in bl
     if len(_256m_cache) >= 32:
         _256m_cache.pop(next(iter(_256m_cache)))
     _256m_cache[key] = res

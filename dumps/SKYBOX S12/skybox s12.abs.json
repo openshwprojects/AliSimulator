@@ -1,0 +1,53 @@
+{
+  "file": "skybox s12.abs",
+  "device": {
+    "brand": "Skybox",
+    "model": "S12 HD PVR",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "SMT",
+    "soc": "ALi M3602 / M3601E (the bootloader chunk's version \"SMT---1.0.0\"; the main code is \"Application version 1.0.0@M3606_DVBS2_SABBAT_20110323\" built on Libcore 5.2.0@SDK4.0aa.5.2_20110615)",
+    "family": "M3602 (chips/m3602.py: single-CPU M36xx with chip ID 0x3602, GeM3602 2D graphics engine at 0xB800A000, and S3501 DVB-S2 demodulator on SCB0 at 0x33)",
+    "demod": "ALi M3501 / S3501 (NIM_S3501_0 on SCB0 0x33)",
+    "tuner": "Sharp BS2S7HZ6306A (I2C 0x60)",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "PT6964 / TM1628-compatible (PAN_PT_0)",
+      "clk": 171,
+      "dio": 62,
+      "stb": 170
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "SMT 1.0.0 (bootloader \"SMT---1.0.0\" 2009-08-27; maincode \"SMT 1.0.0\"; Application 1.0.0@M3606_DVBS2_SABBAT_20110323)",
+    "date": "2011-06-23",
+    "size": 4194304,
+    "sha1": "d6ddef6a31c141fb2926e707f4a1c5721514a195",
+    "layout": "bootloader 0x000000 (SMT---1.0.0, 2009-08-27), maincode 0x010000 (SMT 1.0.0, LZMA 0x1877D3 bytes -> 5.91 MB), Radioback 0x1E0000 (1.0.0), Bootback 0x1F0000 (1.0.0), upgcode 0x200000 (upg 1.0.0), defaultdb 0x210000 (1.1.0, 2011-2-8), userdb 0x22FF80 (1.0.0, 2010-10-1, 0x0E0070 bytes) -- the whole 4 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=skybox%20s12.rar&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S9-S10-S11-S12",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2011-06-23",
+    "login": false,
+    "note": "Unpacked from skybox s12.rar in the mirror's Openbox/Openbox S9-S10-S11-S12 folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "boot",
+      "Strt",
+      "OOO7"
+    ],
+    "note": "Boots as the M3602 family with chip ID 0x3602 (run_dump_skybox_s12_app_starts.py): the \"SMT---1.0.0\" bootloader prints \"APP  init ok\", unpacks the 5.91 MB maincode to 0x80000200 and starts the single-CPU application.  The application drives the 3-wire PT6964 / TM1628 front panel (PAN_PT_0) on CLK = GPIO 171, DIO = GPIO 62, STB = GPIO 170 (\"boot\" -> \"Strt\" -> \"OOO7\"), configures the ALi S3501 DVB-S2 demodulator at I2C 0x33 and tuner at I2C 0x60 on SCB0, and renders its 1280x720 OSD through GeM3602 (123 GE commands, 80 colours)."
+  },
+  "desc": [
+    "Firmware update for the Skybox S12 HD PVR compact DVB-S2 satellite receiver (bootloader \"SMT---1.0.0\", Application 1.0.0@M3606_DVBS2_SABBAT_20110323, Libcore 5.2.0@SDK4.0aa.5.2_20110615), built on the single-CPU ALi M3602 platform.",
+    "Drives its 4-digit 7-segment LED display through a 3-wire PT6964 / TM1628 controller (PAN_PT_0) split across GPIO bank 1 (DIO = GPIO 62) and the legacy third GPIO bank at 0xB80000E8 (STB = GPIO 170, CLK = GPIO 171), displaying \"boot\", \"Strt\", and the active channel \"OOO7\"."
+  ]
+}

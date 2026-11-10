@@ -283,7 +283,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 try:
                     code = bytes(self.mu.mem_read(pc, 4))
                     if m16:
-                        mn, ops = MIPS16Decoder.decode(code, pc)
+                        sz16 = 4 if len(code) >= 2 and (code[1] & 0xF8) in (0xF0, 0x18) else 2
+                        mn, ops = MIPS16Decoder.decode(code[:sz16], pc)
                         text = f"{mn} {ops}"
                     else:
                         i = next(self.md.disasm(code, pc), None) if self.md else None
@@ -1777,14 +1778,14 @@ class CppAliMipsSimulator(AliMipsSimulator):
                         break
                     if (cur_pc & ~1) == 0:
                         break
-                self._cpp_sync()
-                full = self._exact_hook is not None
                 if self._irc_frames:
                     self._irc_service()
                 for service in self.slice_services:
                     service()
-                if self.busy_pending > 1e-9 and not full and self._skip_busy(max_vtime):
+                if self.busy_pending > 1e-9 and not self._want_full_hook() and self._skip_busy(max_vtime):
                     continue
+                self._cpp_sync()
+                full = self._exact_hook is not None
                 if not full and self.poll_skip and self._skip_poll(cur_pc, max_vtime):
                     continue
                 budget = self._budget()

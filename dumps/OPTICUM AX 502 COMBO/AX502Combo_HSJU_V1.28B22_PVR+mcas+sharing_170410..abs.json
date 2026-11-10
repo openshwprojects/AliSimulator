@@ -1,0 +1,51 @@
+{
+  "file": "AX502Combo_HSJU_V1.28B22_PVR+mcas+sharing_170410..abs",
+  "device": {
+    "brand": "Opticum",
+    "model": "AX 502 Combo",
+    "type": "DVB-S2 / DVB-T2 / DVB-C HD combo receiver",
+    "board": "HSJU",
+    "soc": "ALi M3516 (the bootloader chunk's version \"39015-01112\" with board tag \"HSJU\"; the main code is the SDK4.0ba.4 \"M3516\" dual-CPU platform build)",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the revision-B chip ID 0x35030001 and the XIP bootloader's cache-as-RAM stack)",
+    "demod": "internal DVB-S2 (NIM_S3503) + external DVB-T2/C combo demodulator",
+    "tuner": "MXL603 / AV2012",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.28B22 PVR+mcas+sharing (bootloader \"HSJU\" 39015-01112; maincode chunk 0x01FE0101 \"V1.28B22*\"; SDK4.0ba.4_20130918)",
+    "date": "2017-04-10",
+    "size": 8388608,
+    "sha1": "2f696354cd869649b0840a6a8b514b4e9190956c",
+    "layout": "bootloader 0x000000 (\"HSJU\" 39015-01112), MemCfg 0x02F000 (00000001), maincode 0x030000 (V1.28B22*, LZO1X 0x481734 bytes -> 11.41 MB), seecode 0x4B8000 (V1.28B22, LZO1X 0x15F306 bytes -> 3.31 MB), radioback 0x628000 (1.0.0), seeback 0x647F80 (1.0.0), bootlogo 0x658000 (\"AX502Combo\" 1.0.0), data 0x677F80 (1.0.0), cipluskey 0x6C8000 (1.0.0), HDCPKey 0x6D7E00 (1.0.0), defaultdb 0x6D8000 (1.0.0), userdb 0x6FFF80 (1.0.0, 0x100070 bytes) -- the whole 8 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AX502Combo_HSJU_V1.28B22_PVRmcassharing_170410.rar&directory=Firmware%20for%20to%20all%20receivers/Opticum",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2017-04-10",
+    "login": false,
+    "note": "Unpacked from AX502Combo_HSJU_V1.28B22_PVRmcassharing_170410.rar in the mirror's Opticum folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as the M3503 family with revision-B chip ID 0x35030001 (run_dump_ax502_combo_app_starts.py): the \"HSJU\" XIP bootloader runs from the flash window with its stack in the cache-as-RAM range (0x8FFF8000), unpacks its own MIPS16e payload into RAM, parks the SEE at 0xA1018804, unpacks the LZO1X-compressed seecode (5.34 MB) to 0x86000200 and maincode (8.15 MB) to 0x80000200 (with user68 = ffffffffffffffff in the maincode header, so no I2C security IC is queried), and jumps to 0x80000200.  The application moves its exception vectors to EBase 0x80002000, starts the SEE's program at 0x86000200 on the second core (EBase 0x86002001), prints \"i2c_gpio_set id:1 sda:8 scl:7\", \"i2c_gpio_set id:0 sda:134 scl:135\", \"pan_FD650K_display\", \"MC: APP  init ok\" and \"<< SDK4.0ba.4_20130918(Revision: 5511) >>\", exchanges over 900 remote calls with the SEE core, and executes GE commands."
+  },
+  "desc": [
+    "The V1.28B22 PVR+mcas+sharing firmware update of the Opticum AX 502 Combo DVB-S2/T2/C receiver (board \"HSJU\", bootloader 39015-01112, 2017-04-10), built on the ALi M3516 dual-CPU platform.",
+    "Both maincode and seecode are compressed with LZO1X rather than LZMA; unlike the Ferguson Ariva 103 / 153 Combo builds on the same \"390xx\" bootloader family, the maincode chunk header's 8-byte key field at +0x68 is unprogrammed (ffffffffffffffff), so the bootloader skips the I2C 0x62 security-IC decryption loop and boots directly into the application."
+  ]
+}

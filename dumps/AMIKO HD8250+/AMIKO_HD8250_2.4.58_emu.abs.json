@@ -1,0 +1,44 @@
+{
+  "file": "AMIKO_HD8250_2.4.58_emu.abs",
+  "device": {
+    "brand": "Amiko",
+    "model": "HD8250+",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "M3516A",
+    "soc": "ALi M3516A (the bootloader chunk's version \"M3516A 1.2.1\", 2012-12-20; seecode \"M3606 SEE\", 2019-6-26)",
+    "family": "M3503 (chips/m3503.py: the M36xx family with the revision-B chip ID 0x35030001, 256 MB DDR mapping via 0xB8000220 bit 24, and the XIP bootloader's cache-as-RAM stack)",
+    "demod": "internal DVB-S2 (NIM_S3503 on SCB0 0x60..0x63)",
+    "tuner": "AV2012 / Sharp",
+    "flash": "16 MB SPI",
+    "panel": null,
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "2.4.58 emu (bootloader \"M3516A 1.2.1\"; maincode chunk 0x01FE0100 \"14000A882458\"; seecode \"M3606 SEE\" 2019-06-26)",
+    "date": "2019-06-26",
+    "size": 16777216,
+    "sha1": "66f8d3617e4e235b2d325349efee4ab2136210e1",
+    "layout": "bootloader 0x000000 (M3516A 1.2.1, 2012-12-20), MemCfg 0x02F000 (00000001, 2019-6-26), maincode(AV) 0x030000 (14000A882458, LZMA 0x349539 bytes -> 12.57 MB), seecode 0x430000 (M3606 SEE, LZMA 0x0F33DE bytes -> 3.25 MB), default_lang 0x56FD00 (1.0.0), cipluskey 0x56FF80 (1.1.0), countryband 0x580000 (1.0.0), img_webserver 0x588000 (1.0.0, 1 MB), html_webserver 0x688000 (1.0.0, 1 MB), blank_file 0x788000 (1.0.0, 5 MB), logo_user 0xC88000 (1.0.0), logo_menu 0xC98000 (1.0.0), logo_radio 0xCB8000 (1.0.0), logo_boot 0xCD8000 (1.0.0), patch 0xCFFF80 (1.0.0), defaultdb(PRC) 0xD20000 (1.0.1), userdb(64+64) 0xF3FF80 (1.0.1, 0x0C0070 bytes) -- the whole 16 MB flash"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=AMIKO_HD8250_2.4.58_emu.zip&directory=Firmware%20for%20to%20all%20receivers/Amiko/Amiko%20HD8250",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2019-06-26",
+    "login": false,
+    "note": "Unpacked from AMIKO_HD8250_2.4.58_emu.zip in the mirror's Amiko/Amiko HD8250 folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": null,
+    "note": "Boots as the M3503 family with revision-B chip ID 0x35030001 (run_dump_hd8250_plus_app_starts.py): the \"M3516A 1.2.1\" XIP bootloader runs from the flash window with its stack in the cache-as-RAM range (0x8FFF8000), jumps to its RAM payload at 0x8141BB94, verifies the chunk CRCs (\"MG_Setup_CRC_Table finish.\", \"check_program finish.\"), unpacks the LZMA-compressed seecode (3.25 MB) to 0x81889000, sets 0xB8000220 bit 24 to map 240..256 MB DDR at 0x0F000000..0x0FFFFFFF, parks the SEE boot stub at 0xA14187DC, unpacks the 12.57 MB maincode to 0x80000200 (\"success!\") and starts the application.  The application moves its exception vectors to EBase 0x80002000, starts the SEE's program at 0xAE000200 on the second core (EBase 0x8E002001), exchanges over 1,500 remote calls with the SEE core, initialises its hs_config database and DMX, unpacks OSD assets via LzmaDecode at 0x80316254, and executes GE drawing commands."
+  },
+  "desc": [
+    "The 2.4.58 emu firmware update of the Amiko HD8250+ DVB-S2 HD CI+ satellite receiver (bootloader \"M3516A 1.2.1\", build date 2019-06-26), a 16 MB SPI flash image for the ALi M3516A dual-CPU platform.",
+    "Includes embedded web-server partitions (img_webserver and html_webserver), CI+ key partition, and a 12.57 MB unpacked maincode image that maps the upper 240..256 MB DDR window (0x0F000000..0x0FFFFFFF) via 0xB8000220 bit 24 so the SEE co-processor runs at 0xAE000200."
+  ]
+}

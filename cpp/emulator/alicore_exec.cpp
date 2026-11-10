@@ -1175,6 +1175,101 @@ static void analyze_ff(Core::Block *b) {
   Core::Block::Ff &f = b->ff;
   f.mode = 0;
   uint32_t n = b->n;
+  if ((b->key & 1) && b->bytes == 28 && n == 13) {
+    static const uint8_t crc16_raw[28] = {
+      0x00, 0xf6, 0x82, 0x32, 0xed, 0xe0, 0x60, 0xa3, 0x6e, 0xea, 0x48, 0x32, 0xa9, 0xe2,
+      0x80, 0x33, 0x40, 0x9a, 0x83, 0x67, 0x4e, 0xec, 0xe1, 0x47, 0xc2, 0xef, 0xf2, 0x61
+    };
+    if (memcmp(b->raw, crc16_raw, 28) == 0 && b->ops[12].imm == (b->key & ~1u)) {
+      f.mode = Core::FF_CRC16;
+      return;
+    }
+  }
+  if ((b->key & 1) && b->bytes == 16 && n == 8 && b->raw[1] == 0x92) {
+    static const uint8_t copy16_tail[14] = {
+      0xad, 0xe2, 0xa9, 0xe1, 0x40, 0x9a, 0x40, 0xdb, 0xa4, 0x45, 0x83, 0xed, 0xf8, 0x61
+    };
+    if (memcmp(b->raw + 2, copy16_tail, 14) == 0 && b->ops[7].imm == (b->key & ~1u)) {
+      f.mode = Core::FF_COPY16;
+      return;
+    }
+  }
+  if ((b->key & 1) && b->bytes == 26 && n == 13) {
+    static const uint8_t xor16_raw[26] = {
+      0x59, 0x67, 0xf1, 0xe2, 0x02, 0x93, 0xe9, 0xe3, 0xad, 0xe1, 0x40, 0xa2, 0x60, 0xa3,
+      0x6e, 0xea, 0x40, 0xc4, 0xe1, 0x47, 0xa1, 0x45, 0xc2, 0xed, 0xf3, 0x61
+    };
+    if (memcmp(b->raw, xor16_raw, 26) == 0 && b->ops[12].imm == (b->key & ~1u)) {
+      f.mode = Core::FF_XOR16;
+      return;
+    }
+  }
+  if ((b->key & 1) && b->bytes == 16 && n == 8) {
+    static const uint8_t sbox16_raw[16] = {
+      0x8d, 0xe5, 0x40, 0xa3, 0xc9, 0xe2, 0x40, 0xa2,
+      0x40, 0xc3, 0x81, 0x44, 0x03, 0xec, 0xf8, 0x61
+    };
+    if (memcmp(b->raw, sbox16_raw, 16) == 0 && b->ops[7].imm == (b->key & ~1u)) {
+      f.mode = Core::FF_SBOX16;
+      return;
+    }
+  }
+  if ((b->key & 1) && b->bytes == 30 && n == 14 && b->raw[5] == 0x92) {
+    static const uint8_t copy16u_head0[4] = { 0xa9, 0xe1, 0x60, 0x9a };
+    static const uint8_t copy16u_tail0[24] = {
+      0xb1, 0xe2, 0x60, 0xc4, 0x62, 0x32, 0x41, 0xc4, 0x42, 0x32, 0x42, 0xc4,
+      0x00, 0xf6, 0x62, 0x33, 0x63, 0xc4, 0xa4, 0x45, 0xc3, 0xed, 0xf1, 0x61
+    };
+    static const uint8_t copy16u_head1[4] = { 0xa9, 0xe1, 0x80, 0x9a };
+    static const uint8_t copy16u_tail1[24] = {
+      0xad, 0xe2, 0x80, 0xc3, 0x82, 0x32, 0x41, 0xc3, 0x42, 0x32, 0x42, 0xc3,
+      0x00, 0xf6, 0x82, 0x32, 0x43, 0xc3, 0xa4, 0x45, 0xc3, 0xed, 0xf1, 0x61
+    };
+    if (b->ops[13].imm == (b->key & ~1u)) {
+      if (memcmp(b->raw, copy16u_head0, 4) == 0 && memcmp(b->raw + 6, copy16u_tail0, 24) == 0) {
+        f.mode = Core::FF_COPY16U;
+        f.flag = 0;
+        return;
+      }
+      if (memcmp(b->raw, copy16u_head1, 4) == 0 && memcmp(b->raw + 6, copy16u_tail1, 24) == 0) {
+        f.mode = Core::FF_COPY16U;
+        f.flag = 1;
+        return;
+      }
+    }
+  }
+  if (!(b->key & 1) && b->bytes == 48 && n == 12) {
+    static const uint8_t crc32_raw[48] = {
+      0x00, 0x00, 0x82, 0x90, 0x26, 0x10, 0x47, 0x00, 0xff, 0x00, 0x42, 0x30,
+      0x80, 0x10, 0x02, 0x00, 0x21, 0x10, 0x49, 0x00, 0x02, 0x1a, 0x07, 0x00,
+      0x00, 0x00, 0x42, 0x8c, 0x26, 0x38, 0x62, 0x00, 0x01, 0x00, 0x08, 0x25,
+      0x2a, 0x10, 0x05, 0x01, 0xf5, 0xff, 0x40, 0x14, 0x01, 0x00, 0x84, 0x24
+    };
+    if (memcmp(b->raw, crc32_raw, 48) == 0 && b->ops[10].imm == b->key) {
+      f.mode = Core::FF_CRC32;
+      return;
+    }
+  }
+  if ((b->key & 1) && b->bytes == 10 && n == 5) {
+    static const uint8_t memset16_raw[10] = {
+      0x69, 0xe7, 0xa0, 0xc2, 0x61, 0x43, 0xc3, 0xeb, 0xfb, 0x61
+    };
+    if (memcmp(b->raw, memset16_raw, 10) == 0 && b->ops[4].imm == (b->key & ~1u)) {
+      f.mode = Core::FF_MEMSET16;
+      return;
+    }
+  }
+  if (!(b->key & 1) && b->bytes == 32 && n == 8) {
+    static const uint8_t bzero32_raw[32] = {
+      0x00, 0x00, 0x80, 0xac, 0x04, 0x00, 0x80, 0xac, 0x08, 0x00, 0x80, 0xac,
+      0x0c, 0x00, 0x80, 0xac, 0x10, 0x00, 0x84, 0x24, 0x2b, 0x08, 0x85, 0x00,
+      0xf9, 0xff, 0x20, 0x14, 0x00, 0x00, 0x00, 0x00
+    };
+    if (memcmp(b->raw, bzero32_raw, 32) == 0 && b->ops[6].imm == b->key) {
+      f.mode = Core::FF_BZERO32;
+      return;
+    }
+  }
   if ((b->key & 1) || n < 2 || n > BLOCK_MAX_FF) return;
   const Core::Uop &br = b->ops[n - 2];
   if ((br.op != U_BNE && br.op != U_BEQ) || br.imm != b->key) return;
@@ -2058,18 +2153,414 @@ void Core::run_blocks(Block *b) {
     m16 = nm;
     block_runs++;
     i = 0;
-    if (b->ff.mode && next == b->key && spin_skip && idle_skip && !exact_mode && !probe_ && !rec_on_ &&
+    if (b->ff.mode && (next | (nm ? 1u : 0u)) == b->key && spin_skip && idle_skip && !exact_mode && !probe_ && !rec_on_ &&
         next_event_ != ~0ull && next_event_ > icount + 2 * (uint64_t)n) {
-      // a counting loop back at its start: on to its last pass (or the event) at once
-      uint64_t k = ff_passes(b), kmax = (next_event_ - icount) / n - 1;
-      if (k > kmax) k = kmax;
-      if (k) {
-        const Block::Ff &f = b->ff;
-        for (int j = 0; j < f.nind; j++) R[f.ind[j]] += (uint32_t)k * f.step[j];
-        if (f.mode == FF_FLAG) R[f.flag] = f.want ? 1u : 0u;
-        icount += k * n;
-        executed += k * n;
-        ff_skipped += k * n;
+      uint64_t kmax = (next_event_ - icount) / n - 1;
+      if (b->ff.mode == FF_CRC16) {
+        int32_t i_cur = (int32_t)R[7], i_end = (int32_t)R[6];
+        uint32_t tab_base = R[5];
+        const uint8_t *tp0 = vr_[tab_base >> 12];
+        if (i_cur < i_end - 1 && (tab_base & 3) == 0 && tp0 != nullptr &&
+            ((tab_base & 0xFFF) <= 0xC00 || vr_[(tab_base + 0x3FC) >> 12] == tp0 + 0x1000)) {
+          uint64_t k = (uint64_t)(int64_t)(i_end - 1) - (uint64_t)(int64_t)i_cur;
+          if (k > kmax) k = kmax;
+          const uint32_t *tab = (const uint32_t *)(tp0 + (tab_base & 0xFFF));
+          uint32_t crc = R[4], buf_addr = R[16] + (uint32_t)i_cur;
+          uint32_t last_shifted = R[3], last_tab = R[2];
+          uint64_t done = 0;
+          while (done < k) {
+            uint32_t a = buf_addr + (uint32_t)done;
+            const uint8_t *bp = vr_[a >> 12];
+            if (ALI_UNLIKELY(!bp)) break;
+            uint32_t page_rem = 0x1000 - (a & 0xFFF);
+            uint64_t chunk = k - done;
+            if (chunk > page_rem) chunk = page_rem;
+            bp += a & 0xFFF;
+            for (uint64_t p = 0; p < chunk; p++) {
+              uint32_t idx = (crc >> 24) ^ bp[p];
+              last_shifted = crc << 8;
+              last_tab = tab[idx];
+              crc = last_shifted ^ last_tab;
+            }
+            done += chunk;
+          }
+          if (done) {
+            R[4] = crc;
+            R[7] += (uint32_t)done;
+            R[2] = last_tab;
+            R[3] = last_shifted;
+            R[24] = 1;
+            icount += done * n;
+            executed += done * n;
+            ff_skipped += done * n;
+          }
+        }
+      } else if (b->ff.mode == FF_COPY16 && !dirty_rec_) {
+        uint32_t sp_addr = R[29] + b->ops[0].imm;
+        const uint8_t *sp_page = vr_[sp_addr >> 12];
+        if ((sp_addr & 3) == 0 && sp_page != nullptr) {
+          uint32_t dst_base;
+          memcpy(&dst_base, sp_page + (sp_addr & 0xFFF), 4);
+          uint32_t i_cur = R[5], i_end = R[4], src_base = R[17];
+          if ((dst_base & 3) == 0 && (src_base & 3) == 0 && (i_cur & 3) == 0 && i_cur + 4 < i_end) {
+            uint64_t k = (i_end - 1 - i_cur) / 4;
+            if (k > kmax) k = kmax;
+            uint32_t d0 = dst_base + i_cur;
+            if (d0 + 4 * k <= sp_addr || d0 >= sp_addr + 4) {
+              uint32_t last_v0 = R[2], last_v1 = R[3];
+              uint64_t done = 0;
+              while (done < k) {
+                uint32_t sa = src_base + i_cur + 4 * (uint32_t)done;
+                uint32_t da = dst_base + i_cur + 4 * (uint32_t)done;
+                const uint8_t *sp_p = vr_[sa >> 12];
+                bool slow_src = false;
+                if (!sp_p && !flash_cmd_ && (!spi.on || spi_passthrough())) {
+                  uint32_t spa = phys_of(sa);
+                  Region *sr = pregion_[spa >> 12];
+                  if (sr && !sr->mmio && sr->ptr && (sr->perms & PROT_READ) && !(mem_hook_page_[spa >> 12] & 1) &&
+                      !(dev_buf_ && spa >= dev_phys_ && spa - dev_phys_ < dev_size_)) {
+                    sp_p = sr->ptr + ((spa & ~0xFFFu) - sr->base);
+                    slow_src = true;
+                  }
+                }
+                uint8_t *dp_p = vw_[da >> 12];
+                if (ALI_UNLIKELY(!sp_p || !dp_p)) break;
+                uint32_t s_rem = (0x1000 - (sa & 0xFFF)) >> 2;
+                uint32_t d_rem = (0x1000 - (da & 0xFFF)) >> 2;
+                uint64_t chunk = k - done;
+                if (chunk > s_rem) chunk = s_rem;
+                if (chunk > d_rem) chunk = d_rem;
+                const uint32_t *src_w = (const uint32_t *)(sp_p + (sa & 0xFFF));
+                uint32_t *dst_w = (uint32_t *)(dp_p + (da & 0xFFF));
+                for (uint64_t p = 0; p < chunk; p++) {
+                  uint32_t v = src_w[p];
+                  if (dst_w[p] == v) unchanged_stores_++; else dst_w[p] = v;
+                }
+                if (slow_src) slow_ += chunk;
+                last_v0 = src_w[chunk - 1];
+                last_v1 = da + 4 * (uint32_t)(chunk - 1);
+                done += chunk;
+              }
+              if (done) {
+                stores_ += done;
+                R[2] = last_v0;
+                R[3] = last_v1;
+                R[5] = i_cur + 4 * (uint32_t)done;
+                R[24] = 1;
+                icount += done * n;
+                executed += done * n;
+                ff_skipped += done * n;
+              }
+            }
+          }
+        }
+      } else if (b->ff.mode == FF_XOR16 && !dirty_rec_) {
+        int32_t j_cur = (int32_t)R[5], j_lim = (int32_t)R[6];
+        if (j_cur >= 0 && j_lim > 1 && j_cur < j_lim - 1) {
+          uint32_t sp_a = R[29] + 8;
+          const uint8_t *sp_page = (sp_a & 3) == 0 ? vr_[sp_a >> 12] : nullptr;
+          if (sp_page) {
+            uint32_t src_base = *(const uint32_t *)(sp_page + (sp_a & 0xFFF));
+            uint32_t dst_base = R[25], key_base = R[17], i_cur = R[7];
+            uint32_t s0_rem = R[16];
+            // Fast-forward complete 13-byte outer loop iterations when s0_rem > 26
+            if (j_cur == 1 && j_lim == 13 && s0_rem > 26u && (key_base & 0xFFF) <= 0xFF3u) {
+              const uint8_t *kp_p = vr_[key_base >> 12];
+              uint32_t max_blk = (s0_rem - 14u) / 13u;
+              uint64_t cap_blk = kmax / 14u;
+              if (max_blk > cap_blk) max_blk = (uint32_t)cap_blk;
+              if (kp_p && max_blk > 0) {
+                const uint8_t *k13 = kp_p + (key_base & 0xFFF);
+                uint32_t blk_done = 0;
+                uint8_t blk_xb = 0;
+                while (blk_done < max_blk) {
+                  uint32_t sa = src_base + i_cur;
+                  uint32_t da = dst_base + i_cur;
+                  if (ALI_UNLIKELY((uint32_t)(da - sp_a) < 16u && (uint32_t)(sp_a - da) < 16u)) break;
+                  const uint8_t *sp_p = vr_[sa >> 12];
+                  uint8_t *dp_p = vw_[da >> 12];
+                  if (ALI_UNLIKELY(!sp_p || !dp_p || (sa & 0xFFF) > 0xFF3u || (da & 0xFFF) > 0xFF3u)) break;
+                  const uint8_t *s_ptr = sp_p + (sa & 0xFFF);
+                  uint8_t *d_ptr = dp_p + (da & 0xFFF);
+                  for (uint32_t p = 0; p < 12u; p++) {
+                    uint8_t xb = s_ptr[p] ^ k13[p + 1u];
+                    if (d_ptr[p] == xb) unchanged_stores_++; else d_ptr[p] = xb;
+                  }
+                  blk_xb = s_ptr[12] ^ k13[0];
+                  if (d_ptr[12] == blk_xb) unchanged_stores_++; else d_ptr[12] = blk_xb;
+                  i_cur += 13u;
+                  s0_rem -= 13u;
+                  blk_done++;
+                }
+                if (blk_done) {
+                  uint64_t skipped_insns = (uint64_t)blk_done * (13u * n + 8u);
+                  stores_ += (uint64_t)blk_done * 13u;
+                  R[4] = dst_base + i_cur - 1u;
+                  R[2] = blk_xb;
+                  R[3] = k13[0];
+                  R[7] = i_cur;
+                  R[16] = s0_rem;
+                  R[24] = 1;
+                  icount += skipped_insns;
+                  executed += skipped_insns;
+                  ff_skipped += skipped_insns;
+                  kmax = (next_event_ > icount + 2 * (uint64_t)n) ? (next_event_ - icount) / n - 1 : 0;
+                }
+              }
+            }
+            uint64_t k = (uint32_t)(j_lim - 1 - j_cur);
+            if (k > kmax) k = kmax;
+            uint64_t done = 0;
+            uint8_t last_xb = 0, last_kb = 0;
+            while (done < k) {
+              uint32_t sa = src_base + i_cur + (uint32_t)done;
+              uint32_t ka = key_base + (uint32_t)j_cur + (uint32_t)done;
+              uint32_t da = dst_base + i_cur + (uint32_t)done;
+              if (ALI_UNLIKELY((uint32_t)(da - sp_a) < 4u)) break;
+              const uint8_t *sp_p = vr_[sa >> 12];
+              const uint8_t *kp_p = vr_[ka >> 12];
+              uint8_t *dp_p = vw_[da >> 12];
+              if (ALI_UNLIKELY(!sp_p || !kp_p || !dp_p)) break;
+              last_kb = kp_p[ka & 0xFFF];
+              last_xb = sp_p[sa & 0xFFF] ^ last_kb;
+              uint8_t &dst_b = dp_p[da & 0xFFF];
+              if (dst_b == last_xb) unchanged_stores_++; else dst_b = last_xb;
+              done++;
+            }
+            if (done) {
+              stores_ += done;
+              R[4] = dst_base + i_cur + (uint32_t)done - 1;
+              R[2] = last_xb;
+              R[3] = last_kb;
+              R[7] = i_cur + (uint32_t)done;
+              R[5] = (uint32_t)j_cur + (uint32_t)done;
+              R[24] = 1;
+              icount += done * n;
+              executed += done * n;
+              ff_skipped += done * n;
+            }
+          }
+        }
+      } else if (b->ff.mode == FF_SBOX16 && !dirty_rec_) {
+        uint32_t i_cur = R[4], i_lim = R[16], buf_base = R[5], sbox_base = R[6];
+        const uint8_t *sp0 = vr_[sbox_base >> 12];
+        if (i_cur + 1 < i_lim && sp0 != nullptr &&
+            ((sbox_base & 0xFFF) <= 0xF00 || vr_[(sbox_base + 0xFF) >> 12] == sp0 + 0x1000)) {
+          uint64_t k = i_lim - 1 - i_cur;
+          if (k > kmax) k = kmax;
+          const uint8_t *sbox = sp0 + (sbox_base & 0xFFF);
+          uint32_t last_v0 = R[2], last_v1 = R[3];
+          uint64_t done = 0;
+          while (done < k) {
+            uint32_t a = buf_base + i_cur + (uint32_t)done;
+            const uint8_t *rp = vr_[a >> 12];
+            uint8_t *wp = vw_[a >> 12];
+            if (ALI_UNLIKELY(!rp || !wp || (a < sbox_base + 256 && a + 0x1000 > sbox_base))) break;
+            uint32_t page_rem = 0x1000 - (a & 0xFFF);
+            uint64_t chunk = k - done;
+            if (chunk > page_rem) chunk = page_rem;
+            const uint8_t *src_b = rp + (a & 0xFFF);
+            uint8_t *dst_b = wp + (a & 0xFFF);
+            for (uint64_t p = 0; p < chunk; p++) {
+              uint8_t ob = src_b[p];
+              uint8_t nb = sbox[ob];
+              if (ob == nb) unchanged_stores_++; else dst_b[p] = nb;
+              last_v0 = nb;
+            }
+            last_v1 = a + (uint32_t)chunk - 1;
+            done += chunk;
+          }
+          if (done) {
+            stores_ += done;
+            R[2] = last_v0;
+            R[3] = last_v1;
+            R[4] = i_cur + (uint32_t)done;
+            R[24] = 1;
+            icount += done * n;
+            executed += done * n;
+            ff_skipped += done * n;
+          }
+        }
+      } else if (b->ff.mode == FF_COPY16U && !dirty_rec_) {
+        uint32_t sp_addr = R[29] + b->ops[2].imm;
+        const uint8_t *sp_page = vr_[sp_addr >> 12];
+        if ((sp_addr & 3) == 0 && sp_page != nullptr) {
+          uint32_t dst_base;
+          memcpy(&dst_base, sp_page + (sp_addr & 0xFFF), 4);
+          uint32_t i_cur = R[5], i_end = R[6], src_base = R[17];
+          if ((src_base & 3) == 0 && (i_cur & 3) == 0 && i_cur + 4 < i_end) {
+            uint64_t k = (i_end - 1 - i_cur) / 4;
+            if (k > kmax) k = kmax;
+            uint32_t d0 = dst_base + i_cur;
+            if (d0 + 4 * k <= sp_addr || d0 >= sp_addr + 4) {
+              uint32_t last_w = 0, last_da = b->ff.flag ? R[3] : R[4];
+              uint64_t done = 0;
+              while (done < k) {
+                uint32_t sa = src_base + i_cur + 4 * (uint32_t)done;
+                uint32_t da = dst_base + i_cur + 4 * (uint32_t)done;
+                const uint8_t *sp_p = vr_[sa >> 12];
+                bool slow_src = false;
+                if (!sp_p && !flash_cmd_ && (!spi.on || spi_passthrough())) {
+                  uint32_t spa = phys_of(sa);
+                  Region *sr = pregion_[spa >> 12];
+                  if (sr && !sr->mmio && sr->ptr && (sr->perms & PROT_READ) && !(mem_hook_page_[spa >> 12] & 1) &&
+                      !(dev_buf_ && spa >= dev_phys_ && spa - dev_phys_ < dev_size_)) {
+                    sp_p = sr->ptr + ((spa & ~0xFFFu) - sr->base);
+                    slow_src = true;
+                  }
+                }
+                uint8_t *dp_p = vw_[da >> 12];
+                if (ALI_UNLIKELY(!sp_p || !dp_p || (da & 0xFFF) > 0xFFC)) break;
+                uint32_t s_rem = (0x1000 - (sa & 0xFFF)) >> 2;
+                uint32_t d_rem = (0x1000 - (da & 0xFFF)) >> 2;
+                uint64_t chunk = k - done;
+                if (chunk > s_rem) chunk = s_rem;
+                if (chunk > d_rem) chunk = d_rem;
+                if (!chunk) break;
+                const uint32_t *src_w = (const uint32_t *)(sp_p + (sa & 0xFFF));
+                uint8_t *dst_b = dp_p + (da & 0xFFF);
+                for (uint64_t p = 0; p < chunk; p++) {
+                  uint32_t v = src_w[p];
+                  uint8_t *db = dst_b + 4 * p;
+                  for (int bi = 0; bi < 4; bi++) {
+                    uint8_t bv = (uint8_t)(v >> (8 * bi));
+                    if (db[bi] == bv) unchanged_stores_++; else db[bi] = bv;
+                  }
+                  last_w = v;
+                }
+                if (slow_src) slow_ += chunk;
+                last_da = da + 4 * (uint32_t)(chunk - 1);
+                done += chunk;
+              }
+              if (done) {
+                stores_ += 4 * done;
+                if (b->ff.flag) {
+                  R[2] = last_w >> 24;
+                  R[3] = last_da;
+                  R[4] = last_w;
+                } else {
+                  R[2] = (last_w >> 16) & 0xFFFFu;
+                  R[3] = last_w >> 24;
+                  R[4] = last_da;
+                }
+                R[5] = i_cur + 4 * (uint32_t)done;
+                R[24] = 1;
+                icount += done * n;
+                executed += done * n;
+                ff_skipped += done * n;
+              }
+            }
+          }
+        }
+      } else if (b->ff.mode == FF_CRC32) {
+        int32_t i_cur = (int32_t)R[8], i_end = (int32_t)R[5];
+        uint32_t tab_base = R[9];
+        const uint8_t *tp0 = vr_[tab_base >> 12];
+        if (i_cur < i_end - 1 && (tab_base & 3) == 0 && tp0 != nullptr &&
+            ((tab_base & 0xFFF) <= 0xC00 || vr_[(tab_base + 0x3FC) >> 12] == tp0 + 0x1000)) {
+          uint64_t k = (uint64_t)(int64_t)(i_end - 1) - (uint64_t)(int64_t)i_cur;
+          if (k > kmax) k = kmax;
+          const uint32_t *tab = (const uint32_t *)(tp0 + (tab_base & 0xFFF));
+          uint32_t crc = R[7], buf_addr = R[4];
+          uint32_t last_shifted = R[3];
+          uint64_t done = 0;
+          while (done < k) {
+            uint32_t a = buf_addr + (uint32_t)done;
+            const uint8_t *bp = vr_[a >> 12];
+            if (ALI_UNLIKELY(!bp)) break;
+            uint32_t page_rem = 0x1000 - (a & 0xFFF);
+            uint64_t chunk = k - done;
+            if (chunk > page_rem) chunk = page_rem;
+            bp += a & 0xFFF;
+            for (uint64_t p = 0; p < chunk; p++) {
+              uint32_t idx = (crc ^ bp[p]) & 0xFFu;
+              last_shifted = crc >> 8;
+              crc = last_shifted ^ tab[idx];
+            }
+            done += chunk;
+          }
+          if (done) {
+            R[4] = buf_addr + (uint32_t)done;
+            R[7] = crc;
+            R[8] += (uint32_t)done;
+            R[2] = 1;
+            R[3] = last_shifted;
+            icount += done * n;
+            executed += done * n;
+            ff_skipped += done * n;
+          }
+        }
+      } else if (b->ff.mode == FF_MEMSET16 && !dirty_rec_) {
+        uint32_t i_cur = R[3], i_end = R[6], dst_base = R[7];
+        uint8_t val = (uint8_t)R[5];
+        if (i_cur + 1 < i_end) {
+          uint64_t k = i_end - 1 - i_cur;
+          if (k > kmax) k = kmax;
+          uint64_t done = 0;
+          while (done < k) {
+            uint32_t a = dst_base + i_cur + (uint32_t)done;
+            uint8_t *wp = vw_[a >> 12];
+            if (ALI_UNLIKELY(!wp)) break;
+            uint32_t page_rem = 0x1000 - (a & 0xFFF);
+            uint64_t chunk = k - done;
+            if (chunk > page_rem) chunk = page_rem;
+            uint8_t *dst_b = wp + (a & 0xFFF);
+            for (uint64_t p = 0; p < chunk; p++) {
+              if (dst_b[p] == val) unchanged_stores_++; else dst_b[p] = val;
+            }
+            done += chunk;
+          }
+          if (done) {
+            stores_ += done;
+            R[2] = dst_base + i_cur + (uint32_t)done - 1;
+            R[3] = i_cur + (uint32_t)done;
+            R[24] = 1;
+            icount += done * n;
+            executed += done * n;
+            ff_skipped += done * n;
+          }
+        }
+      } else if (b->ff.mode == FF_BZERO32 && !dirty_rec_) {
+        uint32_t a0_cur = R[4], a1_end = R[5];
+        if ((a0_cur & 3) == 0 && a0_cur + 16 < a1_end) {
+          uint64_t k = (a1_end - 1 - a0_cur) / 16;
+          if (k > kmax) k = kmax;
+          uint64_t done = 0;
+          while (done < k) {
+            uint32_t a = a0_cur + 16 * (uint32_t)done;
+            uint8_t *wp = vw_[a >> 12];
+            if (ALI_UNLIKELY(!wp || (a & 0xFFF) > 0xFF0)) break;
+            uint32_t page_rem = (0x1000 - (a & 0xFFF)) >> 4;
+            uint64_t chunk = k - done;
+            if (chunk > page_rem) chunk = page_rem;
+            if (!chunk) break;
+            uint32_t *dst_w = (uint32_t *)(wp + (a & 0xFFF));
+            for (uint64_t p = 0; p < 4 * chunk; p++) {
+              if (dst_w[p] == 0) unchanged_stores_++; else dst_w[p] = 0;
+            }
+            done += chunk;
+          }
+          if (done) {
+            stores_ += 4 * done;
+            R[4] = a0_cur + 16 * (uint32_t)done;
+            R[1] = 1;
+            icount += done * n;
+            executed += done * n;
+            ff_skipped += done * n;
+          }
+        }
+      } else {
+        // a counting loop back at its start: on to its last pass (or the event) at once
+        uint64_t k = ff_passes(b);
+        if (k > kmax) k = kmax;
+        if (k) {
+          const Block::Ff &f = b->ff;
+          for (int j = 0; j < f.nind; j++) R[f.ind[j]] += (uint32_t)k * f.step[j];
+          if (f.mode == FF_FLAG) R[f.flag] = f.want ? 1u : 0u;
+          icount += k * n;
+          executed += k * n;
+          ff_skipped += k * n;
+        }
       }
     }
     if (!CHAIN) return;

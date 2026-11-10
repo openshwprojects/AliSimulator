@@ -1,0 +1,52 @@
+{
+  "file": "A103_20141204_V1.27B8.abs",
+  "device": {
+    "brand": "Ferguson",
+    "model": "Ariva 103",
+    "type": "DVB-S2 Full HD satellite receiver with smartcard reader, Ethernet, USB PVR and internet apps",
+    "board": "bootloader chunk \"HS51\", version \"39001-01047\"",
+    "soc": "ALi M3503 (M3511 / M3516 class dual-CPU DVB-S2 SoC, chip word 0x35030001; SND_S3503 in the SEE program, Libcore 1.1.5a@SDK_20111126)",
+    "family": "M3503 (chips/m3503.py), matched by the bootloader chunk's version \"39001-01047\"",
+    "demod": "internal DVB-S2 (NIM_S3503)",
+    "tuner": "unknown (maincode is encrypted by the board's security IC)",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "FD650K (TM1650-compatible)",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "ext00",
+    "gpioI2c": {
+      "scl": 121,
+      "sda": 120
+    }
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.27B8 (maincode \"V1.27B8*\" 20141204-164029; bootloader HS51 39001-01047, 20140414-164439)",
+    "date": "2014-12-04",
+    "size": 8388608,
+    "sha1": "8d4acff92ec0de7df125c12d4bde2eae16c57fc8",
+    "layout": "HS51 0x000000 (39001-01047, 20140414-164439), MemCfg 0x02F000 (00000001, 20140414-170717), maincode 0x030000 (V1.27B8*, 20141204-164029), seecode 0x450000 (V1.27B8, 20141204-164029, LZO1X), radioback 0x600000 (1.0.0), seeback 0x61FF80 (1.0.0), ARIVA103 0x630000 (1.0.0), data 0x64FF80 (1.0.0), defaultdb 0x6A0000 (1.0.0), userdb 0x6FFF80 (1.0.0)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=A103_20141204_V1.27B8.zip&directory=Firmware%20for%20to%20all%20receivers/Ferguson/Ariva%20103-203",
+    "site": "satedu.cba.pl",
+    "author": "Ferguson",
+    "date": "2014-12-04",
+    "login": false,
+    "note": "Archive A103_20141204_V1.27B8.zip from the Ferguson Ariva 103-203 directory on satedu.cba.pl; fetched 2026-11-09."
+  },
+  "simulator": {
+    "boots": true,
+    "application": false,
+    "display": false,
+    "panelText": [" On "],
+    "note": "The bootloader runs as M3503 revision B (run_dump_a103_security_ic.py): it executes from the flash window with cache-as-RAM stack at 0x8FFF8000..0x8FFFFFFF, jumps into its RAM copy at 0x80C98624, writes \" On \" to its FD650K front panel on GPIO 135 (SCL) / 134 (SDA), unpacks the LZO1X-compressed SEE program (0x1462A6 -> 0x29FE8C bytes at 0x811EF000 via lzo1x_decompress_safe at 0x80C86370), and starts the parked SEE at 0xA0C93958 to copy it to 0xA6000200 (entry 0x86001000) and park again.  It then sends the first 1 KB of the main code (0x030080) in 64 blocks of 16 bytes over bit-banged I2C on GPIO 121 (SCL) / 120 (SDA) to the board's security IC at 0x62 (command 0xD5, 7 fixed bytes 95 8a 67 9e 18 86 d9, 16 encrypted bytes, CRC-16/BUYPASS).  Without the chip's plaintext, LzmaDecode() at 0x80C9B7E0 yields 0 bytes and the bootloader jumps to an empty 0x80000200."
+  },
+  "desc": [
+    "Ferguson Ariva 103 official firmware V1.27B8 (2014-12-04) for the Full HD DVB-S2 satellite receiver on the dual-CPU ALi M3503 (M3511 / M3516) platform.",
+    "Chunk chain: bootloader 0x000000 (\"HS51\", version 39001-01047, 2014-04-14), MemCfg 0x02F000, maincode 0x030000 (\"V1.27B8*\", 4.03 MB, first 1 KB encrypted for the board's security IC), seecode 0x450000 (\"V1.27B8\", 1.27 MB LZO1X-compressed -> 2.62 MB, SND_S3503 / DECV_S3601 / DECA_S3601, Libcore 1.1.5a@SDK_20111126), radioback 0x600000, seeback 0x61FF80, ARIVA103 0x630000 (boot logo), data 0x64FF80, defaultdb 0x6A0000, userdb 0x6FFF80.",
+    "Front panel: FD650K (\"PAN_FD650K\" / \"PAN_CH455_0\" in the bootloader) on GPIO bank 4 (0xB8000454) bits 7 / 6 -- SCL = GPIO 135, SDA = GPIO 134 -- displaying \" On \" during boot; the security IC sits at I2C 0x62 on GPIO bank 3 (0xB8000354) bits 25 / 24 -- SCL = GPIO 121, SDA = GPIO 120."
+  ]
+}

@@ -107,19 +107,32 @@ class M3503(UpperRamMixin, M3602):
 
     @classmethod
     def matches(cls, image):
-        return any(name.lower() == "bootloader" and version.startswith(("M3503", "3510-", "M3510", "M3511", "M3515", "M3516"))
-                   for _offset, name, version in chunk_chain(image))
+        raw = bytes(memoryview(image)[:0x1000])
+        if b"DVBS2---" in raw[:0x100]:
+            if b"\xff\x8f\x1d\x3c" in raw or b"\x04\xb8\x08\x3c" in raw:
+                return True
+        return any(
+            ((name.lower() == "bootloader" or offset == 0)
+             and version.startswith(("M3503", "3510-", "M3510", "M3511", "M3515", "M3516", "390")))
+            or (name.lower() == "maincode" and version.startswith("M3511"))
+            for offset, name, version in chunk_chain(image)
+        )
 
     def variant(self):
         # Newer M3503-family SoCs (M3510B on the Amiko Impulse SAT, M3511 / M3511D
         # on the Opticum XS65 Twin and Amiko HD8150, M3515 on the Opticum XS65
-        # Combo, M3516A on the Amiko HD8260+) are M3503 revision B (low byte 1 ->
-        # sys_ic_get_rev_id() returns 0x20002 instead of rev A's 0x20001; under
-        # rev A the SDK's capability check disables GMA layer 0).
+        # Combo, M3516 / M3516A on the Ferguson Ariva 103/153 and Amiko HD8260+) are
+        # M3503 revision B (low byte 1 -> sys_ic_get_rev_id() returns 0x20002 instead
+        # of rev A's 0x20001; under rev A the SDK's capability check disables GMA layer 0).
         if getattr(self, "_ram_256m", False) or (
-            self.sim.rom_image and any(
-                name.lower() == "bootloader" and version.startswith(("M3510B", "M3511", "M3515", "M3516"))
-                for _o, name, version in chunk_chain(self.sim.rom_image)
+            self.sim.rom_image and (
+                b"DVBS2---" in bytes(self.sim.rom_image[:0x100])
+                or any(
+                    ((name.lower() == "bootloader" or _o == 0)
+                     and version.startswith(("M3510B", "M3511", "M3515", "M3516", "390")))
+                    or (name.lower() == "maincode" and version.startswith("M3511"))
+                    for _o, name, version in chunk_chain(self.sim.rom_image)
+                )
             )
         ):
             return 0x0001

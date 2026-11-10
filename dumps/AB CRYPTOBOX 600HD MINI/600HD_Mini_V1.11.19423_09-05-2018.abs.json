@@ -1,0 +1,53 @@
+{
+  "file": "600HD_Mini_V1.11.19423_09-05-2018.abs",
+  "device": {
+    "brand": "AB CryptoBox",
+    "model": "600HD Mini",
+    "type": "DVB-S2 HD satellite receiver",
+    "board": "600HD Mini",
+    "soc": "ALi M3516 (M3503 family rev B dual-CPU MIPS32 + SEE)",
+    "family": "M3503 (chips/m3503.py: chip ID 0x35030001)",
+    "chipFamily": "M3503",
+    "chipId": "0x3503",
+    "demod": "internal ALi M3503 DVB-S2 demodulator",
+    "tuner": "av2012@0x60",
+    "flash": "8 MB SPI",
+    "panel": {
+      "chip": "CH455",
+      "scl": 135,
+      "sda": 134
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "V1.11.19423 (bootloader \"DVBS2---0.2.0\"; SDK4.0fa.13.8c)",
+    "date": "2018-05-09",
+    "size": 8388608,
+    "sha1": "c25ce46adbd0e9e802c90066a67a4134eecbc5ae",
+    "layout": "bootloader 0x000000 (DVBS2---0.2.0), MemCfg 0x01EF00, maincode and SEE chunks -- 8 MB flash"
+  },
+  "source": {
+    "url": "http://satedu.cba.pl/",
+    "site": "satedu.cba.pl",
+    "author": null,
+    "date": "2018-05-09",
+    "login": false,
+    "note": "AB CryptoBox 600HD Mini official firmware."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": false,
+    "panelText": [
+      "boot",
+      " ON "
+    ],
+    "note": "Boots as M3503 with rev-B chip ID: sets up cache-as-RAM stack, unpacks split SEE and maincode, prints 'model = 3:600HD Mini' and 'MC: APP  init ok'."
+  },
+  "desc": [
+    "The V1.11.19423 firmware for the AB CryptoBox 600HD Mini receiver based on the ALi M3516 dual-core SoC.",
+    "Features cache-as-RAM bootloader initialization and split SEE coprocessor."
+  ]
+}

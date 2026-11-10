@@ -87,6 +87,9 @@ class M3602(ChipFamily):
 
     @classmethod
     def matches(cls, image):
+        raw = bytes(memoryview(image)[:0x100])
+        if b"DVBS2---" in raw:
+            return True
         for _offset, name, version in chunk_chain(image):
             if name == "HDCPKey" and version.startswith(("Demo s3602", "S3606")):
                 return True
@@ -98,9 +101,14 @@ class M3602(ChipFamily):
             # bootloaders ("HS11" / "HS17" / "HS18" / "HS1C" / "HSJ2") start their version with
             # "350" or "370" ("35003-01047", "37017-01047").  ("M3612" / "Demo M3612" is NOT
             # M3602: its single-CPU silicon reads S3811 chip ID 0x3811 -> m3801.py.)
-            if version.startswith(("M3601", "M3602", "M3606", "350", "370", "SMT---", "SMT ")):
+            if version.startswith(("M3601", "M3602", "M3606", "350", "370", "SMT---", "SMT ", "HACK S9")) or "HACK S9" in version:
                 return True
         return False
+
+    def default_chip_id(self):
+        if self.sim.rom_image and b"DVBS2---" in bytes(self.sim.rom_image[:0x100]):
+            return 0x3603
+        return super().default_chip_id()
 
     def _ram_mirrors(self):
         """(address, size) of the RAM's mirrors above its size, up to the flash window."""

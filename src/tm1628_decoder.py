@@ -312,6 +312,15 @@ class TM1628Decoder(PanelDecoder):
         """Segment bytes of the 4 digits (RAM bytes digit_addrs), standard layout."""
         if self.vfd_14seg:
             return self.vfd_to_7seg_digits(self.get_display_text())
+        if max(self.seg_map, default=0) >= 8:
+            return [
+                self._segments(
+                    self.ram[a]
+                    | ((self.ram[a + 1] if a + 1 < self.RAM_SIZE else 0) << 8)
+                    | ((self.ram[a + 2] if a + 2 < self.RAM_SIZE else 0) << 16)
+                ) if a < self.RAM_SIZE else 0
+                for a in self.digit_addrs
+            ]
         return [self._segments(self.ram[a]) if a < self.RAM_SIZE else 0 for a in self.digit_addrs]
 
     def get_display_text(self):

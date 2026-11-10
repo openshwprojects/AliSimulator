@@ -1,0 +1,54 @@
+{
+  "file": "HDS2_S9_by_anonymouSX.abs",
+  "device": {
+    "brand": "Openbox",
+    "model": "S9 HD PVR",
+    "type": "DVB-S2 HD satellite receiver with PVR and CA slot",
+    "board": "HDS2_S9",
+    "soc": "ALi M3602 (the maincode chunk's version \"  HACK S9  \" with bootloader \"  HACK S9  \")",
+    "family": "M3602 (chips/m3602.py: the M36xx family with chip ID 0x3602)",
+    "demod": "ALi S3501",
+    "tuner": "Sharp BS2S7VZ7306A",
+    "flash": "4 MB SPI",
+    "panel": {
+      "chip": "TM1628 / PT6964 (PAN_PT_0 3-wire LED)",
+      "clk": 171,
+      "dio": 62,
+      "stb": 170
+    },
+    "irCoding": "nec",
+    "tunerModel": null
+  },
+  "image": {
+    "kind": "update",
+    "version": "HACK S9 (bootloader \"  HACK S9  \" 2012-01-05; maincode chunk 0x01FE0101 \"  HACK S9  \" 2012-01-05)",
+    "date": "2012-01-05",
+    "size": 4194304,
+    "sha1": "5b7788be808c03dc31921198d752fb6c0dde8346",
+    "layout": "bootloader 0x000000 (\"  HACK S9  \" 2012-01-05), maincode 0x010000 (\"  HACK S9  \", LZMA 0x18F9F2 bytes -> 4.54 MB), Radioback 0x1E0000 (1.0.0), Bootback 0x1F0000 (1.0.0), upgcode 0x200000 (upg 1.0.0), defaultdb 0x210000 (1.1.0), userdb 0x22FF80 (1.0.0, 0x0E0070 bytes)"
+  },
+  "source": {
+    "url": "http://www.satedu.cba.pl/index.php?action=downloadfile&filename=HDS2_S9_by_anonymouSX.abs&directory=Firmware%20for%20to%20all%20receivers/Openbox/Openbox%20S9%20HD%20PVR",
+    "site": "satedu.cba.pl",
+    "author": "anonymouSX",
+    "date": "2012-01-05",
+    "login": false,
+    "note": "Unpacked from HDS2_S9_by_anonymouSX.abs in the mirror's Openbox/Openbox S9 HD PVR folder."
+  },
+  "simulator": {
+    "boots": true,
+    "application": true,
+    "display": true,
+    "panelText": [
+      "    ",
+      "AHAH",
+      "1N1t",
+      "OOO2"
+    ],
+    "note": "Boots as the single-CPU M3602 family with chip ID 0x3602 (run_dump_openbox_s9_app_starts.py): the \"  HACK S9  \" bootloader unpacks maincode via LZMA to 0x80000200, initializes the single-core M3602 environment, and jumps to 0x80000200.  The main application prints 'APP  init ok' on UART, executes hundreds of graphics engine (GeM3602) commands drawing the OSD dialogs, and drives the 3-wire TM1628 LED front panel on CLK = GPIO 171, DIO = GPIO 62, STB = GPIO 170 through 'AHAH' -> '1N1t' -> 'OOO2'."
+  },
+  "desc": [
+    "Openbox S9 HD PVR customized update firmware (2012-01-05) by anonymouSX built on the single-core ALi M3602 HD platform with 4 MB SPI flash.",
+    "Features single-core M3602 execution without secondary SEE core, TM1628 front-panel status progression, and full OSD rendering via the ALi graphics engine."
+  ]
+}
