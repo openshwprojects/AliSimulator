@@ -17,18 +17,31 @@ directory:
   complete 4 MiB flash image for the simulator or an external programmer.
 - [Manifest](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.json):
   sizes, addresses, application version, and SHA-256 checksums.
+- [Portable UART ZIP](../firmware/maciej_app/bin/maciej_uart_v2.zip):
+  the standalone `maciej_uart.py`, 64 KiB payload, and an ASCII Polish README.
+  Extract all three files together; only Python 3.10+ and `pyserial` are needed.
 
 These bytes match the image written by the successful UART self-test exactly.
 No compilation is needed to upload this version:
 
 ```powershell
-python tools/maciej_uart.py --port COM3 --capture-boot 15 flash firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
+python tools/maciej_uart.py --port COM3 --capture-boot 60 flash firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
 ```
 
-Replace `COM3` with the actual adapter port and power-cycle when prompted.
+Replace `COM3` with the actual adapter port and power-cycle immediately when
+prompted. The 60-second capture window gives the stock loader time to finish
+its startup checks; the earlier 15-second example expired before command
+processing began in the simulator.
 This dump's maincode update requires LZMA compression and CRC checks, with no
 encryption or signing step. The updater writes the application region and
 preserves the existing bootloader and other flash regions.
+
+From the extracted portable ZIP's directory, use:
+
+```powershell
+python -m pip install pyserial
+python maciej_uart.py --port COM3 --capture-boot 60 flash elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
+```
 
 ## Build the application
 
@@ -135,6 +148,31 @@ To run only this regression through the suite and generate its HTML report:
 python run_all_tests.py --slow -k maciej_custom_app --engine cpp
 ```
 
+The distributed ZIP has a separate regression:
+
+```powershell
+python run_all_tests.py --slow -k maciej_uart_bundle --engine cpp
+```
+
+It checks the archive against the canonical files, extracts it, and runs the
+updater's CLI against the original bootloader through an emulated pyserial
+device. It installs the same v2 payload twice, checks both full backups and
+UART readbacks, refuses reused backup filenames, and checks native reboot,
+cold boot, and `p`/`v` responses after each installation. No physical serial
+port is used. This complete CLI regression runs on C++ and keeps the updater's
+hardware timeouts unchanged; the slower Unicorn engine reports it as not
+applicable. Results are saved under `build/maciej_app/selftest/cpp/bundle/`
+and included in the existing GitHub self-test artifact upload.
+
+Validated locally on 2026-11-11: the packaged CLI completed both installations
+in 941.536 seconds (943 seconds including the suite wrapper), with four full
+UART dumps, preserved backups, native reboot/cold boot, and `p`/`v` checks.
+The second backup exactly matched the flash produced by the first cycle.
+The separate fresh-build original-to-v1-to-v2 test passed in 181.539 seconds,
+and the distributed v2 image also passed a native Unicorn cold boot. These
+are simulator results; the updated GitHub workflow and physical board still
+require their own runs.
+
 To test already-built applications directly:
 
 ```powershell
@@ -189,7 +227,7 @@ ground with appropriate signal levels, and configure **115200 8E1**. Maciej's
 post reports 3.3 V UART levels on this board.
 
 ```powershell
-python tools/maciej_uart.py --port COM3 --capture-boot 15 probe
+python tools/maciej_uart.py --port COM3 --capture-boot 60 probe
 ```
 
 Power-cycle the box when the command prints its capture message. It sends
@@ -199,7 +237,7 @@ reset the board. A successful `comtest` handshake confirms communication.
 To install v1, run this and power-cycle when prompted:
 
 ```powershell
-python tools/maciej_uart.py --port COM3 --capture-boot 15 flash build/maciej_app/v1/flash.maincode.bin --backup build/maciej_app/before-v1.bin
+python tools/maciej_uart.py --port COM3 --capture-boot 60 flash build/maciej_app/v1/flash.maincode.bin --backup build/maciej_app/before-v1.bin
 ```
 
 The command reads a full CRC-checked backup, checks the bootloader identity,
@@ -211,7 +249,7 @@ copies remain available. `--stay` keeps the box in the loader after verifying.
 Repeat with the second version and a fresh backup filename:
 
 ```powershell
-python tools/maciej_uart.py --port COM3 --capture-boot 15 flash build/maciej_app/v2/flash.maincode.bin --backup build/maciej_app/before-v2.bin
+python tools/maciej_uart.py --port COM3 --capture-boot 60 flash build/maciej_app/v2/flash.maincode.bin --backup build/maciej_app/before-v2.bin
 ```
 
 Power-cycling re-enters the unchanged factory bootloader even though the custom

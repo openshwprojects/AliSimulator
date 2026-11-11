@@ -49,9 +49,27 @@ jobs:
         run: pip install unicorn capstone numpy pillow
 
       - name: Install the MIPS application cross compiler
+        shell: bash
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
+          set -euo pipefail
+          . /etc/os-release
+          # Bypass the runner's Azure mirror list for this installation only.
+          toolchain_sources="$RUNNER_TEMP/mips-toolchain.list"
+          cat > "$toolchain_sources" <<EOF
+          deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu ${VERSION_CODENAME} main universe
+          deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu ${VERSION_CODENAME}-updates main universe
+          deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu ${VERSION_CODENAME}-security main universe
+          EOF
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$toolchain_sources"
+            -o Dir::Etc::sourceparts=-
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20
+          )
+          sudo apt-get "${apt_options[@]}" update --error-on=any
+          sudo apt-get "${apt_options[@]}" install --no-install-recommends -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
 
       # cpp/build.sh: g++ -> cpp/build/libalicore.so (src/cpp_core.py loads it),
       # then the core's own tests (they run dump.bin and ali_sdk.bin).
@@ -63,7 +81,7 @@ jobs:
       # The report is written even when tests fail - a failing report is the
       # useful one; the real outcome is reflected after it is uploaded.  --slow
       # adds the firmware runs that render screens, four at a time on the
-      # runner's cores.  --timeout kills a test that never gets there: 15 min
+      # runner's cores.  --timeout kills a test that never gets there: 30 min
       # on the C++ core, which boots a box in seconds; an hour on Unicorn,
       # whose screen tests take minutes each.
       - name: Run all tests (writes the report)
@@ -73,7 +91,7 @@ jobs:
           if [ "$ENGINE" = unicorn ]; then
             python run_all_tests.py --slow --jobs 4 --timeout 3600 --engine unicorn
           else
-            python run_all_tests.py --slow --jobs 4 --timeout 900 --engine cpp
+            python run_all_tests.py --slow --jobs 4 --timeout 1800 --engine cpp
           fi
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
