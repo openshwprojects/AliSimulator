@@ -48,6 +48,11 @@ jobs:
       - name: Install dependencies
         run: pip install unicorn capstone numpy pillow
 
+      - name: Install the MIPS application cross compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
+
       # cpp/build.sh: g++ -> cpp/build/libalicore.so (src/cpp_core.py loads it),
       # then the core's own tests (they run dump.bin and ali_sdk.bin).
       - name: Build the C++ core
@@ -80,6 +85,14 @@ jobs:
         with:
           name: report-${{ env.ENGINE }}
           path: ${{ env.ENGINE == 'unicorn' && 'report' || 'report/cpp' }}
+
+      - name: Upload Maciej application self-test artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maciej-app-selftest-${{ env.ENGINE }}
+          path: build/maciej_app/selftest/${{ env.ENGINE }}
+          if-no-files-found: warn
 
       # Pushes only: pull requests (especially from forks) cannot deploy Pages,
       # and a Unicorn run by hand must not replace the C++ report on the site.

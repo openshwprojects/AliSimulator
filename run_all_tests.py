@@ -262,6 +262,7 @@ DUMPS = [("dump_maciej.bin", "dump_maciej.bin"), ("dump.bin", "dump.bin"),
          ("opticum_hd506", "Opticum HD 506"),
          ("ali_sdk.bin", "ali_sdk.bin")]
 SLOW_TESTS = ("run_dump_maciej_to_main_app.py", "run_dump_maciej_capture_screen.py",
+              "run_dump_maciej_custom_app.py",
               "run_dump_maciej_remote.py", "run_dump_globo_capture_screen.py",
               "run_dump_cabletech_capture_screen.py", "run_dump_capture_screen.py",
               "run_dump_srt8115_capture_screen.py", "run_dump_urz0194s_capture_screen.py",
