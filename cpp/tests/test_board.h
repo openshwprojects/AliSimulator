@@ -50,7 +50,7 @@ struct Board {
       memcpy(&b->mmio[off], &value, size);
       return 0;
     }
-    if (off == 0x18305) return 0x20;   // UART LSR: always ready (the init stores 0 there)
+    if (off == 0x18305) return 0x60;   // synchronous UART TX: THRE and TEMT
     uint64_t v = 0;
     memcpy(&v, &b->mmio[off], size);
     return v;
@@ -67,7 +67,7 @@ struct Board {
     for (uint32_t win : {0x0F000000u, 0x1F000000u})
       for (uint32_t slot = 0; slot < 0x01000000u; slot += 0x400000u)
         core.map_ptr(win + slot, rom.size(), PROT_READ | PROT_EXEC, rom.data());
-    mmio[0x18305] = 0x20;   // UART LSR: THR empty
+    mmio[0x18305] = 0x60;   // UART LSR: holding and shift registers empty
     mmio[0x0002] = 0x11;    // chip ID 0x3811
     mmio[0x0003] = 0x38;
     core.set_device_window(0x18000000, mmio.data(), (uint32_t)mmio.size(), dev, this);

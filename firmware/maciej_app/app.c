@@ -12,6 +12,8 @@ typedef unsigned int u32;
 static volatile u32 bss_probe;
 static volatile u32 data_probe = 0x13579bdfu;
 
+void platform_restart(void) __attribute__((noreturn));
+
 static void putc_uart(char ch)
 {
     while (!(UART[5] & 0x20u)) { }
@@ -38,7 +40,7 @@ void app_main(void)
     bss_probe = 1;
     puts_uart("\r\n" APP_BANNER "\r\nVersion: " APP_VERSION "\r\n");
     puts_uart("RAM app via original bootloader\r\n");
-    puts_uart("Commands: v=version p=ping\r\n");
+    puts_uart("Commands: v=version p=ping r=restart c=bootloader capture\r\n");
     for (;;) {
         if (UART[5] & 1u) {
             u8 ch = UART[0];
@@ -46,6 +48,15 @@ void app_main(void)
                 puts_uart("pong " APP_VERSION "\r\n");
             else if (ch == 'v')
                 puts_uart(APP_BANNER "\r\nVersion: " APP_VERSION "\r\n");
+            else if (ch == 'r' || ch == 'c') {
+                /* The updater already sends repeated 'c' while capturing the
+                   original loader. Here its first 'c' starts a software reboot;
+                   subsequent bytes interrupt the loader's normal startup. */
+                puts_uart("Restarting via original bootloader\r\n");
+                /* Wait for the FIFO AND shift register, not just THR empty. */
+                while (!(UART[5] & 0x40u)) { }
+                platform_restart();
+            }
         }
     }
 }

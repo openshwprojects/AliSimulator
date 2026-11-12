@@ -1,0 +1,42 @@
+{
+  "format": "maciej-maincode-v1",
+  "input_sha256": "806044f3b831497a23214256edf67f655418ab74995c0a34bb2b518fd8e24c5e",
+  "input_uart_crc": 1608722514,
+  "flash_sha256": "3564d45b5354989f90f704c7bbf4ce1869182675a91bc3f158c6303da40c46c6",
+  "flash_size": 4194304,
+  "flash_offset": 327680,
+  "payload_size": 65536,
+  "payload_sha256": "3bfcdf3a842087e84c22460b862e48bdf316a43112e12a03da6859538919a64a",
+  "application_size": 892,
+  "application_sha256": "e5810e942268e7ae73c4b9ac37815ddae83fa689a4eb46668dd64fcc731116d3",
+  "compressed_size": 565,
+  "load_address": 2147484160,
+  "entry_address": 2147484160,
+  "chunk": {
+    "offset": 327680,
+    "id": 33423617,
+    "length": 677,
+    "span": 2359296,
+    "crc": 1213190323,
+    "name": "406000000003002",
+    "load_address": 2147484160,
+    "entry_address": 2147484160
+  },
+  "preserved_prefix_sha256": "44c1a9b45af405effe961bf123b22e86196c3cd3dcd691d87fa28ef0b69bfc8d",
+  "preserved_suffix_sha256": "02e7a5501092dc5a9d24a444a453d0f16b8cd4db8973c629f3163c1cbad2acbf",
+  "lzma": {
+    "lc": 0,
+    "lp": 2,
+    "pb": 2,
+    "dictionary_size": 8388608
+  },
+  "application_version": "v3",
+  "banner": "ELEKTRODA ALI M3801 TEST FOR MACIEJ",
+  "uart": "115200 8E1",
+  "commands": {
+    "v": "version",
+    "p": "ping",
+    "r": "restart",
+    "c": "restart for repeated-c bootloader capture"
+  }
+}

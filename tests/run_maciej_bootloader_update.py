@@ -105,8 +105,14 @@ class SimulatorTransport:
 
     def check_application(self, version):
         expected = f"{APP_BANNER}\r\nVersion: {version}\r\n".encode("ascii")
-        ready = expected + b"RAM app via original bootloader\r\nCommands: v=version p=ping\r\n"
+        # Existing v1/v2 images and newer applications share the stable prefix;
+        # the command list can grow without weakening the exact banner checks.
+        ready = expected + b"RAM app via original bootloader\r\nCommands: "
         boot = self.wait_for(ready)
+        if b"\r\n" not in boot[boot.index(ready) + len(ready):]:
+            boot += self.wait_for(b"\r\n", 5)
+        commands = boot[boot.index(ready) + len(ready):].split(b"\r\n", 1)[0]
+        assert b"v=version" in commands and b"p=ping" in commands
         assert b"runtime init failed" not in boot, "Application runtime initialization failed"
         assert b"bl_verify_sw" in self.received, "Application did not pass through the original bootloader"
         self.pending.clear()
@@ -119,6 +125,7 @@ class SimulatorTransport:
                 "boot_tail": boot[-400:].decode("latin-1"),
                 "ping": response.decode("latin-1"),
                 "version_response": version_response.decode("latin-1"),
+                "commands": commands.decode("ascii"),
                 "lzma_hle": self.sim.lzma_hle}
 
 

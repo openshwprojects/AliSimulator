@@ -556,8 +556,8 @@ class AliMipsSimulator:
                 self.log(f"Warning: {name} at {hex(base)} - {e}")
         self.mu.mmio_map(0x18000000, MMIO_SIZE, self._mmio_read, None, self._mmio_write, None)
 
-        # Set UART LSR (THR empty) so the firmware's putc does not wait
-        self.mu.mem_write(0xB8018305, b'\x20')
+        # TX is synchronous: both the holding and shift registers are empty.
+        self.mu.mem_write(0xB8018305, b'\x60')
         # (the chip ID at 0xB8000002 is the chip family's: chips/)
 
         # Hooks
@@ -2079,10 +2079,11 @@ class AliMipsSimulator:
             if self._dev_replay_of(uc, 'thr', address, value) is None:
                 self._uart_log(value)
                 self._dev_note(uc, 'thr', address, value)
-            # Set LSR bit 5 (0x20 = Transmitter Holding Register Empty)
-            # so firmware's uart_write_char doesn't timeout and retry 3x.
+            # _uart_log delivers TX synchronously; no FIFO or shift-register
+            # byte remains pending. Report THRE (bit 5) and TEMT (bit 6), so
+            # firmware can drain the UART before resetting or changing baud.
             # LSR is at UART base + 5 (SCI_16550_ULSR = 5).
-            self._mmio_view[(address & 0xFFFFF0) | 5] = 0x20
+            self._mmio_view[(address & 0xFFFFF0) | 5] = 0x60
 
     def _hook_uart_read(self, uc, access, address, size, value, user_data):
         """Handle reads from UART registers for RX simulation.
@@ -2090,14 +2091,14 @@ class AliMipsSimulator:
         16550 UART registers at base 0xB8018300:
           +0    URBR  — Receive Buffer Register (read: get received byte)
           +2    UIIR  — Interrupt Identification Register (0x04=RDA, 0x0C=CTI, 0x01=none)
-          +5    ULSR  — Line Status Register (bit0=DataReady, bit5=THRE)
+          +5    ULSR  — Line Status Register (bit0=DataReady, bit5=THRE, bit6=TEMT)
           +0x12 URFC  — RX FIFO byte count (read by SDK4.0gc / M3821 ISR)
         """
         self._device_access(uc)
         reg_offset = (address & 0x1F)  # offset within 32-byte UART block
         off = address & 0xFFFFFF
         if reg_offset == 5:  # ULSR — Line Status Register
-            lsr = 0x20  # bit5 = THRE always set
+            lsr = 0x60  # synchronous TX has empty holding and shift registers
             if len(self._uart_rx_queue) > 0:
                 lsr |= 0x01  # bit0 = Data Ready
             self._mmio_view[off] = lsr

@@ -358,7 +358,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
         self._gpio_count = (ctypes.c_uint32 * 1).from_address(count.value)
         self._gpio_pairs = (ctypes.c_uint32 * (2 * 4096)).from_address(pairs.value)
         if self._shared is None:
-            core.mem_write(0xB8018305, b'\x20')
+            core.mem_write(0xB8018305, b'\x60')
         core.hook_add(UC_HOOK_MEM_UNMAPPED | UC_HOOK_MEM_FETCH_PROT | UC_HOOK_MEM_READ_PROT, self._hook_mem_invalid)
         core.hook_add(UC_HOOK_MEM_WRITE_PROT, self._hook_flash_write_prot)
         self._mmio_on('w', self._hook_uart_write, 0x18300, 0x18305)
@@ -558,7 +558,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 rflags[off] = rflags.get(off, 0) | DR_READ | DR_UART_IDLE
                 reg_off = off & 0x1F
                 if reg_off == 5:
-                    rules.append((off, 0, 0x00, 0x20, 0, RULE_EXACT_OFF))
+                    rules.append((off, 0, 0x00, 0x60, 0, RULE_EXACT_OFF))
                 elif reg_off == 2:
                     rules.append((off, 0, 0x00, 0x01, 0, RULE_EXACT_OFF))
                 elif reg_off == 0x12:

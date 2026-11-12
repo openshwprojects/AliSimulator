@@ -8,40 +8,68 @@ already performed by the original loader; it is not a replacement reset ROM.
 
 ## Ready-to-use binaries
 
-The tested v2 binaries are stored in the repository, outside the ignored build
-directory:
+The latest application is v3. It adds UART restart and software entry to the
+existing bootloader; v2 files remain available for reproducing the first
+hardware validation.
 
-- [elektroda_ali_m3801_maciej_v2.maincode.bin](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.maincode.bin):
-  64 KiB application chunk for UART upload at `0x50000`.
-- [elektroda_ali_m3801_maciej_v2.bin](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.bin):
-  complete 4 MiB flash image for the simulator or an external programmer.
-- [Manifest](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.json):
-  sizes, addresses, application version, and SHA-256 checksums.
-- [Portable UART ZIP](../firmware/maciej_app/bin/maciej_uart_v2.zip):
-  the standalone `maciej_uart.py`, 64 KiB payload, and an ASCII Polish README.
-  Extract all three files together; only Python 3.10+ and `pyserial` are needed.
-
-These bytes match the image written by the successful UART self-test exactly.
-No compilation is needed to upload this version:
+- [v3 UART payload](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v3.maincode.bin):
+  64 KiB application chunk for upload at `0x50000`.
+- [v3 full flash image](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v3.bin):
+  complete 4 MiB image for the simulator or an external programmer.
+- [v3 manifest](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v3.json):
+  sizes, addresses, commands, and SHA-256 checksums.
+- [Portable v3 UART ZIP](../firmware/maciej_app/bin/maciej_uart_v3.zip):
+  standalone `maciej_uart.py`, payload, and ASCII Polish instructions. Extract
+  all three files together; only Python 3.10+ and `pyserial` are needed.
 
 ```powershell
-python tools/maciej_uart.py --port COM3 --capture-boot 60 flash firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
+python tools/maciej_uart.py --port COM3 --capture-boot 60 flash firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v3.maincode.bin --backup before-maciej-v3.bin
 ```
 
-Replace `COM3` with the actual adapter port and power-cycle immediately when
-prompted. The 60-second capture window gives the stock loader time to finish
-its startup checks; the earlier 15-second example expired before command
-processing began in the simulator.
-This dump's maincode update requires LZMA compression and CRC checks, with no
-encryption or signing step. The updater writes the application region and
-preserves the existing bootloader and other flash regions.
+Replace `COM3` with the tuner adapter. For stock firmware or v1/v2, power the
+tuner on after capture starts. When v3 is already running, leave it powered:
+the first capture `c` requests a restart and subsequent `c` bytes interrupt
+the original loader. A single `c` without continuing capture need not leave
+the receiver in the loader. The unchanged Python and C# capture protocols
+support this path. A new backup filename is required for every update.
 
-From the extracted portable ZIP's directory, use:
+From the extracted ZIP, install `pyserial` and use the same command with
+`maciej_uart.py` and the payload filename in the current directory.
+The image uses LZMA and CRC checks; no encryption or signing step is needed.
+The updater preserves the loader and all bytes outside the maincode payload.
 
-```powershell
-python -m pip install pyserial
-python maciej_uart.py --port COM3 --capture-boot 60 flash elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
-```
+## UART restart in v3
+
+The application accepts individual characters without Enter at 115200 8E1:
+
+- `v`: print the banner and version.
+- `p`: reply `pong v3`.
+- `r`: restart through the original loader and boot the application again.
+- `c`: restart for the updater's repeated-`c` bootloader capture.
+
+`platform_restart` follows the M3801/S3811 branch of this dump's own
+`sys_watchdog_reboot` / `sys_ic_reboot`: set the warm-boot marker, restore
+SPI controller mode, mask CPU interrupts, pulse the same peripheral reset
+registers, and jump to `0xBFC00000`. The original loader then reinitializes
+DRAM and caches and loads the application. The app waits for UART transmit
+completion before restarting. It neither writes flash nor replaces the
+bootloader. These register values apply to the exact supported loader and
+board profile, not arbitrary ALi devices.
+
+`tests/run_dump_maciej_app_restart.py` builds the source. On C++ it exercises
+two updates with different application bytes in one continuously running
+simulator using the production Python CLI. It checks full backups/readbacks,
+`r`, repeated-`c` capture, the original loader's verification, application
+replies, and flash preservation. On Unicorn it checks native restarts,
+software capture, and reboot without the long full-flash transfers. It is
+included in the GitHub `--slow` suite; artifacts are under
+`build/maciej_app/selftest/ENGINE/restart/`.
+
+`tests/run_dump_maciej_ready_v3.py` also tests the exact shipped v3 binary and
+ZIP on both engines: archive contents and hashes, native cold boot, three
+`r` restarts, software capture, loader handshake/reboot, and unchanged flash.
+This shorter regression runs in the default suite, with artifacts under
+`build/maciej_app/selftest/ENGINE/ready_v3/`.
 
 ## Build the application
 
@@ -55,6 +83,7 @@ From the repository root, with the compiler installed on this workstation:
 $env:MIPS_CROSS_COMPILE = 'W:\TOOLS\g++-mipsel-none-elf-15.2.0\bin\mipsel-none-elf-'
 python firmware/maciej_app/build.py --version v1
 python firmware/maciej_app/build.py --version v2
+python firmware/maciej_app/build.py --version v3
 ```
 
 On other machines, set `MIPS_CROSS_COMPILE` to the local prefix, pass
@@ -63,11 +92,11 @@ matching binutils on PATH. The build script uses argument arrays, so compiler
 and output paths may contain spaces.
 
 The result for each version is `build/maciej_app/VERSION/app.bin` plus an ELF,
-link map, disassembly, and build manifest. Both demonstration versions compile
-to 624 bytes with GCC 15.2.0. Both print the exact UART banner
-`ELEKTRODA ALI M3801 TEST FOR MACIEJ`, followed by `Version: v1` or `Version: v2`
-on a separate line. Sending `p` returns `pong v1` or `pong v2`, and `v` prints
-the banner and version again. The application uses 115200 baud, 8 data bits,
+link map, disassembly, and build manifest. The v3 application compiles
+to 892 bytes with GCC 15.2.0; the archived v2 binary is 624 bytes. Each build
+prints the exact UART banner `ELEKTRODA ALI M3801 TEST FOR MACIEJ`, followed by
+its configured version on a separate line. Sending `p` returns `pong VERSION`,
+and `v` prints the banner and version again. The application uses 115200 baud, 8 data bits,
 even parity, 1 stop bit.
 
 The essential build settings are MIPS32 (not MIPS32r2), little endian, o32 ABI,
@@ -170,8 +199,8 @@ UART dumps, preserved backups, native reboot/cold boot, and `p`/`v` checks.
 The second backup exactly matched the flash produced by the first cycle.
 The separate fresh-build original-to-v1-to-v2 test passed in 181.539 seconds,
 and the distributed v2 image also passed a native Unicorn cold boot. These
-are simulator results; the updated GitHub workflow and physical board still
-require their own runs.
+are simulator results; the updated GitHub workflow still requires its own run.
+Physical-board results are recorded below.
 
 To test already-built applications directly:
 
@@ -252,8 +281,8 @@ Repeat with the second version and a fresh backup filename:
 python tools/maciej_uart.py --port COM3 --capture-boot 60 flash build/maciej_app/v2/flash.maincode.bin --backup build/maciej_app/before-v2.bin
 ```
 
-Power-cycling re-enters the unchanged factory bootloader even though the custom
-application has no update command. Use `flash.maincode.bin` as the UART
+Power-cycling re-enters the unchanged factory bootloader on every version.
+The v3 application also supports software capture without cycling power. Use `flash.maincode.bin` as the UART
 payload; `app.bin` lacks its chunk header and `flash.bin` is a full flash image.
 
 ## Wire protocol and the original investigation
@@ -285,6 +314,31 @@ only writable start at `327680` and checks the chunk span before transmission.
 This loader does not need a `go` command: a valid maincode chunk plus reboot
 uses its normal application-loading path.
 
-The simulator results verify the software workflow. Serial timing, electrical
-connections, and real flash behavior still require validation on the board;
-no physical device was flashed during this work.
+Physical validation on 2026-11-11 used a 3.3 V CH340 UART on COM46 at 115200
+8E1. A complete CRC-checked backup matched the original dump byte for byte
+(raw flash SHA-256 `fac12fb68bdd76a86c5f7ba0b8c1325ed9ee1e401daafb14529a35df6729dc44`).
+The bootloader accepted the distributed 64 KiB v2 payload, reported `B0320K`
+and completion, and returned a complete CRC-checked readback matching the
+distributed v2 image (SHA-256
+`0088537d657984b6e50d603d51cc08e64304b5c278a5d46191a7d3dbce827b15`).
+Every byte outside the payload remained unchanged. A bootloader-requested
+reboot printed the exact banner and v2 version; `p`, `v`, and three further
+pings over 30 seconds passed. The original backup and UART logs are kept locally under ignored
+`hardware_backups/`.
+
+A second physical update on the same tuner used BK7231GUIFlashTool's shared
+C# backend through its CLI to install v3. Its full backup matched the
+previously verified v2 image. Complete readback matched the distributed v3
+image (SHA-256
+`3564d45b5354989f90f704c7bbf4ce1869182675a91bc3f158c6303da40c46c6`),
+with every byte outside the payload unchanged. The v3 banner, version,
+ping, and three further pings over 30 seconds passed.
+
+The application's `r` command restarted through the original loader and
+returned to v3. The Python client's existing repeated-`c` capture then
+entered the bootloader without a power cycle; handshake, loader reboot,
+and final v3 version/ping checks passed.
+
+These results establish two physical updates and working software restart
+and bootloader entry. A complete further update initiated from running v3,
+and a power-off cold boot of v3, remain simulator validations.

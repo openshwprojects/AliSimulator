@@ -97,7 +97,7 @@ class BootloaderClient:
     handshake() selects/checks the classic protocol. Boot entry is separate:
     send ASCII 'c' during the loader's boot window. Simulator tests queue it
     before running the reset vector; on a board use capture_boot() while cycling
-    power. Calling dump() never modifies flash.
+    power, or while the v3 application is already running. Calling dump() never modifies flash.
     """
 
     def __init__(self, transport: Transport, timeout: float = 10,
@@ -135,7 +135,7 @@ class BootloaderClient:
         self._expect(raw)
 
     def capture_boot(self, seconds: float = 5) -> bytes:
-        """Send 'c' while the user power-cycles, then clear echoed input.
+        """Send paced 'c' for startup or v3 software capture, then clear echoes.
 
         This helper uses wall time and is for serial transports, not simulated
         time. It does not toggle power, reset lines, DTR, or RTS.
@@ -313,7 +313,7 @@ def main() -> None:
     parser.add_argument("--port", required=True, help="explicit port, e.g. COM3")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--capture-boot", type=float, default=0, metavar="SECONDS",
-                        help="send 'c' while you power-cycle the device")
+                        help="send paced 'c'; running Maciej v3 restarts automatically, older firmware needs power cycling")
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("probe", help="check the classic comtest echo only")
     dump_parser = sub.add_parser("dump", help="read and CRC-check the full 4 MiB flash")
@@ -336,7 +336,7 @@ def main() -> None:
     try:
         client = BootloaderClient(transport)
         if args.capture_boot:
-            print(f"Power-cycle the device now; capturing boot for {args.capture_boot:g} seconds.", flush=True)
+            print(f"Capturing boot for {args.capture_boot:g} seconds. Running Maciej v3 restarts automatically; otherwise power on or power-cycle the tuner now.", flush=True)
             client.capture_boot(args.capture_boot)
         client.handshake()
         print("Classic bootloader handshake OK", flush=True)
