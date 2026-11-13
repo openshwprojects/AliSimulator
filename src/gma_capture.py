@@ -16,6 +16,20 @@ gma_m36f_init_head / gma_fill_hw_head) is:
   +18  next head (physical; the chain ends at a head pointing to itself / 0)
   +1C  bitmap address (physical)
 The GE (ge_m36f.py) draws the bitmaps; this module only reads them.
+A layer's colours are RGB, as the original applications' palettes are.  On
+a revision-1 S3811 (the chip word's low byte non-zero; capture's
+head_matrix, chips/m3801.py) a head is a 0x280-byte block whose words at
++0x240 hold the matrix the chip converts the colours to YCbCr with (12 signed
+words, x512: the rows Y, Cb, Cr of R, G, B and an offset; both original
+applications write BT.709's for an HD output, BT.601's for SD, then 45): the
+capture converts through it and back as the TV decodes the output (BT.709
+for HD, BT.601 for SD) -- an all-zero matrix shows every colour black,
+alpha still applying, as a real box did (a Comsat TE 1050 HD with the
+Maciej demo v4).  Where the family names a YCbCr bit of the layer's enable
+register (capture's ycbcr_bit; the S3811's bit 19, which the originals
+clear) and the register has it set, the chip skips the matrix: a pixel's or
+palette entry's red, green and blue fields are taken as Cr, Y and Cb -- also
+measured on that box, where dark RGB colours came out green.
 
 The M3602's display layers (the SDK's ge_m36.c / ge_lld.c, which the
 Ferguson T50 runs) are older: 0xB80061A0 holds layer 0's enable in bit 0
@@ -81,6 +95,7 @@ def _get_cpp_lib():
 
 LAYER_REGS = (0x6300, 0x6380)       # (enable, base address) register pairs of GMA layers 0 / 1 (offsets in 0xB8000000)
 PHYS = 0x07FFFFFF
+HEAD_MATRIX = 0x240                 # a revision-1 S3811 head's RGB -> YCbCr matrix (12 words, then a 'sharpness' word)
 
 
 def _phys(ram):
@@ -115,10 +130,25 @@ def parse_head(ram, addr):
     return h
 
 
-def layer_heads(ram, dev, layer=0, limit=64):
-    """Heads of a GMA layer (list of dicts) and whether the layer is enabled."""
+def head_matrix(ram, addr):
+    """The 12 signed words of the RGB -> YCbCr matrix at +0x240 of the head at
+    addr (a revision-1 S3811's 0x280-byte head block); None past RAM's end."""
+    a = (addr + HEAD_MATRIX) & _phys(ram)
+    if a + 48 > ram.size:
+        return None
+    return list(struct.unpack_from('<12i', ram, a))
+
+
+def layer_heads(ram, dev, layer=0, limit=64, ycbcr_bit=0, matrix=False):
+    """Heads of a GMA layer (list of dicts) and whether the layer is enabled.
+    Each head's 'ycbcr' is whether its colours are YCbCr: the layer's enable
+    register has `ycbcr_bit` set (0: the family has no such bit); with
+    `matrix` (a revision-1 S3811) a head whose colours are not YCbCr gets its
+    'matrix' (head_matrix) too."""
     en_off, base_off = LAYER_REGS[layer], LAYER_REGS[layer] + 4
-    enabled = struct.unpack_from('<I', dev, en_off)[0] & 1
+    control = struct.unpack_from('<I', dev, en_off)[0]
+    enabled = control & 1
+    ycbcr = bool(control & ycbcr_bit)
     a = struct.unpack_from('<I', dev, base_off)[0] & 0x0FFFFFFF
     heads, seen = [], set()
     while a and a not in seen and len(heads) < limit and a + 0x28 <= ram.size:
@@ -126,6 +156,9 @@ def layer_heads(ram, dev, layer=0, limit=64):
         h = parse_head(ram, a)
         if h['signature'] != 0xAA:
             break
+        h['ycbcr'] = ycbcr
+        if matrix and not ycbcr:
+            h['matrix'] = head_matrix(ram, a)
         heads.append(h)
         a = h['next']
     return enabled, heads
@@ -144,6 +177,66 @@ def _palette(ram, h):
     pal = np.stack([a, ((raw >> 16) & 255).astype(np.float32), ((raw >> 8) & 255).astype(np.float32),
                     (raw & 255).astype(np.float32)], -1)
     return pal, lvl
+
+
+def _shown_rgb(rgb, h):
+    """The colours (..., 3 float R, G, B as the head's pixels or palette hold
+    them) as the TV shows them, decoded as it decodes the output (h['bt709']:
+    BT.709 for HD, else BT.601): a head under the YCbCr bit holds Cr, Y, Cb; a
+    head with a matrix (a revision-1 S3811) is converted to YCbCr through it --
+    the chip adding 16 / 128 / 128, so an all-zero matrix gives black; the
+    offset column in the coefficients' x512 scale (the originals' brightness
+    setting: 0 at their default).  None when the colours are shown as they are."""
+    bt709 = 1 if h.get('bt709', True) else 0
+    if h.get('ycbcr'):
+        return ge_m36f.GeM36F._ycbcr_to_rgb(rgb[..., [1, 2, 0]], bt709)
+    m = h.get('matrix')
+    if m is None:
+        return None
+    k = np.array(m, np.float32).reshape(3, 4) / np.float32(512.0)
+    ycc = rgb @ k[:, :3].T + (k[:, 3] + np.array((16.0, 128.0, 128.0), np.float32))
+    return ge_m36f.GeM36F._ycbcr_to_rgb(ycc, bt709)
+
+
+_SHOWN_LUT = {}
+
+
+def _shown_packed16(g, raw, fmt, pfreg, ga, h):
+    """uint8 RGBA of a converted 16-bit head's pixels (_shown_rgba), through a
+    cached 65536-entry table: as fast as an unconverted head's decode."""
+    m = h.get('matrix')
+    key = (fmt, pfreg & 0x030E0000, ga, bool(h.get('ycbcr')), None if m is None else tuple(m), bool(h.get('bt709', True)))
+    lut = _SHOWN_LUT.get(key)
+    if lut is None:
+        every = np.arange(65536, dtype=np.uint16).reshape(1, 65536)
+        rgba = _shown_rgba(g.decode_rgba_u8(every, fmt, pfreg, ga), h)
+        lut = np.ascontiguousarray(rgba.reshape(65536, 4)).view(np.uint32).reshape(-1)
+        if len(_SHOWN_LUT) >= 64:
+            _SHOWN_LUT.clear()
+        _SHOWN_LUT[key] = lut
+    idx = raw if raw.dtype == np.uint16 else (raw & 0xFFFF)
+    return lut[idx].view(np.uint8).reshape(*raw.shape, 4)
+
+
+def _shown_palette(pal, h):
+    """A palette (n, 4: A, R, G, B float) as the TV shows it (_shown_rgb)."""
+    rgb = _shown_rgb(pal[:, 1:4], h)
+    if rgb is None:
+        return pal
+    out = pal.copy()
+    out[:, 1:4] = rgb
+    return out
+
+
+def _shown_rgba(rgba, h):
+    """uint8 RGBA pixels as the TV shows them (_shown_rgb)."""
+    rgb = _shown_rgb(rgba[..., :3].astype(np.float32), h)
+    if rgb is None:
+        return rgba
+    out = np.empty_like(rgba)
+    out[..., 3] = rgba[..., 3]
+    out[..., :3] = np.clip(rgb + 0.5, 0, 255).astype(np.uint8)
+    return out
 
 
 def _clut_rgba(pal, raw, ga=0xFF):
@@ -201,14 +294,17 @@ def render_head(ram, h):
         ga *= 17
     if fmt in ge_m36f.CLUT_FORMATS:
         pal, _ = _palette(ram, h)
+        pal = _shown_palette(pal, h)
         if fmt not in (0x0E, 0x0B):
             return _clut_rgba(pal, raw, ga), x0, y0
         px = g._decode(raw, fmt, pfreg, pal)
         if ga != 0xFF:
             px[..., 0] *= ga / 255.0
         rgba = np.clip(px[..., [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
+    elif (h.get('ycbcr') or h.get('matrix') is not None) and fmt in ge_m36f._PACKED16_FMTS and raw.size >= 64:
+        rgba = _shown_packed16(g, raw, fmt, pfreg, ga, h)
     else:
-        rgba = g.decode_rgba_u8(raw, fmt, pfreg, ga)
+        rgba = _shown_rgba(g.decode_rgba_u8(raw, fmt, pfreg, ga), h)
     return rgba, x0, y0
 
 
@@ -483,8 +579,9 @@ def _place_rgb_u8(rgb, x0, y0, screen, background):
 
 def _render_head_on_bg(ram, h, screen, background):
     fmt = h['format']
-    if fmt not in (0x08, 0x09, 0x0A, 0x0C) and fmt not in ge_m36f._PACKED16_FMTS:
-        return None
+    converted = h.get('ycbcr') or h.get('matrix') is not None
+    if fmt not in (0x08, 0x09, 0x0A, 0x0C) and (fmt not in ge_m36f._PACKED16_FMTS or converted):
+        return None                     # (16-bit colours the TV sees converted: render_head + _blend)
     bpp = ge_m36f.BPP.get(fmt, 8)
     x0, x1, y0, y1 = h['x0'], h['x1'], h['y0'], h['y1']
     width = max(1, x1 - x0 + 1) if x1 >= x0 else max(1, h['pitch'] * 8 // bpp)
@@ -505,6 +602,7 @@ def _render_head_on_bg(ram, h, screen, background):
         ga *= 17
     if fmt in (0x08, 0x09, 0x0A, 0x0C):
         pal, _ = _palette(ram, h)
+        pal = _shown_palette(pal, h)
         if ga != 0xFF:
             pal[:, 0] *= ga / 255.0
         pal_rgba = np.clip(pal[:, [1, 2, 3, 0]] + 0.5, 0, 255).astype(np.uint8)
@@ -542,10 +640,16 @@ def _render_de_on_bg(ram, layer, screen, background):
     return _place_rgb_u8(rgb, x0, y0, screen, background) if rgb is not None else None
 
 
-def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None, video_rgb=None):
+def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=None, video_rgb=None, ycbcr_bit=0,
+            head_matrix=False):
     """Composite all enabled regions of GMA layers 0 and 1 over a solid
     background (or over `video_rgb`, the video plane).  Returns (rgb uint8
-    (H, W, 3), info dict).
+    (H, W, 3), info dict).  ycbcr_bit: the bit of a GMA layer's enable
+    register with which the chip shows the layer's colours as YCbCr (the
+    family's gma_ycbcr_bit; 0 = none).  head_matrix: whether the chip, on a
+    revision-1 part (the low byte of the chip word at dev[0] non-zero),
+    converts the colours through each head's matrix (the family's
+    gma_head_matrix; see the module doc).
     In an SD or 1080i output mode the regions are drawn at the size their
     bitmaps have, at the scaled-back position (the display engine's scaling
     undone, see output_scale), so the picture is what the TV shows, at the
@@ -556,8 +660,13 @@ def capture(ram, dev, screen=(1280, 720), background=(0, 0, 0), m3327_palettes=N
     fx, fy = output_scale(dev, screen)
     info = {'layers': [], 'output_scale': (fx, fy)}
     active_heads = []
+    matrix = bool(head_matrix and dev[0])
+    lines, _out = output_mode(dev)
+    bt709 = not lines or lines >= 750           # (the TV decodes an HD output as BT.709; not yet set up: HD)
     for layer in range(len(LAYER_REGS)):
-        enabled, heads = layer_heads(ram, dev, layer)
+        enabled, heads = layer_heads(ram, dev, layer, ycbcr_bit=ycbcr_bit, matrix=matrix)
+        for h in heads:
+            h['bt709'] = bt709
         info['layers'].append({'enabled': enabled, 'heads': heads})
         if not enabled:
             continue

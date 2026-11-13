@@ -4,7 +4,7 @@ An emulator of ALi set-top-box firmware (MIPS32 + MIPS16e, Unicorn or the projec
 
 Quick start: `pip install unicorn capstone numpy pillow`, then `python src/tv_gui.py dump_maciej.bin` (the TV window: pick any image from the toolbar), `python src/gui_simulator.py` (the debugger) or `python run_all_tests.py [--slow] [--engine cpp]` (the tests; `--slow` adds the screen regressions). The C++ engine builds with `cpp\build.bat` (MSVC) or `sh cpp/build.sh` (g++) and is selected with `ALISIM_ENGINE=cpp`. The images and their sidecar JSON files (chip, tuner, panel pins, IR coding, where the image came from) are in `dumps/`, one row per image in `dumps/README.md`; the detailed developer notes that used to be this README are in `docs/development_notes.md`..
 
-For building a small C application for `dump_maciej.bin`, preserving its factory bootloader, and testing repeated UART updates, see [the Maciej bootloader workflow](docs/maciej_bootloader.md).
+For building a small C application for `dump_maciej.bin`, preserving its factory bootloader, and testing repeated UART updates, see [the Maciej bootloader workflow](docs/maciej_bootloader.md) -- it also covers the v4 demo (a command line, the TV picture, the front panel, the remote and USB, all checked in the emulator); [the bootloader flash survey](docs/bootloader_flash_survey.md) runs the same UART flash procedure on every image in the emulator.
 
 ## Supported chips
 

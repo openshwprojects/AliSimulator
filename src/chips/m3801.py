@@ -41,6 +41,17 @@ class Demodulator(DemodulatorLock):
 class M3801(ChipFamily):
     name = "M3801"
     chip_id = 0x3811
+    # The S3811's GMA colours, measured on a real box (revision 1, a Comsat TE
+    # 1050 HD running the Maciej demo v4) and read from both original
+    # applications' driver: on revision 1 a region head is a 0x280-byte block
+    # whose +0x240 holds the RGB -> YCbCr matrix the layer's colours go through
+    # (the originals write BT.709's for HD; all zero, every colour came out
+    # black, alpha still working), and bit 19 of the layer's enable register
+    # (0xB8006300 / 0xB8006380; the originals clear it) skips the matrix: the
+    # ARGB1555 red, green and blue fields, a CLUT8 palette entry's bytes 2, 1,
+    # 0, are taken as Cr, Y and Cb.  The screen capture shows both (gma_capture).
+    gma_ycbcr_bit = 1 << 19
+    gma_head_matrix = True
 
     @classmethod
     def matches(cls, image):

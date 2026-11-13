@@ -157,6 +157,11 @@ M3503).
   combo models' internal S3505 demodulator answering at 0xB8028000
   (`run_dump_a104_capture_screen.py`), opens its first-install wizard or
   System Setup menu through the newer display engine's layer. The 256 MB DDR3 C3505 boards (`dumps/FERGUSON ARIVA 255 COMBO/`, `run_dump_a255_app_starts.py`, `run_dump_a255_capture_screen.py`) place their SEE program at 0xAE000200 instead of 0xA6000200 and set 0xB8000220 bit 24 before entering maincode, switching physical 0x0F000000..0x0FFFFFFF from the flash window to the top 16 MB of DDR (240..256 MB, where their display-engine framebuffers live) and restoring 0xBFE00000..0xBFEFFFFF from boot SRAM to the 0xBF800000..0xBFFFFFFF 8 MB flash mirror (`SYS_FLASH_BASE_ADDR` = 0xBFC00000); their external Availink AVL6862 DVB-T2/C demodulator (`demods.AVL6862`) answers at I2C 0x14 on the C3505's fourth hardware I2C master SCB3 at 0xB8018D00 (the Ferguson Ariva 255 Combo S in `dumps/FERGUSON ARIVA 255 COMBO S/` runs the same 256 MB C3505 + AVL6862 platform with an RDA5816 DVB-S2 tuner at I2C 0x0C and an R840 terrestrial tuner, `run_dump_a255s_app_starts.py`, `run_dump_a255s_capture_screen.py`; the Amiko HD8155 in `dumps/AMIKO HD8155/` on 128 MB DDR3 and Amiko HD8265+ in `dumps/AMIKO HD8265+/` on 256 MB DDR3 with an AVL6762 on SCB3 and AV2012 at 0x61 are recognised as C3505 by their generic boot-ROM bootloader, "M3606 SEE" seecode and `maincode(AV)` chunk, drive a CH455 panel on GPIO 107 / 110 or 107 / 108, and render their hardware-ID warning dialog on OSD without the board's anti-clone IC, `run_dump_hd8155_app_starts.py`, `run_dump_hd8155_capture_screen.py`, `run_dump_hd8265_app_starts.py`, `run_dump_hd8265_capture_screen.py`; the same C3505 family also covers the 256 MB Amiko HD8275+ (`M3529A`, AVL6762 + AV2012 + MxL608), Amiko Mini Combo Extra (`M3526A`), and Amiko X-Finder 3 handheld meter (`M3529F`, AVL6762 + MxL603), the 128 MB Amiko Impulse H.265 T2/C (`M3626A`, AVL6762 on bit-banged GPIO 105 / 104 + MxL608), and the H.265 cable variants `M3712A` in the Amiko HD8140C SE (`MxL603` on SCB1) and `M3716A` in the dual-tuner Amiko HD8142 Twin-C (`tuners.R858` dual-path DVB-C tuner at I2C 0x6A on SCB1, `run_dump_hd8142_twinc_app_starts.py`)).
+  When the machine starts, the C3505 model (and the C3503, built on it)
+  rewrites the main code chunk's CRC field to 'NCRC' (no CRC), so the loader
+  skips that check; `sim.keep_main_crc = True` (set before `loadFile`; the
+  flash survey does) keeps the image's own CRC, and the loader checks it
+  ("CRC Check Result : Pass" on the Amiko HD8155 / HD8142 builds).
   The C3503 (`chips/c3503.py`, the Ferguson Ariva 53 and Ariva 54 satellite
   updates in `dumps/FERGUSON ARIVA 53/` and `dumps/FERGUSON ARIVA 54/`,
   recognised by `"M3503D"` in the unpacked main code or the `board_cfg`
@@ -437,7 +442,13 @@ sits next to it differ.
   core; the SPI flash controller is native (except with SPI logging, the
   M3821's stream mode or a parallel flash); GPIO DO / DIR stores (the
   bit-banged panels and I2C buses) are logged by the core and handed to the
-  decoders in order before any other call into Python. Four kinds of loops
+  decoders in order before any other call into Python. With `sim.uart_tx_native`
+  set (`tools/bootloader_flash_survey.py`, whose UART dumps are 4-16 MB of
+  output), a UART's transmit-register stores are logged the same way and
+  handed over in bulk -- to `sim.uart_bulk_callback` as bytes, else to the
+  UART handler byte by byte -- each charged like the Python handler it
+  replaces, so the bytes, the instruction count and the time stay the same
+  (`tests/test_cpp_uart_tx_native.py`). Four kinds of loops
   are skipped exactly -- the registers and the time come out as if they had
   run, `tests/test_cpp_loop_skip.py`: the idle loop (`b .`, WAIT, with
   interrupts on) and a spin that neither stores nor reaches a device handler
@@ -564,6 +575,12 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   16 MB SPI part (the Amiko HD8260+) the upper 8 MB sits at 0xAE800000..0xAEFFFFFF
   when RAM is 128 MB or less (on a 256 MB DDR board 0xAE000000..0xAEFFFFFF is DDR,
   and SPI commands / DMA read the full 16 MB flash).
+  Above the window's top a larger part also continues linearly: physical
+  0x10000000 on (0xB0000000 in KSEG1) shows offset 4 MB on, read-only
+  (`_map_flash_linear_tail`), because the newer M3503 / C3505 / C3503
+  bootloaders read the whole part from 0xAFC00000 upwards for their UART
+  `dump` command (the Amiko CHD8270+'s streams the first 4 MB and then loads
+  0xB0000000).
 
 * **Front panel** (`front_panel.py` picks the decoder per dump): the LED
   driver chip the firmware bit-bangs over GPIO. dump_maciej.bin and the Globo
@@ -785,6 +802,114 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   from +0x82, what a bus without a PHY returns. Without them the driver spun
   on the reset bit forever, and then waited a second of firmware time for
   every PHY register it probed, holding the UI back for minutes.
+* **USB host** (`usb_host.py`, opt-in: `sim.attach_usb_host()` after
+  `loadFile`): the S3811's controller (the SDK's `hc_s3602`) at 0xB8032000
+  on interrupt-controller line 29 -- the port (connection, the device's
+  speed, a bus reset completed after 10 ms), endpoint 0's control transfers
+  (SETUP / IN / OUT tokens through a FIFO port; token-done and error flags,
+  read to clear, the SDK's token error codes at +0x1D), an IN on endpoint B
+  received into RAM by DMA (the SDK's bulk IN, one packet: how the v4 demo
+  reads a keyboard's interrupt endpoint), endpoint C's and D's polling of
+  an interrupt IN endpoint, and two built-in devices: a USB 2.0
+  mass-storage stick (`VirtualStick`, 1209:0001) that answers the standard
+  requests and GET MAX LUN, and a HID boot keyboard
+  (`VirtualKeyboard`, 1209:0002: GET_REPORT, its interrupt endpoint, keys
+  typed with `.type(text)` in emulated time; options make it the low-speed
+  keyboard tried on a real box, whose GET_REPORT is always empty, or stall
+  either way of reading it). Endpoint B behaves as measured on a real S3811
+  with test code run from its RAM (2026-11-13): the first token at once,
+  then one per millisecond while the device answers NAK (+0xA8 = 1), "no
+  response" after two tokens nobody answers, a data toggle that lasts from
+  one transfer to the next and is reset by bit 0 of +0x17, and only the FIFO
+  reset ends a pending IN. Endpoint C sent a low-speed device nothing there,
+  so the model's does not either; endpoint D does poll (a token every
+  2^(+0xA3 - 1) microframes, the packet into its own FIFO at +0x24 with
+  flags 3 bit 4, its own data toggle, reset by bit 0 of +0x23; a failed
+  token only in +0x1D and flags 1, the polling going on -- all measured on
+  the box), and the v4 demo reads a mouse with it. The mouse is
+  `VirtualMouse` (1209:0004, low speed, the A4Tech's report descriptor;
+  `.move` / `.press` / `.release` / `.click` / `.wheel` in emulated time).
+  A fourth device is a hub (`VirtualHub`,
+  1209:0003; `.plug(port, device, speed)` / `.unplug(port)`, hubs behind
+  hubs): port power / reset / status with the change bits, and tokens are
+  routed by address through the tree -- a device that is not high speed
+  behind a high-speed hub answers only to a split token (the split flag
+  in the endpoint's address register, the hub's address, port and the
+  low-speed bit in the register after it), as measured with a real
+  seven-port hub. Endpoint A's OUT by DMA from RAM is modelled too, and
+  given a disk image (`src/fat_image.py` builds FAT12 / FAT16 / FAT32 ones;
+  `tests/test_fat_image.py` reads them back, through 7-Zip too when it is
+  installed, and drives the stick's commands) the stick answers the
+  bulk-only transport with the
+  SCSI commands a host reads a disk with; the data toggles are kept per
+  device endpoint and per controller endpoint, so a host that lets them
+  drift apart loses packets as on the bus. `.attach(speed[, device])` /
+  `.detach()` plug them in and out. A token reaches the device only at the
+  address it carries (+0x80 once the firmware switches the per-endpoint
+  addresses on with +0x8F, +0x1C before); SET_ADDRESS takes effect after its
+  status stage. The speed bits were swapped until 2026-11-12: +0x32 reads
+  0x00 for high speed and 0x40 for low (the SDK's speed ioctl and its hub
+  code agree). dump_maciej.bin's own driver enumerates the stick up to its
+  first bulk-only command (`tests/run_dump_maciej_usb_attach.py`); a
+  stick's bulk transfers (DMA transmit, the bulk-only lists) are not
+  modelled. The register map, the PHY's
+  set-up per chip revision included, is in
+  [maciej_bootloader.md](maciej_bootloader.md#usb).
+* **Watchdog counter** (`watchdog.py`, opt-in: `sim.attach_watchdog()` after
+  `loadFile`): the SDK's `dog_m3327e` at 0xB8018500 -- a 32-bit counter at +0
+  counting up at 27 MHz / 2^(5+n) (the rate measured on a real S3811) while
+  bit 2 of the control byte at +4 is set; overflows in reset mode (0x60) are
+  recorded with their time (`.overflows`, `.due()`), but the machine is not
+  reset: the emulator has no chip reset. The v4 demo tests attach it to
+  check that the demo's watchdog never starves. Note that a `b .` loop with
+  interrupts disabled is not idle-skipped (only with interrupts on), so
+  waiting for a deliberate hang's overflow costs real emulation time.
+* **HDMI transmitter** (0xB802A000, the SDK's libHDMI with symbols in
+  `refs/MainCode/ddk/libHDMI.a`: `hdmi_reg.o` gives the bits): RAM-backed,
+  so +0x08 -- bit 0 hot plug, bit 1 receiver sense -- reads 0 and every
+  M3801 firmware's `hdmi_ctrl_task` keeps the transmitter in soft reset
+  (+0x07 bit 0) for good: no TV. Made to read 0x03 (`ReadyBits`, as
+  `gen_video_init.py` does), dump_maciej.bin and dump.bin read the TV's
+  EDID over bit-banged DDC lines (the Opticum's on GPIO 7 / 8: nothing
+  answers), then set the PHY up, send their infoframes through +0x62 /
+  +0x67..+0x69, set bit 16 of 0xB8000078, release the reset (+0x07 = 0x7C)
+  and pulse +0x09 bit 3 three times (AV unmute, mute type 1). Other bits:
+  +0x05 interrupt source, +0x07 bit 1 working mode / bit 7 AV mute (type
+  0), +0x0A bit 2 DVI mode, +0x0E bit 3 PHY clock power-down, +0x55 bit 6
+  black screen, +0x27..+0x2A the BIST pattern "TSM5".
+* **S3811 revision and reset values**: the emulator answers revision 0
+  (chip word 0x38110000); a real Comsat TE 1050 HD reads 0x38110001, and the
+  firmwares branch on it (`sys_ic_get_rev_id`: the TV encoder's set-up, the
+  GMA enable bits and head matrix below, the output switch-on's timing).
+  `sim.poke(0xB8000000, ...)` after `loadFile` gives revision 1. The chip's
+  device registers do not reset to 0 as the emulator's do -- the HDMI PHY
+  bytes +0x0A..+0x0F are 02 92 24 49 82 21, the display engine comes up with
+  a PAL timing, the TV encoder with dozens of values -- and the drivers
+  change single bits of them; values read on the box after a watchdog reset
+  are in `firmware/maciej_app/demo/s3811_rev1_reset_values.json`
+  (`gen_video_init.py` presets them; without them the replayed set-up gave
+  the TV no signal).
+* **GMA colours on the S3811** (layer enable 0xB8006300 / 0xB8006380):
+  on revision 1 a region head is a 0x280-byte block -- the 40-byte head, a
+  scaling filter table at +0x40 and, at +0x240, the matrix the layer's RGB
+  colours are converted to YCbCr with (12 signed words x512: the rows Y, Cb,
+  Cr of R, G, B and an offset in the same scale -- the brightness setting,
+  0 at the default; then a 'sharpness' word). Both original applications'
+  driver copies the matrix into every head (`gma_m36f_sync_block_header`,
+  chip 0x10048 at revision 1 only): BT.709's for HD (93 314 32 0 / -52 -173
+  225 0 / 225 -204 -21 0, then 45), BT.601's for SD; `gma_m36f_open` sets bit
+  18 of the enable register and clears bit 19 (the same condition); and
+  `gma_m36f_create_region` writes 0xB80063B8 = 1 for a true-colour region, 0
+  for CLUT8 (chip 0x10048, either revision). Measured on the box with the
+  Maciej demo v4: the matrix all zero shows every colour black, only alpha
+  working; bit 19 set skips the matrix and takes a pixel's (or CLUT8
+  entry's) red, green and blue fields as Cr, Y and Cb -- dark RGB colours
+  come out green; bit 18 and 0x63B8 made no visible difference; the enable
+  register reads 0 after a reset. The family's `gma_head_matrix` /
+  `gma_ycbcr_bit` (`chips/m3801.py`) make `gma_capture.py` show both;
+  revision 0 shows the RGB as it is. The display engine's background colour
+  0xB8006188 (YCbCr; the originals write 0x00108080) shows where the layer
+  is transparent or switched off.
 * **Graphics engine** (`GE_M36F`, 0xB800A000): nothing is drawn. A command
   written to +4 (1, 2 or 3) completes at once and sets its bit in the
   interrupt status +8 (0x4, 0x1, 0x2; write 1 to clear), which drives

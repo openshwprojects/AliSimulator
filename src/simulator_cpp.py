@@ -52,7 +52,7 @@ from cpp_core import (F_ICOUNT, F_EXECUTED, F_STATUS, F_CAUSE, F_CAUSE_VALUE, F_
                       STOP_ERROR, STOP_BREAKPOINT, STOP_REQUEST,
                       STOP_COUNT, EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ, DF_READ, DF_WRITE,
                       DF_GPIO_DI, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE, F_UART_IRQS,
-                      DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE, DR_VPO, DR_SCB,
+                      DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE, DR_VPO, DR_SCB, DR_UART_TX,
                       RULE_DEMOD, RULE_DEMOD_COUNT, RULE_DEMOD_CLR3F, RULE_DEMOD_IFZERO,
                       RULE_EXACT_OFF, RULE_VE_STATUS, RULE_MAC_MDIO,
                       RULE_VPO_WRITE, RULE_VPO_M36F_WRITE, RULE_VE_STATUS_WRITE,
@@ -320,6 +320,7 @@ class CppAliMipsSimulator(AliMipsSimulator):
             for phys in flash_phys:
                 for seg in (0x00000000, 0x80000000, 0xA0000000):
                     self._map_flash_mirror(seg + phys + offset, slot)
+        self._map_flash_linear_tail()
         self.ram_buffer = self._buffer('ram_buffer', self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
         low_ram = min(self.ram_size, 0x0F000000)
@@ -357,6 +358,8 @@ class CppAliMipsSimulator(AliMipsSimulator):
         L.ali_gpio_log(core.handle, 1, ctypes.byref(count), ctypes.byref(pairs))   # (_cpp_dev empties it)
         self._gpio_count = (ctypes.c_uint32 * 1).from_address(count.value)
         self._gpio_pairs = (ctypes.c_uint32 * (2 * 4096)).from_address(pairs.value)
+        self._utx_cb = cpp_core._UART_TX_CB(self._cpp_uart_tx)
+        L.ali_uart_tx_callback(core.handle, ctypes.cast(self._utx_cb, ctypes.c_void_p), None)
         if self._shared is None:
             core.mem_write(0xB8018305, b'\x60')
         core.hook_add(UC_HOOK_MEM_UNMAPPED | UC_HOOK_MEM_FETCH_PROT | UC_HOOK_MEM_READ_PROT, self._hook_mem_invalid)
@@ -467,8 +470,10 @@ class CppAliMipsSimulator(AliMipsSimulator):
         dmx_idle = tuple(d.mux is None and d.status == 0 and not any(d.write_ptr) for d in dmx_list)
         u2 = getattr(self.chip, 'uart2', None)
         u2_idle = u2 is not None and not u2.rx_queue and not self._dev_replays
+        uart_tx = bool(getattr(self, 'uart_tx_native', False)) and self._shared is None and not self._dev_replays
         sig = (self._mmio_version, id(self._mmio_rd), len(self._mmio_rd), id(self._mmio_wr), len(self._mmio_wr),
-               len(self._mmio_observers), native_spi, native_ge, uart_idle, ve_status, smc_idle, dmx_idle, u2_idle)
+               len(self._mmio_observers), native_spi, native_ge, uart_idle, ve_status, smc_idle, dmx_idle, u2_idle,
+               uart_tx)
         if sig == self._dev_sig:
             return
         self._dev_sig = sig
@@ -668,6 +673,9 @@ class CppAliMipsSimulator(AliMipsSimulator):
                 rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_WRITE_IGNORE
             elif fn == uart_write and (off & 0xF) != 0:
                 rflags[off] = rflags.get(off, 0) | DR_WRITE
+            elif fn == uart_write and uart_tx:
+                # (opt-in: the transmit holding register's bytes go to _cpp_uart_tx in bulk)
+                rflags[off] = rflags.get(off, 0) | DR_UART_TX
             elif sdram_cmd is not None and fn == sdram_cmd:
                 rflags[off] = rflags.get(off, 0) | DR_WRITE | DR_VPO
                 if off not in seen_sdram_cmd:
@@ -808,6 +816,21 @@ class CppAliMipsSimulator(AliMipsSimulator):
         except BaseException as e:
             self.mu._catch(e)
             return 0
+
+    def _cpp_uart_tx(self, user, data, count):
+        """UART transmit bytes the core logged (uart_tx_native: DR_UART_TX), in
+        order, handed over like the GPIO log: before another call into Python and
+        when a run returns.  Each goes to the UART handler as _hook_uart_write
+        would have passed it."""
+        try:
+            if self.uart_bulk_callback is not None:
+                self.uart_bulk_callback(ctypes.string_at(data, count))
+                return
+            log = self._uart_log
+            for value in ctypes.string_at(data, count):
+                log(value)
+        except BaseException as e:
+            self.mu._catch(e)
 
     def _cpp_gpio(self, user, pairs, count):
         """GPIO stores the core logged (DF_GPIO_*), handed over before another

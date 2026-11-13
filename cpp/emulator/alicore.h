@@ -83,6 +83,8 @@ typedef int (*EventHookCb)(void *user, int access, uint64_t address, int size, i
 typedef void (*IntrHookCb)(void *user, uint32_t intno);
 // GPIO pin levels for the host: count (DO register offset, levels) pairs
 typedef void (*GpioCb)(void *user, const uint32_t *pairs, uint32_t count);
+// UART transmit bytes for the host (DR_UART_TX stores to a transmit holding register), in order
+typedef void (*UartTxCb)(void *user, const uint8_t *data, uint32_t count);
 // The bit-banged I2C bus's slave side for the host (I2C_*): an address byte (returns
 // 1 when a slave answers), a write transaction's bytes (data, n), the next byte of
 // a read (returns it, or -1: the slave has none)
@@ -145,7 +147,8 @@ class Core {
   // host callback for the offsets flagged in devflags (DF_*)
   void set_device_window(uint32_t phys, uint8_t *buffer, uint32_t size, DevCb cb, void *user);
   enum : uint8_t { DF_READ = 1, DF_WRITE = 2, DF_GPIO_DI = 4, DF_NATIVE = 8, DF_GPIO_DO = 16, DF_GPIO_DIR = 32, DF_IC_STATUS = 64, DF_GE = 128 };
-  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8, DR_VPO = 16, DR_SCB = 32, DR_HAS_RULE = 64 };
+  enum : uint8_t { DR_READ = 1, DR_WRITE = 2, DR_UART_IDLE = 4, DR_WRITE_IGNORE = 8, DR_VPO = 16, DR_SCB = 32, DR_HAS_RULE = 64,
+                   DR_UART_TX = 128 };
   enum : uint32_t {
     RULE_DEMOD = 1,
     RULE_DEMOD_COUNT = 2,
@@ -384,8 +387,25 @@ class Core {
   void *gpio_user_ = nullptr;
   bool gpio_dev_drains_ = false;   // the device handler empties the log itself (one host call less)
   void flush_gpio();
+  // UART transmit bytes (DR_UART_TX: a byte store to a transmit holding register whose
+  // only host handler would just pass the byte on): they land here and go to the host
+  // in order, in bulk, with host_sync -- before any other call into the host and when a
+  // run returns.  Each still costs host_access_cost, as the host callback it replaces.
+  enum { UTX_LOG_MAX = 65536 };
+  uint8_t utx_log_[UTX_LOG_MAX];
+  uint32_t utx_n_ = 0;
+  UartTxCb utx_cb_ = nullptr;
+  void *utx_user_ = nullptr;
+  void flush_utx();
   ALI_INLINE void host_sync() {
     if (ALI_UNLIKELY(gpio_n_ != 0)) flush_gpio();
+    if (ALI_UNLIKELY(utx_n_ != 0)) flush_utx();
+  }
+  // Before a device callback: as host_sync, but a handler that drains the GPIO log
+  // itself (gpio_dev_drains_) gets that log with the call, the UART bytes before it.
+  ALI_INLINE void host_sync_dev() {
+    if (!gpio_dev_drains_) host_sync();
+    else if (ALI_UNLIKELY(utx_n_ != 0)) flush_utx();
   }
   // Which logged GPIO stores the host wants (ali_gpio_watch): with gpio_filter_ on,
   // a bank's store is logged only when it changes a pin some host decoder watches

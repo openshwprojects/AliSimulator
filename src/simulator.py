@@ -102,6 +102,21 @@ def default_engine():
 
 class AliMipsSimulator:
     engine = "unicorn"
+    # C++ engine only, opt-in: the UART transmit holding register's bytes are
+    # collected in the core and handed to the UART handler in bulk (before any
+    # other call into Python and when a run returns) instead of one Python call
+    # per byte.  The emulation time each store costs is unchanged; only the
+    # moment the handler sees a byte moves to the end of its slice.  For long
+    # transfers (the bootloader's 4-16 MB 'dump'); False keeps every byte
+    # synchronous, as handlers that stop the run on a string expect.
+    uart_tx_native = False
+    # With uart_tx_native: a callable that gets those bytes as one bytes object
+    # per hand-over instead of the UART handler one character at a time.
+    uart_bulk_callback = None
+    # The C3505 model rewrites the main code chunk's CRC field to 'NCRC' (no
+    # CRC) when the machine starts; True keeps the image's own CRC, so the
+    # loader checks it (chips/c3505.py; set before loadFile).
+    keep_main_crc = False
 
     def __new__(cls, *args, engine=None, **kwargs):
         """AliMipsSimulator(..., engine='cpp') -- or ALISIM_ENGINE=cpp -- is the
@@ -512,7 +527,8 @@ class AliMipsSimulator:
                         self._map_flash_mirror(base, slot)
                     except Exception as e:
                         self.log(f"Warning: Failed to map ROM mirror at {hex(base)}: {e}")
-        
+        self._map_flash_linear_tail()
+
         # Shared RAM Buffer (128MB default, up to 256MB on C3505 boards)
         self.ram_buffer = self._buffer('ram_buffer', self.ram_size)
         ram_ptr = ctypes.addressof(self.ram_buffer)
@@ -1560,6 +1576,26 @@ class AliMipsSimulator:
         perms = (UC_PROT_READ | UC_PROT_EXEC) if base < 0x80000000 else UC_PROT_ALL
         self.mu.mem_map_ptr(base, size, perms, ctypes.addressof(self.rom_buffer) + self._flash_offset(base))
 
+    def _map_flash_linear_tail(self):
+        """A flash larger than 4 MB also continues linearly above its window's
+        top: physical 0x10000000 onwards shows flash offset 0x400000 onwards
+        (read-only, in the physical, KSEG0 and KSEG1 views).  The bootloaders
+        of the newer M3503 / C3505 / C3503 builds read the whole flash through
+        SYS_FLASH_BASE_ADDR 0xAFC00000 upwards for their 'dump' command (the
+        Amiko CHD8270+'s streams offset 0..0x3FFFFF from there and then loads
+        0xB0000000); the SDK's segment layout below 0x0FC00000 (_flash_offset)
+        stays as it is.  Nothing else is mapped there."""
+        import ctypes
+        tail = self.rom_size - 0x400000
+        if tail <= 0:
+            return
+        ptr = ctypes.addressof(self.rom_buffer) + 0x400000
+        for seg in (0x00000000, 0x80000000, 0xA0000000):
+            try:
+                self.mu.mem_map_ptr(seg + 0x10000000, tail, UC_PROT_READ | UC_PROT_EXEC, ptr)
+            except Exception as e:
+                self.log(f"Warning: Failed to map the flash's linear tail at {hex(seg + 0x10000000)}: {e}")
+
     def _sync_flash_windows(self):
         pass
 
@@ -2354,7 +2390,9 @@ class AliMipsSimulator:
         video_rgb = ve.decode_last_frame() if (include_video and ve is not None) else None
         rgb, _ = gma_capture.capture(ram, self._mmio_view[0:0x10000], screen,
                                      m3327_palettes=osd.palettes if osd is not None else None,
-                                     video_rgb=video_rgb)
+                                     video_rgb=video_rgb,
+                                     ycbcr_bit=getattr(self.chip, "gma_ycbcr_bit", 0),
+                                     head_matrix=getattr(self.chip, "gma_head_matrix", False))
         if path:
             gma_capture.save_png(path, rgb)
         return rgb
@@ -2427,6 +2465,29 @@ class AliMipsSimulator:
         import ir_remote
         self._irc_frames.append((ir_remote.nec_rlc(address, command, address_hi),
                                  label or f"NEC 0x{address:02X}/0x{command:02X}"))
+
+    def attach_watchdog(self, memory_clock_hz=27_000_000):
+        """Model the chip's watchdog's counter (watchdog.Watchdog at
+        0xB8018500) -- opt-in, after loadFile: it counts in emulated time at
+        memory_clock_hz / 2^(5+n) (27 MHz: as measured on a real S3811) and
+        records every overflow in reset mode (.overflows), but does not reset
+        the machine.  Returns the model (also self.watchdog)."""
+        import watchdog
+        wd = getattr(self, "watchdog", None)
+        if wd is None or wd._read not in self._mmio_rd.get(wd.base, ()):   # (a family switch dropped it)
+            self.watchdog = watchdog.Watchdog(self, memory_clock_hz=memory_clock_hz)
+        return self.watchdog
+
+    def attach_usb_host(self, base=0x32000, line=29):
+        """Model the chip's USB host controller's port (usb_host.UsbHost: the
+        S3811's at 0xB8032000, interrupt-controller line 29) -- opt-in, after
+        loadFile; .attach(speed) / .detach() plug a device in and out.
+        Returns the model (also self.usb)."""
+        import usb_host
+        usb = getattr(self, "usb", None)
+        if usb is None or usb._read not in self._mmio_rd.get(usb.base, ()):  # (a family switch dropped it)
+            self.usb = usb_host.UsbHost(self, base, line)
+        return self.usb
 
     def attach_tuner(self, chip=None, address=None):
         """Put a tuner chip model (tuners.py) on the I2C bus: `chip` (a key of

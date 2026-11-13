@@ -12,12 +12,18 @@ register layouts the dump_maciej firmware uses:
      blit, a 4-bit glyph read with sub-byte endian 1 (left pixel in the high
      nibble) and stretched x2 into an A8 mask, then the font colour
      alpha-blended through that mask,
-  4. gma_capture follows layer 0's head pointer to the bitmap and renders it.
+  4. gma_capture follows layer 0's head pointer to the bitmap and renders it,
+  5. a Full HD 1:1 head on a 1080i output is resampled onto the 1280 x 720
+     canvas, a 1.5x upscaled 1008 x 640 head placed 1:1,
+  6. the S3811's GMA colours, as measured on a real box: a revision-1 head's
+     RGB -> YCbCr matrix (all zero: every colour black, alpha still applying)
+     and bit 19 of the layer enable register (Cr / Y / Cb taken as they are).
 """
 import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))   # the simulator's modules
 import struct
+import time
 
 import numpy as np
 
@@ -150,6 +156,106 @@ def main():
     rgb_up, _ = gma_capture.capture(ram_up, bytes(dev_fhd), screen=(1280, 720))
     check(tuple(rgb_up[40 + 500, 136 + 900]) == (0x20, 0x80, 0xE0),
           f"1008x640 GMA head upscaled 1.5x to 1080i maps 1:1 to (136+900, 40+500) ({tuple(rgb_up[540, 1036])})")
+
+    # 6. the S3811's GMA colours (measured on a real box, revision 1): a head block of 0x280 bytes
+    #    with an RGB -> YCbCr matrix at +0x240 (12 words x512, rows Y, Cb, Cr of R, G, B, offset;
+    #    both originals write BT.709's for HD), which a revision-1 part converts the colours
+    #    through -- all zero: every colour black, alpha still applying -- and bit 19 of the layer
+    #    enable register, which skips it: the ARGB1555 red, green and blue fields (a CLUT8 palette
+    #    entry's bytes 2, 1, 0) taken as Cr, Y, Cb.  Revision 0 shows the RGB as it is.  The TV
+    #    decodes the YCbCr as BT.709 on an HD output (or one not set up yet), BT.601 on SD.
+    #    Pixels: 0x8000 black, 0xFC00 red, 0xC210 grey (132), 0xC050 (as Cr / Y / Cb: black),
+    #    0x7C00 red with alpha 0; palette entry 1: 0xFF20C040 (RGB) and entry 2: 0xFFF0515A (as
+    #    Cr / Y / Cb: red), entry 0 transparent.  The background is grey-blue (40, 80, 120), so a
+    #    pixel drawn black is told from one not drawn.
+    YBIT = 1 << 19
+    BT709 = [93, 314, 32, 0, -52, -173, 225, 0, 225, -204, -21, 0, 45]
+    BT601 = [131, 258, 50, 0, -76, -149, 225, 0, 225, -188, -37, 0, 45]
+    BG = (40, 80, 120)
+    ram_y = np.zeros(0x200000, np.uint8)
+    PAL_Y, HEAD_A, HEAD_B, BMP_A, BMP_B = 0x010000, 0x011000, 0x011400, 0x020000, 0x030000
+    struct.pack_into('<5H', ram_y, BMP_A, 0x8000, 0xFC00, 0xC210, 0xC050, 0x7C00)
+    struct.pack_into('<3I', ram_y, PAL_Y, 0x00000000, 0xFF20C040, 0xFFF0515A)
+    ram_y[BMP_B:BMP_B + 4] = [1, 1, 2, 0]
+    head_a = [0xAA200B51, 0, 4 << 16, 0, (1 << 16) | 5, (10 << 16) | 0x0F, 0, BMP_A, 0, 0]
+    head_b = [0xAA200FC1, PAL_Y, (13 << 16) | 10, 0, (1 << 16) | 4, (4 << 16) | 0x0F, 0, BMP_B, 0, 0]
+
+    def capture_y(rev, control, matrix, chained=False, only_b=False, lines=0, bit=YBIT, head_matrix=True):
+        a = list(head_a)
+        if chained:
+            a[6] = HEAD_B
+        for addr, words in ((HEAD_A, a), (HEAD_B, head_b)):
+            ram_y[addr:addr + 0x280] = 0
+            ram_y[addr:addr + 40] = np.frombuffer(struct.pack('<10I', *words), np.uint8)
+            ram_y[addr + 0x240:addr + 0x274] = np.frombuffer(struct.pack('<13i', *matrix), np.uint8)
+        dev_y = bytearray(0x10000)
+        struct.pack_into('<I', dev_y, 0, 0x38110000 | rev)
+        # (the output's timing: 0 = not set up, taken as HD; a programmed one would also scale the
+        #  heads' positions to the 16 x 2 screen, so only head A at x 0 is checked with PAL)
+        struct.pack_into('<I', dev_y, gma_capture.DE_TIMING_REG, lines << 16)
+        struct.pack_into('<II', dev_y, 0x6300, control, HEAD_B if only_b else HEAD_A)
+        rgb = gma_capture.capture(ram_y, bytes(dev_y), screen=(16, 2), background=BG, ycbcr_bit=bit,
+                                  head_matrix=head_matrix)[0]
+        return [tuple(int(v) for v in rgb[0, x]) for x in range(16)]
+
+    def close(a, b, tol=1):
+        return all(abs(x - y) <= tol for x, y in zip(a, b))
+
+    px = capture_y(0, 1, [0] * 13)                       # revision 0: RGB as it is, matrix or not
+    check(px[0] == (0, 0, 0) and px[1] == (255, 0, 0) and px[2] == (132, 132, 132) and px[4] == BG,
+          f"revision 0: ARGB1555 shown as RGB, alpha 0 transparent ({px[:5]})")
+    px = capture_y(1, 0x40001, [0] * 13)                 # revision 1, the matrix all zero
+    check(all(p == (0, 0, 0) for p in px[:4]) and px[4] == BG and px[5] == BG,
+          f"revision 1, head matrix all zero: every opaque colour drawn black, alpha 0 still transparent ({px[:6]})")
+    px = capture_y(1, 0x40001, BT709)                    # revision 1, the originals' BT.709 matrix (HD)
+    check(close(px[0], (0, 0, 0)) and close(px[1], (255, 0, 0)) and close(px[2], (132, 132, 132)) and px[4] == BG,
+          f"revision 1, the originals' BT.709 matrix: the RGB colours ({px[:5]})")
+    px = capture_y(1, 0x40001, BT601, lines=625)         # an SD output with the originals' SD matrix
+    check(close(px[1], (255, 0, 0), 2) and close(px[2], (132, 132, 132)),
+          f"revision 1, BT.601 matrix on a PAL output: the RGB colours ({px[:3]})")
+    px = capture_y(1, 0x40001, [0] * 13, head_matrix=False)
+    check(px[1] == (255, 0, 0), f"a family without the head matrix shows RGB at revision 1 ({px[1]})")
+    px = capture_y(1, YBIT | 0x40001, [0] * 13)          # bit 19: no matrix, Cr / Y / Cb (HD: BT.709)
+    check(px[0][1] > 60 and px[0][0] < 10 and px[0][2] < 10 and max(px[3]) <= 10 and px[4] == BG,
+          f"bit 19: the fields read as Cr / Y / Cb, the matrix skipped (0x8000 green {px[0]}, 0xC050 black {px[3]})")
+    px = capture_y(1, YBIT | 0x40001, [0] * 13, lines=625)
+    check(px[0][1] > 120 and px[0][0] < 10 and px[0][2] < 10,
+          f"bit 19 on a PAL output: decoded as BT.601 (0x8000 {px[0]})")
+    px = capture_y(1, YBIT | 0x40001, BT709, bit=0)
+    check(close(px[1], (255, 0, 0)), f"a family without the bit: the matrix applies ({px[1]})")
+    px = capture_y(1, 0x40001, [0] * 13, only_b=True)    # one CLUT8 head: the fast path
+    check(px[10] == (0, 0, 0) and px[12] == (0, 0, 0) and px[13] == BG,
+          f"CLUT8, matrix all zero: black, the transparent entry still transparent ({px[10:14]})")
+    px = capture_y(1, 0x40001, BT709, only_b=True)
+    check(close(px[10], (0x20, 0xC0, 0x40)) and px[13] == BG,
+          f"CLUT8 through the BT.709 matrix: palette entry 0xFF20C040 ({px[10]})")
+    px = capture_y(1, YBIT | 0x40001, BT709, only_b=True)
+    check(px[12][0] > 240 and px[12][1] < 40 and px[12][2] < 10,
+          f"CLUT8 under bit 19: entry 0xFFF0515A is Cr F0 / Y 51 / Cb 5A, red ({px[12]})")
+    one = capture_y(1, 0x40001, BT709, chained=True)     # two heads: both through render_head
+    check(one[1] == capture_y(1, 0x40001, BT709)[1] and one[10] == capture_y(1, 0x40001, BT709, only_b=True)[10],
+          f"two chained heads: the same colours ({one[1]}, {one[10]})")
+    # a full 1280 x 720 ARGB1555 head through the matrix: the cached table gives the same pixels
+    ram_f = np.zeros(0x400000, np.uint8)
+    noise = ((np.arange(1280 * 720, dtype=np.uint64) * 2654435761) >> 16).astype(np.uint16)
+    ram_f[0x100000:0x100000 + 1280 * 720 * 2] = np.frombuffer(noise.tobytes(), np.uint8)
+    head_f = [0xAA200B51, 0, 1279 << 16, 719 << 16, (720 << 16) | 1280, (2560 << 16) | 0x0F, 0, 0x100000, 0, 0]
+    ram_f[0x10000:0x10028] = np.frombuffer(struct.pack('<10I', *head_f), np.uint8)
+    ram_f[0x10240:0x10274] = np.frombuffer(struct.pack('<13i', *BT709), np.uint8)
+    dev_f = bytearray(0x10000)
+    struct.pack_into('<I', dev_f, 0, 0x38110001)
+    struct.pack_into('<II', dev_f, 0x6300, 0x40001, 0x10000)
+    started = time.perf_counter()
+    full = gma_capture.capture(ram_f, bytes(dev_f), head_matrix=True)[0]
+    took = time.perf_counter() - started
+    h = gma_capture.layer_heads(ram_f, bytes(dev_f), matrix=True)[1][0]
+    g_f = ge_m36f.GeM36F(ram_f)
+    direct = gma_capture._shown_rgba(g_f.decode_rgba_u8(noise.reshape(720, 1280), 5, (5 << 12) | 1280, 0xFF),
+                                     dict(h, bt709=True))
+    a = direct[..., 3:4].astype(np.float32) / 255.0
+    want = np.clip(direct[..., :3].astype(np.float32) * a + 0.5, 0, 255).astype(np.uint8)
+    check(int(np.abs(full.astype(int) - want.astype(int)).max()) <= 1,
+          f"a 1280 x 720 revision-1 capture through the cached table: the same pixels ({took * 1000:.0f} ms)")
 
     if fails:
         print(f"\n[FAIL] {len(fails)} check(s) failed")

@@ -142,6 +142,14 @@ ALI_API void ali_set_gpio_cb(void *c, void *cb, void *user) {
   k->gpio_cb_ = (GpioCb)cb;
   k->gpio_user_ = user;
 }
+// The callback that receives the UART transmit bytes of DR_UART_TX stores, in bulk
+// (cb = null drops them; the host then flags no offset DR_UART_TX).
+ALI_API void ali_uart_tx_callback(void *c, void *cb, void *user) {
+  Core *k = (Core *)c;
+  k->host_sync();
+  k->utx_cb_ = (UartTxCb)cb;
+  k->utx_user_ = user;
+}
 // The GPIO log for a device handler that empties it itself (drains != 0): its
 // count (the host sets it to 0 once handled) and its (offset, levels) pairs.
 ALI_API void ali_gpio_log(void *c, int drains, uint32_t **count, uint32_t **pairs) {

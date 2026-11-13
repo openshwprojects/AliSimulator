@@ -76,7 +76,9 @@ class C3505(UpperRamMixin, M3821):
 
     def start(self):
         self._configure_memory()
-        if self.sim.rom_image:
+        # The main code chunk's CRC field becomes 'NCRC' (no CRC: the loader skips its check);
+        # a simulator with keep_main_crc set (the flash survey) keeps the image's CRC and the check.
+        if self.sim.rom_image and not getattr(self.sim, "keep_main_crc", False):
             for offset, name, _ver in chunk_chain(self.sim.rom_image):
                 cid, _len, _nxt, crc = struct.unpack_from(">IIII", self.sim.rom_image, offset)
                 if (name.lower().startswith("maincode") or (cid >> 16) == 0x01FE) and crc != 0x4E435243:

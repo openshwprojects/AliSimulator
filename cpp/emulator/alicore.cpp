@@ -590,6 +590,15 @@ void Core::flush_gpio() {
   leave_callback();
 }
 
+void Core::flush_utx() {
+  uint32_t n = utx_n_;
+  utx_n_ = 0;
+  if (!utx_cb_ || !n) return;
+  enter_callback();
+  utx_cb_(utx_user_, utx_log_, n);
+  leave_callback();
+}
+
 void Core::report_chunk(uint32_t pa) {
   uint32_t c = pa >> chunk_shift;
   chunk_seen[c] = 1;
@@ -769,7 +778,7 @@ uint64_t Core::dev_load(uint32_t off, uint32_t size) {
   }
   if (devflags_[off] & (DF_READ | DF_GPIO_DI)) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
-    if (!gpio_dev_drains_) host_sync();
+    host_sync_dev();
     enter_callback();
     uint64_t v = dev_cb_(dev_user_, 0, off, size, 0);
     leave_callback();
@@ -837,6 +846,14 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
       lemontree_levels(do_off, levels);
     icount += host_access_cost;
   } else if ((f & (DF_GE | DF_WRITE)) == (DF_GE | DF_WRITE) && ge_store(off, size, value)) {
+  } else if ((f & DF_WRITE) && size == 1 && devrules_ && (devrules_[off] & DR_UART_TX)) {
+    // (simulator._hook_uart_write for THR: the byte goes to the host, synchronous
+    // transmit leaves LSR at THRE | TEMT; the store lands)
+    dev_buf_[off] = (uint8_t)value;
+    dev_buf_[(off & ~0xFu) | 5u] = 0x60;
+    utx_log_[utx_n_] = (uint8_t)value;
+    if (++utx_n_ == UTX_LOG_MAX) flush_utx();
+    icount += host_access_cost;
   } else if ((f & DF_WRITE) && devrules_ && (devrules_[off] & DR_SCB)) {
     scb_store(off, size, value);
     icount += host_access_cost;
@@ -849,7 +866,7 @@ void Core::dev_store(uint32_t off, uint32_t size, uint64_t value, bool plain_dev
     icount += host_access_cost;
   } else if (f & DF_WRITE) {
     if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
-    if (!gpio_dev_drains_) host_sync();
+    host_sync_dev();
     enter_callback();
     dev_cb_(dev_user_, 1, off, size, value);
     leave_callback();
@@ -2325,7 +2342,7 @@ void Core::scb_store(uint32_t off, uint32_t size, uint64_t value) {
       if (b & 0x01u) {
         if (dev_cb_) {
           if (ALI_UNLIKELY(prof_dev_ != nullptr)) (*prof_dev_)[cur_pc_ | (m16 ? 1u : 0u)]++;
-          if (!gpio_dev_drains_) host_sync();
+          host_sync_dev();
           enter_callback();
           dev_cb_(dev_user_, 1, base, 1, b);
           leave_callback();

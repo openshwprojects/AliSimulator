@@ -46,6 +46,7 @@ EVT_UART_ERET, EVT_CODE_CHUNK, EVT_FLASH_READ, EVT_UART_IRQ = 1, 2, 3, 5
 # device window flags (Core::DF_*)
 DF_READ, DF_WRITE, DF_GPIO_DI, DF_NATIVE, DF_GPIO_DO, DF_GPIO_DIR, DF_IC_STATUS, DF_GE = 1, 2, 4, 8, 16, 32, 64, 128
 DR_READ, DR_WRITE, DR_UART_IDLE, DR_WRITE_IGNORE, DR_VPO, DR_SCB = 1, 2, 4, 8, 16, 32
+DR_UART_TX = 128           # a transmit holding register whose bytes the core logs (ali_uart_tx_callback)
 RULE_DEMOD, RULE_DEMOD_COUNT, RULE_DEMOD_CLR3F, RULE_DEMOD_IFZERO = 1, 2, 4, 8
 RULE_EXACT_OFF, RULE_VE_STATUS, RULE_MAC_MDIO = 16, 32, 64
 RULE_VPO_WRITE, RULE_VPO_M36F_WRITE, RULE_VE_STATUS_WRITE = 128, 256, 512
@@ -67,6 +68,8 @@ _DEV_CB = ctypes.CFUNCTYPE(ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int, ctype
                            ctypes.c_uint64)
 _MACHINE_EVENT = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint64)
 _GPIO_CB = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32)
+# UART transmit bytes the core logged (UartTxCb): data, count
+_UART_TX_CB = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint32)
 # the core's bit-banged I2C bus calling its slaves (I2cCb): kind, argument, data, length -> result
 _I2C_CB = ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32,
                            ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint32)
@@ -156,6 +159,7 @@ def lib():
         "ali_spi_config": (None, [vp, i32, vp, vp, u32, u32]),
         "ali_spi_get": (u64, [vp, i32]), "ali_spi_set": (None, [vp, i32, u64]),
         "ali_set_gpio_cb": (None, [vp, vp, vp]),
+        "ali_uart_tx_callback": (None, [vp, vp, vp]),
         "ali_gpio_log": (None, [vp, i32, ctypes.POINTER(vp), ctypes.POINTER(vp)]),
         "ali_gpio_watch": (None, [vp, i32, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
         "ali_gpio_di_config": (None, [vp, ctypes.POINTER(u32), ctypes.POINTER(u32), i32]),
