@@ -6,6 +6,8 @@
 #ifndef DEMO_HW_H
 #define DEMO_HW_H
 
+#include <stdarg.h>                     /* (a freestanding header: vuprintf's va_list) */
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -80,6 +82,9 @@ static inline int chip_rev(void)
                                               engine and VCAP at (0x0116xxxx, 0x0146xxxx), which
                                               'video init' sets up again */
 #define HEAD_PHYS        0x00F00000u      /* the GMA region head (HEAD_SIZE bytes, 32-byte aligned) */
+#define CON_FB_PHYS      0x02200000u      /* the console's 1280 x 720 picture (console.c), shown instead of
+                                              the test screen's through a head of its own */
+#define CON_HEAD_PHYS    0x00F00800u      /* its region head (HEAD_SIZE bytes) */
 #define USB_DMA_PHYS     0x00F00400u      /* the packet the USB controller receives by DMA (the
                                               keyboard's report; 32-byte aligned, read through KSEG1) */
 #define USB_DMA_SIZE     64
@@ -121,7 +126,10 @@ void uart_puts(const char *s);
 int uart_getc(void);            /* -1: nothing received */
 void uart_rx_poll(void);        /* received bytes from the chip's FIFO into the buffer (time.c calls it) */
 void uart_flush(void);          /* until the transmitter is empty */
+void uart_capture(u8 *buf, u32 max);    /* what is printed goes into buf instead ('command > file'; LF line ends) */
+u32 uart_capture_end(u32 *over);        /* the bytes captured; *over: the ones that did not fit */
 void uprintf(const char *fmt, ...);
+void vuprintf(const char *fmt, va_list ap);
 int usnprintf(char *buf, int size, const char *fmt, ...);
 
 /* gfx.c */
@@ -144,6 +152,18 @@ u32 gfx_fb_phys(void);
 u16 rgb_from_hex(u32 rrggbb);
 void gfx_cursor(int x, int y, int on);  /* the mouse pointer: its tip at (x, y), shown or not */
 void gfx_cursor_refresh(void);          /* the main loop: drawn again after drawing took it away */
+void gfx_view(int console);             /* what the TV shows: the console (1) or the test screen (0) */
+int gfx_view_console(void);
+void gfx_target(int console);           /* where gfx_* draw: the console's picture or the test screen's (0) */
+void gfx_cell(int x, int y, char c, u16 fg, u16 bg);   /* a 12 x 16 character cell (x even) */
+u32 gfx_console_head_phys(void);
+
+/* console.c: the console on the TV (what the UART shows, scrolling) */
+void console_putc(char c);              /* uart.c: every character sent */
+void console_start(void);               /* the picture is set up: draw from now on */
+void console_service(void);             /* every main loop pass: the screen kept current */
+void console_redraw(void);              /* everything drawn again (after the view switched to it) */
+void console_scroll(int pages);         /* PgUp (1) / PgDn (-1): half a screen back or forward */
 
 /* panel.c (TM1650 over bit-banged I2C; or, on a board without it, two
    buttons on the same pins: GPIO 31 = UP, GPIO 9 = DOWN, low when pressed) */
@@ -181,6 +201,12 @@ int usb_enumerate(void);        /* the bus set up: the device on the port and, t
                                    behind it (addresses from 1, descriptors listed); 0 when the first answered */
 int usb_enumerate_quiet(void);  /* the same without the listing */
 void usb_removed(void);         /* the port lost its device: nothing is on the bus any more */
+int usb_bounced(void);          /* its device went and came back between two looks, and is not set up now */
+int usb_still_set_up(u8 device);        /* it answers, in its configuration */
+int usb_set_up_again(u8 device);        /* one that lost its set-up: 0 set up again (behind a hub: that port
+                                           alone; on the controller's port: the bus), -1 not */
+int usb_set_interface(u8 device, u8 iface, u8 alt);    /* SET_INTERFACE (its toggles: DATA0): 0, -1 */
+int usb_in_pending(void);               /* an interrupt IN (mouse, keyboard) is under way on endpoint B */
 int usb_hub_poll(void (*before)(void));  /* every 100 ms: one port of one hub looked at -- a device plugged
                                    in is set up, one unplugged forgotten; 1 when it said so (after before()) */
 int usb_present(u8 device);     /* is the device still plugged in where it was found? */
@@ -197,13 +223,17 @@ int usb_in_start(u8 device, u8 ep, u16 size);   /* an IN to the device's endpoin
 int usb_in_read(u8 *data, int max);     /* its packet: bytes, 0 nothing yet, -1 error, -2 empty, -3 there is no
                                            IN (a bulk transfer took endpoint B: start it again) */
 void usb_in_stop(void);
-void usb_int_open(int slot, u8 device, u8 ep, u16 size);   /* interrupt endpoints read in turns on endpoint
-                                           B: slot 0 the keyboard's, 1 a mouse's (when endpoint D is taken) */
+void usb_int_open(int slot, u8 device, u8 ep, u16 size, u8 interval);  /* interrupt endpoints read in turns on
+                                           endpoint B: slot 0 the keyboard's, 1 a mouse's (when endpoint D is
+                                           taken); interval: the endpoint's bInterval (ms) */
 void usb_int_close(int slot);
 int usb_int_take(int slot, u8 *data, int max);  /* > 0 a report, 0 nothing yet, -1 failed (closed), -2 empty */
 u32 usb_int_drops(int slot);            /* packets dropped for their data toggle */
 void usb_int_poll(void);                /* every main loop pass, before kbd_poll / mouse_poll */
 int usb_bulk_in(u8 device, u8 ep, u16 maxp, u8 *data, u32 len, u32 timeout_ms);  /* bytes, -1 */
+int usb_bulk_in_packet(u8 device, u8 ep, u16 maxp, u8 *data, u32 timeout_ms);
+                                        /* one packet of any size: bytes, 0 none in time, -1 failed, -2 a
+                                           zero-length packet (a token spoilt on the bus: tried again) */
 int usb_bulk_out(u8 device, u8 ep, u16 maxp, const u8 *data, u32 len, u32 timeout_ms);  /* 0, -1 */
 int usb_clear_halt(u8 device, u8 ep);   /* CLEAR_FEATURE(ENDPOINT_HALT) (bit 7 of ep: IN): 0, -1 */
 int usb_bulk_sync(u8 device, u8 out_ep, u8 in_ep);  /* before a bulk-only command: both toggles in step */
@@ -219,6 +249,8 @@ const char *mouse_start(u8 device, u8 iface, u8 ep, u16 size, u8 interval);  /* 
 void mouse_stop(void);
 int mouse_active(void);
 u8 mouse_device(void);                  /* the address of the mouse in use, 0: none */
+void mouse_yield_epd(void);             /* endpoint D to the keyboard: the mouse reads through endpoint B */
+int mouse_moving_on_b(void);            /* moving, read through endpoint B: eth.c reads less often */
 const char *mouse_poll(void);           /* every main loop pass; a line to show, or 0 */
 void mouse_show_status(void);
 
@@ -226,10 +258,44 @@ void mouse_show_status(void);
 const char *disk_attach(u8 device, u8 iface, u8 in_ep, u8 out_ep, u16 maxp);  /* a line about the disk */
 void disk_detach(u8 device);
 void disk_list(void);                   /* 'disks' */
-void disk_ls(const char *path);         /* 'ls [n:][/path]' */
+void disk_ls(const char *path);         /* 'ls [n:][/path]' (relative to the current directory) */
 void disk_cat(const char *path);        /* 'cat [n:]/path' */
 void disk_sector(const char *where);    /* 'sector [n:]<lba>' */
 int disk_count(void);
+void disk_cd(const char *path);         /* 'cd [n:][path]' */
+void disk_pwd(void);                    /* 'pwd' */
+const char *disk_cwd(void);             /* "3:/docs" (the prompt shows it), "" before any 'cd' */
+void disk_mkdir(const char *path);      /* 'mkdir', 'rmdir', 'rm', 'touch': the FAT volume written */
+void disk_rmdir(const char *path);
+void disk_rm(const char *path);
+void disk_touch(const char *path);
+void disk_write_file(const char *path, const u8 *data, u32 len, int append);  /* 'command > path' / '>>' */
+void disk_cp(const char *from, const char *to);         /* 'cp': a file, onto any FAT volume */
+void disk_mv(const char *from, const char *to);         /* 'mv': rename / move on the same volume */
+
+/* serial.c: USB serial ports (a GSM / LTE module's AT, modem and diagnostic ports; CDC ACM) */
+#define SERIAL_PORTS 8
+const char *serial_attach(u8 device, u8 iface, u8 control, int acm, u8 in_ep, u8 out_ep, u16 maxp,
+                          const char *name);   /* control: the interface with the modem control (ACM's
+                                                  communications interface); a line about the port */
+void serial_detach(u8 device);          /* 0: all */
+int serial_count(void);
+void serial_list(void);                 /* 'tty' */
+void serial_cu(int port);               /* 'cu [n]': the terminal joined to port n (-1: the AT port) until
+                                           "~." or Ctrl-] */
+void serial_at(const char *command);    /* 'at <command>': one AT command to the AT port, its answer */
+int at_prefixed(const char *s);         /* "AT..." in any case */
+
+/* eth.c: wired Ethernet through a USB adapter's CDC ECM function (an RTL8153's), DHCP, ARP, ping */
+const char *eth_attach(u8 device, u8 ctrl_if, u8 data_if, u8 data_alt, u8 in_ep, u8 out_ep, u16 maxp, u8 int_ep,
+                       u8 mac_string);  /* a line about the port */
+void eth_detach(u8 device);             /* 0: all */
+const char *eth_poll(void);             /* every main loop pass: frames, DHCP; a line to show, or 0 */
+void eth_show(void);                    /* 'ifconfig' */
+void eth_dhcp(void);                    /* 'dhcp': ask for an address again */
+void eth_arp_list(void);                /* 'arp' */
+void eth_ping(const char *host, int count);     /* 'ping [-c count] <host>' (0: until Ctrl-C) */
+int eth_parse_ip(const char *s, u8 ip[4]);
 
 /* kbd.c: a USB keyboard (HID boot protocol) typing into the command line */
 const char *kbd_start(u8 device, u8 iface, u8 ep, u16 size, u8 interval);   /* after SET_CONFIGURATION */

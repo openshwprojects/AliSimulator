@@ -4,13 +4,29 @@
    enable, pixel format 5 = ARGB1555; pitch 2560 bytes; global alpha 0x0F;
    on a revision-1 chip the RGB -> YCbCr matrix at +0x240 of the head).
    The CPU draws into the bitmap itself (no GE commands), through KSEG1 so the
-   display engine reads what was written without cache maintenance. */
+   display engine reads what was written without cache maintenance.
+
+   There are two pictures, each with a head of its own: the test screen (the
+   demo's boxes, what 'screen' draws, at FB_PHYS) and the console (console.c,
+   at CON_FB_PHYS).  The layer shows one of them -- gfx_view points its head
+   register at that head -- while both stay drawn; gfx_* draw into the test
+   screen unless gfx_target says the console. */
 #include "hw.h"
 #include "font5x7.h"
 
-#define FB ((volatile u16 *)KSEG1(FB_PHYS))
+#define FB_TEST ((volatile u16 *)KSEG1(FB_PHYS))
+#define FB_CON ((volatile u16 *)KSEG1(CON_FB_PHYS))
 #define HEAD ((volatile u32 *)KSEG1(HEAD_PHYS))
+#define CON_HEAD ((volatile u32 *)KSEG1(CON_HEAD_PHYS))
 #define PITCH_PX SCREEN_W
+
+static volatile u16 *fb = FB_TEST;      /* where gfx_* draw */
+static int view = 1;                    /* what the layer shows: 1 the console, 0 the test screen */
+
+static volatile u16 *shown(void)
+{
+    return view ? FB_CON : FB_TEST;
+}
 
 /* The matrix both original applications put at +0x240 of every head on a
    revision-1 S3811 for an HD output: BT.709 video range, x512, the rows Y,
@@ -27,6 +43,26 @@ static int enabled;
 static u32 enable_at_start;
 static int started;
 
+/* a region head (gma_capture.parse_head; the stock head at 0x008133C0) */
+static void head_write(volatile u32 *head, u32 bitmap)
+{
+    head[0] = 0xAA200B51u;                         /* signature, b16-22 0x20, ARGB1555, enabled */
+    head[1] = 0;                                   /* no palette */
+    head[2] = (u32)(SCREEN_W - 1) << 16;           /* x 0 .. 1279 */
+    head[3] = (u32)(SCREEN_H - 1) << 16;           /* y 0 .. 719 */
+    head[4] = ((u32)SCREEN_H << 16) | SCREEN_W;    /* bitmap 1280 x 720 */
+    head[5] = ((u32)(SCREEN_W * 2) << 16) | 0x0F;  /* pitch in bytes, global alpha (4-bit, opaque) */
+    head[6] = 0;                                   /* the only region */
+    head[7] = bitmap;
+    /* the rest of the block: no scaling filter (zero, as the originals have
+       it without scaling), then the matrix -- written on revision 0 too,
+       where the originals leave it zero (no revision-0 chip was tried) */
+    for (u32 i = 8; i < HEAD_SIZE / 4; i++)
+        head[i] = 0;
+    for (u32 i = 0; i < sizeof(rgb_to_ycbcr) / sizeof(rgb_to_ycbcr[0]); i++)
+        head[HEAD_MATRIX / 4 + i] = rgb_to_ycbcr[i];
+}
+
 void gfx_init(void)
 {
     /* what the layer's enable register held before the demo first wrote it:
@@ -36,22 +72,8 @@ void gfx_init(void)
         enable_at_start = REG32(GMA0_ENABLE);
         started = 1;
     }
-    /* region head (gma_capture.parse_head; the stock head at 0x008133C0) */
-    HEAD[0] = 0xAA200B51u;                         /* signature, b16-22 0x20, ARGB1555, enabled */
-    HEAD[1] = 0;                                   /* no palette */
-    HEAD[2] = (u32)(SCREEN_W - 1) << 16;           /* x 0 .. 1279 */
-    HEAD[3] = (u32)(SCREEN_H - 1) << 16;           /* y 0 .. 719 */
-    HEAD[4] = ((u32)SCREEN_H << 16) | SCREEN_W;    /* bitmap 1280 x 720 */
-    HEAD[5] = ((u32)(SCREEN_W * 2) << 16) | 0x0F;  /* pitch in bytes, global alpha (4-bit, opaque) */
-    HEAD[6] = 0;                                   /* the only region */
-    HEAD[7] = FB_PHYS;
-    /* the rest of the block: no scaling filter (zero, as the originals have
-       it without scaling), then the matrix -- written on revision 0 too,
-       where the originals leave it zero (no revision-0 chip was tried) */
-    for (u32 i = 8; i < HEAD_SIZE / 4; i++)
-        HEAD[i] = 0;
-    for (u32 i = 0; i < sizeof(rgb_to_ycbcr) / sizeof(rgb_to_ycbcr[0]); i++)
-        HEAD[HEAD_MATRIX / 4 + i] = rgb_to_ycbcr[i];
+    head_write(HEAD, FB_PHYS);
+    head_write(CON_HEAD, CON_FB_PHYS);
     gfx_enable(1);
 }
 
@@ -73,9 +95,40 @@ void gfx_enable(int on)
     REG32(GMA1_ENABLE) = 0;
     REG32(GMA0_ALPHA) = 0xFFu;
     REG32(GMA_TRUECOLOUR) = 1;
-    REG32(GMA0_HEAD) = HEAD_PHYS;
+    REG32(GMA0_HEAD) = view ? CON_HEAD_PHYS : HEAD_PHYS;
     REG32(GMA0_ENABLE) = rev_bits | (on ? 1u : 0u);
     enabled = on;
+}
+
+static void cursor_erase(void);
+
+/* the console (1) or the test screen (0) on the TV: the layer's head register
+   pointed at that picture's head (written again, the display engine reads the
+   head anew -- as on the box after the layer's format changed); the mouse
+   pointer moves over */
+void gfx_view(int console)
+{
+    console = console ? 1 : 0;
+    if (console == view)
+        return;
+    cursor_erase();
+    view = console;
+    REG32(GMA0_HEAD) = view ? CON_HEAD_PHYS : HEAD_PHYS;
+}
+
+int gfx_view_console(void)
+{
+    return view;
+}
+
+void gfx_target(int console)
+{
+    fb = console ? FB_CON : FB_TEST;
+}
+
+u32 gfx_console_head_phys(void)
+{
+    return CON_HEAD_PHYS;
 }
 
 u32 gfx_enable_at_start(void)
@@ -127,26 +180,36 @@ static void cursor_erase(void)
 {
     if (!cur_drawn)
         return;
+    volatile u16 *p = shown();
     for (int r = 0; r < CUR_H; r++)
         for (int c = 0; c < CUR_W; c++) {
             int px = cur_x + c, py = cur_y + r;
             if (arrow[r][c] != '.' && px < SCREEN_W && py < SCREEN_H)
-                FB[py * PITCH_PX + px] = under[r * CUR_W + c];
+                p[py * PITCH_PX + px] = under[r * CUR_W + c];
         }
     cur_drawn = 0;
 }
 
 static void cursor_draw(void)
 {
+    volatile u16 *p = shown();
     for (int r = 0; r < CUR_H; r++)
         for (int c = 0; c < CUR_W; c++) {
             int px = cur_x + c, py = cur_y + r;
             if (arrow[r][c] == '.' || px >= SCREEN_W || py >= SCREEN_H)
                 continue;
-            under[r * CUR_W + c] = FB[py * PITCH_PX + px];
-            FB[py * PITCH_PX + px] = arrow[r][c] == 'X' ? RGB(0, 0, 0) : RGB(255, 255, 255);
+            under[r * CUR_W + c] = p[py * PITCH_PX + px];
+            p[py * PITCH_PX + px] = arrow[r][c] == 'X' ? RGB(0, 0, 0) : RGB(255, 255, 255);
         }
     cur_drawn = 1;
+}
+
+/* drawing at (x, y, w, h) into the target: the pointer taken away first when
+   it is over that place of the picture on the TV (the main loop draws it again) */
+static void cursor_clear_of(int x, int y, int w, int h)
+{
+    if (cur_drawn && fb == shown() && x < cur_x + CUR_W && cur_x < x + w && y < cur_y + CUR_H && cur_y < y + h)
+        cursor_erase();
 }
 
 /* the pointer at (x, y) -- its tip -- shown (on) or not */
@@ -171,11 +234,11 @@ void gfx_fill(int x, int y, int w, int h, u16 color)
 {
     if (!clip(&x, &y, &w, &h))
         return;
-    if (cur_drawn && x < cur_x + CUR_W && cur_x < x + w && y < cur_y + CUR_H && cur_y < y + h)
-        cursor_erase();                 /* (drawn under the pointer: it comes back in the main loop) */
+    cursor_clear_of(x, y, w, h);
     u32 pair = ((u32)color << 16) | color;
     for (int row = 0; row < h; row++) {
-        volatile u16 *p = FB + (y + row) * PITCH_PX + x;
+        uart_rx_poll();                         /* (the whole screen takes longer than the UART's FIFO lasts) */
+        volatile u16 *p = fb + (y + row) * PITCH_PX + x;
         int n = w;
         if (((u32)p & 2) && n) {               /* to a word boundary */
             *p++ = color;
@@ -215,7 +278,34 @@ u16 gfx_get(int x, int y)
 {
     if (x < 0 || y < 0 || x >= SCREEN_W || y >= SCREEN_H)
         return 0;
-    return FB[y * PITCH_PX + x];
+    return fb[y * PITCH_PX + x];
+}
+
+/* a console character cell, 12 x 16 at (x, y) (x even): the 5 x 7 glyph at
+   twice its size and a column and a row of spacing, `fg` on `bg` -- two
+   pixels a 32-bit store */
+void gfx_cell(int x, int y, char c, u16 fg, u16 bg)
+{
+    if ((u8)c < FONT_FIRST || (u8)c > FONT_LAST)
+        c = ' ';
+    cursor_clear_of(x, y, 12, 16);
+    const u8 *rows = font5x7[(u8)c - FONT_FIRST];
+    u32 f = ((u32)fg << 16) | fg, b = ((u32)bg << 16) | bg;
+    volatile u32 *p = (volatile u32 *)(fb + y * PITCH_PX + x);
+    for (int r = 0; r < FONT_H + 1; r++) {
+        u8 bits = r < FONT_H ? rows[r] : 0;
+        u32 w0 = (bits & 0x10) ? f : b, w1 = (bits & 0x08) ? f : b, w2 = (bits & 0x04) ? f : b;
+        u32 w3 = (bits & 0x02) ? f : b, w4 = (bits & 0x01) ? f : b;
+        for (int k = 0; k < 2; k++) {
+            p[0] = w0;
+            p[1] = w1;
+            p[2] = w2;
+            p[3] = w3;
+            p[4] = w4;
+            p[5] = b;
+            p += PITCH_PX / 2;
+        }
+    }
 }
 
 /* text: the 5 x 7 font scaled by `scale`, one column of spacing */

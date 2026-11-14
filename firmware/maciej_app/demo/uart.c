@@ -33,13 +33,42 @@ void uart_rx_poll(void)
         rx_store(UART[0]);
 }
 
+/* a command's output going into a file ('command > path'): kept here
+   instead, without the CRs (the file gets Linux line ends) */
+static u8 *cap;
+static u32 cap_len, cap_max, cap_over;
+
+void uart_capture(u8 *buf, u32 max)
+{
+    cap_len = cap_over = 0;
+    cap_max = max;
+    cap = buf;
+}
+
+u32 uart_capture_end(u32 *over)
+{
+    cap = 0;
+    *over = cap_over;
+    return cap_len;
+}
+
 void uart_putc(char c)
 {
+    if (cap) {
+        if (c != '\r') {
+            if (cap_len < cap_max)
+                cap[cap_len++] = (u8)c;
+            else
+                cap_over++;
+        }
+        return;
+    }
     u8 lsr;
     while (!((lsr = UART[5]) & 0x20u))
         if (lsr & 1u)
             rx_store(UART[0]);
     UART[0] = (u8)c;
+    console_putc(c);                    /* the TV's console shows the same */
 }
 
 void uart_puts(const char *s)
@@ -162,6 +191,12 @@ static void format(struct sink *s, const char *fmt, va_list ap)
             put(s, *fmt);
         }
     }
+}
+
+void vuprintf(const char *fmt, va_list ap)
+{
+    struct sink s = {0, 0, 0};
+    format(&s, fmt, ap);
 }
 
 void uprintf(const char *fmt, ...)

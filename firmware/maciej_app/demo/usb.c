@@ -12,7 +12,8 @@
    transfers on endpoint 0 (its descriptors, its strings) and configures it.
    A hub's ports are powered and each device behind it is reset and
    enumerated the same way with the next address (a hub behind a hub too:
-   seven devices in all); one port is asked for its status every 100 ms, so
+   fifteen devices in all, hubs among the first seven); one port is asked
+   for its status every 100 ms, so
    plugging in and pulling out is noticed.  A device that is not high speed
    behind a high-speed hub is reached through the hub's transaction
    translator: the split flag in the endpoint's address register and the
@@ -70,6 +71,7 @@
 #define R_INT_EN2      0x1F
 #define R_FLAGS1       0x20  /* read to clear: b0 connection changed, b1 bus reset done */
 #define R_FLAGS2       0x21  /* read to clear: endpoint 0 b7 done / b3 error, A b6 / b2, B b5 / b1, C b4 / b0 */
+#define R_EPB_LAST     0x2C  /* 16 bits: the size of endpoint B's last packet (get_epb_last_data_size) */
 #define R_FLAGS3       0x2F
 #define R_EPAB_SIZE    0x30  /* b4-6: endpoint B's packet size, 8 << n, with b7 (b0-2 and b3: endpoint A's) */
 #define R_SPEED        0x32  /* b5-6: the device's speed, 0x00 high, 0x20 full, 0x40 low; b2 the controller
@@ -104,14 +106,28 @@
 #define R_PHY1         0xF4
 
 static int initialized;
-static int quiet;                       /* lsusb enumerates without the details */
-#define SAY(...) do { if (!quiet) uprintf(__VA_ARGS__); } while (0)
+static int quiet;                       /* a quiet set-up (lsusb, a retry): without the details */
+
+/* a detail of the set-up, unless quiet -- a function, so that its arguments always run (as a macro it
+   skipped them: disk_attach and serial_attach written inside it never ran in a quiet set-up) */
+static void SAY(const char *fmt, ...)
+{
+    if (quiet)
+        return;
+    va_list ap;
+    va_start(ap, fmt);
+    vuprintf(fmt, ap);
+    va_end(ap);
+}
 
 /* The devices on the bus: devices[a - 1] has the address a.  The first is
    the one on the controller's own port; a hub's devices follow as its ports
-   are looked at.  Seven: the split registers hold three bits of a hub's
-   address and of its port. */
-#define DEVICES     7
+   are looked at.  Fifteen: the endpoints' address registers hold four bits
+   of it (set_ep_device_address masks 0xF).  A hub needs one of the first
+   seven, and only its first seven ports are reached: the split registers
+   hold three bits of a hub's address and of its port. */
+#define DEVICES     15
+#define HUB_MAX     7                   /* the highest address a hub can have */
 #define HUB_PORTS   7
 #define SPEED_LOW   1                   /* (hcd_ioctrl_get_speed's codes) */
 #define SPEED_FULL  2
@@ -144,6 +160,7 @@ struct device {
 static struct device devices[DEVICES];
 static char summary[48];                /* usb_summary's text */
 static u8 ep0_max = 8;                  /* the packet size of the device endpoint 0 is aimed at */
+static u8 flags1_seen;                  /* interrupt flags 1's bit 0 (connection changed) read, not handled yet */
 static u8 flags2_seen;                  /* interrupt flags 2 read (reading clears them), not handled yet */
 static u8 last_error;                   /* the token error register after the last failure; 0: time-out */
 static const char *last_stage = "";    /* the stage a transfer is in (0: there is no such device) */
@@ -205,17 +222,35 @@ static const char *speed_name(u8 speed)
     return "unknown speed";
 }
 
+static u8 flags1(void)                  /* (bit 0, the connection changed, is kept for usb_bounced) */
+{
+    flags1_seen |= USB[R_FLAGS1];
+    return flags1_seen;
+}
+
 static u8 flags2(void)
 {
     flags2_seen |= USB[R_FLAGS2];
     return flags2_seen;
 }
 
-static void fifo_reset(u8 reg)          /* init_ep_fifo */
+/* init_ep_fifo: bit 4 set, a wait, cleared.  The SDK waits OS_Delay(1).  The demo waited a millisecond, five
+   times in every disk command (endpoint 0's control transfers too): a 512-byte read took 5.1 ms on the box,
+   0.96 ms with 10 us (a card reader's FAT16 card: 666 -> 2000 KB/s in 4 KB reads, 0 commands lost; a FAT32
+   stick 697 -> 2752 KB/s) */
+static void fifo_reset(u8 reg)
 {
     USB[reg] = 0x10;
-    delay_ms(1);
+    delay_us(10);
     USB[reg] = 0x00;
+}
+
+/* the DMA receiver's 24-bit count (set_dma_rx_cnt) */
+static void dma_rx_count(u32 count)
+{
+    USB[R_DMA_RX_COUNT] = (u8)count;
+    USB[R_DMA_RX_COUNT + 1] = (u8)(count >> 8);
+    USB[R_DMA_RX_COUNT + 2] = (u8)(count >> 16);
 }
 
 /* revision 0 only: bit 2 of the port register cleared and set again (after
@@ -268,6 +303,7 @@ static void hc_init(void)
     (void)USB[R_FLAGS2];
     (void)USB[R_FLAGS3];
     (void)USB[R_INTF_STATUS];
+    flags1_seen = 0;
     flags2_seen = 0;
     USB[R_INT_EN1] = 0x0F;
     USB[R_INT_EN2] = 0xFF;
@@ -404,6 +440,15 @@ static void note_failure(void)
     fail_error = last_error;
 }
 
+/* a transfer asked of a device that is not there (or with sizes that make no sense): -1, as "no response" */
+static int no_device(void)
+{
+    last_stage = 0;
+    last_error = 0x20;
+    note_failure();
+    return -1;
+}
+
 /* a control transfer to a device (IN data, or none), tried three times
    unless the device stalls it: the bytes received, -1 (usb_error_text says
    why) */
@@ -434,12 +479,8 @@ static struct device *device_at(u8 address)
 int usb_request(u8 device, u8 rtype, u8 req, u16 value, u16 index, u8 *data, u16 len, u32 timeout_ms)
 {
     const struct device *d = device_at(device);
-    if (!d) {
-        last_stage = 0;
-        last_error = 0x20;
-        note_failure();
-        return -1;
-    }
+    if (!d)
+        return no_device();
     return request(d, rtype, req, value, index, data, len, timeout_ms);
 }
 
@@ -578,9 +619,7 @@ static void epb_start(const struct device *d, u8 ep, u16 maxp, u32 phys, u32 cou
     USB32(R_DMA_RX_BASE) = phys;                    /* set_dma_rx_base_addr */
     fifo_reset(R_EPB_STATUS);                       /* init_ep_fifo */
     USB[R_DMA_AUTO] = (u8)(0x80 | (code << 4));     /* enable_dma_auto_rx */
-    USB[R_DMA_RX_COUNT] = (u8)count;                /* set_dma_rx_cnt */
-    USB[R_DMA_RX_COUNT + 1] = (u8)(count >> 8);
-    USB[R_DMA_RX_COUNT + 2] = (u8)(count >> 16);
+    dma_rx_count(count);
     USB[R_DMA_STATE] = (u8)(USB[R_DMA_STATE] | 0x20);       /* init_dma_rx_state */
     USB[R_DMA_STATE] = (u8)(USB[R_DMA_STATE] | 0x10);       /* start_dma_rx_transfer */
     USB[R_SPEED] = (u8)(USB[R_SPEED] | 0x04);       /* dma_host_in_token */
@@ -628,12 +667,8 @@ static u16 in_size;
 int usb_in_start(u8 device, u8 ep, u16 size)
 {
     struct device *d = device_at(device);
-    if (!d) {
-        last_stage = 0;
-        last_error = 0x20;
-        note_failure();
-        return -1;
-    }
+    if (!d)
+        return no_device();
     if (size > USB_DMA_SIZE)
         size = USB_DMA_SIZE;
     last_stage = "interrupt IN";
@@ -647,10 +682,36 @@ int usb_in_start(u8 device, u8 ep, u16 size)
     return 0;
 }
 
+/* an interrupt IN is under way on endpoint B (the mouse's, the keyboard's when endpoint D is not its) */
+int usb_in_pending(void)
+{
+    return in_pending;
+}
+
+/* a report that had come when its IN was ended (for a disk's or a network port's transfer): kept for its
+   slot (usb_int_poll), its toggle counted -- ended unread it was lost, and the device's toggle one ahead of
+   ours lost the next report too (on the box: a keyboard's keys repeated) */
+static u8 kept[USB_DMA_SIZE], kept_device, kept_ep;
+static int kept_n;
+
 void usb_in_stop(void)
 {
     if (!in_pending)
         return;
+    u32 n;
+    if (epb_state(&n) > 0) {
+        struct device *d = device_at(in_device);
+        if (d)
+            toggle_count(d, 0, n, in_size, in_size);
+        const volatile u8 *buf = (const volatile u8 *)KSEG1(USB_DMA_PHYS);
+        if (n > USB_DMA_SIZE)
+            n = USB_DMA_SIZE;
+        for (u32 i = 0; i < n; i++)
+            kept[i] = buf[i];
+        kept_n = n ? (int)n : -2;
+        kept_device = in_device;
+        kept_ep = in_ep_number;
+    }
     epb_end();
     in_pending = 0;
 }
@@ -709,6 +770,8 @@ static const u16 turn_max_ms[INT_SLOTS] = {300, 16};
 
 struct int_slot {
     u8 open, failed, device, ep;
+    u8 every;                           /* ms from one IN's start to the next (the endpoint's interval) */
+    u64 next_start;
     u16 size;
     int result;                         /* the outcome not taken yet: > 0 a report's bytes, -1, -2; 0 none */
     u8 data[USB_DMA_SIZE];
@@ -720,8 +783,13 @@ static int turn = -1;                   /* the slot holding endpoint B */
 static u64 turn_since;
 static int drop_seen;                   /* the token error register showed a toggle error during the IN */
 
-/* the slot's interrupt endpoint is read from now on: `size` bytes a report */
-void usb_int_open(int slot, u8 device, u8 ep, u16 size)
+/* the slot's interrupt endpoint is read from now on: `size` bytes a report, an IN started every
+   `interval` ms at most -- the largest power of two up to the endpoint's bInterval, 8 ms at most, as a USB
+   2.0 host schedules it.  (Endpoint B asks again every millisecond while the device answers NAK; started
+   again at once after each report it read a moving PixArt mouse 954 times a second: movements of a count
+   or two that its pointer's acceleration never saw -- a slow, "laggy" pointer -- and 73 failed split
+   transactions in 1929 reports) */
+void usb_int_open(int slot, u8 device, u8 ep, u16 size, u8 interval)
 {
     struct int_slot *s = &slots[slot];
     if (turn == slot) {
@@ -734,6 +802,10 @@ void usb_int_open(int slot, u8 device, u8 ep, u16 size)
     s->ep = ep;
     s->size = size;
     s->result = 0;
+    s->every = 1;
+    while (s->every < 8 && s->every * 2 <= interval)
+        s->every *= 2;
+    s->next_start = 0;
 }
 
 void usb_int_close(int slot)
@@ -785,6 +857,7 @@ static void int_start(int slot)
 {
     struct int_slot *s = &slots[slot];
     drop_seen = 0;
+    s->next_start = now_ms() + s->every;
     if (usb_in_start(s->device, s->ep, s->size) < 0) {
         s->result = -1;                 /* (usb_error_text: its toggles' set-up got no answer) */
         s->failed = 1;
@@ -798,6 +871,17 @@ void usb_int_poll(void)
 {
     u64 now = now_ms();
     int keep = -1;
+    if (kept_n) {                               /* (a report usb_in_stop kept: to its slot) */
+        for (int i = 0; i < INT_SLOTS; i++) {
+            struct int_slot *s = &slots[i];
+            if (s->open && s->device == kept_device && s->ep == kept_ep && !s->result) {
+                s->result = kept_n;
+                for (int k = 0; k < kept_n; k++)
+                    s->data[k] = kept[k];
+            }
+        }
+        kept_n = 0;
+    }
     if (turn >= 0) {
         struct int_slot *s = &slots[turn];
         if (in_pending) {
@@ -824,8 +908,8 @@ void usb_int_poll(void)
             usb_in_stop();              /* its turn is over */
     }
     if (keep >= 0) {
-        if (!in_pending && !slots[keep].result)
-            int_start(keep);            /* (after its report was taken) */
+        if (!in_pending && !slots[keep].result && now >= slots[keep].next_start)
+            int_start(keep);            /* (after its report was taken, its interval after the last start) */
         return;
     }
     int from = turn < 0 ? 0 : turn + 1;
@@ -928,12 +1012,8 @@ static void epd_halt(void)              /* epD_finish_ok's first two steps */
 int usb_epd_open(u8 device, u8 ep, u16 size, u8 interval)
 {
     struct device *d = device_at(device);
-    if (!d) {
-        last_stage = 0;
-        last_error = 0x20;
-        note_failure();
-        return -1;
-    }
+    if (!d)
+        return no_device();
     if (epd_device && epd_device != device)
         return -2;
     epd_halt();
@@ -1019,16 +1099,24 @@ void usb_epd_counts(u32 *every_us, u32 *reports, u32 *drops)
 int usb_bulk_sync(u8 device, u8 out_ep, u8 in_ep)
 {
     struct device *d = device_at(device);
-    if (!d) {
-        last_stage = 0;
-        last_error = 0x20;
-        note_failure();
-        return -1;
-    }
+    if (!d)
+        return no_device();
     usb_in_stop();                      /* (the keyboard's IN: kbd.c starts it again) */
     last_stage = "toggle set-up";
     if (toggle_sync(d, out_ep, 1) < 0 || toggle_sync(d, in_ep, 0) < 0)
         return -1;
+    return 0;
+}
+
+/* endpoint B made ready for an IN from the device's endpoint `ep` and started, `count` bytes into the RAM
+   at USB_BULK_PHYS: 0, -1 the data toggles could not be put in step */
+static int bulk_in_begin(struct device *d, u8 ep, u16 maxp, u32 count)
+{
+    usb_in_stop();                      /* (the keyboard's IN, when it was pending: kbd.c starts it again) */
+    if (toggle_sync(d, ep, 0) < 0)
+        return -1;
+    last_stage = "bulk IN";             /* (after toggle_sync: its CLEAR_FEATURE names its own stages) */
+    epb_start(d, ep, maxp, USB_BULK_PHYS, count);
     return 0;
 }
 
@@ -1039,17 +1127,10 @@ int usb_bulk_sync(u8 device, u8 out_ep, u8 in_ep)
 int usb_bulk_in(u8 device, u8 ep, u16 maxp, u8 *data, u32 len, u32 timeout_ms)
 {
     struct device *d = device_at(device);
-    if (!d || !maxp || len > USB_BULK_SIZE) {
-        last_stage = 0;
-        last_error = 0x20;
-        note_failure();
+    if (!d || !maxp || len > USB_BULK_SIZE)
+        return no_device();
+    if (bulk_in_begin(d, ep, maxp, len) < 0)
         return -1;
-    }
-    usb_in_stop();                      /* (the keyboard's IN, when it was pending: kbd.c starts it again) */
-    last_stage = "bulk IN";
-    if (toggle_sync(d, ep, 0) < 0)
-        return -1;
-    epb_start(d, ep, maxp, USB_BULK_PHYS, len);
     u64 start = now_ms();
     u32 n = 0;
     int r;
@@ -1072,22 +1153,113 @@ int usb_bulk_in(u8 device, u8 ep, u16 maxp, u8 *data, u32 len, u32 timeout_ms)
     return (int)n;
 }
 
-/* a bulk transfer to the device's OUT endpoint `ep` through endpoint A
-   (hcd_s3602_bulkout_start): `len` bytes (USB_BULK_SIZE at most) from
-   `data`, sent from the RAM at USB_BULK_PHYS; 0 sent, -1 (usb_error_text) */
-int usb_bulk_out(u8 device, u8 ep, u16 maxp, const u8 *data, u32 len, u32 timeout_ms)
+/* one packet from the device's bulk IN endpoint `ep`, whatever its size -- a
+   serial port's answer is often shorter than asked for, and for a short
+   packet the controller raises endpoint B's done but never the DMA's: the
+   bytes stay in endpoint B's FIFO (usb_bulk_in, which waits for both, times
+   out).  As measured on the box with an LTE module's AT port: the DMA is
+   asked for one byte, so the controller sends no IN token after the first
+   packet (with more asked for it goes on, and the next packet lands on this
+   one); the packet's size is then at +0x2C (as the SDK's epB_finish_ok reads
+   it); the FIFO hands the DMA 16 bits at a time, so that one-byte run took
+   the first two bytes, and a second run -- the DMA's count set to the rest
+   and started again -- moves the rest to the buffer's start.  The bytes (up
+   to maxp, 512 at most), 0 none within timeout_ms (the IN is ended, the
+   data toggle kept), -1 failed (usb_error_text), -2 a zero-length packet --
+   as usb_in_read */
+static int bulk_in_packet_once(u8 device, u8 ep, u16 maxp, u8 *data, u32 timeout_ms)
 {
     struct device *d = device_at(device);
-    if (!d || !maxp || !len || len > USB_BULK_SIZE) {
-        last_stage = 0;
-        last_error = 0x20;
+    if (!d || !maxp || maxp > USB_BULK_SIZE)
+        return no_device();
+    if (bulk_in_begin(d, ep, maxp, 1) < 0)
+        return -1;
+    const volatile u8 *buf = (const volatile u8 *)KSEG1(USB_BULK_PHYS);
+    u64 start = now_ms(), empty_at = 0;
+    u32 moved;
+    int n = 0, r;
+    while (!(r = epb_state(&moved))) {
+        if (flags2_seen & 0x20) {                       /* done, nothing for the DMA: a zero-length packet */
+            if (!empty_at)
+                empty_at = now_ticks();
+            else if (now_ticks() - empty_at > ticks_per_ms() / 20) {
+                n = -2;
+                break;
+            }
+        }
+        if (now_ms() - start >= timeout_ms)
+            break;
+    }
+    if (r > 0) {                                        /* a packet, its first DMA run done */
+        n = USB[R_EPB_LAST] | USB[R_EPB_LAST + 1] << 8;
+        if (n > maxp)
+            n = maxp;
+        if (n > 0)
+            data[0] = buf[0];                           /* (the first run took two bytes) */
+        if (n > 1)
+            data[1] = buf[1];
+        if (n > 2) {                                    /* the rest from the FIFO, to the buffer's start */
+            dma_rx_count((u32)(n - 2));
+            intf_status();
+            intf_seen &= (u8)~0x04;
+            USB[R_DMA_STATE] = (u8)(USB[R_DMA_STATE] | 0x20);   /* init_dma_rx_state */
+            USB[R_DMA_STATE] = (u8)(USB[R_DMA_STATE] | 0x10);   /* start_dma_rx_transfer */
+            USB[R_SPEED] = (u8)(USB[R_SPEED] | 0x08);           /* en_dma_transfer */
+            u64 t = now_ms();
+            while (!(intf_status() & 0x04) && now_ms() - t < 5)
+                ;
+            if (intf_status() & 0x04) {
+                for (int i = 2; i < n; i++)
+                    data[i] = buf[i - 2];
+            } else {
+                last_stage = "bulk IN (the packet's rest)";
+                last_error = 0;
+                r = -1;
+            }
+        }
+        if (!n)
+            n = -2;                                     /* (a zero-length packet that took the DMA's done) */
+    }
+    epb_end();
+    intf_seen &= (u8)~0x04;
+    if (r < 0) {
+        toggle_unknown(d, 0);
         note_failure();
         return -1;
     }
+    if (n)
+        toggle_count(d, 0, n > 0 ? (u32)n : 0, maxp, maxp);     /* (one packet) */
+    return n;
+}
+
+/* (a token spoilt on the bus -- not a stall, not "no response": a UTMI, CRC or PID error, as the box got one
+   while an LTE module sent over GSM -- is tried again, twice: an IN that failed was not acknowledged, the
+   device still has its packet) */
+int usb_bulk_in_packet(u8 device, u8 ep, u16 maxp, u8 *data, u32 timeout_ms)
+{
+    int n = bulk_in_packet_once(device, ep, maxp, data, timeout_ms);
+    for (int tries = 0; n == -1 && tries < 2 && fail_error && !(fail_error & 0xA0); tries++)
+        n = bulk_in_packet_once(device, ep, maxp, data, timeout_ms);
+    return n;
+}
+
+/* a bulk transfer to the device's OUT endpoint `ep` through endpoint A
+   (hcd_s3602_bulkout_start): `len` bytes (USB_BULK_SIZE at most) from
+   `data`, sent from the RAM at USB_BULK_PHYS; 0 sent, -1 (usb_error_text).
+   It is over at the DMA transmit's done (+0x63 bit 1, as the SDK's
+   hcd_s3602_dma_tx_done): endpoint A's done (flags 2 bit 6) comes after
+   every packet -- on the box a 4 KB WRITE(10) to a card reader raised it
+   eight times, the DMA transmit's done only after the eighth; ended at the
+   first, the card reader waited for the rest and answered nothing more */
+int usb_bulk_out(u8 device, u8 ep, u16 maxp, const u8 *data, u32 len, u32 timeout_ms)
+{
+    struct device *d = device_at(device);
+    if (!d || !maxp || !len || len > USB_BULK_SIZE)
+        return no_device();
     usb_in_stop();                      /* one DMA engine: the keyboard's IN waits (kbd.c starts it again) */
-    last_stage = "bulk OUT";
     if (toggle_sync(d, ep, 1) < 0)
         return -1;
+    last_stage = "bulk OUT";            /* (after toggle_sync: its CLEAR_FEATURE names its own stages) */
     volatile u8 *buf = (volatile u8 *)KSEG1(USB_BULK_PHYS);
     for (u32 i = 0; i < len; i++)
         buf[i] = data[i];
@@ -1097,15 +1269,12 @@ int usb_bulk_out(u8 device, u8 ep, u16 maxp, const u8 *data, u32 len, u32 timeou
     USB[R_EPAB_SIZE] = (u8)((USB[R_EPAB_SIZE] & 0xF8) | code | 0x08);          /* set_epa_packet_size */
     USB[R_EPA] = (u8)((USB[R_EPA] & 0x3F) | 0x80);                             /* set_ep_transfer_type: bulk */
     USB[R_EPA] = (u8)((USB[R_EPA] & 0xC3) | ((ep & 0x0F) << 2));               /* set_ep_logical_num */
-    (void)USB[R_FLAGS1];
     flags2();
     flags2_seen &= (u8)~0x44;
     intf_status();
     intf_seen &= (u8)~0x02;
     USB[R_INTF_MASK] = 0x10;                        /* enable_all_usb_intf_int, mask_usb_intf_int(0x10) */
-    USB[R_DMA_RX_COUNT] = 0;                        /* set_dma_rx_cnt(0) */
-    USB[R_DMA_RX_COUNT + 1] = 0;
-    USB[R_DMA_RX_COUNT + 2] = 0;
+    dma_rx_count(0);
     USB[R_DMA_AUTO] = (u8)(code | 0x08);            /* enable_dma_auto_tx */
     fifo_reset(R_EPA_STATUS);                       /* init_ep_fifo */
     USB32(R_DMA_TX_BASE) = USB_BULK_PHYS;           /* set_dma_tx_base_addr */
@@ -1120,8 +1289,8 @@ int usb_bulk_out(u8 device, u8 ep, u16 maxp, const u8 *data, u32 len, u32 timeou
         if (f & 0x04) {                             /* endpoint A failed */
             last_error = USB[R_TOKEN_ERROR];
             r = -1;
-        } else if ((f & 0x40) || (intf_status() & 0x02)) {
-            r = 1;                                  /* endpoint A done, the DMA transmit done */
+        } else if (intf_status() & 0x02) {
+            r = 1;                                  /* the DMA transmit done: every packet sent */
         }
     }
     flags2_seen &= (u8)~0x44;
@@ -1187,6 +1356,31 @@ static struct device *device_on(u8 hub, u8 port)
     return 0;
 }
 
+static int port_connect(struct device *h, u8 port);
+static void forget(struct device *d);
+
+/* a device that lost its set-up (an LTE module that restarted) set up again: behind a hub that port alone --
+   forgotten, reset and set up as when it was plugged in, the other devices untouched -- on the controller's
+   port the whole bus, quietly.  0 set up again, -1 not */
+int usb_set_up_again(u8 device)
+{
+    struct device *d = device_at(device);
+    if (!d)
+        return -1;
+    if (!d->hub)
+        return usb_enumerate_quiet();
+    struct device *h = device_at(d->hub);
+    u8 port = d->port;
+    forget(d);
+    if (!h)
+        return -1;
+    int was = quiet;
+    quiet = 1;
+    int r = port_connect(h, port);
+    quiet = was;
+    return r;
+}
+
 /* a device that is gone, with everything that was plugged into it */
 static void forget(struct device *d)
 {
@@ -1203,6 +1397,8 @@ static void forget(struct device *d)
         usb_epd_close();
     if (d->msc_in)
         disk_detach(a);
+    serial_detach(a);
+    eth_detach(a);
     for (int i = 0; i < 2; i++)
         if (owner[i] == a)
             owner[i] = 0;               /* (the address may come back with another device) */
@@ -1214,6 +1410,8 @@ static void forget_all(void)
     kbd_stop();
     mouse_stop();
     usb_epd_close();
+    serial_detach(0);
+    eth_detach(0);
     for (int i = 0; i < DEVICES; i++) {
         if (devices[i].used && devices[i].msc_in)
             disk_detach((u8)(i + 1));
@@ -1264,7 +1462,48 @@ static void print_string(const struct device *d, const char *label, u8 index, ch
     for (int i = 2; i + 1 < n && i < buf[0] && k < size - 1; i += 2)
         text[k++] = (buf[i] >= 32 && buf[i] < 127 && !buf[i + 1]) ? (char)buf[i] : '?';
     text[k] = 0;
-    SAY("  %s: %s\n", label, text);
+    if (label)
+        SAY("  %s: %s\n", label, text);
+}
+
+/* configuration `index`'s descriptor into cfg (size bytes at most): its length, < 9 not read */
+static int read_config(const struct device *d, u8 index, u8 *cfg, int size)
+{
+    if (request(d, 0x80, 0x06, (u16)(0x0200 | index), 0, cfg, 9, 500) != 9)
+        return -1;
+    u16 total = (u16)(cfg[2] | cfg[3] << 8);
+    return request(d, 0x80, 0x06, (u16)(0x0200 | index), 0, cfg, total < size ? total : (u16)size, 500);
+}
+
+/* a CDC Ethernet (ECM) communications interface in a configuration's descriptor */
+static int has_ecm(const u8 *cfg, int n)
+{
+    for (int i = 0; i + 8 < n && cfg[i]; i += cfg[i])
+        if (cfg[i + 1] == 0x04 && cfg[i + 5] == 0x02 && cfg[i + 6] == 0x06)
+            return 1;
+    return 0;
+}
+
+/* SET_INTERFACE: an interface's alternate setting; its endpoints' toggles start at DATA0.  0, -1 */
+int usb_set_interface(u8 device, u8 iface, u8 alt)
+{
+    struct device *d = device_at(device);
+    if (!d)
+        return no_device();
+    if (request(d, 0x01, 0x0B, alt, iface, 0, 0, 500) < 0)
+        return -1;
+    d->in_ep = d->out_ep = 0;           /* (none used since: DATA0) */
+    return 0;
+}
+
+/* a bulk endpoint's descriptor into an interface's pair: its number as the IN or the OUT one, its packets */
+static void bulk_ep(const u8 *ep, u16 size, u8 *in, u8 *out, u16 *maxp)
+{
+    if (ep[2] & 0x80)
+        *in = ep[2] & 0x0F;
+    else
+        *out = ep[2] & 0x0F;
+    *maxp = size;
 }
 
 static const char *class_name(u8 c)
@@ -1281,6 +1520,27 @@ static const char *class_name(u8 c)
     case 0xFF: return "vendor specific";
     }
     return "other";
+}
+
+/* the makers of GSM / LTE modules: their vendor-class interfaces are serial ports (AT, modem, diagnostics,
+   GPS).  Other vendor-class interfaces -- a Wi-Fi stick's, a camera's -- are not, and neither is subclass
+   0x42, a phone's debug interface */
+static int modem_vendor(u16 vid)
+{
+    static const u16 vids[] = {
+        0x1E0E,                         /* SIMCom (the A7670E: 1e0e:9011) */
+        0x2C7C,                         /* Quectel */
+        0x05C6,                         /* Qualcomm */
+        0x12D1,                         /* Huawei */
+        0x19D2,                         /* ZTE */
+        0x1BC7,                         /* Telit */
+        0x1199,                         /* Sierra Wireless */
+        0x2CB7,                         /* Fibocom */
+    };
+    for (unsigned i = 0; i < sizeof(vids) / sizeof(vids[0]); i++)
+        if (vids[i] == vid)
+            return 1;
+    return 0;
 }
 
 /* ---- hubs ---- */
@@ -1346,6 +1606,14 @@ static int port_connect(struct device *h, u8 port)
     SAY("hub %u port %u:\n", h->address, port);
     if (request(d, 0x80, 0x06, 0x0100, 0, first, 8, 500) != 8) {
         SAY("  a device (%s) that does not answer: %s\n", speed_name(d->speed), usb_error_text());
+        port_feature(h, port, 0, PORT_ENABLE);
+        h->ignore |= (u8)(1u << port);
+        d->used = 0;
+        return -1;
+    }
+    if (first[4] == 0x09 && address_of(d) > HUB_MAX) {
+        SAY("  a hub, but the first %u addresses are taken: a hub needs one of them (the split registers hold "
+            "three bits of it)\n", HUB_MAX);
         port_feature(h, port, 0, PORT_ENABLE);
         h->ignore |= (u8)(1u << port);
         d->used = 0;
@@ -1419,15 +1687,45 @@ static int set_up_device(struct device *d, const u8 *first)
     print_string(d, "product", dev[15], d->product, sizeof(d->product));
     print_string(d, "serial", dev[16], serial, sizeof(serial));
     int is_hub = dev[4] == 0x09, kbd_if = -1, in_kbd = 0, in_msc = 0, in_mouse = 0;
-    int n = request(d, 0x80, 0x06, 0x0200, 0, cfg, 9, 500);
-    if (n != 9) {
+    /* serial ports: a GSM / LTE module's vendor-class interfaces with a bulk IN and OUT (its AT, modem,
+       diagnostic and GPS ports, as Linux's option driver takes them), or a CDC ACM data interface (class 0x0A
+       after a class 2 / subclass 2 one; not RNDIS's, protocol 0xFF) */
+    struct serial_ep {
+        u8 iface, control, acm, in, out, name;      /* control: the interface with the modem control */
+        u16 maxp;
+    } ser[8], *cur = 0;
+    int nser = 0, acm_control = -1, modem = modem_vendor(d->vid);   /* acm_control: the interface before */
+    /* CDC Ethernet (ECM): its communications interface (02/06, an interrupt endpoint, the Ethernet
+       descriptor's MAC string), its data interface's setting with a bulk IN and OUT */
+    int ecm_ctrl = -1, in_ecm_ctrl = 0, in_ecm_data = 0;
+    u8 ecm_data = 0, ecm_alt = 0, ecm_in = 0, ecm_out = 0, ecm_int = 0, ecm_mac = 0;
+    u16 ecm_maxp = 0;
+    int n = read_config(d, 0, cfg, sizeof(cfg));
+    if (n < 9) {
         SAY("GET_DESCRIPTOR (configuration) failed: %s\n", usb_error_text());
         return 0;
     }
-    u16 total = (u16)(cfg[2] | cfg[3] << 8);
-    n = request(d, 0x80, 0x06, 0x0200, 0, cfg, total < sizeof(cfg) ? total : sizeof(cfg), 500);
+    /* a device with a CDC Ethernet configuration besides its first, which has none, is set up in that one
+       -- an RTL8153's second; its first is Realtek's own */
+    for (u8 k = 1; k < dev[17] && k < 4 && !has_ecm(cfg, n); k++) {
+        int m = read_config(d, k, cfg, sizeof(cfg));
+        if (m >= 9 && has_ecm(cfg, m)) {
+            n = m;
+            SAY("  configuration %u has CDC Ethernet (ECM): that one\n", cfg[5]);
+        } else {
+            n = read_config(d, 0, cfg, sizeof(cfg));
+        }
+    }
     for (int i = 0; i + 1 < n && cfg[i]; i += cfg[i]) {
         if (cfg[i + 1] == 0x04 && i + 8 < n) {
+            in_ecm_ctrl = cfg[i + 5] == 0x02 && cfg[i + 6] == 0x06;
+            if (in_ecm_ctrl)
+                ecm_ctrl = cfg[i + 2];
+            in_ecm_data = ecm_ctrl >= 0 && cfg[i + 5] == 0x0A && cfg[i + 4] >= 2 && !ecm_in;
+            if (in_ecm_data) {
+                ecm_data = cfg[i + 2];
+                ecm_alt = cfg[i + 3];
+            }
             SAY("  interface %u: class %02x (%s), subclass %02x, protocol %02x, %u endpoints\n",
                 cfg[i + 2], cfg[i + 5], class_name(cfg[i + 5]), cfg[i + 6], cfg[i + 7], cfg[i + 4]);
             if (cfg[i + 5] == 0x09)
@@ -1442,6 +1740,14 @@ static int set_up_device(struct device *d, const u8 *first)
             in_msc = !d->msc_in && cfg[i + 5] == 0x08 && cfg[i + 6] == 0x06 && cfg[i + 7] == 0x50;
             if (in_msc)
                 d->msc_if = cfg[i + 2];
+            cur = 0;
+            if (((cfg[i + 5] == 0xFF && modem && cfg[i + 6] != 0x42) || (cfg[i + 5] == 0x0A && acm_control >= 0))
+                && !cfg[i + 3] && nser < 8) {
+                cur = &ser[nser++];
+                *cur = (struct serial_ep){.iface = cfg[i + 2], .acm = cfg[i + 5] == 0x0A, .name = cfg[i + 8]};
+                cur->control = cur->acm ? (u8)acm_control : cur->iface;
+            }
+            acm_control = cfg[i + 5] == 0x02 && cfg[i + 6] == 0x02 && cfg[i + 7] != 0xFF ? cfg[i + 2] : -1;
         } else if (cfg[i + 1] == 0x05 && i + 6 < n) {
             u16 size = (u16)((cfg[i + 4] | cfg[i + 5] << 8) & 0x7FF);
             SAY("    endpoint %02x %s, %u bytes%s", cfg[i + 2],
@@ -1449,13 +1755,8 @@ static int set_up_device(struct device *d, const u8 *first)
                 (cfg[i + 3] & 3) == 3 ? "" : "\n");
             if ((cfg[i + 3] & 3) == 3)                  /* bInterval: frames (ms) below high speed */
                 SAY(d->speed != SPEED_HIGH ? ", every %u ms\n" : ", interval %u\n", cfg[i + 6]);
-            if (in_msc && (cfg[i + 3] & 3) == 2) {        /* its bulk endpoints */
-                if (cfg[i + 2] & 0x80)
-                    d->msc_in = cfg[i + 2] & 0x0F;
-                else
-                    d->msc_out = cfg[i + 2] & 0x0F;
-                d->msc_max = size;
-            }
+            if (in_msc && (cfg[i + 3] & 3) == 2)          /* its bulk endpoints */
+                bulk_ep(cfg + i, size, &d->msc_in, &d->msc_out, &d->msc_max);
             if (in_mouse && !d->mouse_ep && (cfg[i + 2] & 0x80) && (cfg[i + 3] & 3) == 3) {
                 d->mouse_ep = cfg[i + 2];
                 d->mouse_size = size;
@@ -1467,15 +1768,41 @@ static int set_up_device(struct device *d, const u8 *first)
                 d->kbd_size = size;
                 d->kbd_interval = cfg[i + 6];
             }
+            if (cur && (cfg[i + 3] & 3) == 2)
+                bulk_ep(cfg + i, size, &cur->in, &cur->out, &cur->maxp);
+            if (in_ecm_data && (cfg[i + 3] & 3) == 2)
+                bulk_ep(cfg + i, size, &ecm_in, &ecm_out, &ecm_maxp);
+            if (in_ecm_ctrl && (cfg[i + 3] & 3) == 3 && (cfg[i + 2] & 0x80))
+                ecm_int = cfg[i + 2] & 0x0F;
+        } else if (cfg[i + 1] == 0x24 && i + 3 < n && in_ecm_ctrl && cfg[i + 2] == 0x0F) {
+            ecm_mac = cfg[i + 3];                       /* (the Ethernet descriptor: its MAC address string) */
         }
     }
     if (request(d, 0x00, 0x09, cfg[5], 0, 0, 0, 500) == 0)        /* SET_CONFIGURATION */
         SAY("  configuration %u set\n", cfg[5]);
     else
         SAY("  SET_CONFIGURATION failed: %s\n", usb_error_text());
+    char names[8][32];                  /* (the ports' interface names: each string read once) */
+    for (int k = 0; k < nser && !is_hub; k++) {
+        const struct serial_ep *s = &ser[k];
+        int j = 0;
+        while (j < k && ser[j].name != s->name)
+            j++;
+        if (j < k)
+            usnprintf(names[k], sizeof(names[k]), "%s", names[j]);
+        else
+            print_string(d, 0, s->name, names[k], sizeof(names[k]));
+        if (s->in && s->out)
+            SAY("  %s\n", serial_attach(a, s->iface, s->control, s->acm, s->in, s->out, s->maxp, names[k]));
+    }
+    if (ecm_in && ecm_out && !is_hub)
+        SAY("  %s\n", eth_attach(a, (u8)ecm_ctrl, ecm_data, ecm_alt, ecm_in, ecm_out, ecm_maxp, ecm_int, ecm_mac));
     if (d->msc_in && !d->msc_out)
         d->msc_in = 0;                  /* (bulk-only needs both) */
-    if (is_hub) {
+    if (is_hub && a > HUB_MAX) {
+        SAY("  a hub at address %u: a hub needs one of the first %u (the split registers hold three bits of "
+            "it); its ports are left off\n", a, HUB_MAX);
+    } else if (is_hub) {
         hub_start(d);
     } else if (d->msc_in) {
         SAY("  %s\n", disk_attach(a, d->msc_if, d->msc_in, d->msc_out, d->msc_max));
@@ -1558,6 +1885,29 @@ int usb_enumerate_quiet(void)
 void usb_removed(void)
 {
     forget_all();
+}
+
+/* is the device on the controller's port still set up: answering at its address, in its configuration
+   (GET_CONFIGURATION not 0)?  An LTE module restarting (the A7670E after AT+CRESET) went away and came
+   back twice, and after the second time it answered at its address without its configuration: its
+   endpoints stalled */
+int usb_still_set_up(u8 device)
+{
+    struct device *d = device_at(device);
+    u8 config = 0;
+    return d && request(d, 0x80, 0x08, 0, 0, &config, 1, 100) == 1 && config;
+}
+
+/* the device on the controller's port went away and came back since the last look, too quickly for the
+   main loop's look at the port every 100 ms (the controller keeps the change: flags 1 bit 0), and the one
+   set up there is not set up any more: 1, set it up again.  (Setting the controller up again drops the
+   device for a moment too: one still set up was not gone.) */
+int usb_bounced(void)
+{
+    if (!(flags1() & 0x01))
+        return 0;
+    flags1_seen = 0;
+    return device_at(1) && !usb_still_set_up(1);
 }
 
 /* is the device still where it was enumerated?  The controller's port for

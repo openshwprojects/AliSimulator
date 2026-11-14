@@ -84,16 +84,34 @@ masked, everything polled) for the same bootloader. It prints the same banner an
 
 - **Command line** on the UART (115200 8E1): whole lines ended by Enter,
   echo, Backspace, Ctrl-C / Ctrl-U, Up/Down history (8 lines), prompt
-  `m3801> `. `help` lists the commands: `version`, `ping` (`pong v4`),
+  `m3801> ` (with a current directory: `m3801 3:/Docs> `). `help` lists the
+  commands: `version`, `ping` (`pong v4`),
   `info` (chip ID 0x3811 = S3811 and its revision byte, CPU clock from the
   strap, memory layout, which of the two boards it found, the display
   layer's enable register as the demo found it at start and now),
   `uptime`, `echo`, `md <addr> [len]`, `mr <addr>`, `mw <addr> <value>`
   (RAM, the flash window and the device registers only; `mw` refuses the
-  flash), `screen`, `panel`, `keys`, `ir`, `usb`, `lsusb`, `clear`,
+  flash), `screen`, `testscreen`, `console`, `panel`, `keys`, `ir`, `usb`,
+  `lsusb`, the disk commands below, `clear`, `history`,
   `video init [opticum|comsat] [rev0|rev1]`, `reboot` / `restart` and `bootloader`. Every command may
-  also be written with `/` in front (`/restart`, `/lsusb`).
-- **TV picture**: a 1280 x 720 ARGB1555 bitmap on GMA layer 0 through one
+  also be written with `/` in front (`/restart`, `/lsusb`, `/testscreen`).
+- **Console on the TV** (the view after start, `console.c`): what the UART
+  shows -- the boot messages, the prompt and what is typed on the UART or a
+  USB keyboard, the output, the events (`[usb] ...`, `[panel] ...`) -- as a
+  text terminal like a Linux console: 105 x 42 characters of the demo's 5 x
+  7 font at twice its size, a title bar (uptime, hints), prompts green,
+  what is typed white, an event's tag cyan, a blinking block cursor; the
+  lines scroll up and the last 512 are kept, PgUp / PgDn (a USB keyboard's,
+  or ESC [ 5 ~ / ESC [ 6 ~ from a terminal) looking back half a screen at a
+  time. `uart_putc` hands it every character, so the TV shows what a
+  terminal on the UART does (CR, LF, backspace, tab, ESC [ K, ESC [ 2 J, ESC
+  [ H); only the cells that changed are drawn, from the main loop and
+  every 200 ms while a long output runs. It is a bitmap of its own
+  (0x02200000) with a region head of its own (0x00F00800); `testscreen`
+  points the layer's head register (0xB8006304) at the test screen's head
+  instead, and a key on the USB keyboard -- it types too -- or `console`
+  points it back. Both pictures stay drawn.
+- **Test screen** (`testscreen`; what the TV showed before the console): a 1280 x 720 ARGB1555 bitmap on GMA layer 0 through one
   region head, the way the original application shows its OSD (head word
   0x`AA200B51`, pitch 2560). On a revision-1 S3811 -- a real box reads the
   chip word 0x38110001 -- the head is a 0x280-byte block whose +0x240 holds
@@ -104,7 +122,7 @@ masked, everything polled) for the same bootloader. It prints the same banner an
   region true-colour (0xB80063B8 = 1). The demo screen has live boxes for the system,
   the remote, the front panel, the command line and USB, and colour bars;
   `screen demo | bars | clear [rrggbb] | text <x> <y> <words> |
-  rect <x> <y> <w> <h> <rrggbb> | on | off` draw on it (a drawing command
+  rect <x> <y> <w> <h> <rrggbb> | on | off` draw on it and show it (a drawing command
   pauses the live boxes until `screen demo`). The font is the demo's own
   5 x 7 bitmap font (`gen_font.py`).
 - **Front panel** (TM1650 on GPIO 31 / 9, bit-banged as the bootloader does):
@@ -142,7 +160,7 @@ masked, everything polled) for the same bootloader. It prints the same banner an
 - **USB hubs**: a hub on the port is set up with everything behind it --
   its ports powered, each port with a device reset in turn, the device given
   the next address and enumerated like the first; a hub behind a hub the
-  same way -- up to seven devices in all. `usb` lists each with its hub and
+  same way -- up to fifteen devices in all. `usb` lists each with its hub and
   port, `lsusb` one line each (`Bus 001 Device 004: ID 1209:0002 ..., low
   speed (1.5 Mbit/s), hub 1 port 4`). A device that is not high speed behind
   a high-speed hub is reached through that hub's transaction translator
@@ -150,10 +168,13 @@ masked, everything polled) for the same bootloader. It prints the same banner an
   is looked at every 100 ms, each in its turn, so a device plugged into a
   hub or pulled out is noticed within a second or so and said on the
   console (`[usb] hub 1 port 2: device connected`). The first keyboard
-  found types; when it is unplugged the next one takes over. Limits: seven
-  devices, a hub's first seven ports (the split registers hold three bits
-  of a hub's address and port); a low-speed device behind a full-speed
-  (USB 1.1) hub does not answer and is left alone.
+  found types; when it is unplugged the next one takes over. Limits:
+  fifteen devices (the endpoints' address registers hold four bits of an
+  address; the SDK's `set_ep_device_address` masks it so), a hub only at
+  one of the first seven addresses and only its first seven ports (the
+  split registers hold three bits of a hub's address and port); a
+  low-speed device behind a full-speed (USB 1.1) hub does not answer and is
+  left alone.
 - **USB disks**: a stick, a card reader or a USB disk (mass storage with
   SCSI commands over the bulk-only transport) is found as it is set up --
   its name, size, partitions (MBR or GPT) and file systems -- and `disks`
@@ -162,9 +183,70 @@ masked, everything polled) for the same bootloader. It prints the same banner an
   [n:]/path` shows a text file (a binary one: its first 256 bytes in hex;
   Ctrl-C on the UART stops it); `sector [n:]<number>` shows any sector in
   hex. A disk is named by its USB device number as `lsusb` lists it (`ls
-  3:/docs`, `n.p:` for its partition p); without one the first FAT volume
-  is used, and paths take any case. NTFS and exFAT are listed but not
-  read; only a device's first logical unit is used, and up to four disks.
+  3:/docs`, `n.p:` for its partition p); without one the current directory
+  is used (`cd 3:`, `cd docs`, `cd ..`, `cd /`; `pwd`; `cd` alone forgets
+  it, the prompt shows it), before any `cd` the first FAT volume's root;
+  paths take any case and may be relative; `dir` is `ls`. `mkdir`,
+  `rmdir` (an empty directory), `rm` (a file), `touch` (an empty file), `cp
+  <from> <to>` (a file; into a directory when <to> is one; onto another
+  disk too), `mv <from> <to>` (a rename, or a move into another directory
+  of the same volume: the same clusters, its dates kept, a directory's `..`
+  pointed at its new place) and `command > [n:]path` (what any command
+  prints, into a file, with Linux line ends; `>>` adds it to the file's
+  end) write the FAT volume; `"..."` or `'...'` keep spaces in a word.
+  Writing goes by SCSI WRITE(10) through the bulk-only transport's
+  data-out stage, every copy of the FAT written, long names with their 8.3
+  aliases (`NEWFOL~1`; an 8.3 name in lower case gets Windows' lower-case
+  flags instead), a new directory's cluster zeroed with its `.` and `..`
+  before its entry links it in, a directory grown by a cluster when it is
+  full, an entry deleted before its clusters are freed, FAT32's FSInfo
+  counts made unknown; a write-protected disk (MODE SENSE) is not written.
+  The box has no clock: what is made is dated 2026-11-13 12:00. NTFS and
+  exFAT are listed but not read; only a device's first logical unit is
+  used, and up to four disks.
+- **USB serial ports**: a GSM / LTE module's ports (vendor-class interfaces
+  with a bulk IN and a bulk OUT endpoint, of the module makers Linux's
+  option driver knows: SIMCom, Quectel, Huawei, ZTE, Qualcomm, Telit,
+  Sierra Wireless, Fibocom) and CDC ACM devices become `ttyUSB<n>` /
+  `ttyACM<n>` as they are set up (DTR and RTS on); `tty` lists them. `at
+  <command>` sends one AT command to the first port named "... AT ..." --
+  `AT` put in front when it is missing (`at +csq`, `at i`), the rest as
+  typed, quotes kept (`at +cpin="1234"`) -- and shows the answer up to its
+  final result (OK, ERROR, +CME / +CMS ERROR, NO CARRIER ..., or the `> `
+  of AT+CMGS) and what follows it within 250 ms (AT+HTTPREAD's page, a
+  long line whole); lines the module sent before the command (+HTTPACTION,
+  RING, +CMTI) come first. A line typed as `AT...` goes there too, and `>
+  file` works. `cu [n]` joins the terminal -- the UART and the USB
+  keyboard -- to a port: what is typed goes out (Enter as CR, whatever the
+  terminal sends), what comes in is shown, until `~.` at a line's start or
+  Ctrl-] (as Linux's `cu`). An IN token spoilt on the bus (a UTMI, CRC or
+  PID error) is tried again in usb.c, twice; `cu` goes on through a failed
+  transfer while the device is still set up (it says so once); a module that
+  lost its set-up (it restarted) is set up again by the `at` or `cu` that
+  finds it so -- behind a hub only its port (`usb_set_up_again`), the other
+  devices untouched; a device on the port that does not answer yet (a module
+  starting, or one a set-up elsewhere left so) is tried again every 3 s, ten
+  times. A web page
+  through the module's own HTTP client: `at +cgact=1,1`, `at +httpinit`,
+  `at +httppara="URL","http://example.com/"`, `at +httpaction=0` (its
+  `+HTTPACTION: 0,200,<length>` comes seconds later: the next `at` shows
+  it), `at +httpread=0,<length>`, `at +httpterm`.
+- **Ethernet**: a USB Ethernet adapter with a CDC ECM function -- an
+  RTL8153 (0bda:8153) in its second configuration, which the demo chooses
+  when the first has no ECM -- becomes eth0: its MAC address from the
+  Ethernet descriptor, frames over its bulk endpoints (read every 20 ms in
+  the main loop), DHCP at once (`[eth] eth0: 192.168.0.161 (DHCP) ...`),
+  ARP and ICMP echo answered (the box can be pinged). `ifconfig` shows the
+  port, `dhcp` asks again, `arp` lists the table, `ping [-c n] <host>`
+  pings like Linux's ping: a name asked of the DHCP's DNS server, each
+  reply's TTL and time, ICMP errors, Ctrl-C and the statistics with the
+  loss (`ping` alone still answers pong). The keyboard is
+  read through endpoint D, which polls by itself, and a mouse through
+  endpoint B's turns: frames read through endpoint B every 20 ms lost a
+  keyboard's reports there. While that mouse moves (a report in the last
+  half second) the frames are read every 100 ms instead, and only between
+  its reports, when its IN is not half way through the hub's split
+  transaction: the adapter keeps them meanwhile.
 - **USB keyboard**: a keyboard (an interface of class HID, protocol
   keyboard) types into the same command line as the UART -- US layout,
   Enter, Backspace, Up / Down (history), Caps Lock, Escape (as Ctrl-C), Ctrl
@@ -189,7 +271,8 @@ masked, everything polled) for the same bootloader. It prints the same banner an
   section below.
 - **USB mouse**: a mouse (HID, boot protocol mouse) moves a pointer -- a
   black and white arrow -- over the TV picture, starting in the middle;
-  with the left button held it paints a line (a 5-pixel brush), the right
+  on the test screen, with the left button held, it paints a line (a 5-pixel brush; on the console the
+  pointer only moves), the right
   button picks the next colour (yellow, red, green, blue, white, orange),
   and the buttons and the wheel are told on the UART with the pointer's
   place (`[usb] mouse: left down at 700,390`). Its interrupt endpoint is
@@ -278,13 +361,17 @@ python firmware/maciej_app/build.py --version v4 --demo
 python tools/maciej_release.py --version v4 --app build/maciej_app/v4/app.bin --readme firmware/maciej_app/bin/README_UART_v4.txt
 ```
 
-`tests/run_dump_maciej_demo_v4.py` (default suite, about a minute) checks the
+`tests/run_dump_maciej_demo_v4.py` (default suite, about eight minutes with
+the C++ engine) checks the
 shipped files and, with a MIPS GCC, that the source rebuilds to the shipped
 bytes; then it boots the shipped image through the original bootloader and
-drives it only through its inputs: 172 checks over the commands (every one
-listed by `help`; all but `uptime`, `clear`, `ir raw` and `panel bright`
+drives it only through its inputs: 233 checks over the commands (every one
+listed by `help`; all but `uptime`, `ir raw` and `panel bright`
 run), the line
-editing, the screen pixel by pixel (banner, header colour, the eight colour
+editing, the console on the TV (read back cell by cell against the
+demo's font: what the UART shows, the colours, its head beside the test
+screen's, `clear`, PgUp / PgDn, `testscreen` / `console`, a USB keyboard's
+key bringing it back and typing), the test screen pixel by pixel (banner, header colour, the eight colour
 bars, clear / rect / text / off / demo, the ARGB1555 words in RAM), the
 layer's head block (the head, the filter table zero, the BT.709 matrix at
 +0x240) and enable registers, the panel's digits and both keys,
@@ -325,7 +412,31 @@ up, both toggles DATA0 first; the pointer drawn and moved, a click, a
 painted line in the framebuffer and on the captured screen, the right
 button's colour, the wheel, `usb mouse`; the keyboard typing and `ls` /
 `cat` on the stick while the mouse moves, nothing dropped; unplugged and
-plugged in again), the
+plugged in again), more than seven USB devices (eight behind two hubs, the
+mouse as device 8, and a third hub as the ninth refused: a hub needs one of
+the first seven addresses), a shell on writable sticks (`cd` / `pwd` /
+`dir` / `mkdir` / `rmdir` / `rm` / `touch` on FAT16 with a partition table,
+FAT32 -- its root grown by a cluster -- and a full-speed FAT12 without one,
+the prompt following `cd`; what the demo wrote read back by
+`fat_image.Volume`: long names and their checksums, `.` and `..`, freed
+clusters, both FATs alike, FSInfo's count unknown; the refusals; a
+write-protected stick left alone; files' contents: `echo ... >` and `>>`,
+`help > help.txt` over two clusters, `>>` onto a full cluster and into a
+sector's middle, `>` over a longer file, `cp` to a new name, into a
+directory and onto the FAT32 stick, onto itself refused, `mv` of a file
+and of a directory -- its `..`, the prompt following a moved current
+directory -- `ls > 4:/list.txt` onto FAT12, quotes; every volume then
+checked whole: no lost cluster, every chain as long as its file, `.` and
+`..` right), USB serial ports (an LTE module behind a hub, as the A7670E
+shows itself -- `usb_host.VirtualModem` -- next to a writable stick: its
+four ports in the descriptors' order with DTR and RTS on, `tty`, `at` with
+the answers read a packet at a time through endpoint B's FIFO, the PIN,
+`AT...` typed as a line, `> file`, AT+CMGS's `> ` and its text through
+`cu`, `cu 2` ended by Ctrl-] with LF sent as CR, a web page through the
+module's HTTP client -- its result shown by the next `at`, the page after
+AT+HTTPREAD's OK --, `at` and `cu` through IN tokens spoilt on the bus
+(UTMI errors), the module losing its configuration and its hub port alone
+set up again by `at` (the stick next to it untouched), unplugged), the
 watchdog (running in reset mode from the start, fed every
 0.1 s, never overflowing through all of it; the model in `src/watchdog.py`),
 `video init` (the Opticum's table: 720p timing, the HDMI
@@ -333,7 +444,7 @@ transmitter out of reset and unmuted, the board's own TV encoder values),
 `reboot` / `/restart` (arming the watchdog first), `bootloader` with a held c key, the updater's
 capture and handshake from the running demo, and that the flash never
 changes. `tests/run_dump_maciej_demo_v4_comsat.py` (default suite, about
-40 s) runs the same image on the Comsat's board -- two buttons on GPIO 31
+two minutes) runs the same image on the Comsat's board -- two buttons on GPIO 31
 / 9 (`gpio_keys.GpioKeys`), no TM1650 -- and, as the real box, on a
 revision-1 chip, in 62 checks: button mode, both pins inputs after the
 probe and never driven again, the buttons' events (a single low read is
@@ -480,7 +591,7 @@ emulator at both chip revisions) give the register map:
 | +0x38 | 24 bits: the bytes a DMA receive takes (`set_dma_rx_cnt`) |
 | +0x3D | revision 0: \|= 0x60 before every bus reset |
 | +0x40 / +0x44 / +0x48 | DMA receive: the buffer's physical address (32-byte aligned), its index, the bytes received (24 bits; final only once +0x63 bit 2 is set -- read at endpoint B's done flag it can still be one short) |
-| +0x50 / +0x54 / +0x58 / +0x5C | DMA transmit: the buffer's physical address (32-byte aligned), its index (0x20 after a 31-byte block), the bytes to send (24 bits), the bytes left |
+| +0x50 / +0x54 / +0x58 / +0x5C | DMA transmit: the buffer's physical address (32-byte aligned), its index (0x20 after a 31-byte block), the bytes to send (24 bits), the bytes left; a transfer of several packets raises flags 2 bit 6 and +0x63 bits 0 and 3 after each packet, +0x63 bit 1 (the DMA transmit done) only after the last (measured) |
 | +0x60 | DMA strobes (they read back 0): bit 5 / 4 the receiver's state set up / its transfer started, bit 1 / 0 the transmitter's, bits 7 / 6 the bulk-only command list's |
 | +0x62 / +0x63 | interface interrupt mask / status (read to clear): bits 0 and 3 -- flags 1 / 2 are pending; 0 and 2 -- a DMA receive is done; 0 and 1 -- a DMA transmit is done (both measured); 0 and 4 a bulk-only command (the SDK's handler) |
 | +0x68 | DMA options: 0x80 \| size code << 4 receive (`enable_dma_auto_rx`), 0x08 \| size code transmit |
@@ -527,12 +638,17 @@ not as "no response", as on the box. Given a disk image the stick
 (`VirtualStick(image)`; `src/fat_image.py` builds FAT12 / FAT16 / FAT32
 images with long names, a label, an MBR or none, and files in scattered
 clusters) answers the bulk-only transport -- endpoint A's OUT by DMA from
-RAM, its command block, the data and the status on endpoint B -- with the
+RAM a packet at a time with the flags the box raises after each, its
+command block, the data and the status on endpoint B -- with the
 SCSI commands a host reads a disk with; `full_speed=True` gives it 64-byte
 packets, `unit_attention=True` a first "the medium may have changed",
 `no_medium=True` makes it a card reader without a card,
 `lose_after_idle=s` leaves the first command after s idle seconds
-unanswered (as the 64 GB stick below); like the real
+unanswered (as the 64 GB stick below), `writable=True` takes WRITE(10)'s
+data into the image -- until all of it has come every packet is more of
+it, a command block too, as on a real device (else it is write-protected: MODE SENSE says so,
+WRITE fails with DATA PROTECT); `fat_image.Volume` reads an image back
+(what the demo wrote is checked with it); like the real
 stick below it ends a command whose bulk IN's halt is cleared after the
 command block (the status stalls). Both endpoints keep their data toggles
 per device endpoint, the controller's per endpoint A and B, and a packet
@@ -586,8 +702,10 @@ partition's first sector for its file system. A command is a 31-byte
 command block wrapper sent from RAM by endpoint A's DMA (the SDK's
 `hcd_s3602_bulkout_start`: +0x82 / +0x83 the device, +0x30 bits 0..2 the
 packet size, +0x13 the endpoint, +0x50 / +0x58 the buffer and length, the
-+0x60 bit 0 strobe, +0x32 bit 3; done at flags 2 bit 6 and +0x63 bits 0 and
-1), the data and the 13-byte status wrapper received by endpoint B's
++0x60 bit 0 strobe, +0x32 bit 3; done at the DMA transmit's done, +0x63 bit
+1, as the SDK's `hcd_s3602_dma_tx_done` -- flags 2 bit 6 comes after every
+packet), and WRITE(10)'s data the same way; the data and the 13-byte status
+wrapper received by endpoint B's
 (several packets in one transfer: a 512-byte sector in eight from a
 full-speed stick). A stalled data stage has its halt cleared and the status
 read; a status that makes no sense, a command block the device does not
@@ -824,6 +942,140 @@ text now keeps the
 failed transfer's stage. And the 961 MB stick (ffff:5678) stopped answering
 after two restarts of the box and a `usb` (its port reset), as it had once
 before: it needs to be plugged in again.
+
+With a webcam (17a1:0118, full speed, behind the first hub chip) the box
+then had nine devices; the demo kept seven and refused the mouse as the
+eighth (its port switched off). The endpoints' address registers take four
+bits of an address (`set_ep_device_address` masks it with 0xF), so the
+demo now keeps fifteen, hubs among the first seven: on the box the mouse
+became device 8 and moved the pointer (117 reports through endpoint D, none
+dropped, no error), and the 64 GB stick device 9, enumerated at that
+address and its partition table read through endpoints A and B.
+
+The shell's first write on the box failed. `mkdir 4:/alitest` on the card
+wrote the new cluster's FAT entries (a sector each, one packet), then the
+zeroing of the cluster -- WRITE(10) of eight sectors, 4 KB -- timed out,
+and the card reader answered nothing more until the bus was reset (`usb
+reset`). A RAM-loaded test logged that transfer on a free cluster at the
+card's end (its sectors read first and written back after): flags 2 bit 6
+(endpoint A done) and +0x63 bits 0 and 3 come after every 512-byte packet,
+the DMA's count of bytes left drops as the FIFO takes them, and +0x63 bit 1
+-- the DMA transmit done, which the SDK's `hcd_s3602_dma_tx_done` waits for
+-- only after the eighth (5.9 ms; the reader kept one packet waiting for
+5.5 ms). The demo had taken the first bit 6 for the end: the reader got 512
+of 4096 bytes and waited for the rest. Ended at bit 1, the write and its
+read back matched; the emulator's endpoint A now sends packet by packet
+with those flags (the old build's `mkdir` fails there too). With the new
+build `mkdir 4:/alitest` made its entry (in a deleted entry's slot, with
+Windows' lower-case flag; cluster 259, its `.` and `..`, the rest zero; both
+FATs' entry 0xFFFF) and `rmdir` put both FATs back byte for byte. The
+failed try had left its cluster (258) marked used in both FATs -- its undo
+could not run with the reader stuck: a scan of the FAT and the directory
+tree found it, and it was freed, both FAT sectors checked first and read
+back after.
+
+The TV console's drawing has to read the UART too. The chip's receive FIFO
+holds 16 bytes (30 sent while nothing read it: 16 kept, the overrun bit
+set), 1.4 ms at 115200 baud, and a whole console redraw takes 17.5 ms on
+the box; installing the RAM loader -- 25-byte `mw` lines, each printing a
+line -- once failed on a word that read back wrong. The console's and
+`gfx_fill`'s loops now empty the FIFO every row: 40 lines of 70 bytes,
+each sent the moment its prompt came, were all taken whole.
+
+Then the shell went through on the card, checked from its sectors: `cd`
+(any case, relative, `..`, `/`), `pwd`, `ls` / `dir`, `mkdir` and `touch`
+with long names and spaces (8.3 aliases `LONGFI~1.TXT`, the long-name
+checksums right, Windows' lower-case flags on `a.txt`), `.` and `..`, the
+refusals, all removed again by any case -- both FATs back byte for byte.
+After `cp`, `mv` and `>` / `>>` came: `echo ... > hello.txt` and `>>`,
+`help > help.txt` (4053 bytes), `help >> big.txt` nine times (36477 bytes
+over two 32 KB clusters), `cp` to a new name, into a directory, to the
+root and of the two-cluster file, `mv` of a file into a directory and of a
+directory (its `..` right) -- every file read back from the card's sectors
+the same as what was written, and after `rm` / `rmdir` both FATs again as
+before.
+
+An LTE module (SIMCom A7670E, 1e0e:9011, high speed) on the port has RNDIS
+(interfaces 0 and 1), two diagnostic ports (2, 3) and two AT ports (4, 5),
+all but RNDIS of the vendor class, with 512-byte bulk packets. AT commands
+sent to an AT port were taken, but the demo's bulk IN never got an answer.
+An answer is a short packet: the echo comes first, then the answer (`ATI`:
+145 bytes). RAM-loaded tests showed what endpoint B does with one. A packet
+shorter than the DMA's count raises endpoint B's done (flags 2 bit 5) but
+not the DMA's (+0x63 bit 2). The packet stays in endpoint B's FIFO, +0x2C
+holds its size, and the controller goes on sending IN tokens, so the next
+packet replaces it. With a count of 1 byte the first packet ends the
+transfer: both flags are set and the tokens stop. By then the FIFO has
+handed the packet's first two bytes to the DMA, since it gives the DMA
+16 bits at a time. Started again (+0x38 = the size - 2, the +0x60
+strobes, +0x32 bit 3 alone), the DMA moves the rest to the buffer's start.
+The SDK's `epB_finish_ok` restarts it the same way, with +0x2C's size. The
+demo's `usb_bulk_in_packet` reads a packet of any size this way, and `at i`
+answers in 0.2 s. The emulator's endpoint B now takes the DMA's count of a
+packet and keeps the rest in its FIFO for the restart. A short packet
+before the count still ends the transfer there.
+
+After `AT+CRESET` the module drops off the bus for a second. Then its
+chip's boot port comes for 0.6 s (ASR, 2ecc:3004, CDC ACM), and the
+module's own interfaces return about 8 s after the command. Once it went
+and came back a second time, about 30 s after: it then answered at its
+address but stalled requests to its endpoints (no configuration), though
+the port's connection had not changed. It also restarted by itself once,
+soon after a SIM was found. The demo sets up the boot port (`ttyACM0`) and
+the module as they come. A device that does not answer when it comes is
+tried again every 3 s. A change of the port's connection between two of
+the main loop's looks (the controller keeps it: flags 1 bit 0) sets the
+device up again if it lost its configuration (GET_CONFIGURATION 0), and
+`at` / `cu` set the bus up again when a port fails that way. With a SIM in
+(its PIN lock off) the module registered on its home network (GSM,
+`+CREG: 0,1`), signal 25 to 27, and fetched http://example.com/ with its
+own HTTP client: data context 1 activated (`AT+CGACT=1,1`; the APN was set
+already), `+HTTPACTION: 0,200,577` a few seconds after the command's OK,
+the 577 bytes after AT+HTTPREAD's OK. While it sent, one bulk IN failed
+with a UTMI error (+0x1D = 0x04), the module still set up: `cu` ended
+there, so `at` and `cu` now try again in that case. `at` read only up to
+the OK, dropping AT+HTTPREAD's data and the `+HTTPACTION` line; it now
+reads on for 250 ms after the final result and shows what was waiting
+before the command: the page fetched with `at` alone took 0.55 s.
+
+Profiled with RAM-loaded tests calling the demo's own SCSI routines, every
+disk took about 5 ms a command: a 512-byte READ(10) 5.1 ms, 4 KB 5.7 to
+6.0 ms (650 to 730 KB/s), a 1 MB file written through the FAT writer 246
+KB/s. Timed stage by stage, the command block took 1.0 ms, the data 2.1 ms
+and the status 2.0 ms. The NAK retry setting (+0xA8 = 0, 1 or 8) changed
+nothing. The time was the demo's own: its FIFO reset (init_ep_fifo) waited
+a millisecond, once for the command block and twice for each IN. The SDK's
+waits OS_Delay(1). With 10 us a 512-byte read takes 0.96 ms, and 4 KB
+reads run at 2000 KB/s on the card (FAT16) and 2752 KB/s on the 961 MB
+stick (FAT32), with no command lost. A 1 MB file is written at 452 KB/s and
+removed in 0.56 s. Bigger commands would go further: with the 1 ms resets,
+16 KB READ(10)s ran at 2306 KB/s and 32 KB ones at 3555 KB/s. A 64 KB one
+left the controller answering nothing until `usb` set it up again. The 64
+GB stick (090c:2000, NTFS) lost no command in the first measurement; after
+that 64 KB try it lost about a third of them, at any FIFO reset wait (10 us
+to 1 ms), even after a bus reset, so it needs to be plugged in again.
+
+A USB 3.0 hub with a network port (Genesys Logic 05e3:0610, behind it a
+Realtek RTL8153 0bda:8153) put a third hub on the bus. The RTL8153 has two
+configurations: Realtek's own, and CDC ECM (a communications interface with
+the Ethernet descriptor -- MAC address in string 3, 1514-byte segments --
+and interrupt endpoint 0x83; a data interface whose alternate setting 1 has
+bulk endpoints 0x81 and 0x02, 512 bytes). Set to the second, with the data
+setting chosen and the packet filter at directed + broadcast, its link came
+up 1.6 s later, the home network's frames came in (about 70 a second, most
+of them ARP) and a DHCP DISCOVER was answered by the router's offer. The
+demo now does that by itself: DHCP gave it an address, `ping` to the router
+took 0.6 to 0.9 ms, and a PC's ping of the box was answered (2 to 25 ms:
+frames are read every 20 ms). On 2026-11-14 the Linux-like `ping` went out
+through the router too: 8.8.8.8 at 14 ms (TTL 119), example.com asked of the
+router's DNS and answered at 8.7 ms, a name that does not exist told, Ctrl-C
+ending an endless one with its statistics. Reading frames takes endpoint B from the
+keyboard every 20 ms; `usb_in_stop` used to drop a key report that had come
+just then (and with it the next, its data toggle out of step: keys
+repeated), and now keeps it -- but behind the hub's translator a report
+caught between the split transaction's two halves is still lost: 26 of 150
+reports, a key stuck. So the keyboard now has endpoint D, which polls by
+itself and is never taken away, and a mouse reads through endpoint B.
 
 ## The flash procedure on every image
 

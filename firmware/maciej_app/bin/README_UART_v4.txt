@@ -28,9 +28,13 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
   md <adres> [dl]      zrzut pamieci (RAM, okno flash, rejestry)
   mr <adres>           odczyt slowa 32-bit
   mw <adres> <wart>    zapis slowa 32-bit (RAM i rejestry, nie flash)
-  screen ...           obraz na TV: demo | bars | clear [rrggbb] |
-                       text <x> <y> <slowa> | rect <x> <y> <w> <h> <rrggbb> |
-                       on | off
+  screen ...           rysuje na ekranie testowym (i go pokazuje): demo | bars |
+                       clear [rrggbb] | text <x> <y> <slowa> |
+                       rect <x> <y> <w> <h> <rrggbb> | on | off
+  testscreen           ekran testowy na TV (ramki, paski kolorow); dowolny
+                       klawisz klawiatury USB (wpisuje sie tez) albo
+                       "console" wraca do konsoli
+  console              konsola na TV (widok po starcie)
   panel <tekst>        4 znaki na wyswietlaczu panelu; panel bright 0..7
                        (plyty z TM1650)
   keys                 stan klawiszy panelu (klawisze sa tez zglaszane same);
@@ -48,17 +52,51 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
   lsusb                urzadzenia USB, po jednej linii
   disks                dyski USB (pendrive, czytnik kart): rozmiar, partycje,
                        systemy plikow
-  ls [n:][/sciezka]    katalog na dysku USB (FAT12, FAT16, FAT32, dlugie
+  ls [n:][sciezka]     katalog na dysku USB (FAT12, FAT16, FAT32, dlugie
                        nazwy); n - numer urzadzenia z lsusb (np. ls 3:/docs),
-                       bez niego pierwszy wolumin FAT
-  cat [n:]/sciezka     plik tekstowy z dysku USB (Ctrl-C przerywa; plik
+                       bez niego biezacy katalog (cd), a przed pierwszym cd
+                       pierwszy wolumin FAT; "dir" to samo
+  cd [n:][sciezka]     biezacy katalog, widoczny w znaku zachety
+                       (m3801 3:/Docs>); cd .. - wyzej, cd / - korzen,
+                       samo cd - bez katalogu; pwd - pokazuje go
+  cat [n:]sciezka      plik tekstowy z dysku USB (Ctrl-C przerywa; plik
                        binarny: pierwsze 256 bajtow szesnastkowo)
+  mkdir <sciezka>      nowy katalog (ZAPIS na dysk; dlugie nazwy tez)
+  rmdir <sciezka>      usuwa pusty katalog (zapis)
+  rm <sciezka>         usuwa plik (zapis)
+  touch <sciezka>      nowy pusty plik (zapis)
+  cp <skad> <dokad>    kopiuje plik (do katalogu: do niego, pod ta sama
+                       nazwa; takze na inny dysk) (zapis)
+  mv <skad> <dokad>    zmienia nazwe pliku lub katalogu albo przenosi go
+                       do innego katalogu tego samego woluminu (zapis)
+  komenda > plik       to, co komenda wypisuje, trafia do pliku (np.
+                       ls > 4:/lista.txt, echo tekst > 4:/a.txt); >> dopisuje
+                       na koncu pliku; nazwy ze spacjami w "..." albo '...'
   sector [n:]<numer>   jeden sektor dysku USB szesnastkowo
+  tty                  porty szeregowe USB: porty modulu GSM / LTE (SIMCom,
+                       Quectel, Huawei, ZTE ...) i urzadzenia CDC ACM
+  at [komenda]         jedna komenda AT do portu AT modulu i jej odpowiedz do
+                       OK / ERROR oraz to, co przychodzi zaraz po nich (dane
+                       AT+HTTPREAD); najpierw linie, ktore modul wyslal
+                       wczesniej (+HTTPACTION, RING); np. at +csq, at i,
+                       at +cpin?; linia zaczynajaca sie od AT tez tam trafia;
+                       dziala > plik
+  cu [n]               terminal polaczony z portem szeregowym n (bez n: port
+                       AT modulu): co wpiszesz, idzie do portu, odpowiedzi
+                       widac; "~." na poczatku linii albo Ctrl-] konczy
+  ifconfig             port Ethernet (adapter USB z CDC ECM, np. RTL8153): MAC,
+                       adres IP z DHCP, router
+  dhcp                 ponownie prosi serwer DHCP o adres
+  arp                  tabela ARP
+  ping [-c n] <host>   ping jak w Linuksie przez Ethernet: adres albo nazwa
+                       (DNS z DHCP), TTL i czas kazdej odpowiedzi, Ctrl-C
+                       konczy i pokazuje statystyke (samo "ping": pong)
   watchdog [test|off|on]
                        watchdog ukladu: dziala od startu demo; gdy demo stanie
                        na 8 s, tuner sam sie restartuje; test - przestaje go
                        karmic (tuner restartuje sie po 8 s)
-  clear                czysci ekran terminala
+  clear                czysci ekran terminala (i konsoli na TV)
+  history              poprzednie komendy
   video init [opticum|comsat] [rev0|rev1]
                        odtwarza zapisy rejestrow, ktorymi oryginalne
                        oprogramowanie plyty wlacza obraz 720p i nadajnik HDMI
@@ -69,6 +107,36 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
   bootloader           restart do oryginalnego bootloadera: przytrzymaj klawisz c
                        (albo uruchom maciej_uart.py), zeby w nim zostac
 
+Konsola na TV (widok po starcie): to samo co na UART - komunikaty startowe,
+znak zachety, wpisywane komendy (z UART albo klawiatury USB), ich wyniki
+i zdarzenia ([usb] ..., [panel] ...) - jak konsola w Linuksie: 105 x 42
+znakow, pasek tytulu, znak zachety na zielono, kursor miga. Linie przewijaja
+sie w gore; ostatnie 512 linii zostaje - PgUp / PgDn (klawiatura USB albo
+ESC [ 5 ~ / ESC [ 6 ~ z terminala) przewija o pol ekranu. "testscreen"
+pokazuje dawny ekran demo (ekran testowy), klawisz na klawiaturze USB albo
+"console" wraca do konsoli.
+Zapis na dyski: mkdir, rmdir, rm, touch, cp, mv i "komenda > plik" zapisuja
+wolumin FAT (wszystkie kopie FAT, dlugie nazwy, FSInfo w FAT32; pliki
+tekstowe maja konce linii jak w Linuksie). Tuner nie ma zegara - nowe pliki
+i katalogi maja date 2026-11-13 12:00. Dysk chroniony przed zapisem (MODE
+SENSE) nie jest zapisywany. Uwaga: zapis zmienia dane na pendrivie - najpierw
+sprobuj na pendrivie bez waznych plikow.
+Modul GSM / LTE (sprawdzone z SIMCom A7670E, 1e0e:9011): jego porty to
+ttyUSB0..3 ("tty"), "at +csq" pyta o zasieg, "cu" otwiera port AT jak
+terminal. Gdy modul sie zrestartuje (np. po AT+CRESET), demo samo
+konfiguruje go ponownie; pojedynczy blad transmisji USB (np. gdy modul nadaje
+w GSM) nie przerywa "at" ani "cu". Karta SIM z PIN-em: at +cpin=<PIN> (albo
+wylacz PIN w telefonie).
+Strona WWW przez modul (jego wlasny klient HTTP):
+  at +cgact=1,1                              (polaczenie danych)
+  at +httpinit
+  at +httppara="URL","http://example.com/"
+  at +httpaction=0                           (po kilku sekundach modul wysle
+                                              +HTTPACTION: 0,200,<dlugosc>)
+  at +httpread=0,<dlugosc>                   (strona; mozna tez > plik)
+  at +httpterm
+Sprawdzone przez GSM: example.com, 577 bajtow.
+
 Pilot: kazda odebrana ramka NEC jest wypisywana z kodem i nazwa klawisza,
 pokazana na ekranie i na panelu. Klawisze panelu: wypisywane po nacisnieciu.
 USB: po podlaczeniu urzadzenia demo samo odczytuje jego deskryptory
@@ -78,7 +146,8 @@ i system plikow. Pliki mozna czytac z FAT12/16/32 (tylko odczyt); NTFS
 i exFAT sa rozpoznawane, ale nie czytane. Sprawdzone na Comsat TE 1050 HD:
 karta FAT16 w czytniku 05e3:0751 - ls i cat dzialaja.
 Hub USB: demo wlacza zasilanie portow huba, resetuje kazdy port z urzadzeniem
-i odczytuje urzadzenia za hubem (takze hub za hubem), razem do 7 urzadzen;
+i odczytuje urzadzenia za hubem (takze hub za hubem), razem do 15 urzadzen
+(hub musi miec jeden z pierwszych 7 adresow);
 "lsusb" pokazuje kazde z numerem huba i portu. Podlaczenie i odlaczenie
 urzadzenia w hubie jest zauwazane w ciagu okolo sekundy. Urzadzenia low
 i full speed za hubem USB 2.0 sa obslugiwane przez translator huba (split).

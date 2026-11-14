@@ -5,7 +5,7 @@ connection and the device's speed, raises its interrupt and completes a bus
 reset -- endpoint 0's control transfers to a built-in USB device, an IN
 transfer on endpoint B received into RAM by DMA (an interrupt endpoint's
 report, or a bulk transfer of several packets), an OUT on endpoint A sent from
-RAM by DMA, and endpoint C's and D's polling of an interrupt IN endpoint.  Four
+RAM by DMA, and endpoint C's and D's polling of an interrupt IN endpoint.  Five
 devices: a mass-storage stick (its descriptors; given a disk image, the
 bulk-only transport with the SCSI commands to read it -- without one its bulk
 endpoints answer NAK, so a mass-storage driver waits at its first command), a
@@ -14,7 +14,9 @@ with .type()), a mouse (HID boot protocol: moved, clicked and its wheel turned
 in emulated time) and a hub (its ports' power, reset and status; devices
 plugged into them, other hubs too -- tokens are routed through the tree by
 address, and to a device that is not high speed behind a high-speed hub only
-as split transfers through that hub's transaction translator).  Data toggles
+as split transfers through that hub's transaction translator), and an LTE
+module (the A7670E's interfaces; an AT interpreter on its two AT ports, whose
+answers are short packets).  Data toggles
 are kept per device endpoint and per controller endpoint (A, B and D): a
 packet sent with the other one is dropped, as on the bus.
 
@@ -67,7 +69,11 @@ driver (dump.bin, dump_maciej.bin; traced here):
          toggle reset (bit 0 pulsed)
   +0x50 / +0x54 / +0x58 / +0x5C  DMA transmit: the buffer's physical address,
          its index, the bytes to send, the bytes left; started by the +0x60
-         bit 0 strobe and +0x32 bit 3, done at flags 2 bit 6 and +0x63 = 0x03
+         bit 0 strobe and +0x32 bit 3, a packet at a time: flags 2 bit 6 and
+         +0x63 bits 0 and 3 after each packet, +0x63 bit 1 (the DMA transmit
+         done) only after the last (measured on the box: a 4 KB WRITE(10) to a
+         card reader, eight packets of 512); +0x60 bit 1 or +0x32 bit 3 cleared
+         ends it where it is
   +0x82 / +0x83  endpoint A's device address << 1 | split, and its translator
   +0x60  bit 5 / 4: the DMA receiver's state set up / its transfer started
          (strobes: they read back 0)
@@ -152,13 +158,37 @@ RESET_TIME_S = 0.010                      # a bus reset lasts 10 ms (SE0, USB 2.
 TOKEN_TIME_S = 0.0002                     # a control token with its handshake
 IN_TIME_S = 0.0001                        # endpoint B's IN: a low-speed packet is in RAM after about this long
 FRAME_S = 0.001                           # a NAKed IN is sent again in the next frame (+0xA8 = 1)
-STALL, NO_RESPONSE, TOGGLE = 0x80, 0x20, 0x08   # +0x1D codes
+OUT_PACKET_HS_S = 0.000012                # endpoint A: a 512-byte packet at high speed (on the box about 11 us)
+OUT_PACKET_S = 0.00006                    # a 64-byte one at full speed
+STALL, NO_RESPONSE, TOGGLE, UTMI = 0x80, 0x20, 0x08, 0x04   # +0x1D codes
 HALTED = object()                         # VirtualDevice.interrupt_in: the endpoint is halted (it answers STALL)
 
 
 def _string(text):
     data = text.encode("utf-16-le")
     return bytes([2 + len(data), 0x03]) + data
+
+
+LANGID_STRING = bytes([4, 0x03, 0x09, 0x04])   # string 0: English (US)
+
+
+def _interface_desc(number, endpoints, cls, subclass, protocol, name=0):
+    return bytes([9, 0x04, number, 0, endpoints, cls, subclass, protocol, name])
+
+
+def _endpoint_desc(address, kind, size, interval=0):
+    """kind: 2 bulk, 3 interrupt."""
+    return bytes([7, 0x05, address, kind, size & 0xFF, size >> 8, interval])
+
+
+def _take(queue, n):
+    """The first `n` bytes of a queue's first item (bytes): the rest stays first."""
+    chunk, rest = queue[0][:n], queue[0][n:]
+    if rest:
+        queue[0] = rest
+    else:
+        queue.pop(0)
+    return chunk
 
 
 class VirtualDevice:
@@ -254,7 +284,13 @@ class VirtualStick(VirtualDevice):
     bulk OUT endpoint 0x02, the data and the status wrapper on its bulk IN
     endpoint 0x81, with the SCSI commands a host reads a disk with (INQUIRY,
     TEST UNIT READY, REQUEST SENSE, READ CAPACITY(10), READ(10), MODE SENSE(6),
-    PREVENT ALLOW MEDIUM REMOVAL); writes are refused (it is write-protected).
+    PREVENT ALLOW MEDIUM REMOVAL, SYNCHRONIZE CACHE(10)); writes are refused (it is
+    write-protected: MODE SENSE says so, WRITE(10) fails with DATA PROTECT)
+    unless writable=True -- then WRITE(10)'s data-out stage changes the image
+    (.image, a bytearray; .writes logs (time, first sector, bytes)).  That data
+    comes a packet at a time: until it is all there (or a short packet ends
+    it) every packet is taken as more of it -- a command block too, as a real
+    device would -- and only the bulk-only transport's reset forgets it.
     Without an image its bulk endpoints answer NAK to everything (a driver
     waits at its first command).  full_speed=True gives it 64-byte bulk
     packets (a 512-byte sector in eight); unit_attention=True makes its first
@@ -271,11 +307,12 @@ class VirtualStick(VirtualDevice):
     IN_EP, OUT_EP = 1, 2
 
     def __init__(self, image=None, full_speed=False, unit_attention=False, no_medium=False,
-                 vendor="AliSim", product="Virtual stick", revision="1.00", lose_after_idle=None):
+                 vendor="AliSim", product="Virtual stick", revision="1.00", lose_after_idle=None, writable=False):
         device = bytes([18, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, self.EP0_SIZE,
                         self.VID & 0xFF, self.VID >> 8, self.PID & 0xFF, self.PID >> 8,
                         0x00, 0x01, 1, 2, 3, 1])
         size = 64 if full_speed else 512
+        self.packet_size = size
         interface = bytes([9, 0x04, 0, 0, 2, 0x08, 0x06, 0x50, 0])          # mass storage, SCSI, bulk-only
         ep_in = bytes([7, 0x05, 0x80 | self.IN_EP, 0x02, size & 0xFF, size >> 8, 0])     # bulk IN
         ep_out = bytes([7, 0x05, self.OUT_EP, 0x02, size & 0xFF, size >> 8, 0])         # bulk OUT
@@ -286,7 +323,11 @@ class VirtualStick(VirtualDevice):
                    2: _string(self.PRODUCT), 3: _string(self.SERIAL)}
         super().__init__(device, config, strings)
         self.qualifier = bytes([10, 0x06, 0x00, 0x02, 0x00, 0x00, 0x00, self.EP0_SIZE, 1, 0])
-        self.image = image
+        self.image = bytearray(image) if image is not None else None
+        self.writable = writable
+        self.write_pending = None             # (tag, first sector, bytes, allowed) of a WRITE(10) awaiting its data
+        self.write_data = bytearray()         # what of that data has come
+        self.writes = []                      # (time, first sector, bytes) written
         self.no_medium = no_medium
         self.attention = unit_attention
         self.inquiry_text = (vendor.ljust(8)[:8] + product.ljust(16)[:16] + revision.ljust(4)[:4]).encode("ascii")
@@ -303,6 +344,8 @@ class VirtualStick(VirtualDevice):
             return b"\x00"
         if rtype == 0x21 and request == 0xFF:                                 # Bulk-Only Mass Storage Reset
             self.responses.clear()
+            self.write_pending = None
+            self.write_data = bytearray()
             self.resets += 1
             return b""
         return None
@@ -310,6 +353,22 @@ class VirtualStick(VirtualDevice):
     def bulk_out(self, endpoint, data):
         if self.image is None or endpoint != self.OUT_EP:
             return None                                                       # NAK
+        if self.write_pending is not None:                                    # WRITE(10)'s data, packet by packet
+            tag, lba, length, allowed = self.write_pending
+            self.write_data += data
+            if len(self.write_data) < length and len(data) == self.packet_size:
+                return True                                                   # (more to come)
+            data = bytes(self.write_data[:length])
+            self.write_pending = None
+            self.write_data = bytearray()
+            if allowed:
+                self.image[lba * 512:lba * 512 + len(data)] = data
+                self.writes.append((round(self.clock(), 4), lba, len(data)))
+                status = 0
+            else:
+                status = 1
+            self.responses.append(b"USBS" + tag + (length - len(data)).to_bytes(4, "little") + bytes([status]))
+            return True
         if len(data) != 31 or data[:4] != b"USBC":
             return True                                                       # (not a command: ignored)
         tag, length, flags, cb_len = data[4:8], int.from_bytes(data[8:12], "little"), data[12], data[14]
@@ -321,6 +380,14 @@ class VirtualStick(VirtualDevice):
             self.lost_commands += 1                                           # taken, never answered
             return True
         self.commands.append((round(now, 4), cb))
+        if cb[:1] == b"\x2a" and not flags & 0x80 and length:                 # WRITE(10): the data comes next
+            lba, count = int.from_bytes(cb[2:6], "big"), int.from_bytes(cb[7:9], "big")
+            allowed = (self.writable and not self.no_medium and count * 512 == length
+                       and (lba + count) * 512 <= len(self.image))
+            if not allowed:
+                self.sense = (7, 0x27, 0) if not self.writable else (5, 0x21, 0)   # write-protected / out of range
+            self.write_pending = (tag, lba, length, allowed)
+            return True
         status, reply = self._scsi(cb, length)
         reply = reply[:length] if flags & 0x80 else b""
         residue = length - len(reply)
@@ -346,13 +413,7 @@ class VirtualStick(VirtualDevice):
             self.responses.clear()
             self.stalled_commands = getattr(self, "stalled_commands", 0) + 1
             return HALTED
-        item = self.responses[0]
-        chunk, rest = item[:count], item[count:]
-        if rest:
-            self.responses[0] = rest
-        else:
-            self.responses.pop(0)
-        return chunk
+        return _take(self.responses, count)
 
     def _fail(self, key, asc, ascq=0):
         self.sense = (key, asc, ascq)
@@ -381,10 +442,10 @@ class VirtualStick(VirtualDevice):
             if lba + count > blocks:
                 return self._fail(5, 0x21)                                    # LBA out of range
             return 0, bytes(self.image[lba * 512:(lba + count) * 512])
-        if op == 0x1A:                                                        # MODE SENSE(6): write-protected
-            return 0, bytes([3, 0, 0x80, 0])
-        if op == 0x1E:                                                        # PREVENT ALLOW MEDIUM REMOVAL
-            return 0, b""
+        if op == 0x1A:                                                        # MODE SENSE(6): bit 7 write-protected
+            return 0, bytes([3, 0, 0x00 if self.writable else 0x80, 0])
+        if op in (0x1E, 0x35):                                                # PREVENT ALLOW MEDIUM REMOVAL,
+            return 0, b""                                                     # SYNCHRONIZE CACHE(10)
         return self._fail(5, 0x20)                                            # an invalid command
 
 
@@ -798,6 +859,223 @@ class VirtualHub(VirtualDevice):
         return bytes([bits]) if bits else None
 
 
+class VirtualModem(VirtualDevice):
+    """An LTE module's USB side, as the SIMCom A7670E on the real box showed
+    it (1e0e:9011, high speed, the descriptors in its order): RNDIS
+    (interfaces 0 and 1), two diagnostic ports (2, 3) and two AT ports (4, 5)
+    of the vendor class -- and on the AT ports a small AT interpreter: echo
+    (ATE0 / ATE1), AT, ATI, AT+CGMR, AT+CSQ, AT+CPIN? / AT+CPIN=<PIN>,
+    AT+SPIC, AT+CREG?, AT+COPS?, AT+CMGS (its "> " prompt, the text up to
+    Ctrl-Z), AT+CRESET, the HTTP client (AT+HTTPINIT, AT+HTTPPARA="URL",...,
+    AT+HTTPACTION=0 -- OK, and 1.5 s later +HTTPACTION: 0,200,<length> --
+    AT+HTTPREAD? / AT+HTTPREAD=0,<n> -- the page after its OK, one long line
+    -- AT+HTTPTERM); anything else ERROR.  Its answers come as the real
+    one's do: the echo in a packet of its own, then the answer, each a short
+    packet (which the demo reads a packet at a time).  The IMEI and the serial
+    number are made up.  pin: the SIM's PIN (None: no PIN lock); sim=False: no
+    SIM.  .received lists (interface, bytes) of every packet its AT ports
+    took, .sms (number, text) of the messages "sent".  restart(): it loses its
+    configuration -- as the real one once did after AT+CRESET, without the
+    port's connection changing -- and once configured again its AT ports say
+    RDY, +CPIN: READY, SMS DONE and PB DONE, as after a power-up."""
+
+    VID, PID = 0x1E0E, 0x9011
+    IMEI = "490154203237518"              # (an example from the IMEI's documentation, no module's)
+    SERIAL = "0123456789ABCDEF00"         # (made up)
+    AT_OUT = {15: 4, 10: 5}               # the AT ports' OUT endpoints -> their interface
+    AT_IN = {6: 4, 1: 5}                  # and their IN endpoints
+    ATI = ("Manufacturer: INCORPORATED\r\nModel: A7670E-FASE\r\nRevision: A7670M7_V1.11.1\r\n"
+           "IMEI: {imei}\r\n+GCAP: +CGSM,+FCLASS,+DS")
+    PAGE = (b"<!doctype html><html><head><title>A page through the virtual LTE module</title></head><body><p>"
+            + b"0123456789" * 15 + b"</p></body></html>")
+    HTTP_TIME_S = 1.5                     # AT+HTTPACTION's request over the air
+
+    def __init__(self, pin=None, sim=True):
+        device = bytes([18, 0x01, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, self.VID & 0xFF, self.VID >> 8,
+                        self.PID & 0xFF, self.PID >> 8, 0x00, 0x01, 1, 2, 3, 1])
+        iface, ep = _interface_desc, _endpoint_desc
+        body = (bytes([8, 0x0B, 0, 2, 0xE0, 0x01, 0x03, 5])                          # the RNDIS function
+                + iface(0, 1, 0xE0, 0x01, 0x03, 5) + ep(0x87, 3, 64, 16)
+                + iface(1, 2, 0x0A, 0, 0, 5) + ep(0x83, 2, 512) + ep(0x0C, 2, 512)
+                + iface(2, 2, 0xFF, 0, 0, 8) + ep(0x82, 2, 512) + ep(0x0B, 2, 512)
+                + iface(4, 3, 0xFF, 0, 0, 11) + ep(0x89, 3, 64, 16) + ep(0x86, 2, 512) + ep(0x0F, 2, 512)
+                + iface(5, 3, 0xFF, 0, 0, 11) + ep(0x88, 3, 64, 16) + ep(0x81, 2, 512) + ep(0x0A, 2, 512)
+                + iface(3, 3, 0xFF, 0, 0, 8) + ep(0x84, 3, 16, 16) + ep(0x85, 2, 512) + ep(0x0E, 2, 512))
+        total = 9 + len(body)
+        config = bytes([9, 0x02, total & 0xFF, total >> 8, 6, 1, 0, 0xA0, 250]) + body
+        strings = {0: LANGID_STRING, 1: _string("SIMCom Wireless Solution"),
+                   2: _string("A76XX Series LTE Module"), 3: _string(self.SERIAL),
+                   5: _string("Mobile RNDIS Network Adapter"), 8: _string("Mobile Diag Interface"),
+                   11: _string("Mobile AT Interface")}
+        super().__init__(device, config, strings)
+        self.qualifier = bytes([10, 0x06, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 1, 0])
+        self.pin, self.sim = pin, sim
+        self.locked = sim and pin is not None
+        self.tries = 3
+        self.received, self.sms, self.line_states = [], [], []
+        self.requests = []                    # the URLs AT+HTTPACTION fetched
+        self._reset_ports()
+        self.boot_messages = False
+
+    def _reset_ports(self):
+        self.out = {i: [] for i in self.AT_IN.values()}           # interface -> packets for the host
+        self.lines = {i: bytearray() for i in self.out}
+        self.echo = {i: True for i in self.out}
+        self.sms_to = {}                      # interface -> the number AT+CMGS waits for the text of
+        self.later = []                       # (time, interface, packet): what it sends when the time comes
+        self.http = None                      # the HTTP client: None, or {"url", "length"} after AT+HTTPINIT
+
+    def restart(self):
+        self.configuration = 0
+        self._reset_ports()
+        self.boot_messages = True
+
+    def setup(self, packet):
+        was = self.configuration
+        answer = super().setup(packet)
+        if self.configuration and not was and self.boot_messages:           # configured again
+            self.boot_messages = False
+            for i in self.out:
+                self.out[i] += [b"\r\nRDY\r\n", b"\r\n+CPIN: READY\r\n" if not self.locked else
+                                b"\r\n+CPIN: SIM PIN\r\n", b"\r\nSMS DONE\r\n", b"\r\nPB DONE\r\n"]
+        return answer
+
+    def class_request(self, rtype, request, value, index, length):
+        if rtype == 0x21 and request == 0x22:                                 # SET_CONTROL_LINE_STATE
+            self.line_states.append((index, value))
+            return b""
+        return None
+
+    def bulk_out(self, endpoint, data):
+        iface = self.AT_OUT.get(endpoint)
+        if iface is None:
+            return True                       # (the diagnostic and network ports: taken, not answered)
+        self.received.append((iface, bytes(data)))
+        if self.echo[iface] and data:
+            self.out[iface].append(bytes(data))
+        for c in data:
+            if iface in self.sms_to:
+                if c == 0x1A:                 # Ctrl-Z: the text is complete
+                    self.sms.append((self.sms_to.pop(iface), self.lines[iface].decode("latin-1")))
+                    self.lines[iface].clear()
+                    self._say(iface, f"+CMGS: {len(self.sms)}", "OK")
+                elif c == 0x1B:               # Esc: no message
+                    self.sms_to.pop(iface)
+                    self.lines[iface].clear()
+                    self._say(iface, "OK")
+                else:
+                    self.lines[iface].append(c)
+            elif c == 0x0D:
+                line = self.lines[iface].decode("latin-1").strip()
+                self.lines[iface].clear()
+                if line[:2].upper() == "AT":
+                    self._command(iface, line)
+            elif c != 0x0A:
+                self.lines[iface].append(c)
+        return True
+
+    def in_transfer(self, endpoint, count, maxp):
+        if self.later:
+            due = [x for x in self.later if x[0] <= self.clock()]
+            for x in due:
+                self.later.remove(x)
+                self.out[x[1]].append(x[2])
+        iface = self.AT_IN.get(endpoint)
+        if iface is None or not self.out[iface]:
+            return None                       # NAK
+        return _take(self.out[iface], maxp)
+
+    def _say(self, iface, *lines):
+        self.out[iface].append(b"".join(b"\r\n" + line.encode("latin-1") + b"\r\n" for line in lines))
+
+    def _command(self, iface, line):
+        cmd = line[2:].upper()
+        arg = line.partition("=")[2]
+        no_sim = "+CME ERROR: SIM not inserted"
+        if cmd == "":
+            self._say(iface, "OK")
+        elif cmd == "I":
+            self._say(iface, self.ATI.format(imei=self.IMEI), "OK")
+        elif cmd in ("E0", "E1"):
+            self.echo[iface] = cmd == "E1"
+            self._say(iface, "OK")
+        elif cmd == "+CGMR":
+            self._say(iface, "+CGMR: A011B07A7670M7_F", "OK")
+        elif cmd == "+CSQ":
+            self._say(iface, "+CSQ: 25,99", "OK")
+        elif cmd in ("+CPIN?", "+SPIC") and not self.sim:
+            self._say(iface, no_sim)
+        elif cmd == "+CPIN?":
+            self._say(iface, "+CPIN: " + ("SIM PUK" if not self.tries else "SIM PIN" if self.locked else "READY"), "OK")
+        elif cmd == "+SPIC":
+            self._say(iface, f"+SPIC: {self.tries},10,3,10", "OK")
+        elif cmd.startswith("+CPIN="):
+            given = arg.strip().strip('"')
+            if not self.sim:
+                self._say(iface, no_sim)
+            elif not self.locked:
+                self._say(iface, "+CME ERROR: operation not allowed")
+            elif not self.tries:
+                self._say(iface, "+CME ERROR: SIM PUK required")
+            elif given == self.pin:
+                self.locked, self.tries = False, 3
+                self._say(iface, "OK")
+                self._say(iface, "+CPIN: READY")
+            else:
+                self.tries -= 1
+                self._say(iface, "+CME ERROR: incorrect password")
+        elif cmd == "+CREG?":
+            self._say(iface, "+CREG: 0," + ("1" if self.sim and not self.locked else "0"), "OK")
+        elif cmd == "+COPS?":
+            self._say(iface, '+COPS: 0,2,"00101",7' if self.sim and not self.locked else "+COPS: 0", "OK")
+        elif cmd.startswith("+CMGS="):
+            if not self.sim or self.locked:
+                self._say(iface, "+CMS ERROR: SIM not ready" if self.sim else "+CMS ERROR: SIM not inserted")
+            else:
+                self.sms_to[iface] = arg.strip().strip('"')
+                self.out[iface].append(b"\r\n> ")
+        elif cmd == "+CRESET":
+            self._say(iface, "OK")
+        elif cmd.startswith("+HTTP"):
+            self._http(iface, cmd, arg)
+        else:
+            self._say(iface, "ERROR")
+
+    def _http(self, iface, cmd, arg):
+        ready = self.sim and not self.locked
+        if cmd == "+HTTPINIT" and ready and self.http is None:
+            self.http = {"url": None, "length": 0}
+            self._say(iface, "OK")
+        elif cmd.startswith("+HTTPPARA=") and self.http is not None and "," in arg:
+            name, value = (v.strip().strip('"') for v in arg.split(",", 1))
+            if name.upper() == "URL":
+                self.http["url"] = value
+            self._say(iface, "OK")
+        elif cmd == "+HTTPACTION=0" and self.http is not None and self.http["url"]:
+            self.requests.append(self.http["url"])
+            self.http["length"] = len(self.PAGE)
+            self._say(iface, "OK")
+            self.later.append((self.clock() + self.HTTP_TIME_S, iface,
+                               f"\r\n+HTTPACTION: 0,200,{len(self.PAGE)}\r\n".encode("latin-1")))
+        elif cmd == "+HTTPREAD?" and self.http is not None:
+            self._say(iface, f"+HTTPREAD: LEN,{self.http['length']}", "OK")
+        elif cmd.startswith("+HTTPREAD=") and self.http is not None:
+            try:
+                start, size = (int(v) for v in arg.split(","))
+            except ValueError:
+                self._say(iface, "ERROR")
+                return
+            data = self.PAGE[start:start + size]
+            self._say(iface, "OK")              # (the data comes after it, as on the real module)
+            self.out[iface].append(f"\r\n+HTTPREAD: {len(data)}\r\n".encode("latin-1") + data
+                                   + b"\r\n+HTTPREAD: 0\r\n")
+        elif cmd == "+HTTPTERM" and self.http is not None:
+            self.http = None
+            self._say(iface, "OK")
+        else:
+            self._say(iface, "ERROR")
+
+
 class UsbHost:
     SIZE = 0x100
 
@@ -828,6 +1106,11 @@ class UsbHost:
         self.epb_toggle = 0                   # the data toggle endpoint B expects (0 DATA0)
         self.epb_silent = 0                   # its tokens in a row nobody answered
         self.epb_full = False                 # a packet arrived since the FIFO's last reset (+0x17 reads 0x86)
+        self.epb_fifo = bytearray()           # the rest of a packet the DMA did not take (its count was smaller)
+        self.epb_draining = False             # the DMA started again without IN tokens: it takes from the FIFO
+        self.fifo_drains = 0                  # times it did
+        self.epb_fail_next = 0                # endpoint B's next tokens that fail on the bus (UTMI, the PHY's
+                                              # error: the real box got one while an LTE module sent over GSM)
         self.in_tokens = 0                    # IN tokens endpoint B sent
         self.toggle_drops = 0                 # packets acknowledged and dropped for their data toggle
         self.epa_started = False              # +0x60's transmit start strobe written (start_dma_tx_transfer)
@@ -835,6 +1118,7 @@ class UsbHost:
         self.epa_next = 0.0
         self.epa_toggle = 0                   # the data toggle endpoint A sends next
         self.epa_silent = 0
+        self.epa_sent = 0                     # the bytes of the OUT under way sent so far
         self.bulk_out_log = []                # (vtime, data) endpoint A delivered
         self.bulk_in = []                     # (vtime, bytes) endpoint B received from bulk endpoints
         self.pending_in = b""                 # the rest of a control transfer's IN data
@@ -980,6 +1264,8 @@ class UsbHost:
                 if v & 0x10:                      # endpoint B's FIFO reset: it also ends a pending IN
                     self.epb_pending = False
                     self.epb_full = False
+                    self.epb_fifo.clear()
+                    self.epb_draining = False
                 if v & 0x01:                      # (set_ep_data_toggle's pulse) the toggle back to DATA0
                     self.epb_toggle = 0
             elif o == 0x14:
@@ -992,6 +1278,11 @@ class UsbHost:
                     self.epb_started = True
                 if v & 0x01:                      # start_dma_tx_transfer
                     self.epa_started = True
+                if v & 0x02 and self.epa_pending:     # init_dma_tx_state: an OUT under way ends where it is
+                    self.epa_pending = False
+            elif o == 0x32 and v & 0x0C == 0x08 and self.epb_started and not self.epb_pending and self.epb_fifo:
+                self.epb_started = False          # en_dma_transfer alone, a packet's rest in the FIFO: the
+                self.epb_draining = True          # DMA takes it (_service_epb)
             elif o == 0x32 and v & 0x0C == 0x0C and self.epb_started and not self.epb_pending:
                 self.epb_started = False          # dma_host_in_token + en_dma_transfer: the IN goes out
                 self.epb_pending = True
@@ -1001,7 +1292,10 @@ class UsbHost:
                 self.epa_started = False          # en_dma_transfer alone: the OUT goes out
                 self.epa_pending = True
                 self.epa_silent = 0
+                self.epa_sent = 0
                 self.epa_next = self.sim._vtime() + IN_TIME_S
+            elif o == 0x32 and not v & 0x08 and self.epa_pending:
+                self.epa_pending = False          # en_dma_transfer(0): an OUT under way ends where it is
 
     def _route(self, new_mode_reg):
         """What a token carries: (device address, split flag, split info) --
@@ -1094,15 +1388,73 @@ class UsbHost:
         self.fifo_out.clear()                                           # OUT (data or status)
         return 0
 
+    def _epb_drain(self):
+        """The DMA receiver started again without IN tokens (+0x60's strobes,
+        then +0x32 bit 3 alone) while endpoint B's FIFO holds the rest of a
+        packet: it takes +0x38 of those bytes to +0x40's address -- the
+        buffer's start again -- with +0x63 bit 2 once it took them all
+        (measured on the box: the demo's usb_bulk_in_packet; the SDK's
+        epB_finish_ok does the same)."""
+        count = self._dma_rx_count()
+        take = bytes(self.epb_fifo[:count])
+        del self.epb_fifo[:len(take)]
+        self._dma_rx(take, len(take))
+        self.fifo_drains += 1
+        if len(take) >= count:
+            self.sim._mmio_view[self.base + 0x32] &= ~0x08
+            self.intf |= 0x05                         # the DMA's done
+            self._update_line()
+
+    def _dma_rx_count(self):
+        """The DMA receiver's 24-bit count (+0x38, set_dma_rx_cnt)."""
+        view, b = self.sim._mmio_view, self.base
+        return view[b + 0x38] | view[b + 0x39] << 8 | view[b + 0x3A] << 16
+
+    def _dma_rx(self, data, received):
+        """The DMA receiver's bytes into the RAM at +0x40's address, `received`
+        at +0x48 (read_dma_rx_count)."""
+        view, b = self.sim._mmio_view, self.base
+        address = int.from_bytes(bytes(view[b + 0x40:b + 0x44]), "little") & 0x0FFFFFE0
+        if data and address + len(data) <= self.sim.ram_size:
+            ctypes.memmove(ctypes.addressof(self.sim.ram_buffer) + address, data, len(data))
+        view[b + 0x48:b + 0x4C] = received.to_bytes(4, "little")
+
+    def _epb_fail(self, code):
+        """Endpoint B's IN ends failed: +0x1D says why, flags 2 bit 1."""
+        view, b = self.sim._mmio_view, self.base
+        view[b + 0x1D] = code
+        self.epb_pending = False
+        view[b + 0x32] &= ~0x0C
+        self.flags2 |= 0x02
+        self.intf |= 0x09
+        self._update_line()
+
     def _service_epb(self):
         """Endpoint B's pending IN (the module's notes): the token that is due,
-        to the device's endpoint (+0x16 bits 2..5) at +0x84's address."""
+        to the device's endpoint (+0x16 bits 2..5) at +0x84's address.  The
+        device sends whole packets: with a DMA count smaller than its packet
+        the DMA takes the count -- rounded up to an even number, the FIFO
+        giving it 16 bits at a time -- the transfer is done (both flags) and
+        the packet's rest stays in endpoint B's FIFO, +0x2C its whole size,
+        until the DMA is started again or the FIFO reset (measured on the box
+        with an LTE module's answers, the DMA asked for 1 byte).  A short
+        packet before the count ends the transfer here; on the box it raises
+        endpoint B's done without the DMA's, the packet waits in the FIFO and
+        more IN tokens go out (a packet that comes replaces it) -- the SDK
+        copes, the demo avoids it (a count of 1); not modelled."""
+        if self.epb_draining:
+            self.epb_draining = False
+            self._epb_drain()
         now = self.sim._vtime()
         if not self.epb_pending or now < self.epb_next:
             return
         view, b = self.sim._mmio_view, self.base
         ep = (view[b + 0x16] >> 2) & 0x0F
         self.in_tokens += 1
+        if self.epb_fail_next:                        # a token spoilt on the bus: the device's packet stays
+            self.epb_fail_next -= 1                   # with it (not acknowledged), the IN fails
+            self._epb_fail(UTMI)
+            return
         dev, error = self._target(0x84)
         if dev is not None and not (dev.configuration and ep in dev.in_endpoints):
             dev, error = None, (STALL if self._route(0x84)[1] else NO_RESPONSE)
@@ -1113,32 +1465,24 @@ class UsbHost:
             if self.epb_silent < 2:
                 self.epb_next = now + IN_TIME_S       # (once more)
                 return
-            self.epb_pending = False
-            view[b + 0x32] &= ~0x0C
-            self.flags2 |= 0x02                       # endpoint B failed
-            self.intf |= 0x09
-            self._update_line()
+            self._epb_fail(NO_RESPONSE)
             return
         self.epb_silent = 0
         # (through a hub's translator a silent device or endpoint comes back as a stall: measured,
         #  0.24 ms after the IN's start)
-        count = view[b + 0x38] | view[b + 0x39] << 8 | view[b + 0x3A] << 16
+        count = self._dma_rx_count()
         maxp = 8 << ((view[b + 0x30] >> 4) & 7)
-        data = dev.in_transfer(ep, count, maxp) if dev is not None else HALTED
+        limit = max(count, maxp)                      # (a whole packet comes, whatever the DMA's count)
+        data = dev.in_transfer(ep, limit, maxp) if dev is not None else HALTED
         if data is HALTED:                            # STALL (assumed to end the IN as it ends endpoint 0's token)
-            view[b + 0x1D] = STALL
-            self.epb_pending = False
-            view[b + 0x32] &= ~0x0C
-            self.flags2 |= 0x02
-            self.intf |= 0x09
-            self._update_line()
+            self._epb_fail(STALL)
             return
         if data is None:                              # NAK: again in the next frame (+0xA8)
             period = view[b + 0xA8]
             self.epb_next = (float("inf") if period & 0xF0 else
                              now + (IN_TIME_S if not period else FRAME_S / period))
             return
-        data = bytes(data[:count])
+        data = bytes(data[:limit])
         packets = len(data) // maxp + 1 if len(data) < count else -(-len(data) // maxp)
         toggle = dev.in_toggle.get(ep, 0)
         if toggle != self.epb_toggle:                 # not the toggle expected: the first packet is
@@ -1151,11 +1495,9 @@ class UsbHost:
                 return
         dev.in_toggle[ep] = dev.in_toggle.get(ep, 0) ^ (packets & 1)
         self.epb_toggle ^= packets & 1
-        address = int.from_bytes(bytes(view[b + 0x40:b + 0x44]), "little") & 0x0FFFFFE0
-        if data and address + len(data) <= self.sim.ram_size:
-            ctypes.memmove(ctypes.addressof(self.sim.ram_buffer) + address, data, len(data))
-        for i, v in enumerate(len(data).to_bytes(4, "little")):
-            view[b + 0x48 + i] = v
+        taken = data[:count + (count & 1)]            # (the DMA's count, in 16-bit units; the rest: the FIFO)
+        self.epb_fifo = bytearray(data[len(taken):])
+        self._dma_rx(taken, min(len(data), count))
         for i, v in enumerate((0x20).to_bytes(4, "little")):
             view[b + 0x44 + i] = v
         view[b + 0x2C], view[b + 0x2D] = len(data) & 0xFF, len(data) >> 8
@@ -1173,7 +1515,11 @@ class UsbHost:
 
     def _service_epa(self):
         """Endpoint A's OUT (the SDK's bulkout_start): the bytes at +0x50 (+0x58 of
-        them) to the device's endpoint (+0x13 bits 2..5) at +0x82's address."""
+        them) to the device's endpoint (+0x13 bits 2..5) at +0x82's address, a
+        packet at a time.  After each packet flags 2 bit 6 (endpoint A done) and
+        +0x63 bits 0 and 3; after the last +0x63 bit 1 too (the DMA transmit
+        done, which the SDK's hcd_s3602_dma_tx_done waits for) -- measured on
+        the box."""
         now = self.sim._vtime()
         if not self.epa_pending or now < self.epa_next:
             return
@@ -1196,17 +1542,15 @@ class UsbHost:
         length = int.from_bytes(bytes(view[b + 0x58:b + 0x5C]), "little") & 0xFFFFFF
         address = int.from_bytes(bytes(view[b + 0x50:b + 0x54]), "little") & 0x0FFFFFE0
         data = bytes(self.sim.ram_buffer[address:address + length]) if address + length <= self.sim.ram_size else b""
-        packets = max(1, -(-len(data) // maxp))
-        toggle = dev.out_toggle.get(ep, 0) if dev is not None else 0
-        if dev is not None and toggle != self.epa_toggle:
-            # the device takes the first packet for one it has had already: acknowledged, thrown away
+        packet = data[self.epa_sent:self.epa_sent + maxp]
+        if dev is not None and dev.out_toggle.get(ep, 0) != self.epa_toggle:
+            # the device takes the packet for one it has had already: acknowledged, thrown away
             self.toggle_drops += 1
-            data, packets = data[maxp:], packets - 1
-            self.epa_toggle ^= 1
-            if packets <= 0:
-                self._epa_end(0x40)                   # (the controller thinks it was delivered)
-                return
-        answer = dev.bulk_out(ep, data) if dev is not None else HALTED
+            answer = True
+        else:
+            answer = dev.bulk_out(ep, packet) if dev is not None else HALTED
+            if answer is True:
+                dev.out_toggle[ep] = dev.out_toggle.get(ep, 0) ^ 1
         if answer is HALTED:
             view[b + 0x1D] = STALL
             self._epa_end(0x04)
@@ -1214,21 +1558,27 @@ class UsbHost:
         if answer is None:                            # NAK: again in the next frame
             self.epa_next = now + FRAME_S
             return
-        dev.out_toggle[ep] = dev.out_toggle.get(ep, 0) ^ (packets & 1)
-        self.epa_toggle ^= packets & 1
-        self.bulk_out_log.append((round(now, 4), bytes(data)))
-        for i, v in enumerate((0x20).to_bytes(4, "little")):
-            view[b + 0x54 + i] = v
-        view[b + 0x5C:b + 0x60] = bytes(4)
+        self.epa_toggle ^= 1
+        self.epa_sent += len(packet)
+        self.bulk_out_log.append((round(now, 4), bytes(packet)))
+        view[b + 0x54:b + 0x58] = ((self.epa_sent + 31) & ~31).to_bytes(4, "little")    # (the DMA's index)
+        view[b + 0x5C:b + 0x60] = max(0, len(data) - self.epa_sent).to_bytes(4, "little")
         view[b + 0x1D] = 0
-        self._epa_end(0x40)                           # endpoint A done
+        if self.epa_sent >= len(data):
+            self._epa_end(0x40)                       # endpoint A done, and the DMA transmit
+            return
+        self.flags2 |= 0x40                           # endpoint A done: after every packet
+        self.intf |= 0x09
+        high = self.speed == SPEED_BITS["high"] and not self._route(0x82)[1]
+        self.epa_next = now + (OUT_PACKET_HS_S if high else OUT_PACKET_S)
+        self._update_line()
 
     def _epa_end(self, flag):
         view, b = self.sim._mmio_view, self.base
         self.epa_pending = False
         view[b + 0x32] &= ~0x08
         self.flags2 |= flag
-        self.intf |= 0x03 if flag == 0x40 else 0x09   # (the DMA transmit done; an error: flags 2)
+        self.intf |= 0x0B if flag == 0x40 else 0x09   # (the last packet and the DMA transmit done; an error: flags 2)
         self._update_line()
 
     def _service_epc(self):

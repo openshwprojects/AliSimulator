@@ -183,6 +183,10 @@ static void update_uart_box(void)
 }
 
 static int usb_shown = -1;
+/* a device on the port that does not answer (the main loop, usb_try_again): 0 nothing due, 1..USB_RETRIES
+   the tries made, -1 given up ('usb' or the port's next change start again); when the next is due */
+static int usb_retry;
+static u64 usb_retry_next;
 
 static void update_usb_box(void)
 {
@@ -359,18 +363,33 @@ static int poll_panel(void)
 /* the command line                                                    */
 /* ------------------------------------------------------------------ */
 #define LINE_MAX 96
-#define HISTORY 8
-#define ARGS_MAX 10
+#define HISTORY 16
+#define ARGS_MAX 48                     /* (as many words as a line can hold) */
 
 static char line[LINE_MAX];
 static int line_len;
+/* the line as typed -- quotes and backslashes kept -- up to a '>' that sends
+   the output to a file, from its first word (raw_line), and where the text
+   after the command word begins in it (raw_rest): a verbatim command ('at',
+   see verbatim()) gets that as its one argument -- AT+CPIN="...",
+   AT+CMGS="..." need their quotes */
+static char raw_line[LINE_MAX];
+static const char *raw_rest;
 static char history[HISTORY][LINE_MAX];
 static int history_count, history_pos;
 static int esc_state;
 
+/* "m3801> ", with the current directory once 'cd' chose one: "m3801 3:/docs> " */
 static void prompt(void)
 {
-    uart_puts("m3801> ");
+    const char *cwd = disk_cwd();
+    if (!cwd[0]) {
+        uart_puts("m3801> ");
+        return;
+    }
+    uart_puts("m3801 ");
+    uart_puts(cwd);
+    uart_puts("> ");
 }
 
 static void show_line(void)
@@ -429,19 +448,100 @@ static void cmd_clear(int argc, char **argv);
 static void cmd_reboot(int argc, char **argv);
 static void cmd_bootloader(int argc, char **argv);
 static void cmd_video(int argc, char **argv);
+static void cmd_testscreen(int argc, char **argv);
+static void cmd_console(int argc, char **argv);
+static void cmd_history(int argc, char **argv);
+static void cmd_cd(int argc, char **argv);
+static void cmd_pwd(int argc, char **argv);
+static void cmd_mkdir(int argc, char **argv);
+static void cmd_rmdir(int argc, char **argv);
+static void cmd_rm(int argc, char **argv);
+static void cmd_touch(int argc, char **argv);
+static void cmd_cp(int argc, char **argv);
+static void cmd_mv(int argc, char **argv);
+static void cmd_tty(int argc, char **argv);
+static void cmd_ifconfig(int argc, char **argv);
+static void cmd_dhcp(int argc, char **argv);
+static void cmd_arp(int argc, char **argv);
+static void cmd_cu(int argc, char **argv);
+static void cmd_at(int argc, char **argv);
+
+/* the main loop's passes since 'loop' last looked: how many, how many slow, and each part's slowest (a pass
+   that takes long holds the mouse's and the keyboard's reports back) */
+#define LOOP_PARTS 5
+static const char *const loop_part_names[LOOP_PARTS] = {
+    "UART + endpoint B + keyboard", "Ethernet", "mouse", "IR + TV console + pointer",
+    "timed jobs (command line box, hubs, panel, uptime)"};
+static u32 loop_passes, loop_slow[3], loop_max_us, loop_part_max_us[LOOP_PARTS];
+static u64 loop_since;
+static int loop_reset;                  /* 'loop' looked: counted afresh after this pass (its printing not counted) */
+
+static u32 us_since(u64 *t)             /* microseconds since *t (14 s at most), *t moved on to now */
+{
+    u64 now = now_ticks();
+    u32 us = (u32)(now - *t) / (ticks_per_ms() / 1000);
+    *t = now;
+    return us;
+}
+
+static void loop_part(int part, u64 *t)
+{
+    u32 us = us_since(t);
+    if (us > loop_part_max_us[part])
+        loop_part_max_us[part] = us;
+}
+
+static void loop_pass(u64 start)
+{
+    u32 us = us_since(&start);
+    if (loop_reset) {
+        loop_reset = 0;
+        loop_passes = loop_max_us = 0;
+        for (int i = 0; i < 3; i++)
+            loop_slow[i] = 0;
+        for (int i = 0; i < LOOP_PARTS; i++)
+            loop_part_max_us[i] = 0;
+        loop_since = now_ms();
+        return;
+    }
+    loop_passes++;
+    loop_slow[0] += us > 5000;
+    loop_slow[1] += us > 20000;
+    loop_slow[2] += us > 100000;
+    if (us > loop_max_us)
+        loop_max_us = us;
+}
+
+static void cmd_loop(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    u32 ms = (u32)(now_ms() - loop_since);
+    uprintf("main loop: %u passes in %u.%u s (%u a second), the slowest %u.%u ms; %u over 5 ms, %u over 20 ms, %u "
+            "over 100 ms\n", loop_passes, ms / 1000, ms % 1000 / 100, ms >= 1000 ? loop_passes / (ms / 1000) : 0,
+            loop_max_us / 1000, loop_max_us % 1000 / 100, loop_slow[0], loop_slow[1], loop_slow[2]);
+    for (int i = 0; i < LOOP_PARTS; i++)
+        uprintf("  %s: the slowest %u.%u ms\n", loop_part_names[i], loop_part_max_us[i] / 1000,
+                loop_part_max_us[i] % 1000 / 100);
+    loop_reset = 1;
+}
 
 static const struct command commands[] = {
     {"help", "[command]", "this list", cmd_help},
     {"version", "", "banner and version", cmd_version},
-    {"ping", "", "answers pong", cmd_ping},
+    {"ping", "[-c n] [host]", "answers pong; with a host: ICMP echo over Ethernet until Ctrl-C (or n)", cmd_ping},
     {"info", "", "chip, clock, memory layout, uptime", cmd_info},
     {"uptime", "", "time since this application started", cmd_uptime},
+    {"loop", "", "the main loop since the last look: its passes, the slowest, which part took the time", cmd_loop},
     {"echo", "<words>", "prints its arguments", cmd_echo},
     {"md", "<addr> [len]", "dump memory (RAM, flash window, registers)", cmd_md},
     {"mr", "<addr>", "read a 32-bit word", cmd_mr},
     {"mw", "<addr> <value>", "write a 32-bit word (RAM, registers)", cmd_mw},
-    {"screen", "[subcommand]", "TV picture: demo, bars, clear [rrggbb], text <x> <y> <words>, "
-               "rect <x> <y> <w> <h> <rrggbb>, on, off", cmd_screen},
+    {"screen", "[subcommand]", "the test screen's picture: demo, bars, clear [rrggbb], text <x> <y> <words>, "
+               "rect <x> <y> <w> <h> <rrggbb> (each shows it), on, off", cmd_screen},
+    {"testscreen", "", "the demo's test screen on the TV (its boxes, the colour bars); a key on the USB "
+                   "keyboard (it types too) or 'console' brings the console back", cmd_testscreen},
+    {"console", "", "the console on the TV again", cmd_console},
     {"panel", "[text|bright <n>]", "front panel digits", cmd_panel},
     {"keys", "", "front panel key state", cmd_keys},
     {"ir", "[raw on|off]", "remote control receiver", cmd_ir},
@@ -451,13 +551,34 @@ static const struct command commands[] = {
      "<value> <index> <len> [device]: a control request", cmd_usb},
     {"lsusb", "", "the USB devices, one line each", cmd_lsusb},
     {"disks", "", "USB disks (sticks, card readers): their size, partitions and file systems", cmd_disks},
-    {"ls", "[n:][/path]", "a directory on a USB disk's FAT volume (n: the disk's device number, as "
-     "lsusb lists it; n.p: its partition p)", cmd_ls},
-    {"cat", "[n:]/path", "a text file on a USB disk (Ctrl-C stops it)", cmd_cat},
+    {"ls", "[n:][path]", "a directory on a USB disk's FAT volume (n: the disk's device number, as "
+     "lsusb lists it; n.p: its partition p; a path without '/' starts in the current directory)", cmd_ls},
+    {"dir", "[n:][path]", "the same as ls", cmd_ls},
+    {"cd", "[n:][path]", "the current directory ('..' one up, '/' the volume's root; alone: back to none)",
+     cmd_cd},
+    {"pwd", "", "the current directory", cmd_pwd},
+    {"cat", "[n:]path", "a text file on a USB disk (Ctrl-C stops it)", cmd_cat},
+    {"mkdir", "<path>", "make a directory (this writes the disk)", cmd_mkdir},
+    {"rmdir", "<path>", "remove an empty directory (writes the disk)", cmd_rmdir},
+    {"rm", "<path>", "remove a file (writes the disk)", cmd_rm},
+    {"touch", "<path>", "make an empty file (writes the disk)", cmd_touch},
+    {"cp", "<from> <to>", "copy a file (to a directory: into it; another disk too; writes the disk)", cmd_cp},
+    {"mv", "<from> <to>", "rename a file or directory, or move it into another directory of the same volume "
+     "(writes the disk)", cmd_mv},
     {"sector", "[n:]<number>", "one sector of a USB disk in hex", cmd_sector},
+    {"tty", "", "the USB serial ports (a GSM / LTE module's AT and diagnostic ports, CDC ACM)", cmd_tty},
+    {"cu", "[n]", "the terminal joined to serial port n, ttyUSB<n> / ttyACM<n> (without n: the AT port): what "
+     "you type goes to it; \"~.\" at a line's start or Ctrl-] ends", cmd_cu},
+    {"at", "[command]", "one AT command to the AT port and its answer ('at +csq', 'at i'; a line starting "
+     "with AT goes there too)", cmd_at},
+    {"ifconfig", "", "the Ethernet port (a USB adapter with CDC ECM, an RTL8153's): MAC, address, router",
+     cmd_ifconfig},
+    {"dhcp", "", "ask the network's DHCP server for an address again", cmd_dhcp},
+    {"arp", "", "the ARP table: addresses and the MACs they answer at", cmd_arp},
     {"watchdog", "[test|off|on]", "the chip's watchdog: a demo stopped for 8 s restarts the box; "
      "test: stop feeding it (the box restarts)", cmd_watchdog},
     {"clear", "", "clear the terminal", cmd_clear},
+    {"history", "", "the commands typed before (Up / Down recall them)", cmd_history},
     {"video", "init [opticum|comsat] [rev0|rev1]", "experimental: the original firmware's display and HDMI set-up",
      cmd_video},
     {"reboot", "", "restart through the original bootloader", cmd_reboot},
@@ -493,7 +614,9 @@ static void cmd_help(int argc, char **argv)
         return;
     }
     uprintf("Commands (whole lines, '/' in front allowed; Up/Down recall earlier ones;\n"
-            "'ccc' on an empty line restarts into the bootloader for the UART updater):\n");
+            "'ccc' on an empty line restarts into the bootloader for the UART updater;\n"
+            "\"...\" or '...' keep spaces in a word; 'command > [n:]path' puts what it prints into a file,\n"
+            "'>>' adds it to the file's end):\n");
     for (const struct command *c = commands; c->name; c++) {
         char head[56];
         usnprintf(head, sizeof(head), "%s %s", c->name, c->args);
@@ -511,11 +634,50 @@ static void cmd_version(int argc, char **argv)
     uprintf("%s\nVersion: %s\n", APP_BANNER, APP_VERSION);
 }
 
+/* 'ping': pong; 'ping [-c count] <host>': ICMP echo over Ethernet like Linux's ping, until Ctrl-C (eth.c) */
 static void cmd_ping(int argc, char **argv)
+{
+    const char *host = 0;
+    u32 count = 0;
+    if (argc < 2) {
+        uprintf("pong %s\n", APP_VERSION);
+        return;
+    }
+    int bad = 0;
+    for (int i = 1; i < argc && !bad; i++) {
+        if (str_eq(argv[i], "-c"))
+            bad = !(i + 1 < argc && parse_u32(argv[++i], &count) && count);
+        else if (argv[i][0] != '-' && !host)
+            host = argv[i];
+        else
+            bad = 1;
+    }
+    if (bad || !host) {
+        uprintf("usage: ping [-c count] <host>   (a.b.c.d or a name; Ctrl-C stops)\n");
+        return;
+    }
+    eth_ping(host, (int)count);
+}
+
+static void cmd_ifconfig(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    uprintf("pong %s\n", APP_VERSION);
+    eth_show();
+}
+
+static void cmd_dhcp(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    eth_dhcp();
+}
+
+static void cmd_arp(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    eth_arp_list();
 }
 
 static void cmd_info(int argc, char **argv)
@@ -751,6 +913,7 @@ static void cmd_usb(int argc, char **argv)
     usb_status();
     if (usb_connected())
         usb_enumerate();
+    usb_retry = 0;                              /* (not set up: the main loop tries again) */
     update_usb_box();
 }
 
@@ -831,7 +994,41 @@ static void cmd_screen(int argc, char **argv)
         uprintf("usage: screen [demo|on|off|bars|clear [rrggbb]|text <x> <y> <words>|rect <x> <y> <w> <h> <rrggbb>]\n");
         return;
     }
+    if (!str_eq(argv[1], "on") && !str_eq(argv[1], "off"))
+        gfx_view(0);                    /* (what was drawn is on the TV) */
     uprintf("ok\n");
+}
+
+static void cmd_testscreen(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    if (!demo_shown)
+        draw_screen();                  /* (after a 'screen' drawing: the boxes again) */
+    gfx_view(0);
+    uprintf("the test screen is on the TV: a key on the USB keyboard, or 'console', brings the console back\n");
+}
+
+static void show_console(void)
+{
+    gfx_view(1);
+    console_redraw();
+}
+
+static void cmd_console(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    show_console();
+}
+
+static void cmd_history(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    int oldest = history_count > HISTORY ? history_count - HISTORY : 0;
+    for (int i = oldest; i < history_count; i++)
+        uprintf("%5d  %s\n", i + 1, history[i % HISTORY]);
 }
 
 static void cmd_clear(int argc, char **argv)
@@ -1024,6 +1221,114 @@ static void cmd_sector(int argc, char **argv)
     disk_sector(argv[1]);
 }
 
+static void cmd_cd(int argc, char **argv)
+{
+    disk_cd(joined(argc, argv));
+}
+
+static void cmd_pwd(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    disk_pwd();
+}
+
+/* mkdir / rmdir / rm / touch: one path (spaces in it allowed) */
+static int one_path(int argc, char **argv)
+{
+    if (argc < 2)
+        uprintf("usage: %s <path>\n", argv[0]);
+    return argc >= 2;
+}
+
+static void cmd_mkdir(int argc, char **argv)
+{
+    if (one_path(argc, argv))
+        disk_mkdir(joined(argc, argv));
+}
+
+static void cmd_rmdir(int argc, char **argv)
+{
+    if (one_path(argc, argv))
+        disk_rmdir(joined(argc, argv));
+}
+
+static void cmd_rm(int argc, char **argv)
+{
+    if (one_path(argc, argv))
+        disk_rm(joined(argc, argv));
+}
+
+static void cmd_touch(int argc, char **argv)
+{
+    if (one_path(argc, argv))
+        disk_touch(joined(argc, argv));
+}
+
+/* cp / mv: two paths (a name with spaces in quotes) */
+static int two_paths(int argc, char **argv)
+{
+    if (argc != 3)
+        uprintf("usage: %s <from> <to> (a name with spaces in quotes: %s \"my file.txt\" 4:/docs)\n", argv[0],
+                argv[0]);
+    return argc == 3;
+}
+
+static void cmd_cp(int argc, char **argv)
+{
+    if (two_paths(argc, argv))
+        disk_cp(argv[1], argv[2]);
+}
+
+static void cmd_mv(int argc, char **argv)
+{
+    if (two_paths(argc, argv))
+        disk_mv(argv[1], argv[2]);
+}
+
+static void cmd_tty(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    serial_list();
+}
+
+/* 'cu 2', 'cu ttyUSB2', 'cu -l /dev/ttyUSB2' (as Linux's cu); without a port: the AT port */
+static void cmd_cu(int argc, char **argv)
+{
+    int port = -1;
+    if (argc > 1) {
+        const char *s = argc > 2 && str_eq(argv[1], "-l") ? argv[2] : argv[1];
+        static const char *const prefixes[] = {"/dev/", "ttyUSB", "ttyACM"};
+        for (int i = 0; i < 3; i++) {
+            int k = 0;
+            while (prefixes[i][k] && s[k] == prefixes[i][k])
+                k++;
+            if (!prefixes[i][k])
+                s += k;
+        }
+        u32 v;
+        if (!parse_u32(s, &v) || v >= SERIAL_PORTS) {
+            uprintf("usage: cu [n] -- n: the port's number as 'tty' lists it, ttyUSB<n> / ttyACM<n> (without it: "
+                    "the AT port)\n");
+            return;
+        }
+        port = (int)v;
+    }
+    serial_cu(port);
+}
+
+static void cmd_at(int argc, char **argv)       /* (verbatim: argv[1] is the rest of the line as typed) */
+{
+    serial_at(argc > 1 ? argv[1] : "");
+}
+
+/* the commands that get the rest of the line as typed (raw_rest) as their one argument */
+static int verbatim(const struct command *c)
+{
+    return c->run == cmd_at;
+}
+
 static void cmd_watchdog(int argc, char **argv)
 {
     if (argc > 1 && str_eq(argv[1], "test")) {
@@ -1059,21 +1364,82 @@ static void cmd_watchdog(int argc, char **argv)
 }
 
 
-static void run_line(void)
+/* a command's output going into a file ('command > path') waits here */
+#define CAPTURE_MAX (64 * 1024)
+static u8 capture[CAPTURE_MAX];
+
+
+/* the line in words: spaces between them, "..." or '...' keeping spaces (and
+   the other quote) in one, a backslash the character after it.  A '>' or
+   '>>' outside quotes (with or without a space after it) names the file the
+   command's output goes into: *redirect, *append */
+static int split_line(char *words, char **argv, const char **redirect, int *append)
 {
-    char copy[LINE_MAX];
-    char *argv[ARGS_MAX];
+    const char *p = line, *first = 0, *second = 0, *to_redirect = 0;
+    char *w = words;
     int argc = 0;
-    str_copy(copy, line, sizeof(copy));
-    for (char *p = copy; *p && argc < ARGS_MAX;) {
+    *redirect = 0;
+    *append = 0;
+    for (;;) {
         while (*p == ' ' || *p == '\t')
-            *p++ = 0;
+            p++;
         if (!*p)
             break;
-        argv[argc++] = p;
-        while (*p && *p != ' ' && *p != '\t')
-            p++;
+        int to_file = 0;
+        if (*p != '>' && !first)
+            first = p;
+        else if (*p != '>' && argc == 1 && !second)
+            second = p;
+        if (*p == '>') {
+            if (!to_redirect)
+                to_redirect = p;
+            to_file = p[1] == '>' ? 2 : 1;
+            p += to_file;
+            while (*p == ' ' || *p == '\t')
+                p++;
+        }
+        char *start = w;
+        while (*p && *p != ' ' && *p != '\t' && !(*p == '>' && !to_file)) {
+            if (*p == '"' || *p == '\'') {
+                char q = *p++;
+                while (*p && *p != q)
+                    *w++ = *p++;
+                if (*p)
+                    p++;
+            } else if (*p == '\\' && p[1]) {
+                p++;
+                *w++ = *p++;
+            } else {
+                *w++ = *p++;
+            }
+        }
+        *w++ = 0;
+        if (to_file) {
+            *redirect = start;
+            *append = to_file == 2;
+        } else if (argc < ARGS_MAX) {
+            argv[argc++] = start;
+        }
     }
+    /* raw_line: from the first word to a redirect (or the end), trailing spaces left out; raw_rest in it */
+    const char *end = to_redirect && to_redirect > first ? to_redirect : p;
+    while (first && end > first && (end[-1] == ' ' || end[-1] == '\t'))
+        end--;
+    int n = 0;
+    for (const char *s = first; s && s < end && n < LINE_MAX - 1; s++)
+        raw_line[n++] = *s;
+    raw_line[n] = 0;
+    raw_rest = second && second < end ? raw_line + (second - first) : raw_line + n;
+    return argc;
+}
+
+static void run_line(void)
+{
+    char words[2 * LINE_MAX];
+    char *argv[ARGS_MAX];
+    const char *redirect;
+    int append;
+    int argc = split_line(words, argv, &redirect, &append);
     if (argc == 0)
         return;
     if (history_count == 0 || !str_eq(history[(history_count - 1) % HISTORY], line)) {
@@ -1085,12 +1451,38 @@ static void run_line(void)
     update_uart_box();
     if (argv[0][0] == '/' && argv[0][1])            /* "/restart" as "restart" */
         argv[0]++;
-    for (const struct command *c = commands; c->name; c++)
-        if (str_eq(c->name, argv[0])) {
-            c->run(argc, argv);
+    const struct command *c = commands;
+    while (c->name && !str_eq(c->name, argv[0]))
+        c++;
+    void (*run)(int, char **) = c->run;
+    char *as_typed[2] = {argv[0], (char *)raw_rest}, **av = argv;
+    if (!c->name) {
+        if (!serial_count() || !at_prefixed(argv[0])) {  /* ("AT..." typed: for the modem, when there is one) */
+            uprintf("unknown command '%s' -- type 'help'\n", argv[0]);
             return;
         }
-    uprintf("unknown command '%s' -- type 'help'\n", argv[0]);
+        run = cmd_at;                                   /* "AT+CSQ" as "at AT+CSQ" */
+        as_typed[1] = raw_line + (raw_line[0] == '/');
+    }
+    if (!c->name || verbatim(c)) {
+        argc = 2;
+        av = as_typed;
+    }
+    if (!redirect) {
+        run(argc, av);
+        return;
+    }
+    if (!redirect[0]) {
+        uprintf("a file name after '%s'\n", append ? ">>" : ">");
+        return;
+    }
+    u32 over;
+    uart_capture(capture, CAPTURE_MAX);
+    run(argc, av);
+    u32 n = uart_capture_end(&over);
+    disk_write_file(redirect, capture, n, append);
+    if (over)
+        uprintf("the output was longer than %u bytes: the file has its first %u\n", CAPTURE_MAX, CAPTURE_MAX);
 }
 
 static void recall(int step)
@@ -1124,6 +1516,14 @@ static void cli_input(int c)
             recall(-1);
         else if (c == 'B')
             recall(1);
+        else if (c == '5' || c == '6')
+            esc_state = c == '5' ? 3 : 4;   /* PgUp / PgDn: ESC [ 5 ~, ESC [ 6 ~ */
+        return;
+    }
+    if (esc_state >= 3) {
+        if (c == '~')
+            console_scroll(esc_state == 3 ? 1 : -1);    /* the TV's console looks back or forward */
+        esc_state = 0;
         return;
     }
     switch (c) {
@@ -1164,6 +1564,31 @@ static void cli_input(int c)
         restart("\r\nBootloader capture requested ('ccc'): restarting via original bootloader");
 }
 
+/* a device on the port that did not answer when it came: tried again every
+   3 s, ten times.  An LTE module (the A7670E) starting is connected for
+   seconds before it answers: its chip's boot port first, then its own. */
+#define USB_RETRIES 10
+#define USB_RETRY_MS 3000
+
+static void usb_try_again(void)
+{
+    int ok = usb_enumerate_quiet() == 0;
+    usb_retry_next = now_ms() + USB_RETRY_MS;           /* (after the try: one can take seconds) */
+    if (!ok && usb_retry++ < USB_RETRIES)
+        return;
+    usb_retry = ok ? 0 : -1;
+    event_begin();
+    if (ok) {
+        uprintf("[usb] the device answers now: %s\n", usb_summary());
+        if (serial_count())
+            serial_list();
+    } else {
+        uprintf("[usb] the device still does not answer (%s): 'usb' tries again\n", usb_error_text());
+    }
+    update_usb_box();
+    show_line();
+}
+
 /* ------------------------------------------------------------------ */
 static volatile u32 bss_probe;
 static volatile u32 data_probe = 0x13579bdfu;
@@ -1184,6 +1609,7 @@ void app_main(void)
     else
         uprintf("Watchdog left off: its counter does not count here\n");
     gfx_init();
+    console_start();                            /* the TV shows the console, from the boot messages on */
     if (!panel_init())
         uart_puts("No TM1650 front panel: GPIO 31 / 9 are read as two buttons (Comsat TE 1050 HD type board)\r\n");
     ir_init();
@@ -1203,7 +1629,9 @@ void app_main(void)
 
     u64 last_poll = now_ms(), last_second = last_poll, last_line_drawn = 0;
     struct ir_event ev;
+    loop_since = last_poll;
     for (;;) {
+        u64 pass_start = now_ticks(), t = pass_start;
         int c = uart_getc();
         if (c >= 0)
             cli_input(c);
@@ -1221,21 +1649,36 @@ void app_main(void)
             show_line();
         }
         typing_on_usb = 1;
-        while ((c = kbd_getc()) >= 0)
+        while ((c = kbd_getc()) >= 0) {
+            if (!gfx_view_console())
+                show_console();                 /* the test screen: any key brings the console back -- and
+                                                   types, so a command typed at once loses nothing */
             cli_input(c);
+        }
         typing_on_usb = 0;
+        loop_part(0, &t);
+        said = eth_poll();                      /* the Ethernet port's frames, DHCP */
+        if (said) {
+            event_begin();
+            uprintf("[eth] %s\n", said);
+            show_line();
+        }
+        loop_part(1, &t);
         said = mouse_poll();                    /* a USB mouse: the pointer, its buttons */
         if (said) {
             event_begin();
             uprintf("[usb] %s\n", said);
             show_line();
         }
+        loop_part(2, &t);
         if (ir_poll(&ev)) {
             event_begin();
             on_ir(&ev);
             show_line();
         }
+        console_service();                      /* the TV's console: what changed, the cursor's blink */
         gfx_cursor_refresh();                   /* (drawing under the mouse pointer took it away) */
+        loop_part(3, &t);
         u64 now = now_ms();
         if (line_dirty && now - last_line_drawn >= 50) {
             last_line_drawn = now;
@@ -1245,16 +1688,26 @@ void app_main(void)
             last_poll = now;
             if (poll_panel())
                 show_line();
-            if (usb_connected() != usb_shown) {
+            int bounced = 0;
+            if (usb_connected() != usb_shown || (bounced = usb_shown && usb_bounced())) {
                 int connected = usb_connected();
                 event_begin();
-                uprintf("[usb] %s\n", connected ? "device connected" : "device removed");
+                uprintf("[usb] %s\n", bounced ? "the device went away and came back: setting it up again"
+                                              : connected ? "device connected" : "device removed");
+                usb_retry = 0;
                 if (connected)
                     usb_enumerate();            /* its name on the screen; a keyboard starts typing */
                 else
                     usb_removed();
                 update_usb_box();
                 show_line();
+            } else if (usb_shown && usb_retry > 0 && now >= usb_retry_next) {
+                usb_try_again();
+            } else if (usb_shown && !usb_retry && !usb_present(1)) {
+                usb_retry = 1;                  /* connected, nothing set up: it did not answer when it came, or a
+                                                   set-up elsewhere failed ('at' / 'cu' after a module's
+                                                   restart, a hub's recovery) -- tried again */
+                usb_retry_next = now + USB_RETRY_MS;
             } else if (usb_shown && usb_hub_poll(event_begin)) {    /* a hub's ports, one each time */
                 update_usb_box();
                 show_line();
@@ -1264,5 +1717,7 @@ void app_main(void)
             last_second = now;
             update_uptime();
         }
+        loop_part(4, &t);
+        loop_pass(pass_start);
     }
 }

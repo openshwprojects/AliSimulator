@@ -25,6 +25,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
 import fat_image                                          # noqa: E402
+from fat_image import Volume                              # noqa: E402
 from usb_host import HALTED, VirtualStick                 # noqa: E402
 
 failures = []
@@ -38,89 +39,6 @@ def check(ok, text):
 
 def le(b, at, n):
     return int.from_bytes(b[at:at + n], "little")
-
-
-class Volume:
-    """A minimal FAT reader for the checks (the demo's own is C, in disk.c)."""
-
-    def __init__(self, image, start):
-        b = image[start * 512:start * 512 + 512]
-        self.image, self.start = image, start
-        self.spc, reserved, fats, root_entries = b[13], le(b, 14, 2), b[16], le(b, 17, 2)
-        total = le(b, 19, 2) or le(b, 32, 4)
-        fat_size = le(b, 22, 2) or le(b, 36, 4)
-        self.root_sectors = root_entries * 32 // 512
-        self.fat_start = start + reserved
-        self.root_start = self.fat_start + fats * fat_size
-        self.data_start = self.root_start + self.root_sectors
-        self.clusters = (total - (reserved + fats * fat_size + self.root_sectors)) // self.spc
-        self.fat = 12 if self.clusters < 4085 else 16 if self.clusters < 65525 else 32
-        self.root_cluster = le(b, 44, 4) if self.fat == 32 else 0
-
-    def next(self, c):
-        base = self.fat_start * 512
-        if self.fat == 32:
-            n = le(self.image, base + c * 4, 4) & 0x0FFFFFFF
-            return None if n >= 0x0FFFFFF8 else n
-        if self.fat == 16:
-            n = le(self.image, base + c * 2, 2)
-            return None if n >= 0xFFF8 else n
-        v = le(self.image, base + c * 3 // 2, 2)
-        n = v >> 4 if c & 1 else v & 0xFFF
-        return None if n >= 0xFF8 else n
-
-    def chain(self, c):
-        out = []
-        while c is not None:
-            out.append(c)
-            c = self.next(c)
-        return out
-
-    def read(self, first, size=None):
-        data = bytearray()
-        if first == 0 and self.fat != 32:
-            at = self.root_start * 512
-            return bytes(self.image[at:at + self.root_sectors * 512])
-        for c in self.chain(first or self.root_cluster):
-            at = (self.data_start + (c - 2) * self.spc) * 512
-            data += self.image[at:at + self.spc * 512]
-        return bytes(data[:size]) if size is not None else bytes(data)
-
-    def entries(self, first):
-        raw, out, parts = self.read(first), [], {}
-        for i in range(0, len(raw), 32):
-            e = raw[i:i + 32]
-            if e[0] == 0:
-                break
-            if e[0] == 0xE5:
-                continue
-            if e[11] == 0x0F:
-                name = (e[1:11] + e[14:26] + e[28:32]).decode("utf-16-le").split("\0")[0]
-                parts[e[0] & 0x1F] = (name, e[13])
-                continue
-            short = e[0:11]
-            long_name = "".join(parts[k][0] for k in sorted(parts)) if parts else None
-            sums = {s for _n, s in parts.values()}
-            out.append({"short": short, "long": long_name, "sum_ok": not parts or sums == {fat_image._checksum(short)},
-                        "attr": e[11], "cluster": le(e, 26, 2) | (le(e, 20, 2) << 16 if self.fat == 32 else 0),
-                        "size": le(e, 28, 4)})
-            parts = {}
-        return out
-
-    def find(self, path):
-        cluster = 0
-        entry = None
-        for part in [p for p in path.split("/") if p]:
-            for e in self.entries(cluster):
-                short = e["short"].decode("ascii")
-                name83 = short[:8].rstrip() + ("." + short[8:].rstrip() if short[8:].strip() else "")
-                if part in (e["long"], name83):
-                    entry = e
-                    cluster = e["cluster"]
-                    break
-            else:
-                return None
-        return entry
 
 
 FILES = {"README.TXT": b"hello\n" * 300, "Docs/A long file name.txt": bytes(range(97, 123)) * 200,

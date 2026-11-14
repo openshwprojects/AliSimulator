@@ -30,11 +30,18 @@ ZIP_TIME = (2026, 11, 12, 12, 0, 0)
 # what each release answers on the UART (v4: whole command lines)
 COMMANDS = {
     "v4": {
-        "help": "list of commands", "version": "banner and version", "ping": "answers pong",
+        "help": "list of commands", "version": "banner and version",
+        "ping": "answers pong; ping [-c n] <host>: ICMP echo over Ethernet like Linux's ping (names via DNS)",
+        "ifconfig": "the Ethernet port (a USB adapter with CDC ECM, an RTL8153's): MAC, address from DHCP, router",
+        "dhcp": "ask the DHCP server for an address again", "arp": "the ARP table",
         "info": "chip, clock, memory layout, uptime", "uptime": "time since start",
         "echo": "prints its arguments", "md": "dump memory", "mr": "read a 32-bit word",
         "mw": "write a 32-bit word (RAM, registers)",
-        "screen": "draw on the TV picture: demo|bars|clear|text|rect|on|off",
+        "screen": "draw on the test screen's picture (and show it): demo|bars|clear|text|rect|on|off",
+        "testscreen": "the demo's test screen on the TV (its boxes, the colour bars); a key on the USB keyboard or "
+                      "'console' brings the console back",
+        "console": "the console on the TV: everything the UART shows, scrolling, PgUp/PgDn for earlier lines "
+                   "(the view after start)",
         "panel": "front panel digits, brightness (boards with the TM1650)",
         "keys": "front panel key state; without a TM1650 (Comsat TE 1050 HD) its two buttons on GPIO 31 / 9",
         "ir": "remote control receiver (raw timing on|off)",
@@ -45,13 +52,32 @@ COMMANDS = {
                "(a control request)",
         "lsusb": "the USB devices, one line each (with the hub and port of those behind a hub)",
         "disks": "USB disks (sticks, card readers): their size, partitions and file systems",
-        "ls": "[n:][/path]: a directory on a USB disk's FAT12 / FAT16 / FAT32 volume (n: the disk's device "
-              "number as lsusb lists it)",
-        "cat": "[n:]/path: a text file on a USB disk (Ctrl-C stops it)",
+        "ls": "[n:][path]: a directory on a USB disk's FAT12 / FAT16 / FAT32 volume (n: the disk's device "
+              "number as lsusb lists it; a path without '/' starts in the current directory)",
+        "dir": "the same as ls",
+        "cd": "[n:][path]: the current directory, shown in the prompt ('..' one up; alone: none)",
+        "pwd": "the current directory",
+        "cat": "[n:]path: a text file on a USB disk (Ctrl-C stops it)",
+        "mkdir": "<path>: make a directory (writes the disk; long names too)",
+        "rmdir": "<path>: remove an empty directory (writes the disk)",
+        "rm": "<path>: remove a file (writes the disk)",
+        "touch": "<path>: make an empty file (writes the disk)",
+        "cp": "<from> <to>: copy a file (to a directory: into it; onto another disk too)",
+        "mv": "<from> <to>: rename a file or directory, or move it into another directory of the same volume",
+        "> / >>": "after any command: what it prints goes into a file ('ls > 4:/list.txt'; >> adds to its end); "
+                  "\"...\" or '...' keep spaces in a word",
         "sector": "[n:]<number>: one sector of a USB disk in hex",
+        "tty": "the USB serial ports: a GSM / LTE module's AT and diagnostic ports (SIMCom, Quectel, Huawei, "
+               "ZTE ...), CDC ACM devices",
+        "cu": "[n]: the terminal joined to serial port ttyUSB<n> (without n: the module's AT port): what you "
+              "type goes to it, what it sends is shown; \"~.\" at a line's start or Ctrl-] ends",
+        "at": "[command]: one AT command to the module's AT port and its answer up to OK / ERROR, and what "
+              "follows at once (AT+HTTPREAD's page); lines the module sent before (+HTTPACTION, RING) first "
+              "('at +csq', 'at i'; a line typed as AT... goes there too; > file works)",
         "watchdog": "the chip's watchdog, running from the start: a demo stopped for 8 s restarts the box; "
                     "test (stop feeding it), off, on",
         "clear": "clear the terminal",
+        "history": "the commands typed before (Up/Down recall them)",
         "video": "the original firmware's display and HDMI set-up, per board and chip revision "
                  "(init [opticum|comsat] [rev0|rev1]); the demo runs this board's at start, before USB",
         "reboot": "restart through the original bootloader", "restart": "the same as reboot",

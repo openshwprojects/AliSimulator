@@ -28,7 +28,7 @@ DEFAULT_LOAD_ADDRESS = 0x80000200
 # the v4 demo (demo/: command line, TV picture, front panel, remote, USB port)
 DEMO_SOURCES = ("demo/main.c", "demo/time.c", "demo/uart.c", "demo/gfx.c",
                 "demo/panel.c", "demo/ir.c", "demo/usb.c", "demo/kbd.c", "demo/dog.c", "demo/disk.c",
-                "demo/mouse.c")
+                "demo/mouse.c", "demo/console.c", "demo/serial.c", "demo/eth.c")
 
 
 def build(output, version="v1", cross_prefix=None, *, sources=("app.c",),

@@ -836,12 +836,25 @@ Besides UART, SPI flash, GPIO and the CP0 timer:
   behind a high-speed hub answers only to a split token (the split flag
   in the endpoint's address register, the hub's address, port and the
   low-speed bit in the register after it), as measured with a real
-  seven-port hub. Endpoint A's OUT by DMA from RAM is modelled too, and
-  given a disk image (`src/fat_image.py` builds FAT12 / FAT16 / FAT32 ones;
-  `tests/test_fat_image.py` reads them back, through 7-Zip too when it is
-  installed, and drives the stick's commands) the stick answers the
-  bulk-only transport with the
-  SCSI commands a host reads a disk with; the data toggles are kept per
+  seven-port hub. Endpoint A's OUT by DMA from RAM is modelled too, a
+  packet at a time as measured on the box (flags 2 bit 6 after every
+  packet, +0x63 bit 1 -- the DMA transmit done -- only after the last; a
+  host that stops at the first leaves the device waiting for the rest), and
+  given a disk image (`src/fat_image.py` builds FAT12 / FAT16 / FAT32 ones
+  and reads them back with `fat_image.Volume`; `tests/test_fat_image.py`
+  checks them, through 7-Zip too when it is installed, and drives the
+  stick's commands) the stick answers the bulk-only transport with the
+  SCSI commands a host reads a disk with -- and with `writable=True`
+  WRITE(10)'s data-out stage changes the image (the v4 demo's mkdir / rm /
+  ... are checked by reading it back); `lose_after_idle=s` leaves the
+  first command after an idle spell unanswered, as a real stick did. Endpoint
+  B's DMA takes its count of a packet and leaves the rest in the FIFO, which
+  a DMA started again without IN tokens moves to the buffer's start (as
+  measured on the box with an LTE module's short answers, read with a count
+  of 1); a short packet before the count still ends the transfer, where the
+  box raises only endpoint B's flag. `VirtualModem` is that module's USB
+  side (the A7670E's interfaces, an AT interpreter on its AT ports, made-up
+  IMEI and serial number). The data toggles are kept per
   device endpoint and per controller endpoint, so a host that lets them
   drift apart loses packets as on the bus. `.attach(speed[, device])` /
   `.detach()` plug them in and out. A token reaches the device only at the

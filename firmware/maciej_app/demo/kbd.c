@@ -15,6 +15,7 @@
        (1a2c:2d23) always answers eight zero bytes.
    A key going down becomes what the UART would deliver for it (US layout;
    Enter = CR, Backspace = BS, Escape = Ctrl-C, Up / Down = ESC [ A / B,
+   PgUp / PgDn = ESC [ 5 ~ / ESC [ 6 ~ (the TV's console looks back),
    Ctrl with a letter = its control code); a held key repeats after 500 ms,
    25 times a second.  Caps Lock is kept here (the keyboard's LED stays as it
    is: the demo sends no output reports).  'usb kbd raw on' prints every
@@ -35,6 +36,7 @@ static u16 ep_size;
 static u8 held[8];                      /* the last report: modifiers, 0, six keys */
 static u64 next_poll;
 static int fails, armed;
+static int via_d;                       /* read through endpoint D, which polls by itself (else endpoint B) */
 static int switched;                    /* the way of reading was changed by itself once already */
 static u32 reports, keys, errors;
 static u32 int_errors;                  /* the interrupt endpoint's, since it was chosen */
@@ -107,6 +109,8 @@ static int key_down(u8 k, u8 mods)
     case 0x39: caps ^= 1; return 0;                       /* Caps Lock */
     case 0x52: push(0x1b); push('['); push('A'); return 1;   /* Up: the line before */
     case 0x51: push(0x1b); push('['); push('B'); return 1;   /* Down */
+    case 0x4B: push(0x1b); push('['); push('5'); push('~'); return 1;   /* PgUp: the console looks back */
+    case 0x4E: push(0x1b); push('['); push('6'); push('~'); return 1;   /* PgDn */
     case 0x4C: push(0x08); return 1;                      /* Delete: as Backspace (no cursor) */
     case 0x54: push('/'); return 1;                       /* keypad / * - + Enter . */
     case 0x55: push('*'); return 1;
@@ -152,10 +156,18 @@ static void on_report(const u8 *r, int n)
         held[i] = now[i];
 }
 
+static void disarm(void)                /* (its interrupt endpoint no longer read) */
+{
+    if (via_d)
+        usb_epd_close();
+    else
+        usb_int_close(0);
+}
+
 void kbd_stop(void)
 {
     if (active && mode == MODE_INTERRUPT && armed)
-        usb_int_close(0);
+        disarm();
     active = 0;
     armed = 0;
     repeat_key = 0;
@@ -200,7 +212,7 @@ void kbd_set_mode(int interrupt)
     if (!active)
         return;
     if (mode == MODE_INTERRUPT && armed)
-        usb_int_close(0);
+        disarm();
     armed = 0;
     fails = 0;
     silent = 0;
@@ -295,12 +307,18 @@ void kbd_show_status(void)
     }
     uprintf("keyboard on interface %u, interrupt endpoint %02x (%u bytes, every %u ms) of device %u\n", iface, ep,
             ep_size, interval, device);
-    if (mode == MODE_REPORT)
+    if (mode == MODE_REPORT) {
         uprintf("  read with GET_REPORT over endpoint 0 every %u ms\n", REPORT_PERIOD_MS);
-    else
+    } else if (via_d) {
+        u32 every_us, got, drops;
+        usb_epd_counts(&every_us, &got, &drops);
+        uprintf("  read from its interrupt endpoint through the controller's endpoint D (it polls by itself, "
+                "every %u us); %u reports dropped for their data toggle\n", every_us, drops);
+    } else {
         uprintf("  read from its interrupt endpoint (an IN pending on the controller's endpoint B%s); %u reports the "
-                "controller dropped for their data toggle\n", mouse_active() && !usb_epd_device() ? ", in turns with "
-                "the mouse's" : "", usb_int_drops(0));
+                "controller dropped for their data toggle\n", mouse_active() ? ", in turns with the mouse's" : "",
+                usb_int_drops(0));
+    }
     uprintf("  %u reports, %u keys, %u errors; Caps Lock %s; raw reports %s; keys held now:", reports, keys, errors,
             caps ? "on" : "off", raw ? "on" : "off");
     int any = 0;
@@ -343,11 +361,19 @@ const char *kbd_poll(void)
     } else {
         int n = 0;
         if (!armed && now >= next_poll) {
+            /* endpoint D first: it polls by itself and nothing else takes it.  Through endpoint B every
+               disk or network transfer ended the keyboard's IN, and behind a hub's translator a report
+               caught between its two halves was lost -- the keyboard's toggle a step ahead, the next one
+               dropped too: on the box 26 of 150 reports with Ethernet read every 20 ms, keys stuck */
+            if (usb_epd_device() && usb_epd_device() == mouse_device())
+                mouse_yield_epd();
+            via_d = usb_epd_open(device, ep, ep_size, interval) == 0;
+            if (!via_d)
+                usb_int_open(0, device, ep, ep_size, interval);     /* (usb.c reads it: endpoint B's turns) */
             armed = 1;
-            usb_int_open(0, device, ep, ep_size);       /* (usb.c reads it: endpoint B) */
         }
-        if (armed)
-            n = usb_int_take(0, r, sizeof(r));  /* > 0 a report, 0 nothing yet, -1 failed, -2 an empty one */
+        if (armed)                              /* > 0 a report, 0 nothing yet, -1 failed, -2 an empty one */
+            n = via_d ? usb_epd_take(r, sizeof(r)) : usb_int_take(0, r, sizeof(r));
         if (n == -1) {
             armed = 0;                          /* (the slot is closed): opened again when next_poll comes */
             errors++;

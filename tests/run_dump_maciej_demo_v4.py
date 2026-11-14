@@ -50,7 +50,7 @@ from maciej_uart import BootloaderClient, FLASH_SIZE, MAIN_OFFSET, validate_main
 from run_maciej_bootloader_update import APP_BANNER, SimulatorTransport  # noqa: E402
 from front_panel import make_panel                                  # noqa: E402
 from tm1650_decoder import TM1650Decoder                             # noqa: E402
-from usb_host import VirtualHub, VirtualKeyboard, VirtualMouse, VirtualStick   # noqa: E402
+from usb_host import VirtualHub, VirtualKeyboard, VirtualModem, VirtualMouse, VirtualStick   # noqa: E402
 import report_artifacts                                              # noqa: E402
 
 BIN = ROOT / "firmware/maciej_app/bin"
@@ -252,6 +252,129 @@ def fb_pixel(sim, x, y):
     return struct.unpack_from("<H", sim.ram_buffer, FB_PHYS + 2 * (y * 1280 + x))[0]
 
 
+def fb_rgb(sim):
+    """The test screen's picture as RGB, read from its bitmap (it need not be on the TV)."""
+    words = np.frombuffer(sim.ram_buffer, dtype="<u2", count=1280 * 720, offset=FB_PHYS).reshape(720, 1280)
+    rgb = np.stack([(words >> 10) & 31, (words >> 5) & 31, words & 31], axis=2).astype(int)
+    return (rgb << 3) | (rgb >> 2)
+
+
+# the console (console.c): 105 x 42 cells of 12 x 16 pixels from (10, 32), the title's cells at y 5; the
+# glyphs are the demo's 5 x 7 font (font5x7.h) at twice its size
+CON_HEAD_PHYS, CON_FB_PHYS = 0x00F00800, 0x02200000
+CON_COLS, CON_ROWS, CON_X0, CON_Y0, CON_TITLE_Y = 105, 42, 10, 32, 5
+
+
+def _font():
+    rows = [tuple(int(v, 16) for v in re.findall(r"0x([0-9a-f]{2})", line))
+            for line in (ROOT / "firmware/maciej_app/demo/font5x7.h").read_text().splitlines()
+            if line.strip().startswith("{0x")]
+    glyphs = {}
+    for i, g in enumerate(rows):
+        glyphs.setdefault(g, chr(0x20 + i))
+    return glyphs
+
+
+FONT_GLYPHS = _font()
+
+
+def read_cell(rgb, x, y):
+    """The character in the cell at (x, y) and its colour (the cursor's inverted block too)."""
+    bg = rgb[y, x + 10]                                     # (the spacing column: the cell's background)
+    lit = lambda px: int(np.abs(px - bg).sum()) > 60       # noqa: E731
+    rows, colour = [], None
+    for r in range(7):
+        bits = 0
+        for c in range(5):
+            px = rgb[y + 2 * r, x + 2 * c]
+            if lit(px):
+                bits |= 0x10 >> c
+                colour = tuple(int(v) for v in px) if colour is None else colour
+        rows.append(bits)
+    return FONT_GLYPHS.get(tuple(rows), "?"), colour
+
+
+def console_lines(rgb):
+    """The console's 42 lines as text (trailing blanks dropped)."""
+    return ["".join(read_cell(rgb, CON_X0 + c * 12, CON_Y0 + r * 16)[0] for c in range(CON_COLS)).rstrip()
+            for r in range(CON_ROWS)]
+
+
+def console_title(rgb):
+    return "".join(read_cell(rgb, CON_X0 + c * 12, CON_TITLE_Y)[0] for c in range(CON_COLS)).strip()
+
+
+def console_rgb(box):
+    """The TV after a moment (the console draws what changed from its main loop, every 30 ms at most)."""
+    box.run(0.3)
+    return box.sim.capture_screen().astype(int)
+
+
+def console_text(box):
+    """What the TV's console shows now (it must be on the TV)."""
+    return console_lines(console_rgb(box))
+
+
+def check_console(box):
+    """The console on the TV (console.c), the view after boot: what the UART shows, as a text terminal
+    with a title bar -- the prompt green, what is typed white, the output grey -- 'clear', PgUp / PgDn
+    looking back, and 'testscreen' / 'console' switching the TV between it and the test screen."""
+    rgb = console_rgb(box)
+    lines, title = console_lines(rgb), console_title(rgb)
+    check(mmio(box.sim, 0x6304, 4) == CON_HEAD_PHYS and title.startswith("M3801 console - demo v4") and "up 0:" in title,
+          f"after boot the TV shows the console: the layer at its own head (0xB8006304 = 0x{CON_HEAD_PHYS:08x}), a "
+          f"title bar ({title!r})")
+    head = list(struct.unpack_from("<160i", box.sim.ram_buffer, CON_HEAD_PHYS))
+    test_head = head_block(box.sim)
+    check(head[:7] == test_head[:7] and head[7] == CON_FB_PHYS and head[8:] == test_head[8:],
+          f"its head is the test screen's but for the bitmap (0x{CON_FB_PHYS:08x}): the same format, size, matrix")
+    check(lines[-3:] == ["m3801> ping", "pong v4", "m3801>"],
+          f"it shows what the UART shows: the last command, its answer, the prompt ({lines[-3:]})")
+    prompt_colour = read_cell(rgb, CON_X0, CON_Y0 + 39 * 16)[1]
+    typed_colour = read_cell(rgb, CON_X0 + 7 * 12, CON_Y0 + 39 * 16)[1]
+    output_colour = read_cell(rgb, CON_X0, CON_Y0 + 40 * 16)[1]
+    check(near(prompt_colour, shown(100, 230, 100)) and near(typed_colour, shown(255, 255, 255))
+          and near(output_colour, shown(200, 200, 200)),
+          f"the prompt green, the command typed white, the output grey ({prompt_colour}, {typed_colour}, "
+          f"{output_colour})")
+    box.keys(b"clear\r", b"\x1b[2J\x1b[H" + PROMPT)          # (its prompt follows the escape codes)
+    box.command("echo HELLO")
+    lines = console_text(box)
+    check(lines[:3] == ["m3801> echo HELLO", "HELLO", "m3801>"] and not any(lines[3:]),
+          f"clear empties it: the prompt at the top, then what follows ({lines[:3]})")
+    box.command("help", timeout=30)
+    lines = console_text(box)
+    check(lines[-1] == "m3801>" and not any("Commands (whole lines" in line for line in lines),
+          "help's lines scroll the console: its end is on the screen")
+    pages = 0
+    while pages < 4 and not any("Commands (whole lines" in line for line in lines):
+        send_keys(box, b"\x1b[5~")
+        pages += 1
+        rgb = console_rgb(box)
+        lines, title = console_lines(rgb), console_title(rgb)
+    check(any("Commands (whole lines" in line for line in lines) and f"{21 * pages} lines back - PgDn returns" in title,
+          f"PgUp (ESC [ 5 ~) looks back half a screen a time: help's first lines after {pages}, the title says how far "
+          f"({title!r})")
+    for _ in range(pages):
+        send_keys(box, b"\x1b[6~")
+    rgb = console_rgb(box)
+    check(console_lines(rgb)[-1] == "m3801>" and "lines back" not in console_title(rgb),
+          "PgDn (ESC [ 6 ~) comes back to the end")
+    out = box.command("testscreen")
+    check(mmio(box.sim, 0x6304, 4) == HEAD_PHYS and "the test screen is on the TV" in out,
+          f"testscreen shows the test screen (the layer at its head, 0x{HEAD_PHYS:08x})")
+    box.command("console")
+    lines = console_text(box)
+    check(mmio(box.sim, 0x6304, 4) == CON_HEAD_PHYS and lines[-2:] == ["m3801> console", "m3801>"],
+          "console brings the console back, drawn whole")
+
+
+def send_keys(box, raw, seconds=0.5):
+    """Bytes on the UART that print nothing (PgUp, ...), then a little time."""
+    box.t.write(raw)
+    box.run(seconds)
+
+
 def head_block(sim):
     """The demo's region head block: 160 signed words (0x280 bytes at hw.h HEAD_PHYS)."""
     return list(struct.unpack_from("<160i", sim.ram_buffer, HEAD_PHYS))
@@ -407,6 +530,7 @@ def check_hub(box):
     check("ping\r\npong v4" in out and (0x84, 0x09) in writes and (0x85, 0x61) in writes and box.usb.toggle_drops == drops,
           "ping typed on the keyboard behind the hub -> pong v4: the IN on endpoint B goes through the translator "
           "too (+0x84 = 4 << 1 | 1, +0x85 = 0x61)")
+    box.command("testscreen")
     rgb = box.screen("v4_usb_hub_screen.png", "a USB hub with a keyboard, a stick and a second hub")
     label = np.abs(rgb[590:606] - shown(150, 190, 255)).sum(axis=2) < 30
     check(label[:, 56:152].sum() > 100 and (np.abs(rgb[590:606, 160:600] - shown(255, 230, 120)).sum(axis=2) < 30).sum() > 300,
@@ -625,6 +749,7 @@ def check_mouse(box):
     hub2.plug(2, stick, "high")
     hub2.plug(4, mouse, "low")
     hub.plug(4, kbd, "low")
+    box.command("testscreen")                                # (the pointer paints on the test screen)
     wmark, smark, drops = len(box.usb.writes), len(box.usb.setups), box.usb.toggle_drops
     box.usb.attach("high", hub)
     out = box.run(12.0)
@@ -732,6 +857,435 @@ def check_mouse(box):
     box.run(0.6)
 
 
+def check_many_devices(box):
+    """More than seven devices, as the real box got (two hub chips, a CH341, a card reader, two sticks, a
+    keyboard -- and the mouse as the eighth, which an earlier build refused): fifteen are kept (the
+    endpoints' address registers hold four bits of an address), a hub only among the first seven (the
+    split registers hold three bits of its address)."""
+    import fat_image
+    hub, hub2, hub3 = VirtualHub(4), VirtualHub(4), VirtualHub(4)
+    sticks = [VirtualStick(fat_image.build({f"S{i}.TXT": b"%d\n" % i}, fat=12, size_mb=1, partition=False))
+              for i in range(3)]
+    kbd, kbd2, mouse = VirtualKeyboard(get_report="empty", composite=True), VirtualKeyboard(), VirtualMouse()
+    hub.plug(1, hub2, "high")
+    hub2.plug(1, sticks[0], "high")
+    hub2.plug(2, kbd2, "full")
+    hub2.plug(3, kbd, "low")
+    hub2.plug(4, sticks[1], "high")
+    hub.plug(2, sticks[2], "high")
+    hub.plug(3, mouse, "low")
+    hub.plug(4, hub3, "high")
+    hub3.plug(1, VirtualKeyboard(), "full")                  # behind the hub that gets no address
+    wmark = len(box.usb.writes)
+    box.usb.attach("high", hub)
+    out = box.run(18.0)
+    kept = (hub, hub2, sticks[0], kbd2, kbd, sticks[1], sticks[2], mouse)
+    listing = box.command("lsusb")
+    check([d.address for d in kept] == list(range(1, 9)) and all(d.configuration == 1 for d in kept)
+          and "Bus 001 Device 008: ID 1209:0004 AliSimulator Virtual USB mouse, low speed (1.5 Mbit/s), hub 1 port 3"
+          in listing and all(f"disk {n}: " in out for n in (3, 6, 7)),
+          "eight devices behind two hubs: addresses 1 to 8, each configured, the mouse as device 8 (lsusb), the "
+          "three sticks' disks")
+    check("hub 1 port 4:\r\n  a hub, but the first 7 addresses are taken: a hub needs one of them" in out
+          and hub3.address == 0 and "Device 009" not in listing,
+          "a third hub as the ninth device: refused -- a hub needs one of the first seven addresses (three bits of "
+          "it in the split registers) -- and its port switched off")
+    box.run(mouse.move(30, 0, over=0.3) + 0.5)
+    writes = [(o, v) for _t, o, _s, v in box.usb.writes[wmark:]]
+    out = type_on(box, kbd2, "ping\r")
+    check((0x88, 0x11) in writes and pointer_at(box) == (670, 360) and "ping\r\npong v4" in out,
+          "the mouse at address 8 is polled by endpoint D (+0x88 = 8 << 1 | 1) and moves the pointer; the first "
+          "keyboard types")
+    box.usb.detach()
+    box.run(0.6)
+
+
+def shell(box, line, cwd="", timeout=60):
+    """A command line on the UART; its output up to the prompt -- "m3801> ", or with a current directory
+    "m3801 <cwd>> " (so the prompt is checked too)."""
+    prompt = b"m3801> " if not cwd else b"m3801 " + cwd.encode("latin-1") + b"> "
+    box.t.pending.clear()
+    box.t.write(line.encode("latin-1") + b"\r")
+    return box.t.wait_for(b"\r\n" + prompt, timeout).decode("latin-1")
+
+
+def fat_volume(stick):
+    """The stick's FAT volume, read by the tests' own reader: its MBR's first partition, or none."""
+    from fat_image import Volume
+    image = bytes(stick.image)
+    start = int.from_bytes(image[454:458], "little") if image[450] in (0x01, 0x04, 0x06, 0x0B, 0x0C, 0x0E) else 0
+    return Volume(image, start)
+
+
+def fats_alike(vol):
+    """Every copy of the FAT the same (the demo writes them all)."""
+    b = vol.image[vol.start * 512:vol.start * 512 + 512]
+    fats, size = b[16], int.from_bytes(b[22:24], "little") or int.from_bytes(b[36:40], "little")
+    first = vol.image[vol.fat_start * 512:(vol.fat_start + size) * 512]
+    return fats >= 2 and all(vol.image[(vol.fat_start + i * size) * 512:(vol.fat_start + (i + 1) * size) * 512] == first
+                             for i in range(1, fats))
+
+
+def name83(e):
+    short = e["short"].decode("ascii")
+    return short[:8].rstrip() + ("." + short[8:].rstrip() if short[8:].strip() else "")
+
+
+def entry_named(vol, cluster, name):
+    """The entry with that name (long, or 8.3 in any case) in a directory."""
+    for e in vol.entries(cluster):
+        if name == e["long"] or name.upper() == name83(e):
+            return e
+    return None
+
+
+def fat_problems(vol):
+    """What is wrong with a FAT volume: a file's chain not as long as its size needs, a cluster in two
+    chains, one marked used that nothing uses (lost), a directory's '.' or '..' not where it should point."""
+    problems, owner = [], {}
+    csize = vol.spc * 512
+    if vol.fat == 32:
+        for c in vol.chain(vol.root_cluster):
+            owner[c] = "/"
+
+    def walk(cluster, parent, path):
+        for e in vol.entries(cluster):
+            name = e["long"] or name83(e)
+            if e["attr"] & 0x08:
+                continue
+            if name in (".", ".."):
+                want = cluster if name == "." else parent
+                if e["cluster"] != want:
+                    problems.append(f"{path}: '{name}' -> {e['cluster']}, not {want}")
+                continue
+            chain = vol.chain(e["cluster"]) if e["cluster"] else []
+            for c in chain:
+                if c in owner:
+                    problems.append(f"{path}/{name}: cluster {c} is {owner[c]}'s too")
+                owner[c] = f"{path}/{name}"
+            if e["attr"] & 0x10:
+                walk(e["cluster"], cluster, f"{path}/{name}")
+            elif len(chain) != -(-e["size"] // csize):
+                problems.append(f"{path}/{name}: {len(chain)} clusters for {e['size']} bytes")
+
+    walk(0, 0, "")
+    lost = [c for c in range(2, vol.clusters + 2) if vol.next(c) != 0 and c not in owner]
+    if lost:
+        problems.append(f"used, but nothing uses them: {lost[:8]}")
+    return problems
+
+
+def file_data(vol, cluster, path):
+    """A file's bytes by its path from a directory (names as entry_named takes them); None: not there."""
+    parts = [p for p in path.split("/") if p]
+    e = None
+    for part in parts:
+        e = entry_named(vol, cluster, part)
+        if e is None:
+            return None
+        cluster = e["cluster"]
+    return vol.read(e["cluster"], e["size"]) if e["cluster"] else b""
+
+
+def check_shell(box):
+    """A shell on the USB disks: cd / pwd / dir / mkdir / rmdir / rm / touch on writable sticks -- FAT16 with
+    a partition table, FAT32, FAT12 without one -- the prompt showing the current directory; what the demo
+    writes read back by an independent FAT reader: entries with long names and
+    their checksums, '.' and '..', freed clusters, every copy of the FAT alike (fat_image.Volume).  A
+    write-protected stick is left alone."""
+    import fat_image                                         # (its Volume reads the sticks back)
+    exact = bytes(range(256)) * 8                            # (one cluster of the FAT16 image, 2 KB, full)
+    w16 = VirtualStick(fat_image.build({"README.TXT": b"hi\n", "Docs/A.TXT": b"a\n", "Docs/EXACT.BIN": exact},
+                                       fat=16, size_mb=16, label="W16"), writable=True)
+    w32 = VirtualStick(fat_image.build({"BOOT.INI": b"x\n"}, fat=32, size_mb=40, label="W32"), writable=True)
+    w12 = VirtualStick(fat_image.build({"F.TXT": b"f\n"}, fat=12, size_mb=2, partition=False), full_speed=True,
+                       writable=True)
+    locked = VirtualStick(fat_image.build({"KEEP.TXT": b"k\n"}, fat=16, size_mb=16, label="RO"))
+    hub = VirtualHub(4)
+    for port, stick in enumerate((w16, w32, w12, locked), 1):
+        hub.plug(port, stick, "full" if stick is w12 else "high")
+    box.usb.attach("high", hub)
+    out = box.run(14.0)
+    check(all(f"disk {n}: " in out for n in (2, 3, 4, 5)), "four sticks behind a hub: disks 2 to 5")
+    out = shell(box, "pwd")
+    check("no current directory" in out, "pwd before any cd: none (the prompt as before, 'm3801> ')")
+    out = shell(box, "cd 2:", "2:/") + shell(box, "pwd", "2:/")
+    check("\r\n2:/\r\n" in out, "cd 2: -- the prompt shows it ('m3801 2:/> '), pwd says 2:/")
+    out = shell(box, "mkdir New Folder", "2:/") + shell(box, "dir", "2:/")
+    check("<DIR>  New Folder\r\n" in out and "README.TXT" in out, "mkdir New Folder (a long name); dir lists it")
+    out = shell(box, "cd new folder", "2:/New Folder") + shell(box, "touch notes.txt", "2:/New Folder")
+    out += shell(box, "mkdir sub", "2:/New Folder") + shell(box, "mkdir lower", "2:/New Folder")
+    out += shell(box, "ls", "2:/New Folder")
+    check("<DIR>  sub\r\n" in out and "         0  notes.txt\r\n" in out and "<DIR>  lower\r\n" in out
+          and "2026-11-13 12:00" in out,
+          "cd into it (spelt as the disk has it, any case typed); touch, mkdir; ls there (made 2026-11-13 12:00: "
+          "the box has no clock)")
+    out = shell(box, "cd sub", "2:/New Folder/sub") + shell(box, "cd ..", "2:/New Folder")
+    out += shell(box, "cd /Docs", "2:/Docs") + shell(box, "cd ../..", "2:/") + shell(box, "cat Docs/A.TXT", "2:/")
+    check("a\r\n" in out, "cd sub, cd .., cd /Docs, cd ../.. (the root's .. is the root); cat a relative path")
+    vol = fat_volume(w16)
+    nf = entry_named(vol, 0, "New Folder")
+    inside = {(e["long"] or name83(e)).lower(): e for e in vol.entries(nf["cluster"])} if nf else {}
+    dots = vol.entries(nf["cluster"])[:2] if nf else []
+    check(nf is not None and nf["attr"] == 0x10 and nf["sum_ok"] and nf["short"] == b"NEWFOL~1   "
+          and [d["short"] for d in dots] == [b".          ", b"..         "]
+          and dots[0]["cluster"] == nf["cluster"] and dots[1]["cluster"] == 0
+          and inside.get("notes.txt", {}).get("size") == 0 and inside.get("sub", {}).get("attr") == 0x10
+          and inside.get("lower", {}).get("long", 1) is None and fats_alike(vol),
+          "on the disk: 'New Folder' with its long name (NEWFOL~1, the checksum right), '.' and '..' (0: the "
+          "root), notes.txt of 0 bytes and sub and lower as 8.3 names (lower case by Windows' flags); both FATs "
+          "alike")
+    used = vol.chain(nf["cluster"]) if nf else []
+    out = shell(box, "rmdir New Folder", "2:/")
+    check("rmdir: not empty: New Folder" in out, "rmdir refuses a directory that is not empty")
+    out = shell(box, "rm New Folder/notes.txt", "2:/") + shell(box, "rmdir New Folder/sub", "2:/")
+    out += shell(box, "rmdir New Folder/lower", "2:/") + shell(box, "rmdir New Folder", "2:/")
+    listing = shell(box, "dir", "2:/")                      # (the others' output holds their echoed lines)
+    vol = fat_volume(w16)
+    check("rm:" not in out and "rmdir:" not in out and "New Folder" not in listing
+          and entry_named(vol, 0, "New Folder") is None and all(vol.next(c) == 0 for c in used) and fats_alike(vol),
+          "rm, rmdir: no complaint, gone from the directory, their clusters free again, both FATs alike")
+    out = shell(box, "rm Docs", "2:/") + shell(box, "mkdir README.TXT", "2:/") + shell(box, "rmdir ..", "2:/")
+    check("rm: a directory" in out and "mkdir: 'README.TXT' exists" in out and "not that one" in out,
+          "refused: rm of a directory, mkdir of a name there already, rmdir of '..'")
+    # FAT32: the root directory is a chain of clusters -- long names enough to need another one
+    root32 = len(fat_volume(w32).chain(fat_volume(w32).root_cluster))
+    names = [f"A rather long file name number {i} for the FAT32 root directory" for i in range(4)]
+    out = shell(box, "cd 3:", "3:/")
+    for name in names:
+        out += shell(box, f"touch {name}", "3:/")
+    out += shell(box, "dir", "3:/")
+    vol = fat_volume(w32)
+    found = [entry_named(vol, 0, n) for n in names]
+    check(all(f"0  {n}\r\n" in out for n in names) and all(e and e["sum_ok"] for e in found)
+          and len(vol.chain(vol.root_cluster)) > root32 and fats_alike(vol),
+          f"FAT32: four files with long names in the root; it grew a cluster ({root32} -> "
+          f"{len(vol.chain(vol.root_cluster))}); both FATs alike")
+    fsinfo = vol.image[(vol.start + 1) * 512:(vol.start + 2) * 512]
+    check(fsinfo[488:492] == b"\xff\xff\xff\xff", "FAT32's FSInfo free count made unknown (the next system counts)")
+    # FAT12 without a partition table, full speed: 64-byte packets, entries of 12 bits
+    out = shell(box, "mkdir 4:/Logs", "3:/") + shell(box, "touch 4:/Logs/today.log", "3:/")
+    out += shell(box, "ls 4:/logs", "3:/")
+    vol = fat_volume(w12)
+    logs = entry_named(vol, 0, "Logs")
+    check("0  today.log" in out and logs is not None and logs["attr"] == 0x10 and fats_alike(vol)
+          and entry_named(vol, logs["cluster"], "today.log") is not None,
+          "FAT12 (no partition table, a full-speed stick): mkdir and touch by a path with its disk ('4:/Logs')")
+    out = shell(box, "rm 4:/Logs/today.log", "3:/") + shell(box, "rmdir 4:/Logs", "3:/")
+    vol = fat_volume(w12)
+    check(entry_named(vol, 0, "Logs") is None and vol.next(logs["cluster"]) == 0 and fats_alike(vol),
+          "and removed again: the 12-bit FAT entry free")
+    out = shell(box, "mkdir 5:/NEW", "3:/")
+    check("device 5 is write-protected" in out and not locked.writes,
+          "a write-protected stick (MODE SENSE) is not written")
+    out = shell(box, "cd", "")
+    check(out.endswith("m3801> "), "cd alone: no current directory, the prompt as before")
+    check_files(box, w16, w32, w12, exact)
+    box.usb.detach()
+    box.run(0.6)
+
+
+def check_modem(box):
+    """USB serial ports: an LTE module (usb_host.VirtualModem, the A7670E's interfaces and endpoints) behind
+    a hub, a writable stick next to it.  tty lists the module's four ports; at sends one AT command to the
+    first "Mobile AT Interface" and shows the answer up to its final result -- the answers are short
+    packets, read one at a time: endpoint B's DMA asked for 1 byte, the packet's rest taken from its FIFO
+    -- a line typed as AT... goes there too, and > writes the answer into a file; cu joins the terminal to
+    a port ("~." at a line's start or Ctrl-] ends it, Enter goes out as CR whatever the terminal sends); a
+    web page through the module's HTTP client (its result after the command's OK, the page after
+    AT+HTTPREAD's); both go on through IN tokens spoilt on the bus; a module that lost its configuration
+    (restarted) is set up again by the command that finds it so; unplugged, its ports are gone."""
+    import fat_image
+    modem = VirtualModem(pin="1234")
+    stick = VirtualStick(fat_image.build({"README.TXT": b"hi\n"}, fat=16, size_mb=16, label="LOGS"), writable=True)
+    hub = VirtualHub(4)
+    hub.plug(1, modem, "high")
+    hub.plug(2, stick, "high")
+    box.t.pending.clear()
+    box.usb.attach("high", hub)
+    out = box.t.wait_for(b"disk 3: ", 15).decode("latin-1")     # (the stick is set up last)
+    ports = [(0, 2, "Mobile Diag Interface"), (1, 4, "Mobile AT Interface"), (2, 5, "Mobile AT Interface"),
+             (3, 3, "Mobile Diag Interface")]
+    check(all(f"ttyUSB{n}: a serial port (interface {i}, {name}): 'cu {n}'" in out for n, i, name in ports)
+          and "disk 3: " in out and sorted(modem.line_states) == [(2, 3), (3, 3), (4, 3), (5, 3)],
+          "an LTE module (1e0e:9011) behind a hub: its four vendor-class ports in the descriptors' order "
+          "(ttyUSB0..3; its network interfaces left alone), DTR and RTS on for each; the stick next to it: disk 3")
+    out = box.command("tty")
+    check("ttyUSB1  device 2 interface 4: Mobile AT Interface (bulk in 86, out 0f, 512-byte packets)" in out
+          and "ttyUSB3  device 2 interface 3: Mobile Diag Interface (bulk in 85, out 0e, 512-byte packets)" in out,
+          "tty lists them: device, interface, name, endpoints")
+    wmark, drains, drops = len(box.usb.writes), box.usb.fifo_drains, box.usb.toggle_drops
+    out = box.command("at")
+    check("\r\nAT\r\nOK\r\n" in out and modem.received[-1] == (4, b"AT\r"),
+          "at: \"AT\" to the AT port (interface 4); its echo and OK shown")
+    out = box.command("at i")
+    counts = [v for _t, o, s, v in box.usb.writes[wmark:] if o == 0x38 and s == 1]
+    check("\r\nATi\r\n" in out and "Model: A7670E-FASE\r\n" in out and f"IMEI: {VirtualModem.IMEI}\r\n" in out
+          and "+GCAP: +CGSM,+FCLASS,+DS\r\n\r\nOK\r\n" in out and 1 in counts and box.usb.fifo_drains > drains
+          and box.usb.toggle_drops == drops,
+          "at i: the module's lines as they came -- each answer one short packet: the DMA asked for 1 byte, "
+          "then started again for the packet's rest in endpoint B's FIFO; no data toggle lost")
+    out = box.command("at +cpin?")
+    check("+CPIN: SIM PIN\r\n" in out, "at +cpin?: the SIM wants its PIN")
+    out = box.command('at +cpin="1234"')
+    check("\r\nOK\r\n" in out and modem.received[-1] == (4, b'AT+cpin="1234"\r') and not modem.locked,
+          'at +cpin="1234": the command as typed, quotes kept ("AT" put in front); OK, the SIM unlocked')
+    out = box.command("at +cpin?") + box.command("at +spic")
+    check("+CPIN: READY\r\n" in out and "+SPIC: 3,10,3,10\r\n" in out,
+          "+CPIN: READY (the module's own +CPIN: READY after the PIN, waiting on the port, not taken for the "
+          "answer); +SPIC: three tries again")
+    out = box.command("AT+CSQ") + box.command("/AT+CGMR")
+    check("+CSQ: 25,99\r\n" in out and "+CGMR: A011B07A7670M7_F\r\n" in out
+          and modem.received[-2:] == [(4, b"AT+CSQ\r"), (4, b"AT+CGMR\r")],
+          "a line typed as AT+CSQ goes to the module as it is (/AT+CGMR too, without the '/')")
+    out = box.command("at +bogus")
+    check("\r\nERROR\r\n" in out, "an unknown command: ERROR, its final result")
+    box.command("at +csq > 3:/csq.txt")
+    vol = fat_volume(stick)
+    check(file_data(vol, 0, "csq.txt") == b"AT+csq\n+CSQ: 25,99\n\nOK\n" and not fat_problems(vol),
+          "at +csq > 3:/csq.txt: the answer in a file on the stick")
+    out = box.command('at +cmgs="+48600100200"')
+    check(out.endswith("\r\n> \r\nm3801> "), 'at +cmgs="+48600100200": back at the module\'s "> " (the text: cu)')
+    out = box.keys(b"cu\r", until=b"Ctrl-] ends.\r\n")
+    out += box.keys(b"hello\x1a", until=b"OK\r\n") + box.keys(b"\r~.", until=PROMPT)
+    check("Connected to ttyUSB1 (device 2 interface 4, Mobile AT Interface)" in out and "+CMGS: 1\r\n" in out
+          and modem.sms == [("+48600100200", "hello")] and "Disconnected from ttyUSB1." in out,
+          "cu (the AT port): the message's text typed, Ctrl-Z passed on (+CMGS: 1); \"~.\" at a line's start "
+          "ends it")
+    mark = len(modem.received)
+    out = box.keys(b"cu 2\r", until=b"Ctrl-] ends.\r\n") + box.keys(b"ATI\n", until=b"OK\r\n")
+    out += box.keys(b"\x1d", until=PROMPT)
+    sent = b"".join(d for i, d in modem.received[mark:] if i == 5)
+    check("Model: A7670E-FASE" in out and sent == b"ATI\r" and "Disconnected from ttyUSB2." in out,
+          "cu 2 (the other AT port): ATI with LF for Enter goes out as ATI CR; Ctrl-] ends it")
+    out = box.command("cu 7")
+    check("no serial port 7" in out, "cu 7: no such port")
+    # a web page through the module's own HTTP client: its result comes seconds after AT+HTTPACTION's OK,
+    # the page after AT+HTTPREAD's OK -- at shows both
+    out = box.command("at +httpinit") + box.command('at +httppara="URL","http://example.com/"')
+    out += box.command("at +httpaction=0")
+    check(out.count("\r\nOK\r\n") == 3 and "+HTTPACTION" not in out and modem.requests == ["http://example.com/"],
+          "at +httpinit, +httppara (the URL in quotes), +httpaction=0: OK each, the result not yet there")
+    box.run(2.0)                                            # (the module's 1.5 s request)
+    page = VirtualModem.PAGE.decode("latin-1")
+    out = box.command(f"at +httpread=0,{len(page)}")
+    urc, echo = out.find("+HTTPACTION: 0,200,"), out.find("AT+httpread=0,")
+    check(0 <= urc < echo and "\r\nOK\r\n" in out[echo:]
+          and f"\r\n+HTTPREAD: {len(page)}\r\n{page}\r\n+HTTPREAD: 0\r\n" in out[echo:],
+          f"at +httpread: the +HTTPACTION that came after the last command shown first; the page that follows "
+          f"OK shown too ({len(page)} bytes on one line, whole)")
+    box.usb.epb_fail_next = 2
+    out = box.command("at i")
+    check("Model: A7670E-FASE\r\n" in out and "\r\nOK\r\n" in out and "failed" not in out
+          and box.usb.epb_fail_next == 0,
+          "at through two IN tokens spoilt on the bus (UTMI errors): each tried again in usb.c, the answer whole")
+    out = box.keys(b"cu\r", until=b"Ctrl-] ends.\r\n")
+    box.usb.epb_fail_next = 3
+    out += box.keys(b"ATI\r", until=b"OK\r\n") + box.keys(b"~.", until=PROMPT)
+    check("(a USB transfer failed: bulk IN stage: UTMI error (token error 0x04) -- going on)" in out
+          and "Model: A7670E-FASE" in out and "Disconnected from ttyUSB1." in out and box.usb.epb_fail_next == 0,
+          "cu goes on when an IN fails three times in a row (the UTMI error the real box got while the module "
+          "sent over GSM, past usb.c's two tries again): said once, the session goes on")
+    modem.restart()
+    commands = len(stick.commands)
+    out = box.command("at +csq", timeout=60)
+    check("not set up any more" in out and "ttyUSB1 is back: the command again" in out and "+CSQ: 25,99\r\n" in out
+          and 0 <= out.find("\r\nRDY\r\n") < out.find("AT+csq") and modem.configuration
+          and len(stick.commands) == commands,
+          "the module restarted (its configuration lost, the port's connection unchanged, as the real one once "
+          "after AT+CRESET): at finds it so, sets that hub port alone up again (the stick next to it untouched), "
+          "sends the command again; the module's start-up messages (RDY ...) shown before it, not taken for its "
+          "answer")
+    hub.unplug(1)
+    out = box.t.wait_for(b"device removed", 5).decode("latin-1") + box.command("tty")
+    check("no USB serial ports" in out, "unplugged: its ports are gone")
+    box.usb.detach()
+    box.run(0.6)
+
+
+def check_files(box, w16, w32, w12, exact):
+    """Files' contents written: a command's output into a file ('>' and '>>'), cp (into a directory, onto
+    another disk), mv (rename, into a directory, a directory with its '..', the current directory's path),
+    quotes; each file read back, and every volume left without a lost cluster or a chain of the wrong
+    length (FAT16 2 KB clusters, FAT32 512-byte ones, FAT12)."""
+    cwd = "2:/Quoted Dir"
+    prompt = f"m3801 {cwd}> "
+    out = shell(box, 'mkdir "2:/Quoted Dir"', "") + shell(box, "cd '2:/quoted dir'", cwd)
+    check(out.endswith(prompt) and "not" not in out, "quotes keep a name's space: mkdir \"2:/Quoted Dir\", "
+                                                      "cd '2:/quoted dir' (the prompt spells it as the disk has it)")
+    out = shell(box, "echo hello world > notes.txt", cwd)
+    out += shell(box, "echo second   line>>notes.txt", cwd) + shell(box, "cat notes.txt", cwd)
+    vol = fat_volume(w16)
+    qd = entry_named(vol, 0, "Quoted Dir")["cluster"]
+    check(file_data(vol, qd, "notes.txt") == b"hello world\nsecond line\n"
+          and "cat notes.txt\r\nhello world\r\nsecond line\r\n" in out,
+          "echo hello world > notes.txt, echo ...>>notes.txt: the file holds both lines (Linux line ends), cat "
+          "shows them")
+    quiet = shell(box, "help > help.txt", cwd)
+    shown = shell(box, "help", cwd)
+    text = shown.split("\r\n", 1)[1][:-len(prompt)].replace("\r\n", "\n").encode("latin-1")
+    vol = fat_volume(w16)
+    h = entry_named(vol, qd, "help.txt")
+    check(quiet == "help > help.txt\r\n" + prompt and file_data(vol, qd, "help.txt") == text
+          and h["size"] > 2048 and len(vol.chain(h["cluster"])) == -(-h["size"] // 2048),
+          f"help > help.txt: nothing on the terminal, the file is what help prints ({len(text)} bytes, "
+          f"{-(-len(text) // 2048)} clusters)")
+    out = shell(box, 'cp notes.txt "copy of notes.txt"', cwd) + shell(box, "mkdir sub", cwd)
+    out += shell(box, "cp help.txt sub", cwd) + shell(box, "cp help.txt 3:/", cwd)
+    same = shell(box, "cp help.txt help.txt", cwd) + shell(box, "cp help.txt HELP.TXT", cwd)
+    vol, vol32 = fat_volume(w16), fat_volume(w32)
+    check(file_data(vol, qd, "copy of notes.txt") == b"hello world\nsecond line\n"
+          and file_data(vol, qd, "sub/help.txt") == text and file_data(vol32, 0, "help.txt") == text
+          and len(vol32.chain(entry_named(vol32, 0, "help.txt")["cluster"])) == -(-len(text) // 512)
+          and same.count("cp: the same file") == 2,
+          "cp to a new name, into a directory, onto the FAT32 stick (512-byte clusters); onto itself refused")
+    copy = entry_named(vol, qd, "copy of notes.txt")
+    out = shell(box, 'mv "copy of notes.txt" renamed.txt', cwd) + shell(box, "mv renamed.txt sub", cwd)
+    sub = entry_named(fat_volume(w16), qd, "sub")
+    out += shell(box, 'mv sub "/moved sub"', cwd)
+    vol = fat_volume(w16)
+    moved = entry_named(vol, 0, "moved sub")
+    inner = entry_named(vol, moved["cluster"], "renamed.txt") if moved else None
+    dots = vol.entries(moved["cluster"])[:2] if moved else []
+    check(out.count("\r\n") == 3 and entry_named(vol, qd, "sub") is None and moved is not None
+          and moved["cluster"] == sub["cluster"] and inner is not None and inner["cluster"] == copy["cluster"]
+          and file_data(vol, moved["cluster"], "renamed.txt") == b"hello world\nsecond line\n"
+          and [d["cluster"] for d in dots] == [moved["cluster"], 0],
+          "mv to a new name, into a directory, a directory to the root with a new name: the same clusters, its "
+          "'..' now the root")
+    out = shell(box, 'mv "/moved sub" "/moved sub/inner"', cwd) + shell(box, "mv notes.txt 3:/", cwd)
+    out += shell(box, "mv notes.txt help.txt", cwd)
+    check("mv: a directory into itself" in out and "mv: to another volume" in out and "mv: 'help.txt' exists" in out,
+          "refused: a directory into itself, to another disk, onto a name there")
+    out = shell(box, "cd '/moved sub'", "2:/moved sub") + shell(box, "mv '/moved sub' '/Moved Again'", "2:/Moved Again")
+    out += shell(box, "pwd", "2:/Moved Again")
+    check("\r\n2:/Moved Again\r\n" in out, "mv of the current directory: the prompt and pwd follow it")
+    out = shell(box, "echo tail >> /Docs/EXACT.BIN", "2:/Moved Again") + shell(box, "echo more >> /README.TXT",
+                                                                                "2:/Moved Again")
+    out += shell(box, "echo short > '/Quoted Dir/help.txt'", "2:/Moved Again")
+    vol = fat_volume(w16)
+    ex = entry_named(vol, entry_named(vol, 0, "Docs")["cluster"], "EXACT.BIN")
+    hl = entry_named(vol, qd, "help.txt")
+    check(file_data(vol, 0, "Docs/EXACT.BIN") == exact + b"tail\n" and len(vol.chain(ex["cluster"])) == 2
+          and file_data(vol, 0, "README.TXT") == b"hi\nmore\n"
+          and file_data(vol, qd, "help.txt") == b"short\n" and len(vol.chain(hl["cluster"])) == 1,
+          ">> onto a full cluster (a cluster added) and into a sector's middle; > over a file of several clusters: "
+          "one left")
+    out = shell(box, "echo x > 5:/x", "2:/Moved Again") + shell(box, "echo x > /nothing/x", "2:/Moved Again")
+    out += shell(box, "echo x > '/Moved Again'", "2:/Moved Again") + shell(box, "echo x >", "2:/Moved Again")
+    check("device 5 is write-protected" in out and "not found: nothing" in out and ">: a directory" in out
+          and "a file name after '>'" in out, "> refused: a write-protected stick, a missing directory, onto a "
+                                               "directory, no name")
+    out = shell(box, "ls > 4:/list.txt", "2:/Moved Again") + shell(box, "cd", "")
+    vol12 = fat_volume(w12)
+    listing = file_data(vol12, 0, "list.txt") or b""
+    check(b"renamed.txt" in listing and b"help.txt" in listing, "ls > 4:/list.txt: onto the FAT12 stick")
+    problems = fat_problems(fat_volume(w16)) + fat_problems(fat_volume(w32)) + fat_problems(fat_volume(w12))
+    check(not problems and fats_alike(fat_volume(w16)) and fats_alike(fat_volume(w32)) and fats_alike(vol12),
+          f"all three volumes whole: no lost cluster, every chain as long as its file, '.' and '..' right, both "
+          f"FATs alike {problems[:3]}")
+
+
 def check_head_block(sim, label):
     """The 40-byte head the demo's picture needs, the scaling filter table zero and the
     originals' BT.709 matrix at +0x240 (what a revision-1 S3811 converts the colours with)."""
@@ -758,9 +1312,10 @@ def run(args):
 
     # ---- the command line ------------------------------------------------
     out = box.command("help")
-    names = ["help", "version", "ping", "info", "uptime", "echo", "md", "mr", "mw", "screen", "panel", "keys",
-             "ir", "usb", "lsusb", "disks", "ls", "cat", "sector", "watchdog", "clear", "video", "reboot", "restart",
-             "bootloader"]
+    names = ["help", "version", "ping", "info", "uptime", "loop", "echo", "md", "mr", "mw", "screen", "testscreen",
+             "console", "panel", "keys", "ir", "usb", "lsusb", "disks", "ls", "dir", "cd", "pwd", "cat", "mkdir", "rmdir",
+             "rm", "touch", "cp", "mv", "sector", "tty", "cu", "at", "ifconfig", "dhcp", "arp", "watchdog", "clear",
+             "history", "video", "reboot", "restart", "bootloader"]
     check(all(f"\r\n  {n} " in out for n in names), f"help lists all {len(names)} commands")
     check("pong v4" in box.command("ping"), "ping -> pong v4")
     check("pong v4" in box.command("/ping"), "a command may start with '/' (/ping)")
@@ -788,8 +1343,11 @@ def run(args):
     check("^C" in out, "Ctrl-C cancels the line")
     check("pong v4" in box.command("ping"), "the line is empty again after Ctrl-C")
 
-    # ---- the TV picture ---------------------------------------------------
-    rgb = box.screen("v4_demo_screen.png", "v4 demo screen after boot")
+    # ---- the TV picture: the console, then the test screen ---------------------------
+    check_console(box)
+    rgb = box.screen("v4_console_screen.png", "the console on the TV (the view after boot)")
+    box.command("testscreen")
+    rgb = box.screen("v4_demo_screen.png", "v4 demo screen after boot ('testscreen')")
     check(mmio(box.sim, 0x6300, 4) == 0x1 and mmio(box.sim, 0x63B8, 4) == 1,
           f"the layer is on as the originals switch it on (revision 0: 0xB8006300 = 1; is 0x{mmio(box.sim, 0x6300, 4):x})"
           f" and marked true-colour (0xB80063B8 = 1)")
@@ -936,12 +1494,19 @@ def run(args):
     out = type_on(box, kbd, "ccc{ESC}")
     check("ccc^C" in out and "Bootloader capture requested" not in out,
           "'ccc' typed on the keyboard is only text (the restart for the UART updater listens to the UART)")
+    box.command("testscreen")
+    out = type_on(box, kbd, "echo back\r")
+    check("echo back\r\nback\r\n" in out and mmio(box.sim, 0x6304, 4) == CON_HEAD_PHYS,
+          "on the test screen a key on the USB keyboard brings the console back -- and types: 'echo back' runs")
     type_on(box, kbd, "echo on the tv")
-    rgb = box.screen("v4_usb_keyboard_screen.png", "a USB keyboard: the line being typed shown on the TV")
+    lines = console_text(box)
+    box.screen("v4_usb_keyboard_screen.png", "a USB keyboard: the line being typed on the TV's console")
+    check(lines[-1] == "m3801> echo on the tv", f"the TV's console shows the line being typed ({lines[-1]!r})")
+    rgb = fb_rgb(box.sim)
     label = np.abs(rgb[436:452] - shown(150, 190, 255)).sum(axis=2) < 30
     white = np.abs(rgb[436:452] - 255).sum(axis=2) < 30
     check(label[:, 676:690].sum() > 10 and white[:, 696:880].sum() > 150 and not white[:, 890:1220].any(),
-          "the TV shows the line being typed in the command line box ('> echo on the tv_', 15 cells from x 696)")
+          "and the test screen's command line box has it too ('> echo on the tv_', 15 cells from x 696)")
     label = np.abs(rgb[590:606] - shown(150, 190, 255)).sum(axis=2) < 30
     check(label[:, 56:152].sum() > 100 and label[:, 130:152].sum() > 10 and
           (np.abs(rgb[590:606, 160:600] - shown(255, 230, 120)).sum(axis=2) < 30).sum() > 300,
@@ -1029,7 +1594,17 @@ def run(args):
     # ---- a USB mouse -------------------------------------------------------------
     check_mouse(box)
 
+    # ---- more than seven USB devices ----------------------------------------------
+    check_many_devices(box)
+
+    # ---- a shell on the USB disks: cd, mkdir, rm, ... ------------------------------
+    check_shell(box)
+
+    # ---- USB serial ports: an LTE module's AT ports (tty, at, cu) --------------------
+    check_modem(box)
+
     # ---- the experimental display set-up ---------------------------------------
+    box.command("testscreen")
     out = box.command("video init", timeout=60)
     check("of the Opticum HD N2's display set-up (dump_maciej.bin, chip revision 0" in out
           and "done: output timing 0x02ee0f78" in out

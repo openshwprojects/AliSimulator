@@ -74,6 +74,7 @@ def run(args):
           "a true-colour region (0xB80063B8 = 1), as the originals do")
     check("display layer register 0xb8006300: 0x00000000 at the demo's start, 0x00040001 now" in out,
           "info: the layer register as the demo found it and now")
+    box.command("testscreen")                                # (the console is the view after boot)
     check_head_block(box.sim, "revision 1")
     out = box.command("keys")
     check("buttons: UP (GPIO 31) released, DOWN (GPIO 9) released; 0 presses so far" in out,
