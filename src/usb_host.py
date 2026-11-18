@@ -254,7 +254,8 @@ class VirtualDevice:
         if rtype == 0x80 and request == 0x08:                                 # GET_CONFIGURATION
             return bytes([self.configuration])
         if rtype in (0x80, 0x81, 0x82) and request == 0x00:                   # GET_STATUS
-            return b"\x00\x00"
+            halted = rtype == 0x82 and self.endpoint_halted(index & 0x8F)     # an endpoint's: bit 0 = halted
+            return bytes([1 if halted else 0, 0])
         if rtype in (0x00, 0x01, 0x02) and request in (0x01, 0x03):           # CLEAR / SET_FEATURE
             return b""
         if rtype == 0x01 and request == 0x0B:                                 # SET_INTERFACE
@@ -278,6 +279,11 @@ class VirtualDevice:
 
     def halt_cleared(self, endpoint):
         """CLEAR_FEATURE(ENDPOINT_HALT) on an endpoint (bit 7: IN) arrived."""
+
+    def endpoint_halted(self, endpoint):
+        """GET_STATUS of an endpoint (bit 7: IN): True when it is halted -- it
+        answers STALL -- (bit 0 of the status, USB 2.0 9.4.5)."""
+        return False
 
 
 class VirtualStick(VirtualDevice):
@@ -515,7 +521,7 @@ class VirtualKeyboard(VirtualDevice):
     GET_REPORT.  composite=True gives it that keyboard's second interface
     too (HID, its media keys, endpoint 0x82: never anything to report).
     interrupt=False halts its interrupt endpoint (every IN is answered with
-    STALL)."""
+    STALL, and GET_STATUS of the endpoint says it is halted)."""
 
     VID, PID = 0x1209, 0x0002
     MANUFACTURER, PRODUCT, SERIAL = "AliSimulator", "Virtual USB keyboard", "000000000002"
@@ -595,6 +601,9 @@ class VirtualKeyboard(VirtualDevice):
         if rtype == 0x21 and request == 0x09:                                 # SET_REPORT (LEDs)
             return b""
         return None
+
+    def endpoint_halted(self, endpoint):
+        return endpoint == 0x81 and not self.interrupt
 
     def interrupt_in(self, endpoint):
         if endpoint != 1:
@@ -1780,9 +1789,11 @@ class UsbHost:
         (flags 3 bit 4).  A failed token sets +0x1D and a flags 1 bit -- 0x10
         through a translator, 0x20 for no response (measured), 0x80 and bit 4
         for a stall without one (assumed) -- and the polling goes on, flags 3
-        untouched, as on the box.  A packet with the other data toggle is
-        acknowledged and dropped (+0x1D bit 3): the device's report is lost,
-        the polling goes on."""
+        untouched, as on the box.  A halted endpoint's stall relayed by a
+        translator leaves no trace at all (measured 2026-11-18 with a low-speed
+        keyboard behind a hub: +0x1D 0, flags 1 / 2 / 3 clear).  A packet with
+        the other data toggle is acknowledged and dropped (+0x1D bit 3): the
+        device's report is lost, the polling goes on."""
         view, b = self.sim._mmio_view, self.base
         code = view[b + 0xA3]
         if not (view[b + 0x2B] & 0x08 and code and view[b + 0x22] & 0xC0 == 0xC0):
@@ -1805,6 +1816,8 @@ class UsbHost:
         if data is None:
             return                                # NAK: polled again at the interval
         if data is HALTED:
+            if split and there:
+                return                            # a halted endpoint behind a translator: nothing shows (measured)
             # failed (the translator's answer, nobody there, the device's stall): +0x1D and flags 1
             # only -- no flags 3, no +0x63 bits -- and the polling goes on (measured)
             code = 0x10 if split else (STALL if there else NO_RESPONSE)

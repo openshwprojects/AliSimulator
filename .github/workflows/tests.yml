@@ -33,7 +33,10 @@ env:
 jobs:
   test:
     name: Tests (${{ inputs.engine || 'cpp' }} engine)
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04, not ubuntu-latest: Ubuntu 26.04 (ubuntu-latest since the runner migration
+    # of late 2026) no longer ships gcc-mipsel-linux-gnu, so the next step failed and every
+    # test was skipped (packages.ubuntu.com lists it for 22.04 and 24.04 only).
+    runs-on: ubuntu-24.04
     # The C++ suite is about half an hour; a Unicorn run by hand needs hours.
     timeout-minutes: ${{ inputs.engine == 'unicorn' && 360 || 90 }}
     steps:

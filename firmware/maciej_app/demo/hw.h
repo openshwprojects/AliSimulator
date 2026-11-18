@@ -248,6 +248,7 @@ void usb_epd_close(void);
 int usb_epd_take(u8 *data, int max);    /* > 0 a report (it polls on), 0 nothing yet, -1 failed (stopped), -2 empty */
 u8 usb_epd_device(void);                /* the device endpoint D polls, 0: none */
 void usb_epd_counts(u32 *every_us, u32 *reports, u32 *drops);
+u32 usb_epd_checks(void);               /* GET_STATUS asked of the device after failed tokens */
 
 /* mouse.c: a USB mouse (HID boot protocol): a pointer on the TV, painting */
 const char *mouse_start(u8 device, u8 iface, u8 ep, u16 size, u8 interval);  /* after SET_CONFIGURATION */

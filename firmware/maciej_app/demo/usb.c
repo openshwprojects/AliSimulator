@@ -1005,7 +1005,14 @@ void usb_int_poll(void)
    +0x2E = 0x77 enables them) bit 4 says a packet came; bit 0 is the SDK's
    "failed", but on the box a failed token showed only in +0x1D and flags 1
    (bit 4 through a translator, 5 without) and the polling went on -- an
-   unplugged device is noticed at its port.  The data toggle lasts from one
+   unplugged device is noticed at its port.  Every endpoint's failed token
+   sets those flags 1 bits, so while they come usb_epd_take asks the device
+   about its endpoint (epd_check: GET_STATUS); a device that does not answer
+   (reset behind the demo's back) or whose endpoint is halted ends the
+   polling as a failure, as flags 3 bit 0 would.  A halted endpoint behind a
+   hub's translator leaves no trace at all (measured 2026-11-18: +0x1D 0,
+   flags 1 / 2 / 3 clear, the polling goes on), so only a device that stops
+   answering is noticed there.  The data toggle lasts from one
    packet to the next, through the polling's stops and starts; bit 0 of
    +0x23 pulsed puts it back to DATA0.
    No DMA, nothing shared with endpoints A and B: a stick's transfers and the
@@ -1028,6 +1035,9 @@ void usb_int_poll(void)
 static u8 epd_ep, epd_code;
 static u16 epd_size;
 static u32 epd_reports, epd_drops;
+static u32 epd_checks;                  /* GET_STATUS asked after a failed token (epd_check) */
+static u64 epd_checked_at;
+#define EPD_CHECK_MS 250                /* at most one such GET_STATUS this often */
 
 static u8 flags3(void)
 {
@@ -1060,6 +1070,8 @@ static void epd_go(void)                /* hcd_s3602_IntInD_start */
     USB[R_EPD] = (u8)((USB[R_EPD] & 0xC3) | ((epd_ep & 0x0F) << 2));               /* set_ep_logical_num */
     flags3();
     flags3_seen &= (u8)~0x11;
+    flags1();
+    flags1_seen &= (u8)~0x30;                   /* (failed tokens from before this polling: epd_check) */
     fifo_reset(R_EPD_STATUS);                                                      /* init_ep_fifo */
     USB[R_INT_EN3] = 0x77;                                                         /* en_host_int_flag3_all */
     USB[R_EPD_INTERVAL] = epd_code;                                                /* set_int_interval_value */
@@ -1116,6 +1128,46 @@ void usb_epd_close(void)
     epd_device = 0;
 }
 
+/* nothing came: did endpoint D's tokens fail?  On this chip that shows only
+   in flags 1 (bit 4 through a translator, 5 without) and +0x1D, and the
+   polling goes on; another endpoint's failed token sets the same bits.  So
+   while they are seen the device is asked about the endpoint (GET_STATUS,
+   at most every EPD_CHECK_MS): no answer -> -1 as no response to the
+   tokens (kbd.c sets a keyboard reset behind the demo's back up again);
+   halted -> -1 as the stall every token gets; a good answer: the failed
+   token was another endpoint's, the polling goes on (0) */
+static int epd_check(void)
+{
+    if (!(flags1() & 0x30))
+        return 0;
+    u64 now = now_ms();
+    if (now - epd_checked_at < EPD_CHECK_MS)
+        return 0;
+    epd_checked_at = now;
+    flags1_seen &= (u8)~0x30;
+    const struct device *d = device_at(epd_device);
+    if (!d)
+        return 0;
+    epd_checks++;
+    u8 status[2] = {0, 0};
+    if (request(d, 0x82, 0x00, 0, (u16)(0x80 | epd_ep), status, 2, 50) < 0) {
+        last_stage = "interrupt IN";    /* no answer to a request every device answers: told as no answer to the
+                                           tokens -- behind a hub a silent device's is the translator's stall,
+                                           which kbd.c would take for a halted endpoint */
+        last_error = 0x20;
+        note_failure();
+        epd_halt();
+        return -1;
+    }
+    if (!(status[0] & 0x01))
+        return 0;
+    last_stage = "interrupt IN";
+    last_error = 0x80;                  /* the endpoint is halted: its tokens get a stall */
+    note_failure();
+    epd_halt();
+    return -1;
+}
+
 /* endpoint D's outcome: > 0 a packet's bytes (into data; the polling goes
    on), 0 nothing yet, -1 a token failed (usb_error_text; the polling has
    stopped: usb_epd_open again), -2 a packet without data */
@@ -1125,7 +1177,7 @@ int usb_epd_take(u8 *data, int max)
         return 0;
     u8 f = flags3();
     if (!(f & 0x11))
-        return 0;
+        return epd_check();
     flags3_seen &= (u8)~0x11;
     u8 e = USB[R_TOKEN_ERROR];
     if (e & 0x08)
@@ -1162,6 +1214,11 @@ void usb_epd_counts(u32 *every_us, u32 *reports, u32 *drops)
     *every_us = epd_device ? (125u << (epd_code - 1)) : 0;
     *reports = epd_reports;
     *drops = epd_drops;
+}
+
+u32 usb_epd_checks(void)                /* GET_STATUS asked after failed tokens (epd_check) */
+{
+    return epd_checks;
 }
 
 /* would toggle_sync clear the device endpoint's halt (its toggle not known to be in step)? */
@@ -1747,6 +1804,8 @@ static int port_connect(struct device *h, u8 port)
 {
     u16 status = 0, change = 0;
     u8 first[8];
+    port_feature(h, port, 0, C_PORT_RESET);     /* (one left from an earlier reset ended the wait below at once: on
+                                                   the box the keyboard was asked while its port was still reset) */
     port_feature(h, port, 1, PORT_RESET);
     for (int i = 0; i < 50; i++) {
         delay_ms(10);

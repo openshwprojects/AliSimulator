@@ -2697,8 +2697,9 @@ void app_main(void)
         if (said) {
             event_begin();
             uprintf("[usb] %s\n", said);
-            if (kbd_lost() && usb_connected()) {    /* it stopped answering: set it up again */
-                int ok = usb_enumerate_quiet() == 0;
+            if (kbd_lost() && usb_connected()) {    /* it stopped answering: set it up again -- behind a hub that
+                                                       port alone (the network adapter, disks untouched) */
+                int ok = usb_set_up_again(kbd_device()) == 0;
                 uprintf("[usb] %s\n", ok ? (kbd_active() ? "keyboard set up again" : "set up again: no keyboard now")
                                          : usb_error_text());
                 update_usb_box();

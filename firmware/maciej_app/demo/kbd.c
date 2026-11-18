@@ -294,6 +294,10 @@ static const char *stalled(void)
 {
     if (!usb_present(device))
         return 0;                       /* unplugged from a hub: its translator answers with a stall */
+    if (!usb_still_set_up(device))
+        return no_answer();             /* behind a hub a device that stopped answering (reset behind the demo's
+                                           back) gets the translator's stall too: set up again, not read another
+                                           way (on the box: a suspended port -> "given up" before this) */
     silent = 0;
     if (++fails < 3)
         return 0;
@@ -346,7 +350,8 @@ void kbd_show_status(void)
         u32 every_us, got, drops;
         usb_epd_counts(&every_us, &got, &drops);
         uprintf("  read from its interrupt endpoint through the controller's endpoint D (it polls by itself, "
-                "every %u us); %u reports dropped for their data toggle\n", every_us, drops);
+                "every %u us); %u reports dropped for their data toggle; asked GET_STATUS %u times after failed "
+                "tokens\n", every_us, drops, usb_epd_checks());
     } else {
         uprintf("  read from its interrupt endpoint (an IN pending on the controller's endpoint B%s); %u reports the "
                 "controller dropped for their data toggle\n", mouse_active() ? ", in turns with the mouse's" : "",
