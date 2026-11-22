@@ -49,6 +49,7 @@ struct z80 {
     u8 *rd[64];                         /* the memory map, 1 KB pages: where reads of each come from (0: from
                                            read() instead) */
     u8 *wr[64];                         /* where writes go (0: to write() instead) */
+    u8 *op[64];                         /* M1 opcode fetch pages when distinct from rd[] (Kabuki Z80; 0: rd[]) */
     u8 (*read)(struct z80 *c, u16 address);
     void (*write)(struct z80 *c, u16 address, u8 value);
     u8 (*in)(struct z80 *c, u16 port);

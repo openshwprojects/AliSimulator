@@ -348,7 +348,7 @@ def check_console(box):
     check(lines[-1] == "m3801>" and not any("Commands (whole lines" in line for line in lines),
           "help's lines scroll the console: its end is on the screen")
     pages = 0
-    while pages < 8 and not any("Commands (whole lines" in line for line in lines):
+    while pages < 20 and not any("Commands (whole lines" in line for line in lines):
         send_keys(box, b"\x1b[5~")
         pages += 1
         rgb = console_rgb(box)
@@ -1563,6 +1563,140 @@ def check_play(box):
     box.run(0.6)
 
 
+def check_extra_consoles(box):
+    """Smoke check for the expanded console emulators (built-in Vectrex Vector Storm, PC Engine, Neo Geo Pocket,
+    Sony PlayStation 1 PS-X EXE, and Capcom CPS-2) from tiny self-contained test programs on a VirtualStick."""
+    import fat_image
+    pce = bytearray(b"\x00" * 8192)
+    pce_code = bytes([
+        0x78, 0xD4,                         # SEI; CSH
+        0xA9, 0xFF, 0x53, 0x01,             # LDA #$FF; TAM #$01 (I/O at $0000)
+        0x9C, 0x02, 0x04, 0x9C, 0x03, 0x04, # STZ $0402; STZ $0403 (VCE addr 0)
+        0xA9, 0xC0, 0x8D, 0x04, 0x04,       # LDA #$C0; STA $0404
+        0xA9, 0x01, 0x8D, 0x05, 0x04,       # LDA #$01; STA $0405
+        0x80, 0xFE,                         # BRA .
+    ])
+    pce[0:len(pce_code)] = pce_code
+    struct.pack_into("<H", pce, 0x1FFE, 0xE000)
+
+    ngp = bytearray(b"\xff" * 0x10000)
+    ngp[0:16] = b"COPYRIGHT BY SNK"
+    struct.pack_into("<I", ngp, 0x1C, 0x00200040)
+    ngp[0x23] = 0x10
+    ngp[0x24:0x30] = b"SMOKETEST   "
+    ngp_code = bytes([0xF1, 0xE0, 0x83, 0x02, 0xF0, 0x00, 0xF1, 0x18, 0x81, 0x00, 0x80, 0x68, 0xFE])
+    ngp[0x40:0x40 + len(ngp_code)] = ngp_code
+
+    psx = bytearray(4096)
+    psx[0:8] = b"PS-X EXE"
+    struct.pack_into("<IIII", psx, 0x10, 0x80010000, 0, 0x80010000, 0x800)
+    struct.pack_into("<I", psx, 0x30, 0x801FFF00)
+    for idx, w in enumerate((
+        0x3C081F80,                         # lui  $t0, 0x1F80
+        0x3C0902FF, 0x35292010, 0xAD091810, # GP0(02): Quick Fill color
+        0xAD001810,                         # x=0, y=0
+        0x3C0900F0, 0x35290140, 0xAD091810, # w=320, h=240
+        0x1000FFFF, 0x00000000,             # b . ; nop
+    )):
+        struct.pack_into("<I", psx, 0x800 + idx * 4, w)
+
+    cps_hdr = bytearray(256)
+    cps_hdr[0:4] = b"CPS2"
+    struct.pack_into("<5I", cps_hdr, 0x04, 0x11, 0x400, 0, 0, 0x400)
+    cps_hdr[0x18], cps_hdr[0x19] = 13, 0xFF
+    cps_hdr[0x44:0x4D] = b"SMOKETEST"
+    cps_prom = bytearray(0x400)
+    cps_prom[0:8] = bytes.fromhex("00FFFE00 00000200")
+    cps_code = bytes.fromhex(
+        "33FC FF0F 00910402"                # Scroll1 pal 0 pen 1 = bright red ($FF0F)
+        "33FC 0001 00904000"                # Scroll1 cell (0,0) = tile 1
+        "33FC 9040 00800102"                # Scroll1 base = $904000
+        "33FC FFC0 0080010C"                # Scroll1 X = 0
+        "33FC FFF0 0080010E"                # Scroll1 Y = 0
+        "33FC 12CE 00800166"                # Layer ctrl = enable Scr1..3
+        "33FC 003F 00800170"                # Pal ctrl = all 6 pages
+        "33FC 9100 0080010A"                # Palette DMA from $910000
+        "33FC 1260 00400004"                # CPS-2 layer priorities
+        "60FE"                              # bra.s *
+    )
+    cps_prom[0x200:0x200 + len(cps_code)] = cps_code
+    cps_gfx = bytearray(b"\xff" * 0x400)
+    for y in range(8):
+        cps_gfx[64 + y * 8 : 64 + y * 8 + 4] = b"\xff\x00\x00\x00"  # tile 1 = solid pen 1
+    cps = bytes(cps_hdr + cps_prom + cps_gfx)
+
+    # MSX2: tiny 16 KB V9938 Graphic 7 (SCREEN 8) cartridge setting border/backdrop bright cyan
+    mx2 = bytearray(0x4000)
+    mx2[0:4] = b"AB\x10\x40"
+    mx2_code = bytes([
+        0xF3, 0xDB, 0x99,
+        0x3E, 0x0E, 0xD3, 0x99, 0x3E, 0x80, 0xD3, 0x99,   # R#0 = $0E (SCREEN 8)
+        0x3E, 0x62, 0xD3, 0x99, 0x3E, 0x81, 0xD3, 0x99,   # R#1 = $62
+        0x3E, 0x1F, 0xD3, 0x99, 0x3E, 0x82, 0xD3, 0x99,   # R#2 = $1F
+        0x3E, 0xE3, 0xD3, 0x99, 0x3E, 0x87, 0xD3, 0x99,   # R#7 = $E3
+        0x18, 0xFE,
+    ])
+    mx2[0x10:0x10 + len(mx2_code)] = mx2_code
+
+    # Atari ST: tiny GEMDOS .prg ($601A header) setting Shifter color 0 = $0700 (red) and looping
+    st_code = bytes.fromhex("33FC 0700 00FF8240 60FE")
+    st_prg = struct.pack(">HIIIIIIH", 0x601A, len(st_code), 0, 0, 0, 0, 0, 0) + st_code + b"\x00\x00\x00\x00"
+
+    # Sega System 16B: tiny .s16 arcade image setting CRAM[0] = $000F (red) and looping
+    s16_hdr = bytearray(256)
+    s16_hdr[0:4] = b"S16B"
+    struct.pack_into("<I", s16_hdr, 0x04, 1)                # YM2151
+    struct.pack_into("<I", s16_hdr, 0x08, 0x400)            # 1 KB 68k ROM
+    struct.pack_into("<I", s16_hdr, 0x18, 192)              # 3 planes x 8 tiles x 8B = 192B tile GFX
+    struct.pack_into("<I", s16_hdr, 0x1C, 64)               # 64B sprite GFX
+    s16_hdr[0x40:0x49] = b"SMOKETEST"
+    s16_prom = bytearray(0x400)
+    s16_prom[0:8] = bytes.fromhex("00FFFE00 00000100")
+    s16_code = bytes.fromhex("33FC 000F 00840000 60FE")
+    s16_prom[0x100:0x100 + len(s16_code)] = s16_code
+    s16_rom = bytes(s16_hdr + s16_prom + bytes(192 + 64))
+
+    # Atari 800XL/130XE: tiny 8 KB cartridge ($A000..$BFFF) setting COLBK ($D01A) = $44 and looping
+    a8_cart = bytearray(b"\xff" * 0x2000)
+    a8_code = bytes([0xA9, 0x44, 0x8D, 0x1A, 0xD0, 0x4C, 0x05, 0xA0, 0x60])
+    a8_cart[0:len(a8_code)] = a8_code
+    a8_cart[0x1FFA:0x2000] = bytes([0x00, 0xA0, 0x00, 0x04, 0x08, 0xA0])
+
+    # Atari 5200: tiny 8 KB cartridge ($8000..$9FFF mirrored to $BFFF) with diagnostic $FF immediate start
+    a52_cart = bytearray(b"\xff" * 0x2000)
+    a52_code = bytes([0xA9, 0x96, 0x8D, 0x1A, 0xC0, 0x4C, 0x05, 0x80])
+    a52_cart[0:len(a52_code)] = a52_code
+    a52_cart[0x1FFD:0x2000] = bytes([0xFF, 0x00, 0x80])
+
+    stick = VirtualStick(fat_image.build({"T.PCE": bytes(pce), "T.NGP": bytes(ngp), "T.EXE": bytes(psx), "T.CPS": cps,
+                                          "T.MX2": bytes(mx2), "T.PRG": st_prg, "T.S16": s16_rom,
+                                          "ATARI8/T.ROM": bytes(a8_cart), "T.A52": bytes(a52_cart)},
+                                         fat=12, size_mb=1, partition=False))
+    box.usb.attach("high", stick)
+    box.run(4.0)
+    r_vec = box.command("vectrex -f 2", timeout=60)
+    r_pce = box.command("pce -f 2 1:/T.PCE", timeout=60)
+    r_ngp = box.command("ngp -f 2 1:/T.NGP", timeout=60)
+    r_psx = box.command("psx -f 2 1:/T.EXE", timeout=60)
+    r_cps = box.command("cps -f 2 1:/T.CPS", timeout=60)
+    r_mx2 = box.command("msx2 -f 2 1:/T.MX2", timeout=60)
+    r_st  = box.command("atarist -f 5 1:/T.PRG", timeout=60)
+    r_s16 = box.command("sys16 -f 2 1:/T.S16", timeout=60)
+    r_a8  = box.command("atari8 -f 2 1:/ATARI8/T.ROM", timeout=60)
+    r_a52 = box.command("a5200 -f 2 1:/T.A52", timeout=60)
+    check("picture CRC-32" in r_vec and "picture CRC-32" in r_pce and "picture CRC-32" in r_ngp
+          and "PlayStation 1 PS-X EXE" in r_psx and "picture CRC-32" in r_psx
+          and "CPS-2: SMOKETEST" in r_cps and "picture CRC-32" in r_cps
+          and "MSX2 (V9938" in r_mx2 and "picture CRC-32" in r_mx2
+          and "Atari" in r_st and "picture CRC-32" in r_st
+          and "SMOKETEST" in r_s16 and "picture CRC-32" in r_s16
+          and "Atari 130XE" in r_a8 and "picture CRC-32" in r_a8
+          and "Atari 5200" in r_a52 and "picture CRC-32" in r_a52,
+          "vectrex, pce, ngp, psx, cps, msx2, atarist, sys16, atari8 and a5200 run and render deterministic frames")
+    box.usb.detach()
+    box.run(0.6)
+
+
 def shell(box, line, cwd="", timeout=60):
     """A command line on the UART; its output up to the prompt -- "m3801> ", or with a current directory
     "m3801 <cwd>> " (so the prompt is checked too)."""
@@ -2187,9 +2321,12 @@ def run(args):
     # ---- the command line ------------------------------------------------
     out = box.command("help")
     names = ["help", "version", "ping", "info", "uptime", "loop", "echo", "md", "mr", "mw", "screen", "testscreen",
-             "console", "explorer", "panel", "keys", "ir", "usb", "lsusb", "disks", "ls", "dir", "cd", "pwd", "cat", "mkdir", "rmdir",
-             "rm", "touch", "cp", "mv", "sector", "tty", "cu", "at", "ifconfig", "dhcp", "arp", "watchdog", "clear",
-             "history", "video", "reboot", "restart", "bootloader"]
+             "console", "explorer", "panel", "keys", "ir", "usb", "lsusb", "disks", "ls", "dir", "cd", "pwd", "cat",
+             "nes", "gb", "sms", "gg", "sg", "zx", "a26", "c64", "amiga", "dos", "megadrive",
+             "pce", "coleco", "msx", "msx2", "ws", "snes", "neogeo", "gba", "a78", "lynx", "vectrex", "fds", "ngp",
+             "odyssey2", "intv", "psx", "cps", "atarist", "sys16", "atari8", "a5200",
+             "mkdir", "rmdir", "rm", "touch", "cp", "mv", "sector", "tty", "cu", "at", "ifconfig", "dhcp", "arp",
+             "watchdog", "clear", "history", "video", "reboot", "restart", "bootloader"]
     check(all(f"\r\n  {n} " in out for n in names), f"help lists all {len(names)} commands")
     check("pong v4" in box.command("ping"), "ping -> pong v4")
     check("pong v4" in box.command("/ping"), "a command may start with '/' (/ping)")
@@ -2487,6 +2624,7 @@ def run(args):
     check_amiga(box)
     check_dos(box)
     check_md(box)
+    check_extra_consoles(box)
     check_play(box)
     check_view_jpeg(box)
 
@@ -2547,7 +2685,7 @@ def run(args):
     # (12 s: the bootloader checks the main code before it looks for 'c' -- 4.7 s of emulated time for the 588 KB
     # demo with the Z80 / 2600 players, 8.3 s for the 1.1 MB one with TLS; maciej_uart.py on the real box keeps
     # sending for up to 90 s)
-    while box.sim._vtime() < start + 12:
+    while box.sim._vtime() < start + 26:
         box.t.write(b"c")
         nxt = box.sim._vtime() + 1 / 30
         while box.sim._vtime() < nxt:
@@ -2564,7 +2702,7 @@ def run(args):
     check("Version: v4" in box.boot().decode("latin-1"), "and its reboot command starts the demo again")
     box.t.pending.clear()
     mark = len(box.t.received)
-    deadline = box.sim._vtime() + 12                   # (the bootloader's check first: 8.3 s, as above)
+    deadline = box.sim._vtime() + 26                   # (the bootloader's check first: ~16 s for ~2 MB v4)
     while box.sim._vtime() < deadline:                 # maciej_uart.capture_boot's pacing, in emulated time
         box.t.write(b"c")
         nxt = min(deadline, box.sim._vtime() + 0.05)

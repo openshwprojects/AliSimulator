@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build the RAM application with a MIPS little-endian GCC cross toolchain."""
 import argparse
+import concurrent.futures
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -34,25 +36,51 @@ DEMO_SOURCES = ("demo/main.c", "demo/time.c", "demo/uart.c", "demo/gfx.c",
                 "demo/image.c", "demo/view.c", "demo/http.c", "demo/web.S", "demo/rf.c", "demo/snd.c",
                 "demo/z80.c", "demo/sms.c", "demo/zx.c", "demo/a26.c", "demo/c64.c", "demo/amiga.c", "demo/dos.c",
                 "demo/av.c", "demo/avc.c", "demo/mp2.c", "demo/md.c", "demo/zip.c", "demo/tls.c",
-                "demo/tls_anchors.S", "demo/ssdp.c", "demo/jpeghw.c")
+                "demo/tls_anchors.S", "demo/ssdp.c", "demo/jpeghw.c", "demo/pce.c", "demo/col.c", "demo/msx.c",
+                "demo/ws.c", "demo/snes.c", "demo/neo.c", "demo/gba.c", "demo/a78.c", "demo/lnx.c", "demo/vec.c",
+                "demo/o2.c", "demo/intv.c", "demo/ngp.c", "demo/psx.c", "demo/cps.c", "demo/st.c", "demo/s16.c",
+                "demo/a8.c")
 BEARSSL = HERE / "bearssl"                      # BearSSL 0.6's files a TLS client needs (bearssl/README.txt)
+
+
+def _tree_digest(paths):
+    h = hashlib.sha256()
+    for p in paths:
+        h.update(str(p.name).encode("utf-8") + b"\0")
+        h.update(p.read_bytes() + b"\0")
+    return h.hexdigest()
 
 
 def build_bearssl(prefix, arch_flags, output):
     """BearSSL's sources (bearssl/src/**/*.c, in name order) compiled into OUTPUT/bearssl/libbearssl.a
     (deterministic: the same files give the same bytes); its path."""
     objects = output / "bearssl"
-    if objects.exists():
-        shutil.rmtree(objects)
-    objects.mkdir(parents=True)
+    objects.mkdir(parents=True, exist_ok=True)
     sources = sorted(BEARSSL.glob("src/**/*.c"), key=lambda p: p.relative_to(BEARSSL).as_posix())
+    headers = sorted([*BEARSSL.glob("inc/*.h"), *BEARSSL.glob("src/*.h"), *BEARSSL.glob("shim/*.h")],
+                     key=lambda p: p.relative_to(BEARSSL).as_posix())
     flags = [*arch_flags, "-w", "-DBR_USE_URANDOM=0", "-DBR_USE_WIN32_RAND=0", "-DBR_USE_UNIX_TIME=0",
              "-DBR_USE_WIN32_TIME=0", "-DBR_RDRAND=0", "-DBR_64=0", "-DBR_LOMUL=0",
              "-I" + str(BEARSSL / "shim"), "-I" + str(BEARSSL / "inc"), "-I" + str(BEARSSL / "src")]
-    subprocess.run([prefix + "gcc", *flags, "-c", *[str(s) for s in sources]], check=True, cwd=objects)
     library = objects / "libbearssl.a"
-    names = [s.stem + ".o" for s in sources]
+    stamp = objects / "bearssl.stamp"
+    want_stamp = hashlib.sha256((prefix + "\0" + "\0".join(flags) + "\0" +
+                                 _tree_digest([*sources, *headers])).encode("utf-8")).hexdigest()
+    if library.exists() and stamp.exists() and stamp.read_text(encoding="utf-8").strip() == want_stamp:
+        return library
+
+    def compile_one(src):
+        obj = objects / (src.stem + ".o")
+        subprocess.run([prefix + "gcc", *flags, "-c", str(src), "-o", str(obj)], check=True, cwd=objects)
+        return src.stem + ".o"
+
+    workers = min(16, max(2, os.cpu_count() or 4))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        names = list(pool.map(compile_one, sources))
+    if library.exists():
+        library.unlink()
     subprocess.run([prefix + "ar", "rcsD", str(library), *names], check=True, cwd=objects)
+    stamp.write_text(want_stamp + "\n", encoding="utf-8")
     return library
 
 
@@ -100,7 +128,32 @@ def build(output, version="v1", cross_prefix=None, *, sources=("app.c",),
         if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
             raise ValueError(f"invalid define name {name!r}")
         flags.append(f"-D{name}" if value is None else f"-D{name}={value}")
-    command = [prefix + "gcc", *flags, str(HERE / start), *[str(HERE / s) for s in sources], *libraries,
+    all_sources = [start, *sources]
+    obj_dir = output / "objs"
+    obj_dir.mkdir(parents=True, exist_ok=True)
+    shared_deps = sorted([*HERE.glob("*.h"), *(HERE / "demo").glob("*.h"), *(HERE / "demo").glob("*.inc"),
+                          *(HERE / "demo").glob("*.html"), *(HERE / "demo").glob("*.bin")],
+                         key=lambda p: p.relative_to(HERE).as_posix())
+    deps_hash = _tree_digest(shared_deps)
+
+    def compile_unit(item):
+        idx, rel = item
+        src_path = HERE / rel
+        obj_path = obj_dir / f"{idx:03d}_{src_path.stem}.o"
+        stamp_path = obj_dir / f"{idx:03d}_{src_path.stem}.stamp"
+        unit_key = hashlib.sha256((prefix + "\0" + "\0".join(flags) + "\0" + deps_hash + "\0" +
+                                   rel + "\0").encode("utf-8") + src_path.read_bytes()).hexdigest()
+        if obj_path.exists() and stamp_path.exists() and stamp_path.read_text(encoding="utf-8").strip() == unit_key:
+            return str(obj_path)
+        subprocess.run([prefix + "gcc", *flags, "-c", str(src_path), "-o", str(obj_path)], check=True)
+        stamp_path.write_text(unit_key + "\n", encoding="utf-8")
+        return str(obj_path)
+
+    workers = min(16, max(2, os.cpu_count() or 4))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        obj_files = list(pool.map(compile_unit, enumerate(all_sources)))
+
+    command = [prefix + "gcc", *flags, *obj_files, *libraries,
                "-Wl,--build-id=none", "-Wl,-T," + str(linker_script),
                "-Wl,-Map," + str(output / "app.map"), "-o", str(elf)]
     subprocess.run(command, check=True)

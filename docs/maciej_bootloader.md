@@ -971,6 +971,96 @@ masked, everything polled) for the same bootloader. It prints the same banner an
   command line takes 159 characters (was 95), for such a test's script.
   The emulator suite's cartridge has a Color version: its palette 0 colour
   1 set to red, red on the TV, the PC's CRC-32.
+- **Additional console players** (all sharing `play.c`'s TV scaler, USB/UART/IR
+  pad, `.zip`/`.gz` unpacking, `.sav` persistence, 48 kHz HDMI/SCART sound via
+  `snd.c`, clean-room built-in BIOS replacements with optional user BIOS files,
+  and `explorer` integration; all verified on PC, in `AliSimulator`, and on the
+  real S3811 box):
+  - **PC Engine / TurboGrafx-16** (`pce`, `.pce`, `pce.c`): HuC6280 CPU
+    (627,517/627,517 SingleStepTests), HuC6270 VDC + HuC6260 VCE (256/320/512
+    wide), 6-channel PSG, Street Fighter II mapper, 2 KB BRAM `.sav` (4.4-10.4 ms/frame on the box).
+  - **ColecoVision & MSX1** (`coleco` `.col`, `msx` `.rom`/`.mx1`, `col.c`,
+    `msx.c`): Z80 + TMS9928A/9918A, SN76489 / AY-3-8910 + Konami SCC sound,
+    MegaCart, Super Game Module, Konami/ASCII MegaROM mappers (2.5-4.8 ms/frame).
+  - **WonderSwan & WonderSwan Color** (`ws`, `.ws`/`.wsc`, `ws.c`): NEC V30MZ,
+    224 x 144 horizontal and auto-rotated 144 x 224 vertical LCD at 75.47 Hz,
+    4-channel wavetable/HyperVoice/DMA sound, SRAM & EEPROM `.sav` (1.7-10.2 ms/frame).
+  - **Super Nintendo / Super Famicom** (`snes`, `.sfc`/`.smc`, `snes.c`): WDC
+    65C816 (LoROM/HiROM/ExHiROM, GPDMA/HDMA), S-PPU Modes 0-7, SPC700 + 8-voice
+    S-DSP BRR sound, SRAM `.sav` (6.4-16.5 ms/frame).
+  - **Neo Geo AES / MVS** (`neogeo`, `.neo`, `neo.c`): 68000 + Z80, LSPC2
+    hardware-zoomed sprite strips + fix layer (320 x 224), YM2610 FM/SSG/ADPCM-A/B,
+    64 KB `.sav` (2.5-14.3 ms/frame).
+  - **Game Boy Advance** (`gba`, `.gba`, `gba.c`): ARM7TDMI (ARM + Thumb,
+    12/12 `gba-tests`, 17/17 PeterLemon), PPU Modes 0-5, DirectSound FIFO + PSG,
+    SRAM / Flash 64K & 128K / EEPROM `.sav` (5.2-17.1 ms/frame).
+  - **Atari 7800 & Atari Lynx** (`a78` `.a78`, `lynx` `.lnx`/`.lyx`, `a78.c`,
+    `lnx.c`): 6502C + MARIA DLL/DL + TIA/POKEY (`a78`), and 65SC02 + Suzy
+    hardware sprite scaling/math + Mikey timers/sound (`lynx`) (4.3-8.2 ms/frame).
+  - **Vectrex** (`vectrex`, `.vec` or no file for built-in *Vector Storm* /
+    *Mine Storm*, `vec.c`): MC6809 + 6522 VIA + DAC integrator + 540 x 720
+    anti-aliased phosphor vector buffer + AY-3-8912 sound (6.2-15.7 ms/frame).
+  - **Famicom Disk System** (`fds`, `.fds`, `nes.c`): 1-8 disk sides, cycle-exact
+    IRQ timer (21/21 `fdsirqtests`), RP2C33 wavetable + FM modulation sound,
+    disk writes persisted in `.sav` (4.6-11.3 ms/frame).
+  - **Neo Geo Pocket Color, Odyssey2 & Intellivision** (`ngp` `.ngp`/`.ngc`,
+    `odyssey2` `.o2`, `intv` `.int`/`.rom`; `ngp.c`, `o2.c`, `intv.c`): TLCS-900/H
+    + Z80 + K1GE/K2GE + T6W28/DAC + 64 KB Flash `.sav` (8.8-11.2 ms/frame);
+    8048 + 8244 VDC (2.5 ms/frame); CP1610 + STIC + AY-3-8914 (4.4 ms/frame).
+  - **Sony PlayStation 1** (`psx`, `.exe`/`.cue`/`.iso`, `psx.c`): MIPS R3000A +
+    COP2 GTE 3D geometry, PS1 GPU (1024 x 512 BGR555 VRAM, shaded/textured
+    polygons, 15/24bpp), DMA0..6, MDEC, 24-voice SPU XA-ADPCM, 128 KB Memory Card
+    (`.sav`), streaming `.cue`/`.bin` & `.iso` CD-ROM reader, and `"PS-X EXE"` vs
+    DOS `"MZ"` `.exe` disambiguation in `explorer` (1.4-14.7 ms/frame on 3D/2D
+    homebrew & tests on the box).
+  - **Capcom CPS-1, CPS-1.5 & CPS-2 Arcade** (`cps`, `.cps`/`.cps1`/`.cps2` and
+    MAME `.zip` romsets, `cps.c`, `tools/cps_pack.py`): 10/12/16 MHz 68000 (`m68k.inc`
+    with separate decrypted `fmap` vs data `rmap`) + 4/8 MHz Z80 (`z80.c` with
+    Kabuki M1/data decryption), CPS-2 dual 4-round Feistel opcode decryption
+    (20-byte `.key` + built-in key table + Phoenix XOR), CPS-A & CPS-B custom chips
+    (16x16 hardware multiply, board IDs, GFX bank mappers), 384 x 224 4,096-color
+    3-layer tilemaps (`SCROLL1` 8x8, `SCROLL2` 16x16 with per-scanline rowscroll,
+    `SCROLL3` 32x32) + CPS-1 `BgHi` foreground pen masking + CPS-2 Z-buffered
+    sprite priorities, YM2151 + OKIM6295 (CPS-1) and 16-voice DL-1425 QSound DSP
+    (CPS-1.5 / CPS-2) mixed at 48 kHz, and 93C46 EEPROM (`.sav`).
+  - **ZX Spectrum 128K + Pentagon BetaDisk 128** (`zx`, `.sna`/`.z80`/`.tap`/`.tzx`/`.trd`/`.scl`,
+    `zx.c`): port `0x7FFD` 128 KB RAM banking (8 x 16 KB banks, Bank 7 shadow screen,
+    dual ROMs), 128K `.sna` (131,103 B) & `.z80` v2/v3 snapshots, multi-block 128K
+    `.tap`/`.tzx` loader, BetaDisk WD1793 FDC + `0x3D00..0x3DFF` trap for `.trd` &
+    `.scl` floppies (with optional `128.rom`/`trdos.rom` or built-in clean-room
+    loader), and 48 kHz ULA beeper + AY-3-8912 3-channel PSG audio.
+  - **MSX2** (`msx2`, `.mx2`/`.dsk`/`.rom`, `msx.c`): Z80A + Yamaha V9938 (128 KB
+    VRAM + 64 KB ExpVRAM, RGB333 palette, `SCREEN 0..8` including 512 px `G5`/`G6`
+    and 256-color `SCREEN 8`, Sprite Mode 2 OR-color blending, `R#19` scanline IRQ,
+    `R#23` vertical scroll, and full hardware blitter `HMMC`/`YMMM`/`HMMM`/`HMMV`/
+    `LMMC`/`LMCM`/`LMMM`/`LMMV`/`LINE`/`SRCH`/`PSET`), 256 KB Memory Mapper, RP5C01
+    RTC, FAT12 `.dsk` floppy support, C-BIOS MSX2 or built-in BIOS, and AY-3-8910 +
+    Konami SCC + Yamaha YM2413 MSX-MUSIC FM sound.
+  - **Atari 520ST / 1040STFM** (`atarist`, `.st`/`.msa`/`.prg`/`.tos`, `st.c`):
+    8.021 MHz 68000 (`m68k.inc` with Bus Error `/BERR` & vectored MFP IPL 6 IRQs),
+    2 MB ST-RAM, Atari Shifter (320x200 16c, 640x200 4c, 640x400 mono, per-scanline
+    raster palettes) + STE Blitter (`$FF8A00`), MC68901 MFP Timers A/B/C/D, dual
+    MC6850 ACIA + HD6301 IKBD, WD1772 FDC + DMA (`.st`, RLE `.msa`, and auto-boot
+    FAT12 wrapper for bare `.prg`/`.tos` with `$601A` vs C64 `.prg` disambiguation
+    in `explorer`), YM2149F 48 kHz PSG, and free GPLv2 EmuTOS (`etos192uk.img` /
+    `etos256uk.img`) or built-in clean-room TOS.
+  - **Sega System 16A, 16B & OutRun-Road Arcade** (`sys16`, `.s16` and MAME `.zip`,
+    `s16.c`, `tools/s16_pack.py`): 10/12.5 MHz 68000 + Z80 (FD1089/FD1094 `fmap` &
+    MC-8123 `op` support), Sega `315-5195` 8-region mapper, `315-5197` 3-layer
+    tilemaps (Text + FG + BG with rowscroll & colscroll) + 16-bit zoomed sprites
+    with Shadow/Highlight pens + dual-stripe perspective road generator (`S16R`),
+    YM2151 FM + NEC uPD7759 ADPCM + Sega 16-channel PCM sound at 48 kHz, and 16 KB
+    NVRAM (`.sav`).
+  - **Atari 800XL / 130XE & Atari 5200 SuperSystem** (`atari8` `.atr`/`.xex`/`.obx`/`.com`/`.car`/`.rom`
+    or bare BASIC, and `a5200` `.a52`/`.car`/`.bin`, `a8.c`, `a8_roms.inc`): 1.77/1.79 MHz SALLY
+    6502C (with BCD & undocumented opcodes), ANTIC Display List co-processor (modes `2..F`,
+    `LMS`, `HSCROL`, `VSCROL`, `DLI` + cycle-split `WSYNC`), GTIA (336 x 240, 256-color
+    NTSC & PAL palettes, 4 Players + 4 Missiles, hardware collisions, `PRIOR` + modes 9/10/11),
+    POKEY 4-channel 48 kHz polynomial/pure-tone/16-bit/digisound + timers + pots + high-speed
+    `SIOV` & serial SIO (`.atr` `.sav` writeback, multi-segment `$FFFF` `.xex` `INITAD`/`RUNAD`
+    loader, and `$FFFF` `.com` vs MS-DOS `.com` disambiguation in `explorer`), 130XE 128 KB
+    `PORTB` CPU/ANTIC bank switching, XL/XE & 5200 cartridge mappers up to 1 MB, and built-in
+    royalty-free AltirraOS XL/XE, Altirra BASIC & Altirra 5200 OS ROMs.
 - **USB keyboard**: a keyboard (an interface of class HID, protocol
   keyboard) types into the same command line as the UART -- US layout,
   Enter, Backspace, the arrows, Home / End, Delete, Tab, Caps Lock, Escape (as Ctrl-C), Ctrl

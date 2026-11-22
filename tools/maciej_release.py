@@ -115,11 +115,11 @@ COMMANDS = {
         "sg": "[-f frames] [-k script] <file.sg|file.sc>: a Sega SG-1000 / SC-3000 game on the TV (256 x 192 "
               "three times as large; plain ROMs up to 48 KB, Sega mapper above; pads only, no sound): X = button 2, "
               "Z = button 1, Enter = Pause; the other keys and the options of nes",
-        "zx": "[-f frames] [-k script] [file]: a ZX Spectrum 48K on the TV (320 x 240 with its border, three "
-              "times as large, 50 frames a second): a snapshot (.sna, .z80) or a tape (.tap, .tzx, loaded at once "
-              "with LOAD \"\" typed by itself); no file: BASIC. Its ROM is a file 48.rom (not in the demo) beside "
-              "the program, in zx/ or at the top of its disk. The USB keyboard is the Spectrum's, its arrows a "
-              "Kempston joystick too; characters typed on the UART are typed on it; Esc ends",
+        "zx": "[-f frames] [-k script] [file]: a ZX Spectrum 48K / 128K + Pentagon BetaDisk 128 on the TV (320 x 240 "
+              "with its border, three times as large, 50 frames a second): a snapshot (.sna, .z80), a tape (.tap, .tzx) "
+              "or a TR-DOS floppy (.trd, .scl) with 48 kHz beeper + AY-3-8912 sound; no file: BASIC. Optional 48.rom, "
+              "128.rom and trdos.rom in zx/ or beside the program (else built-in clean-room loader). The USB keyboard is "
+              "the Spectrum's, its arrows a Kempston joystick too; characters typed on the UART are typed on it; Esc ends",
         "c64": "[-f frames] [-k script] [file]: a Commodore 64 (PAL) on the TV (352 x 240 with its border, "
                "three times as large, 50 frames a second): a program (.prg, .t64) or a disk (.d64), loaded and "
                "RUN by itself, or a cartridge (.crt: normal, Ocean, Magic Desk, EasyFlash, System 3, Dinamic, Fun "
@@ -144,6 +144,57 @@ COMMANDS = {
         "a26": "[-f frames] [-k script] <file.a26>: an Atari 2600 game on the TV (160 x 228, five times as wide "
                "and three times as high; 2K, 4K, F8, F6, F4 and their Superchip RAM, FE, E0, 3F, E7, FA; NTSC; no "
                "sound): arrows, X or Z = fire, Enter = the console's Reset, Tab = Select",
+        "pce": "[-f frames] [-k script] <file.pce>: a PC Engine / TurboGrafx-16 HuCard on the TV (256 / 320 / 512 x "
+               "240) with its 6-channel PSG sound and 2 KB backup RAM (.sav)",
+        "coleco": "[-f frames] [-k script] <file.col>: a ColecoVision cartridge on the TV (256 x 192, three times as "
+                  "large; MegaCart and Super Game Module too; coleco.rom in col/ or built-in BIOS) with SN76489 sound",
+        "msx": "[-f frames] [-k script] <file.rom|file.mx1>: an MSX1 cartridge on the TV (plain, Konami, Konami SCC, "
+               "ASCII8, ASCII16; msx.rom in msx/ or built-in BIOS) with AY-3-8910 + SCC sound",
+        "msx2": "[-f frames] [-k script] <file.mx2|file.dsk|file.rom>: an MSX2 home computer on the TV (Yamaha V9938 "
+                "256/512 x 192/212, 128 KB VRAM, SCREEN 0..8, hardware blitter, 256 KB Memory Mapper, RP5C01 RTC; "
+                "cbios_main_msx2.rom/msx2.rom in msx2/ or built-in BIOS) with AY-3-8910 + SCC + YM2413 FM sound",
+        "ws": "[-f frames] [-k script] <file.ws|file.wsc>: a Bandai WonderSwan or WonderSwan Color game on the TV "
+              "(224 x 144 five times as large, or 144 x 224 rotated) with 4-channel sound and SRAM / EEPROM (.sav)",
+        "snes": "[-f frames] [-k script] <file.sfc|file.smc>: a Super Nintendo / Super Famicom game on the TV "
+                "(LoROM, HiROM, ExHiROM, Modes 0-7) with SPC700 / S-DSP BRR sound and SRAM (.sav)",
+        "neogeo": "[-f frames] [-k script] <file.neo>: an SNK Neo Geo AES / MVS cartridge on the TV (320 x 224, "
+                  "three times as large; uni-bios.rom in neogeo/ or built-in BIOS) with Z80 + YM2610 sound and .sav",
+        "gba": "[-f frames] [-k script] <file.gba>: a Game Boy Advance game on the TV (240 x 160, four times as "
+               "large; gba_bios.bin in gba/ or built-in BIOS) with DirectSound + PSG sound and SRAM / Flash / EEPROM (.sav)",
+        "a78": "[-f frames] [-k script] <file.a78>: an Atari 7800 ProSystem cartridge on the TV (320 x 224 / 240; "
+               "MARIA display lists, Linear / SuperGame / Activision / Absolute) with TIA + POKEY sound and .sav",
+        "lynx": "[-f frames] [-k script] <file.lnx|file.lyx>: an Atari Lynx game on the TV (160 x 102 six times as "
+                "large, or 102 x 160 rotated; Suzy sprite scaling, lynxboot.img in lynx/ or built-in loader) with Mikey sound",
+        "vectrex": "[-f frames] [-k script] [file.vec]: a GCE Vectrex vector console on the TV (270 x 360 twice as "
+                   "large; no file: Mine Storm with vectrex.rom in vec/, or built-in Vector Storm) with AY-3-8912 sound",
+        "fds": "[-f frames] [-k script] <file.fds>: a Famicom Disk System disk image (1-8 sides; disksys.rom in fds/ "
+               "or built-in BIOS, Q flips disk sides) on the TV with RP2C33 wavetable + FM sound and .sav disk writes",
+        "ngp": "[-f frames] [-k script] <file.ngp|file.ngc>: a Neo Geo Pocket or Neo Geo Pocket Color game on the TV "
+               "(160 x 152 four times as large; ngp_bios.rom in ngp/ or built-in BIOS) with T6W28 + DAC sound and Flash .sav",
+        "odyssey2": "[-f frames] [-k script] <file.o2>: a Magnavox Odyssey2 / Philips Videopac G7000 cartridge on the "
+                    "TV (160 x 240, 640 x 720; o2rom.bin in o2/ or built-in BIOS) with Intel 8244 sound",
+        "intv": "[-f frames] [-k script] <file.int|file.rom>: a Mattel Intellivision cartridge on the TV (176 x 208, "
+                "704 x 624; exec.bin + grom.bin in intv/ or built-in EXEC/GROM) with AY-3-8914 sound",
+        "psx": "[-f frames] [-k script] <file.exe|file.cue|file.iso>: a Sony PlayStation 1 program or CD-ROM on the TV "
+               "(R3000A + GTE 3D, GPU 15/24bpp, MDEC, streaming .cue/.bin & .iso, scph1001.bin in psx/ or built-in BIOS) "
+               "with 24-voice SPU XA-ADPCM sound and 128 KB Memory Card (.sav)",
+        "cps": "[-f frames] [-k script] <file.cps|file.zip>: a Capcom CPS-1 / CPS-1.5 / CPS-2 arcade game on the TV "
+               "(384 x 224 three times as large; 10/12/16 MHz 68000 + Z80, Feistel .key & Kabuki decryption, 3 scroll "
+               "layers + rowscroll + Z-priority sprites) with YM2151 + OKIM6295 / 16-voice QSound DSP sound and 93C46 "
+               "EEPROM (.sav)",
+        "atarist": "[-f frames] [-k script] [file.st|file.msa|file.prg]: an Atari 520ST / 1040STFM on the TV (320 x 200 "
+                   "x3, 640 x 200, 640 x 400; 8 MHz 68000, Shifter + STE Blitter, MC68901 MFP, IKBD, WD1772 FDC; "
+                   "etos256uk.img / tos.img in atarist/ or built-in TOS) with YM2149F sound",
+        "sys16": "[-f frames] [-k script] <file.s16|file.zip>: a Sega System 16A / 16B / OutRun-Road arcade game on the "
+                 "TV (320 x 224 three times as large; 10/12.5 MHz 68000 + Z80, 315-5195 mapper, 315-5197 tilemaps + "
+                 "zoomed sprites + road generator) with YM2151 + uPD7759 + Sega 16-ch PCM sound and 16 KB NVRAM (.sav)",
+        "atari8": "[-f frames] [-k script] [file.atr|file.xex|file.car|file.rom]: an Atari 800XL / 130XE (128 KB) on the "
+                  "TV (336 x 240 three times as large; SALLY 6502C, ANTIC modes 2..F + DLI + WSYNC, GTIA Players/Missiles "
+                  "+ modes 9/10/11, 130XE PORTB banking, POKEY 48 kHz sound, .sav disk writeback; built-in AltirraOS XL + "
+                  "BASIC or atarixl.rom / ataribas.rom in atari8/)",
+        "a5200": "[-f frames] [-k script] <file.a52|file.car>: an Atari 5200 SuperSystem cartridge on the TV (336 x 240 "
+                 "three times as large; 4K..40K mappers, ANTIC + GTIA + POKEY 48 kHz sound, analog stick + 12-key pad; "
+                 "built-in Altirra 5200 OS or 5200.rom in a5200/)",
         "rf": "the aerial input: the MxL603 tuner (I2C 0x60) and the S3811's DVB-T demodulator as dump.bin drives "
               "them -- init, tune <MHz|channel> [6|7|8], status (lock, level, quality, errors, the stream's "
               "parameters), scan, services (the multiplex's channel names), ts <s> [file] (the PIDs, or a .ts "

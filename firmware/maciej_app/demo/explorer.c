@@ -26,6 +26,12 @@
 #include "hw.h"
 #include "av.h"
 #include "md.h"
+#include "msx.h"
+#include "intv.h"
+#include "psx.h"
+#include "cps.h"
+#include "s16.h"
+#include "a8.h"
 #include "zip.h"
 
 #define CELL        12                  /* the font's cells (gfx_cell): 12 x 16 */
@@ -788,7 +794,18 @@ static player_fn player_for(const char *s, int on_disk)
     for (; s[n]; n++)
         if (s[n] == '.')
             dot = n;
-    if (dot < 0 || n - dot > 4)
+    if (dot < 0)
+        return 0;
+    if (n - dot == 6 && (s[dot + 1] | 32) == 'p' && (s[dot + 2] | 32) == 's' && (s[dot + 3] | 32) == 'e' &&
+        (s[dot + 4] | 32) == 'x' && (s[dot + 5] | 32) == 'e')
+        return psx_play;
+    if (n - dot == 7 && (s[dot + 1] | 32) == 'p' && (s[dot + 2] | 32) == 's' && s[dot + 3] == '-' &&
+        (s[dot + 4] | 32) == 'e' && (s[dot + 5] | 32) == 'x' && (s[dot + 6] | 32) == 'e')
+        return psx_play;
+    if (n - dot == 5 && (s[dot + 1] | 32) == 'c' && (s[dot + 2] | 32) == 'p' && (s[dot + 3] | 32) == 's' &&
+        (s[dot + 4] == '1' || s[dot + 4] == '2'))
+        return cps_play;
+    if (n - dot > 4)
         return 0;
     char e[4] = {0, 0, 0, 0};
     for (int i = 0; dot + 1 + i < n; i++)
@@ -802,8 +819,24 @@ static player_fn player_for(const char *s, int on_disk)
     int gz = e[0] == 'g' && e[1] == 'z' && !e[2];
     if (on_disk && (zip || adz || gz)) {
         char inner[96];
-        return archive_name(s, inner, sizeof(inner)) ? player_for(inner, 0) : 0;
+        player_fn pf = archive_name(s, inner, sizeof(inner)) ? player_for(inner, 0) : 0;
+        if (pf)
+            return pf;
+        if (zip) {
+            u32 size = 0;
+            u8 *all = (u8 *)KSEG0(MEDIA_PHYS);
+            int got = disk_read_head(s, all, MEDIA_MAX, &size);
+            if (got > 0 && size <= MEDIA_MAX && cps_is_rom(all, (u32)got, s))
+                return cps_play;
+            if (got > 0 && size <= MEDIA_MAX && s16_is_zip(all, (u32)got))
+                return s16_play;
+        }
+        return 0;
     }
+    if (e[0] == 'c' && e[1] == 'p' && e[2] == 's' && !e[3])
+        return cps_play;
+    if (e[0] == 's' && e[1] == '1' && e[2] == '6' && !e[3])
+        return s16_play;
     if (e[0] == 's' && e[1] == 'm' && e[2] == 's' && !e[3])
         return sms_play;
     if (e[0] == 'g' && e[1] == 'g' && !e[2])
@@ -813,23 +846,154 @@ static player_fn player_for(const char *s, int on_disk)
     if (e[0] == 'a' && e[1] == '2' && e[2] == '6' && !e[3])
         return a26_play;
     if ((e[0] == 's' && e[1] == 'n' && e[2] == 'a') || (e[0] == 'z' && e[1] == '8' && e[2] == '0') ||
-        (e[0] == 't' && e[1] == 'a' && e[2] == 'p') || (e[0] == 't' && e[1] == 'z' && e[2] == 'x'))
+        (e[0] == 't' && e[1] == 'a' && e[2] == 'p') || (e[0] == 't' && e[1] == 'z' && e[2] == 'x') ||
+        (e[0] == 't' && e[1] == 'r' && e[2] == 'd') || (e[0] == 's' && e[1] == 'c' && e[2] == 'l'))
         return e[3] ? 0 : zx_play;
-    if ((e[0] == 'p' && e[1] == 'r' && e[2] == 'g') || (e[0] == 't' && e[1] == '6' && e[2] == '4') ||
+    if ((e[0] == 's' && e[1] == 't' && !e[2]) ||
+        (((e[0] == 'm' && e[1] == 's' && e[2] == 'a') ||
+          (e[0] == 's' && e[1] == 't' && e[2] == 'x') ||
+          (e[0] == 't' && e[1] == 'o' && e[2] == 's')) && !e[3]))
+        return st_play;
+    if (e[0] == 'p' && e[1] == 'r' && e[2] == 'g' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 2 && head[0] == 0x60 && head[1] == 0x1A)
+                return st_play;
+        }
+        return c64_play;
+    }
+    if ((e[0] == 't' && e[1] == '6' && e[2] == '4') ||
         (e[0] == 'd' && e[1] == '6' && e[2] == '4') || (e[0] == 'p' && e[1] == '0' && e[2] == '0') ||
         (e[0] == 'c' && e[1] == 'r' && e[2] == 't'))
         return e[3] ? 0 : c64_play;
     if (e[0] == 'a' && e[1] == 'd' && e[2] == 'f' && !e[3])
         return amiga_play;
-    if (((e[0] == 'e' && e[1] == 'x' && e[2] == 'e') || (e[0] == 'c' && e[1] == 'o' && e[2] == 'm')) && !e[3])
+    if (e[0] == 'e' && e[1] == 'x' && e[2] == 'e' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 8 && psx_is_exe(head, (u32)got))
+                return psx_play;
+            if (got >= 7 && a8_is_xex(head, (u32)got))
+                return a8_play;
+        }
         return dos_play;
+    }
+    if (e[0] == 'c' && e[1] == 'o' && e[2] == 'm' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 7 && a8_is_xex(head, (u32)got))
+                return a8_play;
+        }
+        return dos_play;
+    }
+    if (((e[0] == 'a' && e[1] == 't' && e[2] == 'r') ||
+         (e[0] == 'x' && e[1] == 'e' && e[2] == 'x') ||
+         (e[0] == 'o' && e[1] == 'b' && e[2] == 'x')) && !e[3])
+        return a8_play;
+    if (e[0] == 'a' && e[1] == '5' && e[2] == '2' && !e[3])
+        return a52_play;
+    if (e[0] == 'c' && e[1] == 'a' && e[2] == 'r' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            int is_52 = 0;
+            if (got >= 16 && a8_is_car(head, (u32)got, &is_52))
+                return is_52 ? a52_play : a8_play;
+        }
+        return a8_play;
+    }
+    if (((e[0] == 'c' && e[1] == 'u' && e[2] == 'e') || (e[0] == 'i' && e[1] == 's' && e[2] == 'o') ||
+         (e[0] == 'p' && e[1] == 's' && e[2] == 'x')) && !e[3])
+        return psx_play;
     if (((e[0] == 'm' && e[1] == 'd' && !e[2]) || (e[0] == 'g' && e[1] == 'e' && e[2] == 'n') ||
          (e[0] == 's' && e[1] == 'm' && e[2] == 'd')) && !e[3])
         return md_play;
+    if (e[0] == 'p' && e[1] == 'c' && e[2] == 'e' && !e[3])
+        return pce_play;
+    if (e[0] == 'c' && e[1] == 'o' && e[2] == 'l' && !e[3])
+        return col_play;
+    if (e[0] == 'm' && e[1] == 'x' && e[2] == '1' && !e[3])
+        return msx_play;
+    if (((e[0] == 'm' && e[1] == 'x' && e[2] == '2') || (e[0] == 'd' && e[1] == 's' && e[2] == 'k')) && !e[3])
+        return msx2_play;
+    if (e[0] == 'w' && e[1] == 's' && (!e[2] || (e[2] == 'c' && !e[3])))
+        return ws_play;
+    if (e[0] == 's' && (e[1] == 'f' || e[1] == 'm') && e[2] == 'c' && !e[3])
+        return snes_play;
+    if (e[0] == 'n' && e[1] == 'e' && e[2] == 'o' && !e[3])
+        return neo_play;
+    if (e[0] == 'g' && e[1] == 'b' && e[2] == 'a' && !e[3])
+        return gba_play;
+    if (e[0] == 'a' && e[1] == '7' && e[2] == '8' && !e[3])
+        return a78_play;
+    if (e[0] == 'l' && (e[1] == 'n' || e[1] == 'y') && e[2] == 'x' && !e[3])
+        return lnx_play;
+    if (e[0] == 'v' && e[1] == 'e' && e[2] == 'c' && !e[3])
+        return vec_play;
+    if (e[0] == 'f' && e[1] == 'd' && e[2] == 's' && !e[3])
+        return fds_play;
+    if (e[0] == 'n' && e[1] == 'g' && (e[2] == 'p' || e[2] == 'c') && !e[3])
+        return ngp_play;
+    if (e[0] == 'o' && e[1] == '2' && !e[2])
+        return o2_play;
+    if (e[0] == 'i' && e[1] == 'n' && e[2] == 't' && !e[3])
+        return intv_play;
+    if (on_disk && e[0] == 'r' && e[1] == 'o' && e[2] == 'm' && !e[3]) {
+        u32 size = 0;
+        int got = disk_read_head(s, head, HEAD_BYTES, &size);
+        if (got >= 2 && ((head[0] == 0x55 && head[1] == 0xAA) || (head[0] == 0xAA && head[1] == 0x55)))
+            return col_play;
+        if (got > 0 && intv_is_rom(head, (u32)got, size))
+            return intv_play;
+        if (got > 0 && msx_is_cart(head, (u32)got, size)) {
+            const char *cwd = disk_cwd();
+            for (const char *q = cwd; *q; q++)
+                if ((q[0] | 32) == 'm' && (q[1] | 32) == 's' && (q[2] | 32) == 'x' && q[3] == '2')
+                    return msx2_play;
+            for (const char *q = s; *q; q++)
+                if ((q[0] | 32) == 'm' && (q[1] | 32) == 's' && (q[2] | 32) == 'x' && q[3] == '2')
+                    return msx2_play;
+            return msx_play;
+        }
+        /* Atari 800XL/130XE & 5200 raw .rom cartridges inside atari8/ or a5200/ (excluding system BIOS ROMs) */
+        const char *bn = s;
+        for (const char *q = s; *q; q++)
+            if (*q == '/' || *q == '\\' || *q == ':')
+                bn = q + 1;
+        int is_sys = ((bn[0] | 32) == 'a' && (bn[1] | 32) == 't' && (bn[2] | 32) == 'a' && (bn[3] | 32) == 'r' &&
+                      (bn[4] | 32) == 'i' && ((bn[5] | 32) == 'x' || (bn[5] | 32) == 'b')) ||
+                     (bn[0] == '5' && bn[1] == '2' && bn[2] == '0' && bn[3] == '0' && bn[4] == '.');
+        if (!is_sys) {
+            const char *cwd = disk_cwd();
+            for (const char *q = cwd; *q; q++) {
+                if ((q[0] | 32) == 'a' && q[1] == '5' && q[2] == '2' && q[3] == '0' && q[4] == '0')
+                    return a52_play;
+                if ((q[0] | 32) == 'a' && (q[1] | 32) == 't' && (q[2] | 32) == 'a' && (q[3] | 32) == 'r' &&
+                    (q[4] | 32) == 'i' && q[5] == '8')
+                    return a8_play;
+            }
+            for (const char *q = s; *q; q++) {
+                if ((q[0] | 32) == 'a' && q[1] == '5' && q[2] == '2' && q[3] == '0' && q[4] == '0')
+                    return a52_play;
+                if ((q[0] | 32) == 'a' && (q[1] | 32) == 't' && (q[2] | 32) == 'a' && (q[3] | 32) == 'r' &&
+                    (q[4] | 32) == 'i' && q[5] == '8')
+                    return a8_play;
+            }
+        }
+        return 0;
+    }
     if (on_disk && e[0] == 'b' && e[1] == 'i' && e[2] == 'n' && !e[3]) {
         u32 size = 0;
         int got = disk_read_head(s, head, HEAD_BYTES, &size);
-        return got > 0 && md_cartridge(head, (u32)got, size) ? md_play : 0;
+        if (got > 0 && md_cartridge(head, (u32)got, size))
+            return md_play;
+        if (got >= 16 && size >= 18u * 2352u && head[0] == 0x00 && head[1] == 0xFF && head[2] == 0xFF &&
+            head[3] == 0xFF && head[10] == 0xFF && head[11] == 0x00 && (head[15] == 1 || head[15] == 2))
+            return psx_play;
+        return 0;
     }
     return 0;
 }

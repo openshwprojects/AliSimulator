@@ -156,16 +156,16 @@ const char *zip_pick_name(const u8 *zip, u32 n, char *name, int max)
     return 0;
 }
 
-const char *zip_unpack(const u8 *zip, u32 n, const char *ext, u8 *dst, u32 cap, u32 *size, char *name, int max)
+static const char *unpack_entry(const u8 *zip, u32 n, const u8 *e, u8 *dst, u32 cap, u32 *size, char *name, int max)
 {
     const char *why;
-    *size = 0;
-    const u8 *e = pick(zip, n, ext, &why);
-    if (!e)
-        return why;
     u32 flags = le16(e + 8), method = le16(e + 10), crc = le32(e + 16), clen = le32(e + 20), ulen = le32(e + 24);
     u32 local = le32(e + 42);
     copy_name(e + 46, le16(e + 28), name, max);
+    if (!dst) {
+        *size = ulen;
+        return 0;
+    }
     if (flags & 1)
         return "an encrypted zip member (not read)";
     if (ulen > cap)
@@ -195,6 +195,47 @@ const char *zip_unpack(const u8 *zip, u32 n, const char *ext, u8 *dst, u32 cap, 
         return "a damaged zip member (its CRC-32)";
     *size = made;
     return 0;
+}
+
+const char *zip_unpack(const u8 *zip, u32 n, const char *ext, u8 *dst, u32 cap, u32 *size, char *name, int max)
+{
+    const char *why;
+    *size = 0;
+    const u8 *e = pick(zip, n, ext, &why);
+    if (!e)
+        return why;
+    return unpack_entry(zip, n, e, dst, cap, size, name, max);
+}
+
+u32 zip_count(const u8 *zip, u32 n)
+{
+    u32 at = 0, count = 0;
+    return central(zip, n, &at, &count) ? 0 : count;
+}
+
+const char *zip_unpack_at(const u8 *zip, u32 n, u32 index, u8 *dst, u32 cap, u32 *size, char *name, int max)
+{
+    u32 at = 0, count = 0;
+    *size = 0;
+    if (max > 0)
+        name[0] = 0;
+    const char *why = central(zip, n, &at, &count);
+    if (why)
+        return why;
+    if (index >= count)
+        return "zip member index out of range";
+    for (u32 k = 0; k < index; k++) {
+        if (at + 46 > n || le32(zip + at) != 0x02014B50u)
+            return "a damaged zip directory";
+        const u8 *e = zip + at;
+        at += 46 + le16(e + 28) + le16(e + 30) + le16(e + 32);
+    }
+    if (at + 46 > n || le32(zip + at) != 0x02014B50u)
+        return "a damaged zip directory";
+    const u8 *e = zip + at;
+    if (at + 46 + le16(e + 28) > n)
+        return "a damaged zip directory";
+    return unpack_entry(zip, n, e, dst, cap, size, name, max);
 }
 
 int gz_is(const u8 *p, u32 n)

@@ -46,4 +46,10 @@ void nes_test_pc(u16 pc);
 void nes_test_step(u16 *pc, u8 *a, u8 *x, u8 *y, u8 *p, u8 *s, u32 *cycles);
 u8 nes_test_peek(u16 address);
 
+/* Famicom Disk System (.fds): shares the 6502, PPU and 48 kHz mixer with nes.c */
+#define FDS_PAD_FLIP 0x0400                     /* PAD_L ('Q' / PAGE-): eject, flip to next disk side, re-insert */
+void fds_set_bios(const u8 *rom, u32 size);     /* optional 8 KB disksys.rom (0: built-in clean-room BIOS) */
+const char *fds_load(u8 *image, u32 size);      /* a .fds disk image (with or without 16-byte FDS header) */
+void fds_frame(u16 pad, u8 *picture);           /* one 60.1 Hz frame; picture: NES_W x NES_H entries of nes_rgb */
+
 #endif

@@ -18,6 +18,10 @@ const char *zip_unpack(const u8 *zip, u32 n, const char *ext, u8 *dst, u32 cap, 
 const char *zip_first_name(const u8 *head, u32 n, char *name, int max);
 /* the name of the member zip_unpack would pick, from the whole archive (0: none) */
 const char *zip_pick_name(const u8 *zip, u32 n, char *name, int max);
+/* multi-member archives (arcade ROM sets): member count (0: not a valid zip), and member `index` unpacked into
+   dst (or, with dst == 0, only its *size and name inspected): 0, or why not */
+u32 zip_count(const u8 *zip, u32 n);
+const char *zip_unpack_at(const u8 *zip, u32 n, u32 index, u8 *dst, u32 cap, u32 *size, char *name, int max);
 
 /* a gzip file (.gz; the Amiga's .adz is one): its header ("\x1F\x8B", deflate) */
 int gz_is(const u8 *p, u32 n);

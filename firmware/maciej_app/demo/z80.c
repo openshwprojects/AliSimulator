@@ -82,7 +82,7 @@ static inline u8 fetch(struct z80 *c)
     cont(c, a);
     T += 4;
     c->r++;
-    const u8 *p = c->rd[a >> 10];
+    const u8 *p = c->op[a >> 10] ? c->op[a >> 10] : c->rd[a >> 10];
     return p ? p[a & 0x3FF] : c->read(c, a);
 }
 
@@ -891,5 +891,7 @@ void z80_init(struct z80 *c)
     c->cycles = 0;
     c->trap = -1;
     c->cont_n = 0;
+    for (int i = 0; i < 64; i++)
+        c->op[i] = 0;
     z80_reset(c);
 }

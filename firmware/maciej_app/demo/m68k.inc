@@ -50,6 +50,9 @@ static struct m68k {
     u32 stopped;                        /* STOP: waiting for an interrupt */
     u32 fault, fault_write;             /* an address error in this instruction: the address | 1, read or write */
     u32 fault_pc;
+#ifdef M68K_BUS_ERROR
+    u32 bus_err, bus_addr, bus_write;
+#endif
 } m;
 
 static u8 *rmap[256], *wmap[256];       /* each 64 KB page's memory (0: the chips, through io_read / io_write) */
@@ -116,7 +119,11 @@ static void wl(u32 a, u32 v)
 
 INLINE u32 fetch(void)
 {
+#ifdef M68K_FETCH
+    u32 v = M68K_FETCH(m.pc);
+#else
     u32 v = rw(m.pc);
+#endif
     m.pc += 2;
     return v;
 }
@@ -248,6 +255,39 @@ static void address_error(void)
     check_pending();
 }
 
+#ifdef M68K_BUS_ERROR
+static void m68k_bus_error(u32 a, int write)
+{
+    if (!m.bus_err) {
+        m.bus_err = 1;
+        m.bus_addr = a;
+        m.bus_write = (u32)write;
+    }
+}
+
+static void bus_error(void)
+{
+    u32 a = m.bus_addr, w = m.bus_write, was_s = m.s;
+    m.bus_err = 0;
+    u32 sr = get_sr();
+    supervisor();
+    m.r[15] -= 4;
+    wl(m.r[15], m.pc);
+    m.r[15] -= 2;
+    ww(m.r[15], sr);
+    m.r[15] -= 2;
+    ww(m.r[15], m.op);
+    m.r[15] -= 4;
+    wl(m.r[15], a);
+    m.r[15] -= 2;
+    ww(m.r[15], (w ? 0 : 0x10) | (was_s ? 5 : 1));
+    m.pc = rl(2 * 4);
+    m.bus_err = 0;
+    m.clock += 50;
+    check_pending();
+}
+#endif
+
 #define OP   m.op
 #define RX   ((m.op >> 9) & 7)
 #define RY   (m.op & 7)
@@ -355,6 +395,10 @@ INLINE u32 src(int s)                    /* the operand of the low six bits */
         return m.r[reg] & msk(s);
     if (mode == 1)
         return m.r[8 + reg] & msk(s);
+    if (mode == 7 && reg == 4) {
+        m.clock += s == 4 ? 8 : 4;
+        return (s == 4 ? fetch32() : fetch()) & msk(s);
+    }
     return rd(ea(mode, reg, s), s);
 }
 
@@ -1588,6 +1632,9 @@ static void cpu_reset(void)
     m.other_sp = 0;
     set_ccr(0);
     m.stopped = 0, m.fault = 0, m.ipl = 0;
+#ifdef M68K_BUS_ERROR
+    m.bus_err = 0;
+#endif
     m.r[15] = rl(0);
     m.pc = rl(4);
     check_pending();
@@ -1604,7 +1651,12 @@ static void take_pending(void)
         wl(m.r[15], m.pc);
         m.r[15] -= 2;
         ww(m.r[15], sr);
-        m.pc = rl((24 + level) * 4);
+#ifdef M68K_INT_VEC
+        u32 vec = M68K_INT_VEC(level);
+#else
+        u32 vec = 24 + level;
+#endif
+        m.pc = rl(vec * 4);
         m.stopped = 0;
         m.clock += 44;
         M68K_IACK(level);
@@ -1629,6 +1681,12 @@ static void cpu_run(s32 until)
             handler[optab[m.op]]();
             if (m.fault)
                 address_error();
+#ifdef M68K_BUS_ERROR
+            else if (m.bus_err) {
+                bus_error();
+                continue;
+            }
+#endif
             exception(9, m.pc);
             continue;
         }
@@ -1640,5 +1698,9 @@ static void cpu_run(s32 until)
         handler[optab[m.op]]();
         if (m.fault)
             address_error();
+#ifdef M68K_BUS_ERROR
+        else if (m.bus_err)
+            bus_error();
+#endif
     }
 }

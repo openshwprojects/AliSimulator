@@ -497,21 +497,46 @@ int kbd_held(u8 usage);                 /* is the key with that HID usage held n
 int kbd_held_all(u8 *usages, int max);  /* every key held now as HID usages, modifiers as 0xE0..0xE7: how many */
 void kbd_show_status(void);
 
-/* play.c: the NES and Game Boy players (nes.c, gb.c are the machines) */
+/* play.c: the game players (only one runs at a time: EMU_RAM_PHYS..SND_I2S_PHYS is theirs) */
 #define MEDIA_PHYS       0x02400000u      /* a cartridge file, a picture file: read whole into RAM (cached) */
 #define MEDIA_MAX        0x01000000u      /* 16 MB */
+#define EMU_RAM_PHYS     0x03400000u      /* a machine's own RAM / VRAM / tables (cached KSEG0, 9.5 MB) */
+#define EMU_RAM_SIZE     0x00980000u
+#define PICTURE_PHYS     0x03D80000u      /* play.c's picture and previous-frame buffers (1.5 MB, up to 0x03F00000) */
 int nes_play(const char *path, u32 frames, const char *script);    /* 'nes': 0, -1 it could not start */
 int gb_play(const char *path, u32 frames, const char *script);     /* 'gb': the same for a Game Boy game */
 int sms_play(const char *path, u32 frames, const char *script);    /* 'sms': a Master System game */
 int gg_play(const char *path, u32 frames, const char *script);     /* 'gg': a Game Gear game */
 int sg_play(const char *path, u32 frames, const char *script);     /* 'sg': an SG-1000 / SC-3000 game */
-int zx_play(const char *path, u32 frames, const char *script);     /* 'zx': a ZX Spectrum program ("": BASIC) */
+int zx_play(const char *path, u32 frames, const char *script);     /* 'zx': a ZX Spectrum 48K/128K/TR-DOS program ("": BASIC) */
 int a26_play(const char *path, u32 frames, const char *script);    /* 'a26': an Atari 2600 game */
 int c64_play(const char *path, u32 frames, const char *script);    /* 'c64': a C64 program ("": BASIC) */
 int amiga_play(const char *path, u32 frames, const char *script);  /* 'amiga': an .adf ("": no disk) */
 int dos_play(const char *path, u32 frames, const char *script);    /* 'dos': a DOS program (.exe, .com) */
 int md_play(const char *path, u32 frames, const char *script);     /* 'megadrive': a Mega Drive / Genesis game */
 void md_play_region(int region);        /* the console its next game runs on: 'J', 'U', 'E', 0 the header's */
+int pce_play(const char *path, u32 frames, const char *script);    /* 'pce': a PC Engine / TurboGrafx-16 HuCard */
+int col_play(const char *path, u32 frames, const char *script);    /* 'coleco': a ColecoVision cartridge (.col) */
+int msx_play(const char *path, u32 frames, const char *script);    /* 'msx': an MSX1 ROM cartridge (.rom, .mx1) */
+int msx2_play(const char *path, u32 frames, const char *script);   /* 'msx2': an MSX2 cartridge or disk (.mx2, .dsk, .rom) */
+int ws_play(const char *path, u32 frames, const char *script);     /* 'ws': a WonderSwan / Color game (.ws, .wsc) */
+int snes_play(const char *path, u32 frames, const char *script);   /* 'snes': a Super NES game (.sfc, .smc) */
+int neo_play(const char *path, u32 frames, const char *script);    /* 'neogeo': a Neo Geo game (.neo) */
+int gba_play(const char *path, u32 frames, const char *script);    /* 'gba': a Game Boy Advance game (.gba) */
+int a78_play(const char *path, u32 frames, const char *script);    /* 'a78': an Atari 7800 game (.a78) */
+int lnx_play(const char *path, u32 frames, const char *script);    /* 'lynx': an Atari Lynx game (.lnx) */
+int vec_play(const char *path, u32 frames, const char *script);    /* 'vectrex': a Vectrex game (.vec, "": Mine Storm) */
+int fds_play(const char *path, u32 frames, const char *script);    /* 'fds': a Famicom Disk System disk (.fds) */
+int ngp_play(const char *path, u32 frames, const char *script);    /* 'ngp': a Neo Geo Pocket Color game (.ngp, .ngc) */
+int o2_play(const char *path, u32 frames, const char *script);     /* 'odyssey2': an Odyssey2 / Videopac game (.o2) */
+int intv_play(const char *path, u32 frames, const char *script);   /* 'intv': an Intellivision game (.int) */
+int psx_play(const char *path, u32 frames, const char *script);    /* 'psx': a PlayStation 1 program / disc (.exe, .cue) */
+void psx_play_region(int region);       /* 'J', 'U' (60 Hz NTSC), 'E' (50 Hz PAL), 0 auto */
+int cps_play(const char *path, u32 frames, const char *script);    /* 'cps': a Capcom CPS-1 / CPS-2 arcade game (.cps, .zip) */
+int st_play(const char *path, u32 frames, const char *script);     /* 'atarist': an Atari ST disk or program (.st, .msa, .prg, .tos) */
+int s16_play(const char *path, u32 frames, const char *script);    /* 'sys16': a Sega System 16A / 16B / OutRun arcade game (.s16, .zip) */
+int a8_play(const char *path, u32 frames, const char *script);     /* 'atari8': an Atari 800XL / 130XE disk, .xex or cart ("": BASIC) */
+int a52_play(const char *path, u32 frames, const char *script);    /* 'a5200': an Atari 5200 SuperSystem cartridge (.a52, .car) */
 
 /* view.c: the picture viewer (image.c decodes JPEG, PNG, GIF, BMP) */
 #define IMAGE_WORK_PHYS  0x06900000u      /* the picture as shown, and the decoder's memory (a progressive JPEG's */

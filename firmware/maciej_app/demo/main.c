@@ -501,6 +501,27 @@ static void cmd_c64(int argc, char **argv);
 static void cmd_amiga(int argc, char **argv);
 static void cmd_dos(int argc, char **argv);
 static void cmd_megadrive(int argc, char **argv);
+static void cmd_pce(int argc, char **argv);
+static void cmd_coleco(int argc, char **argv);
+static void cmd_msx(int argc, char **argv);
+static void cmd_msx2(int argc, char **argv);
+static void cmd_ws(int argc, char **argv);
+static void cmd_snes(int argc, char **argv);
+static void cmd_neogeo(int argc, char **argv);
+static void cmd_gba(int argc, char **argv);
+static void cmd_a78(int argc, char **argv);
+static void cmd_lynx(int argc, char **argv);
+static void cmd_vectrex(int argc, char **argv);
+static void cmd_fds(int argc, char **argv);
+static void cmd_ngp(int argc, char **argv);
+static void cmd_odyssey2(int argc, char **argv);
+static void cmd_intv(int argc, char **argv);
+static void cmd_psx(int argc, char **argv);
+static void cmd_cps(int argc, char **argv);
+static void cmd_atarist(int argc, char **argv);
+static void cmd_sys16(int argc, char **argv);
+static void cmd_atari8(int argc, char **argv);
+static void cmd_a5200(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_rf(int argc, char **argv);
 static void cmd_history(int argc, char **argv);
@@ -602,8 +623,8 @@ static const struct command commands[] = {
     {"console", "", "the console on the TV again", cmd_console},
     {"explorer", "[n:][path]", "a file explorer on the TV, in the current directory (cd follows it, it follows cd; "
      "with a path: cd there first): USB keyboard Up/Down/PgUp/PgDn/Home/End, Enter opens (a picture: the viewer, "
-     "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .a26, .prg, .t64, .d64, .crt, "
-     ".adf, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, any of them in a .zip or a .gz (.adz): the game), "
+     "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .trd, .scl, .a26, .prg, .t64, .d64, .crt, "
+     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
      "Backspace goes up, "
      "'/' or Tab types a path, Esc: the console again; the mouse clicks, double-clicks, scrolls; on FAT: F2 "
      "renames, F7 makes a directory, Delete / F8 deletes (y), F5 / F6 mark a file to copy / move and Insert "
@@ -636,11 +657,11 @@ static const struct command commands[] = {
      "Z = button 1, Enter = Start; the options of nes", cmd_gg},
     {"sg", "[-f frames] [-k script] <file>", "play a Sega SG-1000 / SC-3000 cartridge file (.sg, .sc) on the TV: "
      "X = button 2, Z = button 1, Enter = Pause; the other keys and the options of nes", cmd_sg},
-    {"zx", "[-f frames] [-k script] [file]", "a ZX Spectrum 48K on the TV: a snapshot (.sna, .z80) or a tape "
-     "(.tap, .tzx: loaded by itself with LOAD \"\"); no file: BASIC.  Its ROM is a file 48.rom beside the "
-     "program, in zx/ or at the top of its disk.  The USB keyboard is the Spectrum's (Shift = CAPS SHIFT, "
-     "Ctrl / Alt = SYMBOL SHIFT, Backspace = DELETE), the arrows also a Kempston joystick (fire: the remote's "
-     "OK); typed on the UART / telnet, characters are typed on it; Esc ends", cmd_zx},
+    {"zx", "[-f frames] [-k script] [file]", "a ZX Spectrum 48K / 128K + BetaDisk 128 on the TV: a snapshot (.sna, "
+     ".z80), a tape (.tap, .tzx) or a TR-DOS floppy (.trd, .scl) with 48 kHz beeper + AY-3-8912 sound; no file: BASIC. "
+     "Optional 48.rom, 128.rom and trdos.rom in zx/ or beside the program (else built-in clean-room loader). The USB "
+     "keyboard is the Spectrum's (Shift = CAPS SHIFT, Ctrl / Alt = SYMBOL SHIFT, Backspace = DELETE), the arrows also a "
+     "Kempston joystick (fire: the remote's OK); typed on the UART / telnet, characters are typed on it; Esc ends", cmd_zx},
     {"a26", "[-f frames] [-k script] <file>", "play an Atari 2600 cartridge file (.a26, .bin: 2K, 4K, F8, F6, F4, "
      "their Superchip RAM, FE, E0, 3F, E7, FA) on the TV: arrows or W A S D, X or Z = fire, Enter = the "
      "console's Reset, Tab = Select; the options of nes", cmd_a26},
@@ -665,6 +686,83 @@ static const struct command commands[] = {
      ".gen, .bin; .smd and copier headers taken apart) on the TV with its sound, at its console's rate (-r: a "
      "Japanese, American or European one; else the header's region): X = B, Z = A, Tab / Space = C, Enter = Start, "
      "the remote's OK / 0 / INFO / MENU too; cartridge RAM kept in a .sav file; the options of nes", cmd_megadrive},
+    {"pce", "[-f frames] [-k script] <file>", "play a PC Engine / TurboGrafx-16 HuCard (.pce) on the TV with its "
+     "6-channel PSG sound: arrows or W A S D, X = I, Z = II, Enter = Run, Tab = Select; 2 KB backup RAM kept in a "
+     ".sav file; the options of nes", cmd_pce},
+    {"coleco", "[-f frames] [-k script] <file>", "play a ColecoVision cartridge (.col, .rom; MegaCart and Super Game "
+     "Module too) on the TV with its SN76489 sound (coleco.rom in col/ if present, else built-in BIOS): X = fire 1, "
+     "Z = fire 2, Enter = keypad 1, Tab = *, C = #, 0..9 on USB keyboard; the options of nes", cmd_coleco},
+    {"msx", "[-f frames] [-k script] <file>", "play an MSX1 ROM cartridge (.rom, .mx1: plain, Konami, Konami SCC, "
+     "ASCII8, ASCII16) on the TV with AY-3-8910 + SCC sound (msx.rom or cbios_main_msx1.rom in msx/ if present, "
+     "else built-in BIOS): arrows or USB keyboard, X = Space / trigger A, Z = trigger B; the options of nes", cmd_msx},
+    {"msx2", "[-f frames] [-k script] <file>", "play an MSX2 cartridge or floppy disk (.mx2, .dsk, .rom: V9938 SCREEN "
+     "0..8, 128 KB VRAM, hardware blitter, 256 KB Mapper, RP5C01 RTC) on the TV with AY-3-8910 + SCC + YM2413 FM sound "
+     "(msx2.rom/cbios_main_msx2.rom and msx2ext.rom/cbios_sub.rom in msx2/ if present, else built-in MSX2 BIOS): "
+     "arrows or USB keyboard, X = Space / trigger A, Z = trigger B; the options of nes", cmd_msx2},
+    {"ws", "[-f frames] [-k script] <file>", "play a Bandai WonderSwan or WonderSwan Color cartridge (.ws, .wsc; "
+     "horizontal and rotated vertical games) on the TV with its 4-channel sound: arrows or W A S D, X = A, Z = B, "
+     "Enter = Start, C/V/Q/E = Y1..Y4; cartridge SRAM / EEPROM kept in a .sav file; the options of nes", cmd_ws},
+    {"snes", "[-f frames] [-k script] <file>", "play a Super Nintendo / Super Famicom cartridge (.sfc, .smc: LoROM, "
+     "HiROM, ExHiROM, Modes 0-7) on the TV with SPC700 BRR sound: arrows or W A S D, X = A, Z = B, C = X, V = Y, "
+     "Q = L, E = R, Enter = Start, Tab = Select; SRAM kept in a .sav file; the options of nes", cmd_snes},
+    {"neogeo", "[-f frames] [-k script] <file>", "play an SNK Neo Geo AES / MVS cartridge (.neo) on the TV with its "
+     "Z80 + YM2610 FM/SSG/ADPCM sound (uni-bios.rom or neogeo.rom in neogeo/ if present, else built-in BIOS): "
+     "arrows or W A S D, X = A, Z = B, C = C, V = D, Enter = Start, Tab = Select; backup RAM kept in a .sav file; "
+     "the options of nes", cmd_neogeo},
+    {"gba", "[-f frames] [-k script] <file>", "play a Game Boy Advance cartridge (.gba; inside a .zip or .gz too) on "
+     "the TV with DirectSound + PSG sound (gba_bios.bin in gba/ if present, else built-in BIOS): arrows or W A S D, "
+     "X = A, Z = B, Q = L, E = R, Enter = Start, Tab = Select; SRAM / Flash / EEPROM kept in a .sav file; the options "
+     "of nes", cmd_gba},
+    {"a78", "[-f frames] [-k script] <file>", "play an Atari 7800 ProSystem cartridge (.a78: Linear, SuperGame, "
+     "Activision, Absolute) on the TV with TIA + POKEY sound: arrows or W A S D, X = fire 1, Z = fire 2, Enter = "
+     "Pause, Tab = Select, C = Reset; High-Score SRAM kept in a .sav file; the options of nes", cmd_a78},
+    {"lynx", "[-f frames] [-k script] <file>", "play an Atari Lynx cartridge (.lnx, .lyx, BLL .o; horizontal and "
+     "rotated vertical games) on the TV with 4-channel Mikey sound (lynxboot.img in lynx/ if present, else built-in "
+     "loader): arrows or W A S D, X = A, Z = B, Q = Option 1, Tab = Option 2, Enter = Pause; the options of nes",
+     cmd_lynx},
+    {"vectrex", "[-f frames] [-k script] [file]", "a GCE Vectrex vector console on the TV: a cartridge (.vec), or no "
+     "file for built-in Mine Storm (with vectrex.rom in vec/) / Vector Storm (with the built-in BIOS), with AY-3-8912 "
+     "sound: arrows or W A S D, X = button 4, Z = button 3, Tab = button 2, Enter = button 1; the options of nes",
+     cmd_vectrex},
+    {"fds", "[-f frames] [-k script] <file>", "play a Famicom Disk System disk image (.fds: 1-8 sides) on the TV with "
+     "its RP2C33 wavetable + FM sound (disksys.rom in fds/ if present, else built-in BIOS): arrows or W A S D, X = A, "
+     "Z = B, Enter = Start, Tab = Select, Q = flip disk side; disk writes kept in a .sav file; the options of nes",
+     cmd_fds},
+    {"ngp", "[-f frames] [-k script] <file>", "play a Neo Geo Pocket or Neo Geo Pocket Color cartridge (.ngp, .ngc) on "
+     "the TV with its Z80 + T6W28 + DAC sound (ngp_bios.rom in ngp/ if present, else built-in BIOS): arrows or W A S D, "
+     "X = A, Z = B, Enter or Tab = Option; Flash saves kept in a .sav file; the options of nes", cmd_ngp},
+    {"odyssey2", "[-f frames] [-k script] <file>", "play a Magnavox Odyssey2 / Philips Videopac G7000 cartridge (.o2, "
+     ".bin: 2-16 KB) on the TV with its Intel 8244 sound (o2rom.bin in o2/ if present, else built-in BIOS): arrows or "
+     "W A S D, X = Action, Z = Space, Enter = 1, Tab = 2, 0..9 on USB keyboard; the options of nes", cmd_odyssey2},
+    {"intv", "[-f frames] [-k script] <file>", "play a Mattel Intellivision cartridge (.int, Intellicart .rom, .bin) on "
+     "the TV with its AY-3-8914 sound (exec.bin and grom.bin in intv/ if present, else built-in EXEC and GROM): arrows "
+     "or W A S D, X/Z/C = side buttons, Enter = Enter / 1, Tab = Clear, 0..9 on USB keyboard; the options of nes",
+     cmd_intv},
+    {"psx", "[-r j|u|e] [-f frames] [-k script] <file>", "play a Sony PlayStation 1 program or disc (.exe, .cue, .iso, .bin) on the "
+     "TV with its R3000A + GTE 3D geometry, MDEC video and 24-voice SPU XA-ADPCM sound (scph1001.bin in psx/ if present, "
+     "else built-in BIOS; -r u/j forces 60 Hz NTSC, R toggles 50/60 Hz): arrows or W A S D, X = Circle, Z = Cross, C = Triangle, V = Square, Q = L1, E = R1, Enter = "
+     "Start, Tab = Select; 128 KB Memory Card kept in a .sav file; the options of nes", cmd_psx},
+    {"cps", "[-f frames] [-k script] <file>", "play a Capcom CPS-1 / CPS-1.5 / CPS-2 arcade game (.cps, .cps1, .cps2, or "
+     "MAME .zip romset) on the TV with its 68000 + Z80 and YM2151 + OKIM6295 / 16-voice QSound DSP sound: arrows or "
+     "W A S D, X/Z/C = LP/MP/HP, V/Q/E = LK/MK/HK, Enter = Start, Tab = Coin; 93C46 EEPROM kept in a .sav file; the "
+     "options of nes", cmd_cps},
+    {"atarist", "[-f frames] [-k script] [file]", "an Atari 520ST / 1040STFM on the TV: a floppy image (.st, .msa) or "
+     "GEMDOS program (.prg, .tos), or no file for desktop, with 8 MHz 68000, Shifter + STE Blitter, MFP, IKBD, WD1772 "
+     "FDC and YM2149F sound (tos.img / etos256uk.img / etos192uk.img in atarist/ if present, else built-in TOS): "
+     "the USB keyboard is the Atari ST's, arrows = joystick 1 (fire: right Ctrl, remote OK); Esc ends", cmd_atarist},
+    {"sys16", "[-f frames] [-k script] <file>", "play a Sega System 16A / 16B / OutRun-Road arcade game (.s16 or MAME "
+     ".zip romset) on the TV with its 10/12.5 MHz 68000 + Z80, 315-5195 mapper, 315-5197 tilemaps + zoomed sprites + "
+     "road generator, and YM2151 + uPD7759 + Sega 16-ch PCM sound: arrows or W A S D, X/Z/C = buttons 1..3, Enter = "
+     "Start, Tab = Coin; 16 KB NVRAM kept in a .sav file; the options of nes", cmd_sys16},
+    {"atari8", "[-f frames] [-k script] [file]", "an Atari 800XL / 130XE (128 KB) on the TV: a floppy image (.atr, "
+     "writes kept in .sav), binary program (.xex, .obx, .com) or cartridge (.car, .rom), or no file for 8K BASIC, with "
+     "ANTIC + GTIA + POKEY 48 kHz sound (built-in AltirraOS XL + BASIC, or atarixl.rom / ataribas.rom in atari8/): "
+     "the USB keyboard is the Atari's (F1/F2 = START, F3 = SELECT, F4 = OPTION), arrows = joystick 1 (fire: right Ctrl, "
+     "remote OK); Esc ends", cmd_atari8},
+    {"a5200", "[-f frames] [-k script] <file>", "play an Atari 5200 SuperSystem cartridge (.a52, .car, .bin: 4K..40K) on "
+     "the TV with its ANTIC + GTIA + POKEY 48 kHz sound (5200.rom in a5200/ if present, else built-in Altirra 5200 OS): "
+     "arrows or W A S D (analog stick), X = Bottom Fire, Z = Top Fire, Enter = Start, C = Pause, Tab = Reset, 0..9 on "
+     "USB keyboard; the options of nes", cmd_a5200},
     {"rf", "<init|tune|status|scan|services|ts|spectrum|live|...>", "the aerial input (DVB-T): init the MxL603 tuner and the "
      "chip's demodulator, tune <MHz|channel> [6|7|8], status (lock, level, quality), scan [vhf|all|<from> <to>], "
      "services (the multiplex's channel names), ts <s> [file] [-p pids] (the stream's PIDs, or recorded to a .ts "
@@ -1563,6 +1661,170 @@ static void cmd_megadrive(int argc, char **argv)
 static void cmd_a26(int argc, char **argv)
 {
     cmd_game(argc, argv, a26_play);
+}
+
+static void cmd_pce(int argc, char **argv)
+{
+    cmd_game(argc, argv, pce_play);
+}
+
+static void cmd_coleco(int argc, char **argv)
+{
+    cmd_game(argc, argv, col_play);
+}
+
+static void cmd_msx(int argc, char **argv)
+{
+    cmd_game(argc, argv, msx_play);
+}
+
+static void cmd_msx2(int argc, char **argv)
+{
+    cmd_game(argc, argv, msx2_play);
+}
+
+static void cmd_ws(int argc, char **argv)
+{
+    cmd_game(argc, argv, ws_play);
+}
+
+static void cmd_snes(int argc, char **argv)
+{
+    cmd_game(argc, argv, snes_play);
+}
+
+static void cmd_neogeo(int argc, char **argv)
+{
+    cmd_game(argc, argv, neo_play);
+}
+
+static void cmd_gba(int argc, char **argv)
+{
+    cmd_game(argc, argv, gba_play);
+}
+
+static void cmd_a78(int argc, char **argv)
+{
+    cmd_game(argc, argv, a78_play);
+}
+
+static void cmd_lynx(int argc, char **argv)
+{
+    cmd_game(argc, argv, lnx_play);
+}
+
+static void cmd_vectrex(int argc, char **argv)
+{
+    int i = 1;
+    while (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k")))
+        i += 2;
+    if (i == argc) {                    /* (no file: built-in Mine Storm / Vector Storm) */
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, vec_play);
+        return;
+    }
+    cmd_game(argc, argv, vec_play);
+}
+
+static void cmd_fds(int argc, char **argv)
+{
+    cmd_game(argc, argv, fds_play);
+}
+
+static void cmd_ngp(int argc, char **argv)
+{
+    cmd_game(argc, argv, ngp_play);
+}
+
+static void cmd_odyssey2(int argc, char **argv)
+{
+    cmd_game(argc, argv, o2_play);
+}
+
+static void cmd_intv(int argc, char **argv)
+{
+    cmd_game(argc, argv, intv_play);
+}
+
+static void cmd_psx(int argc, char **argv)
+{
+    int region = 0;
+    for (int i = 1; i + 1 < argc && argv[i][0] == '-'; i += 2) {
+        if (!str_eq(argv[i], "-r"))
+            continue;
+        char c = (char)(argv[i + 1][0] & ~32);
+        if (c != 'J' && c != 'U' && c != 'E') {
+            uprintf("-r: j (Japan, NTSC 60 Hz), u (America, NTSC 60 Hz) or e (Europe, PAL 50 Hz)\n");
+            return;
+        }
+        region = c;
+        for (int k = i; k + 2 < argc; k++)
+            argv[k] = argv[k + 2];
+        argc -= 2;
+        break;
+    }
+    psx_play_region(region);
+    cmd_game(argc, argv, psx_play);
+    psx_play_region(0);
+}
+
+static void cmd_cps(int argc, char **argv)
+{
+    cmd_game(argc, argv, cps_play);
+}
+
+static void cmd_atarist(int argc, char **argv)
+{
+    int i = 1;
+    while (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k")))
+        i += 2;
+    if (i == argc) {                    /* (no file: boot TOS / EmuTOS desktop) */
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, st_play);
+        return;
+    }
+    cmd_game(argc, argv, st_play);
+}
+
+static void cmd_sys16(int argc, char **argv)
+{
+    cmd_game(argc, argv, s16_play);
+}
+
+static void cmd_atari8(int argc, char **argv)
+{
+    int i = 1;
+    while (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k")))
+        i += 2;
+    if (i == argc) {                    /* (no file: boot 8K BASIC Ready prompt) */
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, a8_play);
+        return;
+    }
+    cmd_game(argc, argv, a8_play);
+}
+
+static void cmd_a5200(int argc, char **argv)
+{
+    cmd_game(argc, argv, a52_play);
 }
 
 static void cmd_rf(int argc, char **argv)

@@ -17,7 +17,11 @@
    the banks during the horizontal blanking gets it on the next line, as on
    the machine; changes in the middle of a line show one line late.  The
    sprite-0 hit is told at the dot where it happens. */
+#pragma GCC optimize("O2")
 #include "nes.h"
+#ifdef __mips__
+#include "hw.h"
+#endif
 
 #define FC 0x01
 #define FZ 0x02
@@ -94,8 +98,68 @@ static struct {
 } apu;
 
 static u8 ram[0x800], save_ram[0x2000], vram[0x1000], chr_ram[0x2000], pal[32], oam[256];
-static u8 *prg_map[4], *chr_map[8], *nt_map[4];
+static u8 *prg_map[4], *chr_map[8], *nt_map[4], *wram_low = save_ram;
 static u8 pads[2], pad_shift[2], strobe, save_changed;
+
+/* ---- Famicom Disk System (RP2C33 RAM Adapter + FD3206 Quick Disk Drive) ---- */
+#define FDS_MAX_SIDES  8
+#define FDS_SIDE_RAW   65500u
+#define FDS_TRACK_LEN  72704u
+#define FDS_BYTE_CYC   149u
+
+struct fds_mem {
+    u8 prg_ram[0x8000];                 /* 32 KB writable program RAM at $6000..$DFFF */
+    u8 bios[0x2000];                    /* 8 KB System BIOS ROM at $E000..$FFFF */
+    u8 tmp_side[FDS_SIDE_RAW];          /* Scratch side buffer during WriteFile / AppendFile */
+    u8 tracks[FDS_MAX_SIDES][FDS_TRACK_LEN];
+};
+
+#ifdef __mips__
+#define FDS_M ((struct fds_mem *)KSEG0(EMU_RAM_PHYS))
+#else
+static struct fds_mem fds_host_mem;
+#define FDS_M (&fds_host_mem)
+#endif
+
+static struct {
+    u8  active, using_hle_bios;
+    u8  num_sides, cur_side;
+    u8  ejected, eject_frames, prev_flip, disk_dirty;
+    const u8 *ext_bios;
+    u32 ext_bios_size;
+
+    /* $4020..$4033 Disk & Timer IRQ registers */
+    u8  io_enable, ctrl, mirror_h, ext_latch;
+    u8  read_latch, write_latch;
+    u16 irq_reload, irq_counter;
+    u8  irq_repeat, irq_enabled;
+    u8  timer_irq, disk_irq, byte_xfer, watchdog_irq;
+    u8  crc_err, end_of_head, in_block, crc_write_idx;
+    u16 crc_acc;
+    u32 head_pos, spinup_cyc, byte_cyc, dram_starve, at;
+
+    /* Built-in BIOS LoadFiles state */
+    u8  lf_boot, lf_boot_id, lf_rem, lf_loaded;
+    u16 lf_disk_id_ptr, lf_file_list_ptr;
+    u32 lf_scan_pos;
+
+    /* $4040..$4097 Wavetable + Modulation Expansion Audio */
+    u8  wave[64], mod_tbl[32], mod_pos;
+    u8  vol_reg, vol_gain, mod_reg, mod_gain, env_speed;
+    u32 vol_tmr, mod_tmr;
+    u16 carr_freq, mod_freq;
+    u8  env_halt, wave_halt, mod_halt, wave_write, master_vol;
+    signed char mod_ctr;
+    u32 wave_acc, mod_acc;
+    u32 snd_level;
+} fds;
+
+static void __attribute__((noinline)) fds_sync(u32 to);
+static u8   __attribute__((noinline)) fds_read_reg(u16 a);
+static void __attribute__((noinline)) fds_write_reg(u16 a, u8 v);
+static void __attribute__((noinline)) fds_snd_step(u32 cyc);
+static u32  __attribute__((noinline)) fds_hle_step(void);
+static void __attribute__((noinline)) fds_reset_hw(void);
 static u32 cpu_dot;                     /* where in the frame the 6502 is, in dots (at the instruction's start) */
 static u8 op_cycles;                    /* the instruction being run: its cycles (a read is in its last one) */
 static u8 vbl_seen;                     /* this frame's vertical blank flag was read before line 241 came */
@@ -305,6 +369,18 @@ static void mapper_write(u16 a, u8 v)
 
 static void mapper_start(void)
 {
+    if (fds.active) {
+        cart.irq = 0;
+        wram_low   = FDS_M->prg_ram;
+        prg_map[0] = FDS_M->prg_ram + 0x2000;
+        prg_map[1] = FDS_M->prg_ram + 0x4000;
+        prg_map[2] = FDS_M->prg_ram + 0x6000;
+        prg_map[3] = FDS_M->bios;
+        chr8(0);
+        mirror(1);
+        return;
+    }
+    wram_low = save_ram;
     cart.irq = 0;
     cart.shift = cart.count = 0;
     cart.ctrl = 0x0C;
@@ -336,7 +412,7 @@ static u8 ppu_get(u16 a)
 {
     a &= 0x3FFF;
     if (a < 0x2000)
-        return chr_map[a >> 10][a & 0x3FF];
+        return chr_map[(a >> 10) & 7][a & 0x3FF];
     if (a < 0x3F00)
         return nt_map[(a >> 10) & 3][a & 0x3FF];
     a &= 0x1F;
@@ -350,7 +426,7 @@ static void ppu_put(u16 a, u8 v)
     a &= 0x3FFF;
     if (a < 0x2000) {
         if (cart.chr_is_ram)
-            chr_map[a >> 10][a & 0x3FF] = v;
+            chr_map[(a >> 10) & 7][a & 0x3FF] = v;
     } else if (a < 0x3F00) {
         nt_map[(a >> 10) & 3][a & 0x3FF] = v;
     } else {
@@ -585,8 +661,8 @@ struct envelope {
     u8 start, divider, decay, constant, period;  /* period: the register's low 4 bits, also the constant volume */
 };
 
-static struct {                         /* the five voices (cleared by a reset) */
-    u32 count[5];                       /* cycles to each one's next step: pulse 1, pulse 2, triangle, noise, DMC */
+static struct {                         /* the voices (cleared by a reset) */
+    u32 count[6];                       /* cycles to each one's next step: pulse 1, pulse 2, triangle, noise, DMC, FDS */
     u8 out[4];                          /* what the pulses, the triangle and the noise put out now (0-15) */
     u8 volume[4];                       /* the pulses' and the noise's volume while they sound (0: silent) */
     struct envelope env[4];             /* the pulses' and the noise's (env[2], the triangle's, is unused) */
@@ -620,7 +696,8 @@ static const u16 noise_periods[16] = {4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 
 
 static void snd_mix(void)
 {
-    snd.level = (u32)pulse_mix[vc.out[0] + vc.out[1]] + tnd_mix[3 * vc.out[2] + 2 * vc.out[3] + vc.dmc_level];
+    snd.level = (u32)pulse_mix[vc.out[0] + vc.out[1]] + tnd_mix[3 * vc.out[2] + 2 * vc.out[3] + vc.dmc_level] +
+                (fds.active ? fds.snd_level : 0u);
 }
 
 /* the sample made: its average level, the filters, into the ring */
@@ -648,19 +725,20 @@ static void snd_sample(void)
     snd.cur = snd.left - (snd.length >> 10);
 }
 
-static u32 least(u32 a, u32 b, u32 c, u32 d, u32 e)
+static u32 least(u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
 {
     a = b < a ? b : a;
     a = c < a ? c : a;
     a = d < a ? d : a;
-    return e < a ? e : a;
+    a = e < a ? e : a;
+    return f < a ? f : a;
 }
 
 /* n cycles of sound: a turn to the next sample's end or the next voice step, whichever comes first */
 static void snd_run(u32 n)
 {
-    u32 c0 = vc.count[0], c1 = vc.count[1], c2 = vc.count[2], c3 = vc.count[3], c4 = vc.count[4];
-    u32 next = least(c0, c1, c2, c3, c4), gone = 0;    /* the next step; the cycles gone since c0-c4 were right */
+    u32 c0 = vc.count[0], c1 = vc.count[1], c2 = vc.count[2], c3 = vc.count[3], c4 = vc.count[4], c5 = vc.count[5];
+    u32 next = least(c0, c1, c2, c3, c4, c5), gone = 0; /* the next step; the cycles gone since c0-c5 were right */
     u32 acc = snd.acc, left = snd.left, level = snd.level;
     while (n) {
         u32 d = left < next ? left : next;
@@ -677,6 +755,7 @@ static void snd_run(u32 n)
             c2 -= gone;
             c3 -= gone;
             c4 -= gone;
+            c5 -= gone;
             gone = 0;
             if (!c0) {
                 vc.seq[0] = (vc.seq[0] + 1) & 7;
@@ -721,9 +800,13 @@ static void snd_run(u32 n)
                     }
                 }
             }
+            if (!c5) {
+                fds_snd_step(8);
+                c5 = (!fds.active || fds.wave_halt || fds.carr_freq == 0) ? IDLE : 8u;
+            }
             snd_mix();
             level = snd.level;
-            next = least(c0, c1, c2, c3, c4);
+            next = least(c0, c1, c2, c3, c4, c5);
         }
         if (!left) {
             snd.acc = acc;
@@ -737,6 +820,7 @@ static void snd_run(u32 n)
     vc.count[2] = c2 - gone;
     vc.count[3] = c3 - gone;
     vc.count[4] = c4 - gone;
+    vc.count[5] = c5 - gone;
     snd.acc = acc;
     snd.left = left;
 }
@@ -786,6 +870,7 @@ static void snd_refresh(void)
     }
     if (!vc.dmc_left)
         vc.count[4] = IDLE;
+    vc.count[5] = (!fds.active || fds.wave_halt || fds.carr_freq == 0) ? IDLE : (vc.count[5] > 8u ? 8u : vc.count[5]);
     snd_mix();
 }
 
@@ -901,7 +986,7 @@ static void snd_reset(void)
 {
     for (unsigned i = 0; i < sizeof(vc); i++)
         ((u8 *)&vc)[i] = 0;
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 6; i++)
         vc.count[i] = IDLE;
     vc.lfsr = 1;
     vc.out[2] = 15;                     /* (the triangle's first step) */
@@ -1090,7 +1175,9 @@ static u8 rd(u16 a)
     if (a < 0x4000)
         return ppu_read(a & 7);
     if (a >= 0x6000)
-        return save_ram[a & 0x1FFF];
+        return wram_low[a & 0x1FFF];
+    if (fds.active && a >= 0x4020)
+        return fds_read_reg(a);
     if (a == 0x4016 || a == 0x4017) {
         int i = a & 1;
         u8 b = strobe ? (pads[i] & 1) : (pad_shift[i] & 1);
@@ -1118,18 +1205,31 @@ static void wr(u16 a, u8 v)
     } else if (a >= 0x8000) {
         if (snd.rate && vc.dmc_left)
             snd_catch(cpu.cycles);              /* (a sample playing is read from the banks as they were) */
-        mapper_write(a, v);
+        if (fds.active) {
+            if (a < 0xE000)
+                FDS_M->prg_ram[a - 0x6000] = v;
+        } else {
+            mapper_write(a, v);
+        }
     } else if (a >= 0x6000) {
-        if (save_ram[a & 0x1FFF] != v) {
+        if (fds.active) {
+            FDS_M->prg_ram[a - 0x6000] = v;
+        } else if (save_ram[a & 0x1FFF] != v) {
             save_ram[a & 0x1FFF] = v;
             save_changed = 1;
         }
+    } else if (fds.active && a >= 0x4020) {
+        fds_write_reg(a, v);
     } else if (a == 0x4014) {                   /* the sprites, 256 bytes copied from a page of memory */
         for (int i = 0; i < 256; i++)
             oam[(u8)(ppu.oam_addr + i)] = rd((u16)(v << 8 | i));
         cpu.cycles += 513;
         cpu_dot += 513 * 3;
         apu_tick(513);
+        if (fds.active) {
+            fds.dram_starve = 0;
+            fds_sync(cpu.cycles);
+        }
     } else if (a == 0x4016) {
         if (v & 1) {
             strobe = 1;
@@ -1229,13 +1329,26 @@ static u32 step(void)
         cpu.nmi_hold = 0;
     } else if (cpu.nmi) {
         cpu.nmi = 0;
+        if (fds.active)
+            fds.dram_starve = 0;
         interrupt(0xFFFA, 0);
         return 7;
     }
-    if ((cart.irq | apu.frame_irq | apu.dmc_irq) && !(cpu.p & FI)) {
+    u8 fds_irq = fds.active ? (u8)(fds.timer_irq | fds.disk_irq | fds.watchdog_irq) : 0u;
+    if ((cart.irq | apu.frame_irq | apu.dmc_irq | fds_irq) && !(cpu.p & FI)) {
+        if (fds.active)
+            fds.dram_starve = 0;
         interrupt(0xFFFE, 0);
         return 7;
     }
+    if (fds.active && fds.using_hle_bios && cpu.pc >= 0xE160) {
+        u32 hc = fds_hle_step();
+        if (hc) {
+            fds.dram_starve = 0;
+            return hc;
+        }
+    }
+    u16 pc_at = cpu.pc;
     u8 op = rd(cpu.pc++), mode = mode_of[op], v;
     u32 cycles = cycles_of[op];
     op_cycles = (u8)cycles;
@@ -1490,6 +1603,20 @@ static u32 step(void)
     }
 #undef BRANCH
 #undef MODIFY
+    if (fds.active) {
+        if ((fds.io_enable & 1u) && pc_at >= 0x6000u && pc_at < 0xE000u &&
+            (mode == IMP || mode == REL || mode == IMM) &&
+            op != 0x00u && op != 0x08u && op != 0x20u && op != 0x28u &&
+            op != 0x40u && op != 0x48u && op != 0x60u && op != 0x68u) {
+            fds.dram_starve += cycles;
+            if (fds.dram_starve >= 4160u) {
+                fds.dram_starve -= 4160u;
+                fds.watchdog_irq = 1;
+            }
+        } else if (pc_at >= 0xE000u || pc_at < 0x6000u || (ea < 0x6000u || ea >= 0xE000u)) {
+            fds.dram_starve = 0;
+        }
+    }
     return cycles;
 }
 
@@ -1502,7 +1629,11 @@ static void run_to(u32 dot)
         cpu_dot += (cpu.cycles - before) * 3;   /* (a sprite copy inside the instruction counted itself) */
         cpu_dot -= (cpu.cycles - before - c) * 3;
         apu_tick(c);
+        if (fds.active && (fds.irq_enabled || (fds.ctrl & 1u)))
+            fds_sync(cpu.cycles);
     }
+    if (fds.active)
+        fds_sync(cpu.cycles);
 }
 
 void nes_frame(u8 pad1, u8 pad2, u8 *picture)
@@ -1577,6 +1708,8 @@ void nes_reset(void)
         ((u8 *)&apu)[i] = 0;
     apu.dmc_length = 1;
     apu.next = sequence[0][0];
+    if (fds.active)
+        fds_reset_hw();
     mapper_start();
     cpu.a = cpu.x = cpu.y = 0;
     cpu.s = 0xFD;
@@ -1617,6 +1750,30 @@ static char *number(char *p, u32 v)
     return p;
 }
 
+static void init_mode_table(void)
+{
+    for (int op = 0; op < 256; op++) {
+        int col = op & 0x1F, m = IMP;
+        switch (col) {
+        case 0x00: m = (op == 0x20) ? ABS : (op >= 0x80) ? IMM : IMP; break;
+        case 0x01: case 0x03: m = IZX; break;
+        case 0x02: m = (op >= 0x80) ? IMM : IMP; break;
+        case 0x04: case 0x05: case 0x06: case 0x07: m = ZP; break;
+        case 0x09: case 0x0B: m = IMM; break;
+        case 0x0C: m = (op == 0x6C) ? IND : ABS; break;
+        case 0x0D: case 0x0E: case 0x0F: m = ABS; break;
+        case 0x10: m = REL; break;
+        case 0x11: case 0x13: m = IZY; break;
+        case 0x14: case 0x15: m = ZPX; break;
+        case 0x16: case 0x17: m = (op == 0x96 || op == 0xB6 || op == 0x97 || op == 0xB7) ? ZPY : ZPX; break;
+        case 0x19: case 0x1B: m = ABY; break;
+        case 0x1C: case 0x1D: m = ABX; break;
+        case 0x1E: case 0x1F: m = (op == 0x9E || op == 0xBE || op == 0x9F || op == 0xBF) ? ABY : ABX; break;
+        }
+        mode_of[op] = (u8)m;
+    }
+}
+
 const char *nes_load(u8 *image, u32 size)
 {
     static const struct {
@@ -1624,6 +1781,7 @@ const char *nes_load(u8 *image, u32 size)
         const char *name;
     } known[] = {{0, "NROM"}, {1, "MMC1"}, {2, "UxROM"}, {3, "CNROM"}, {4, "MMC3"}, {7, "AxROM"},
                  {11, "Color Dreams"}, {34, "BNROM"}, {66, "GxROM"}, {71, "Camerica"}};
+    fds.active = 0;
     if (size < 16 || image[0] != 'N' || image[1] != 'E' || image[2] != 'S' || image[3] != 0x1A)
         return "not a NES cartridge file (no iNES header)";
     u32 prg = image[4] * 0x4000u, chr = image[5] * 0x2000u, at = 16;
@@ -1679,27 +1837,7 @@ const char *nes_load(u8 *image, u32 size)
     for (unsigned i = 0; i < sizeof(save_ram); i++)
         save_ram[i] = 0;
     save_changed = 0;
-    /* each instruction's addressing mode, by its place in the 6502's table */
-    for (int op = 0; op < 256; op++) {
-        int col = op & 0x1F, m = IMP;
-        switch (col) {
-        case 0x00: m = (op == 0x20) ? ABS : (op >= 0x80) ? IMM : IMP; break;
-        case 0x01: case 0x03: m = IZX; break;
-        case 0x02: m = (op >= 0x80) ? IMM : IMP; break;
-        case 0x04: case 0x05: case 0x06: case 0x07: m = ZP; break;
-        case 0x09: case 0x0B: m = IMM; break;
-        case 0x0C: m = (op == 0x6C) ? IND : ABS; break;
-        case 0x0D: case 0x0E: case 0x0F: m = ABS; break;
-        case 0x10: m = REL; break;
-        case 0x11: case 0x13: m = IZY; break;
-        case 0x14: case 0x15: m = ZPX; break;
-        case 0x16: case 0x17: m = (op == 0x96 || op == 0xB6 || op == 0x97 || op == 0xB7) ? ZPY : ZPX; break;
-        case 0x19: case 0x1B: m = ABY; break;
-        case 0x1C: case 0x1D: m = ABX; break;
-        case 0x1E: case 0x1F: m = (op == 0x9E || op == 0xBE || op == 0x9F || op == 0xBF) ? ABY : ABX; break;
-        }
-        mode_of[op] = (u8)m;
-    }
+    init_mode_table();
     nes_reset();
     return 0;
 }
@@ -1711,6 +1849,11 @@ const char *nes_info(void)
 
 u8 *nes_save_ram(u32 *size, int *battery)
 {
+    if (fds.active) {
+        *size = (u32)fds.num_sides * FDS_TRACK_LEN;
+        *battery = 1;
+        return &FDS_M->tracks[0][0];
+    }
     *size = sizeof(save_ram);
     *battery = cart.battery;
     return save_ram;
@@ -1718,6 +1861,11 @@ u8 *nes_save_ram(u32 *size, int *battery)
 
 int nes_save_changed(void)
 {
+    if (fds.active) {
+        int d = fds.disk_dirty;
+        fds.disk_dirty = 0;
+        return d;
+    }
     int c = save_changed;
     save_changed = 0;
     return c;
@@ -1742,6 +1890,8 @@ void nes_test_pc(u16 pc)
 void nes_test_step(u16 *pc, u8 *a, u8 *x, u8 *y, u8 *p, u8 *s, u32 *cycles)
 {
     cpu.cycles += step();
+    if (fds.active)
+        fds_sync(cpu.cycles);
     *pc = cpu.pc;
     *a = cpu.a;
     *x = cpu.x;
@@ -1754,4 +1904,1481 @@ void nes_test_step(u16 *pc, u8 *a, u8 *x, u8 *y, u8 *p, u8 *s, u32 *cycles)
 u8 nes_test_peek(u16 address)
 {
     return address < 0x2000 ? ram[address & 0x7FF] : rd(address);
+}
+
+/* ============================================================================
+   Famicom Disk System (.fds) Implementation:
+   - Cycle-exact 16-bit Timer IRQ ($4020..$4022), $4023 gate, $4025 mirroring,
+     DRAM refresh watchdog ($4030.D1), and 149-cycle FD3206 Quick Disk R/W + CRC
+   - RP2C33 Wavetable (64x6-bit) + 32-step FM Modulation Audio ($4040..$4097)
+   - Clean-Room Built-In 8 KB FDS BIOS ($E000..$FFFF) + optional disksys.rom
+   ============================================================================ */
+
+static u16 fds_crc_step(u16 crc, u8 b)
+{
+    crc ^= b;
+    for (int i = 0; i < 8; i++)
+        crc = (crc & 1u) ? (u16)((crc >> 1) ^ 0x8408u) : (u16)(crc >> 1);
+    return crc;
+}
+
+/* Clean-room 8x7/8x8 glyphs for FDS BIOS font ($00..$09 = '0'..'9', $0A..$23 = 'A'..'Z',
+   $24 = ' ', $25 = ',', $26 = '.', $27 = ':', $28 = '-', $29 = '!') */
+static const u8 fds_font42[42][8] = {
+    {0x3C,0x66,0x6E,0x76,0x66,0x66,0x3C,0x00}, /* 00 '0' */
+    {0x18,0x38,0x18,0x18,0x18,0x18,0x7E,0x00}, /* 01 '1' */
+    {0x3C,0x66,0x06,0x1C,0x30,0x60,0x7E,0x00}, /* 02 '2' */
+    {0x3C,0x66,0x06,0x1C,0x06,0x66,0x3C,0x00}, /* 03 '3' */
+    {0x0C,0x1C,0x3C,0x6C,0x7E,0x0C,0x0C,0x00}, /* 04 '4' */
+    {0x7E,0x60,0x7C,0x06,0x06,0x66,0x3C,0x00}, /* 05 '5' */
+    {0x3C,0x60,0x7C,0x66,0x66,0x66,0x3C,0x00}, /* 06 '6' */
+    {0x7E,0x66,0x0C,0x18,0x18,0x18,0x18,0x00}, /* 07 '7' */
+    {0x3C,0x66,0x66,0x3C,0x66,0x66,0x3C,0x00}, /* 08 '8' */
+    {0x3C,0x66,0x66,0x3E,0x06,0x66,0x3C,0x00}, /* 09 '9' */
+    {0x18,0x3C,0x66,0x66,0x7E,0x66,0x66,0x00}, /* 0A 'A' */
+    {0x7C,0x66,0x66,0x7C,0x66,0x66,0x7C,0x00}, /* 0B 'B' */
+    {0x3C,0x66,0x60,0x60,0x60,0x66,0x3C,0x00}, /* 0C 'C' */
+    {0x78,0x6C,0x66,0x66,0x66,0x6C,0x78,0x00}, /* 0D 'D' */
+    {0x7E,0x60,0x60,0x7C,0x60,0x60,0x7E,0x00}, /* 0E 'E' */
+    {0x7E,0x60,0x60,0x7C,0x60,0x60,0x60,0x00}, /* 0F 'F' */
+    {0x3C,0x66,0x60,0x6E,0x66,0x66,0x3E,0x00}, /* 10 'G' */
+    {0x66,0x66,0x66,0x7E,0x66,0x66,0x66,0x00}, /* 11 'H' */
+    {0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00}, /* 12 'I' */
+    {0x1E,0x0C,0x0C,0x0C,0x6C,0x6C,0x38,0x00}, /* 13 'J' */
+    {0x66,0x6C,0x78,0x70,0x78,0x6C,0x66,0x00}, /* 14 'K' */
+    {0x60,0x60,0x60,0x60,0x60,0x60,0x7E,0x00}, /* 15 'L' */
+    {0x63,0x77,0x7F,0x6B,0x63,0x63,0x63,0x00}, /* 16 'M' */
+    {0x66,0x76,0x7E,0x7E,0x6E,0x66,0x66,0x00}, /* 17 'N' */
+    {0x3C,0x66,0x66,0x66,0x66,0x66,0x3C,0x00}, /* 18 'O' */
+    {0x7C,0x66,0x66,0x7C,0x60,0x60,0x60,0x00}, /* 19 'P' */
+    {0x3C,0x66,0x66,0x66,0x6E,0x3C,0x0E,0x00}, /* 1A 'Q' */
+    {0x7C,0x66,0x66,0x7C,0x6C,0x66,0x66,0x00}, /* 1B 'R' */
+    {0x3C,0x66,0x60,0x3C,0x06,0x66,0x3C,0x00}, /* 1C 'S' */
+    {0x7E,0x18,0x18,0x18,0x18,0x18,0x18,0x00}, /* 1D 'T' */
+    {0x66,0x66,0x66,0x66,0x66,0x66,0x3C,0x00}, /* 1E 'U' */
+    {0x66,0x66,0x66,0x66,0x66,0x3C,0x18,0x00}, /* 1F 'V' */
+    {0x63,0x63,0x63,0x6B,0x7F,0x77,0x63,0x00}, /* 20 'W' */
+    {0x66,0x66,0x3C,0x18,0x3C,0x66,0x66,0x00}, /* 21 'X' */
+    {0x66,0x66,0x66,0x3C,0x18,0x18,0x18,0x00}, /* 22 'Y' */
+    {0x7E,0x06,0x0C,0x18,0x30,0x60,0x7E,0x00}, /* 23 'Z' */
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /* 24 ' ' */
+    {0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x30}, /* 25 ',' */
+    {0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00}, /* 26 '.' */
+    {0x00,0x18,0x18,0x00,0x18,0x18,0x00,0x00}, /* 27 ':' */
+    {0x00,0x00,0x00,0x7E,0x00,0x00,0x00,0x00}, /* 28 '-' */
+    {0x18,0x18,0x18,0x18,0x18,0x00,0x18,0x00}, /* 29 '!' */
+};
+
+static void fds_load_default_chr_font(void)
+{
+    for (int i = 0; i < 0x2000; i++)
+        chr_ram[i] = 0;
+    for (int ch = 0; ch < 42; ch++) {
+        for (int r = 0; r < 8; r++) {
+            u8 b = fds_font42[ch][r];
+            /* FDS BIOS loads 1bpp font into plane 0 (plane 1 = 0 -> palette color 1!) */
+            chr_ram[0x1000 + ch * 16 + r]     = b;
+            chr_ram[0x1000 + ch * 16 + 8 + r] = 0u;
+            chr_ram[0x0000 + ch * 16 + r]     = b;
+            chr_ram[0x0000 + ch * 16 + 8 + r] = 0u;
+        }
+    }
+    /* Also populate standard ASCII '0'..'9', 'A'..'Z', '-', ':', '.', '!' in $1300..$15AF & $0300..$05AF */
+    for (int d = 0; d < 10; d++) {
+        for (int r = 0; r < 8; r++) {
+            u8 b = fds_font42[d][r];
+            chr_ram[0x1000 + (0x30 + d) * 16 + r] = chr_ram[0x0000 + (0x30 + d) * 16 + r] = b;
+        }
+    }
+    for (int l = 0; l < 26; l++) {
+        for (int r = 0; r < 8; r++) {
+            u8 b = fds_font42[0x0A + l][r];
+            chr_ram[0x1000 + (0x41 + l) * 16 + r] = chr_ram[0x0000 + (0x41 + l) * 16 + r] = b;
+            chr_ram[0x1000 + (0x61 + l) * 16 + r] = chr_ram[0x0000 + (0x61 + l) * 16 + r] = b;
+        }
+    }
+}
+
+static void fds_build_clean_bios(void)
+{
+    u8 *b = FDS_M->bios;
+    for (int i = 0; i < 0x2000; i++)
+        b[i] = 0x60u;                   /* RTS safe default across $E000..$FFFF */
+
+    /* $FC60: 1bpp font table in BIOS ROM */
+    for (int ch = 0; ch < 42; ch++)
+        for (int r = 0; r < 8; r++)
+            b[0x1C60 + ch * 8 + r] = fds_font42[ch][r];
+
+    /* $E149..$E152: Delay131 (~131 CPU cycles, preserves A/X/Y) */
+    static const u8 delay131[] = { 0x48, 0xA9, 0x16, 0x38, 0xE9, 0x01, 0xD0, 0xFC, 0x68, 0x60 };
+    for (unsigned i = 0; i < sizeof(delay131); i++) b[0x0149 + i] = delay131[i];
+
+    /* $E153..$E160: Delayms (~1790*Y cycles, preserves A/X) */
+    static const u8 delayms[] = { 0x48, 0xA9, 0xFE, 0x38, 0xEA, 0xE9, 0x01, 0xD0, 0xFB, 0x88, 0xD0, 0xF5, 0x68, 0x60 };
+    for (unsigned i = 0; i < sizeof(delayms); i++) b[0x0153 + i] = delayms[i];
+
+    /* $E18B..$E1C6: NMI hardware dispatcher ($0100 -> $DFF6/$DFF8/$DFFA or VINTWait wakeup) + $E1B2 VINTWait */
+    static const u8 nmi_vint[] = {
+        /* $E18B: */ 0x2C,0x00,0x01, 0x30,0x05, 0x50,0x0B, 0x6C,0xF6,0xDF,
+        /* $E195: */ 0x50,0x03, 0x6C,0xFA,0xDF, 0x6C,0xF8,0xDF,
+        /* $E19D: */ 0x2C,0x02,0x20, 0xA5,0xFF, 0x29,0x7F, 0x85,0xFF, 0x8D,0x00,0x20,
+        /* $E1A9: */ 0x68,0x68,0x68,0x68, 0x8D,0x00,0x01, 0x68, 0x60,
+        /* $E1B2: */ 0x48, 0xAD,0x00,0x01, 0x48, 0xA9,0x00, 0x8D,0x00,0x01,
+        /* $E1BC: */ 0xA5,0xFF, 0x09,0x80, 0x8D,0x00,0x20, 0x4C,0xC3,0xE1, 0xEA
+    };
+    for (unsigned i = 0; i < sizeof(nmi_vint); i++) b[0x018B + i] = nmi_vint[i];
+
+    /* $E1C7..$E1F7: IRQ hardware dispatcher ($0101 -> XferByte / Skip / Ack / ($DFFE)) + $E1F0 XferByte */
+    static const u8 irq_xfer[] = {
+        /* $E1C7: */ 0x2C,0x01,0x01, 0x30,0x0D, 0x50,0x19,
+        /* $E1CE: */ 0x68,0x68,0x68, 0x8D,0x24,0x40, 0xAD,0x31,0x40, 0x60, 0xEA,
+        /* $E1D9: */ 0x50,0x03, 0x6C,0xFE,0xDF,
+        /* $E1DE: */ 0x48, 0xAD,0x31,0x40, 0xCE,0x01,0x01, 0x68, 0x40,
+        /* $E1E7: */ 0x48, 0xAD,0x30,0x40, 0xAD,0x15,0x40, 0x68, 0x40,
+        /* $E1F0: */ 0x58, 0x4C,0xF1,0xE1, 0xEA,0xEA,0xEA,0x60
+    };
+    for (unsigned i = 0; i < sizeof(irq_xfer); i++) b[0x01C7 + i] = irq_xfer[i];
+
+    /* $E7A3: XferByte public entry -> JMP $E1F0 */
+    b[0x07A3] = 0x4C; b[0x07A4] = 0xF0; b[0x07A5] = 0xE1;
+
+    /* $E620..$E646: Pure 6502 PRG file loader loop using ($0A),Y + XferByte IRQs (supports all bypasses!) */
+    static const u8 prg_xfer_loop[] = {
+        /* $E620: */ 0x20,0xF0,0xE1,                        /* JSR XferByte (block type $04) */
+        /* $E623: */ 0x20,0xF0,0xE1,                        /* JSR XferByte (data byte) */
+        /* $E626: */ 0xA0,0x00, 0x91,0x0A,                  /* LDY #$00 ; STA ($0A),Y */
+        /* $E62A: */ 0xE6,0x0A, 0xD0,0x02, 0xE6,0x0B,       /* INC $0A ; BNE +2 ; INC $0B */
+        /* $E630: */ 0xA5,0x0C, 0xD0,0x02, 0xC6,0x0D,       /* LDA $0C ; BNE +2 ; DEC $0D */
+        /* $E636: */ 0xC6,0x0C, 0xA5,0x0C, 0x05,0x0D,       /* DEC $0C ; LDA $0C ; ORA $0D */
+        /* $E63C: */ 0xD0,0xE5,                             /* BNE $E623 */
+        /* $E63E: */ 0x20,0xF0,0xE1,                        /* JSR XferByte (CRC lo) */
+        /* $E641: */ 0x20,0xF0,0xE1,                        /* JSR XferByte (CRC hi) */
+        /* $E644: */ 0x4C,0x10,0xE6                         /* JMP $E610 (next file) */
+    };
+    for (unsigned i = 0; i < sizeof(prg_xfer_loop); i++) b[0x0620 + i] = prg_xfer_loop[i];
+
+    /* $E650..$E659: Gap/End-of-track scan wait (allows $2000 NMI bypass to fire on VBlank!) */
+    static const u8 eot_wait[] = {
+        0xAD,0x30,0x40, 0x29,0x40, 0xF0,0xF9, 0x4C,0x10,0xE6
+    };
+    for (unsigned i = 0; i < sizeof(eot_wait); i++) b[0x0650 + i] = eot_wait[i];
+
+    /* $EE40..$EE53: Cold-boot 6502 sequence: JSR $E1F8 (.dw $EFF0, $EFFA), set $0102=$35, $0103=$AC, JMP ($DFFC) */
+    static const u8 cold_seq[] = {
+        0x20,0xF8,0xE1, 0xF0,0xEF, 0xFA,0xEF,
+        0xA9,0x35, 0x8D,0x02,0x01,
+        0xA9,0xAC, 0x8D,0x03,0x01,
+        0x6C,0xFC,0xDF
+    };
+    for (unsigned i = 0; i < sizeof(cold_seq); i++) b[0x0E40 + i] = cold_seq[i];
+
+    /* $EFF0..$EFFB: Wildcard DiskID (10x $FF) + boot file selector ($FE, $FF) */
+    for (int i = 0; i < 10; i++) b[0x0FF0 + i] = 0xFFu;
+    b[0x0FFA] = 0xFEu;
+    b[0x0FFB] = 0xFFu;
+
+    /* 6502 Hardware Vectors at $FFFA..$FFFF */
+    b[0x1FFA] = 0x8Bu; b[0x1FFB] = 0xE1u; /* NMI   -> $E18B */
+    b[0x1FFC] = 0x24u; b[0x1FFD] = 0xEEu; /* RESET -> $EE24 */
+    b[0x1FFE] = 0xC7u; b[0x1FFF] = 0xE1u; /* IRQ   -> $E1C7 */
+}
+
+/* Convert a 65500-byte .fds side into a physical track with pre-gaps, $80 start marks & CCITT CRC-16s */
+static void fds_build_track(int side, const u8 *raw, u32 raw_len)
+{
+    u8 *trk = FDS_M->tracks[side];
+    for (u32 i = 0; i < FDS_TRACK_LEN; i++)
+        trk[i] = 0;
+
+    u32 pos = 3200u, src = 0;
+    if (raw_len < 58u || raw[0] != 0x01u)
+        return;
+
+    /* Block 1: Disk Info (56 bytes) */
+    u16 crc = fds_crc_step(0, 0x80u);
+    trk[pos++] = 0x80u;
+    for (u32 i = 0; i < 56u; i++) {
+        u8 v = raw[src++];
+        trk[pos++] = v;
+        crc = fds_crc_step(crc, v);
+    }
+    trk[pos++] = (u8)crc;
+    trk[pos++] = (u8)(crc >> 8);
+    pos += 122u;
+
+    /* Block 2: File Count (2 bytes) */
+    if (src + 2u > raw_len || raw[src] != 0x02u)
+        return;
+    crc = fds_crc_step(0, 0x80u);
+    trk[pos++] = 0x80u;
+    for (u32 i = 0; i < 2u; i++) {
+        u8 v = raw[src++];
+        trk[pos++] = v;
+        crc = fds_crc_step(crc, v);
+    }
+    trk[pos++] = (u8)crc;
+    trk[pos++] = (u8)(crc >> 8);
+    pos += 122u;
+
+    /* Pairs of Block 3 (16-byte File Header) + Block 4 (1 + fsize File Data) */
+    while (src + 17u <= raw_len && raw[src] == 0x03u) {
+        u32 fsize = (u32)raw[src + 13u] | ((u32)raw[src + 14u] << 8);
+        if (raw[src + 16u] != 0x04u || src + 17u + fsize > raw_len)
+            break;
+        if (pos + 16u + 125u + 1u + fsize + 125u >= FDS_TRACK_LEN)
+            break;
+
+        crc = fds_crc_step(0, 0x80u);
+        trk[pos++] = 0x80u;
+        for (u32 i = 0; i < 16u; i++) {
+            u8 v = raw[src++];
+            trk[pos++] = v;
+            crc = fds_crc_step(crc, v);
+        }
+        trk[pos++] = (u8)crc;
+        trk[pos++] = (u8)(crc >> 8);
+        pos += 122u;
+
+        crc = fds_crc_step(0, 0x80u);
+        trk[pos++] = 0x80u;
+        for (u32 i = 0; i < 1u + fsize; i++) {
+            u8 v = raw[src++];
+            trk[pos++] = v;
+            crc = fds_crc_step(crc, v);
+        }
+        trk[pos++] = (u8)crc;
+        trk[pos++] = (u8)(crc >> 8);
+        pos += 122u;
+    }
+}
+
+static void fds_update_snd_level(void)
+{
+    if (!fds.active) {
+        fds.snd_level = 0;
+        return;
+    }
+    static const u8 mvol_num[4] = { 30, 20, 15, 12 };
+    u32 vg = fds.vol_gain > 32u ? 32u : fds.vol_gain;
+    u32 idx = (fds.wave_acc >> 16) & 63u;
+    u32 ws = fds.wave[idx] & 0x3Fu;
+    /* Max ws*vg*mvol = 63 * 32 * 30 = 60480 -> scale to ~11385 (~2.4x one square channel, matching Twin Famicom!) */
+    fds.snd_level = (ws * vg * mvol_num[fds.master_vol & 3u] * 12u) >> 6;
+}
+
+static void fds_snd_step(u32 cyc)
+{
+    if (!fds.wave_halt && fds.carr_freq > 0u) {
+        s32 temp = (s32)fds.mod_ctr * (s32)fds.mod_gain;
+        u32 rem = (u32)temp & 0x0Fu;
+        temp >>= 4;
+        if (rem > 0u && (temp & 0x80) == 0)
+            temp += (fds.mod_ctr < 0) ? -1 : 2;
+        if (temp >= 192)
+            temp -= 256;
+        else if (temp < -64)
+            temp += 256;
+        s32 pitch = (s32)fds.carr_freq + ((temp * (s32)fds.carr_freq) >> 6);
+        if (pitch > 0)
+            fds.wave_acc += (u32)pitch * cyc;
+    }
+    fds_update_snd_level();
+}
+
+static u32 fds_env_period(u8 reg)
+{
+    return 8u * ((u32)fds.env_speed + 1u) * (((u32)reg & 0x3Fu) + 1u);
+}
+
+/* Advance FDS cycle timer, disk head, and audio envelopes/modulator up to `to` */
+static void fds_sync(u32 to)
+{
+    u32 n = to - fds.at;
+    if (!n)
+        return;
+    fds.at = to;
+
+    /* 1. 16-bit Cycle Timer IRQ ($4020..$4022) */
+    if ((fds.io_enable & 1u) && fds.irq_enabled) {
+        u32 left = n;
+        while (left > 0u && fds.irq_enabled) {
+            if (fds.irq_counter == 0u) {
+                fds.timer_irq = 1u;
+                fds.irq_counter = fds.irq_reload;
+                if (!fds.irq_repeat)
+                    fds.irq_enabled = 0u;
+                left--;
+            } else if (left < fds.irq_counter) {
+                fds.irq_counter = (u16)(fds.irq_counter - left);
+                left = 0u;
+            } else {
+                left -= fds.irq_counter;
+                fds.timer_irq = 1u;
+                fds.irq_counter = fds.irq_reload;
+                if (!fds.irq_repeat)
+                    fds.irq_enabled = 0u;
+            }
+        }
+    }
+
+    /* 2. FD3206 Quick Disk Drive Head (1 byte every 149 CPU cycles) */
+    if ((fds.io_enable & 1u) && (fds.ctrl & 1u) && !(fds.ctrl & 2u) && !fds.ejected) {
+        u32 left = n;
+        if (fds.spinup_cyc > 0u) {
+            if (left < fds.spinup_cyc) {
+                fds.spinup_cyc -= left;
+                left = 0u;
+            } else {
+                left -= fds.spinup_cyc;
+                fds.spinup_cyc = 0u;
+            }
+        }
+        fds.byte_cyc += left;
+        while (fds.byte_cyc >= FDS_BYTE_CYC) {
+            fds.byte_cyc -= FDS_BYTE_CYC;
+            if (fds.head_pos >= FDS_TRACK_LEN) {
+                fds.end_of_head = 1u;
+                continue;
+            }
+            u8 *trk = FDS_M->tracks[fds.cur_side];
+            int read_mode = (fds.ctrl & 0x04u) != 0u;
+            int crc_ctrl  = (fds.ctrl & 0x10u) != 0u;
+            int xfer_on   = (fds.ctrl & 0x40u) != 0u;
+            int irq_en    = (fds.ctrl & 0x80u) != 0u;
+
+            if (read_mode) {
+                u8 b = trk[fds.head_pos++];
+                if (!xfer_on) {
+                    fds.in_block = 0u;
+                } else if (!fds.in_block) {
+                    if (b == 0x80u) {
+                        fds.in_block = 1u;
+                        fds.crc_acc = fds_crc_step(0, 0x80u);
+                        fds.crc_err = 0u;
+                    }
+                } else {
+                    fds.read_latch = b;
+                    fds.crc_acc = fds_crc_step(fds.crc_acc, b);
+                    if (crc_ctrl)
+                        fds.crc_err = (fds.crc_acc != 0u);
+                    fds.byte_xfer = 1u;
+                    if (irq_en)
+                        fds.disk_irq = 1u;
+                }
+            } else {
+                if (!xfer_on) {
+                    fds.in_block = 0u;
+                    trk[fds.head_pos++] = 0x00u;
+                    fds.disk_dirty = 1u;
+                } else if (!fds.in_block) {
+                    fds.in_block = 1u;
+                    fds.crc_acc = fds_crc_step(0, 0x80u);
+                    fds.crc_write_idx = 0u;
+                    trk[fds.head_pos++] = 0x80u;
+                    fds.disk_dirty = 1u;
+                    fds.byte_xfer = 1u;
+                    if (irq_en)
+                        fds.disk_irq = 1u;
+                } else if (!crc_ctrl) {
+                    u8 wb = fds.write_latch;
+                    trk[fds.head_pos++] = wb;
+                    fds.crc_acc = fds_crc_step(fds.crc_acc, wb);
+                    fds.disk_dirty = 1u;
+                    fds.byte_xfer = 1u;
+                    if (irq_en)
+                        fds.disk_irq = 1u;
+                } else if (fds.crc_write_idx < 2u) {
+                    u8 cb = (fds.crc_write_idx == 0u) ? (u8)fds.crc_acc : (u8)(fds.crc_acc >> 8);
+                    trk[fds.head_pos++] = cb;
+                    fds.crc_write_idx++;
+                    fds.byte_xfer = 1u;
+                    if (irq_en)
+                        fds.disk_irq = 1u;
+                } else {
+                    trk[fds.head_pos++] = 0x00u;
+                }
+            }
+        }
+    }
+
+    /* 3. Audio Envelopes ($4090 / $4092) & Modulation Counter ($4097) */
+    if (fds.io_enable & 2u) {
+        if (!fds.wave_halt && !fds.env_halt && fds.env_speed > 0u) {
+            if (!(fds.vol_reg & 0x80u)) {
+                u32 per = fds_env_period(fds.vol_reg);
+                fds.vol_tmr += n;
+                while (fds.vol_tmr >= per) {
+                    fds.vol_tmr -= per;
+                    if (fds.vol_reg & 0x40u) {
+                        if (fds.vol_gain < 32u) fds.vol_gain++;
+                    } else {
+                        if (fds.vol_gain > 0u)  fds.vol_gain--;
+                    }
+                }
+            }
+            if (!(fds.mod_reg & 0x80u)) {
+                u32 per = fds_env_period(fds.mod_reg);
+                fds.mod_tmr += n;
+                while (fds.mod_tmr >= per) {
+                    fds.mod_tmr -= per;
+                    if (fds.mod_reg & 0x40u) {
+                        if (fds.mod_gain < 32u) fds.mod_gain++;
+                    } else {
+                        if (fds.mod_gain > 0u)  fds.mod_gain--;
+                    }
+                }
+            }
+        }
+        if (!fds.mod_halt && fds.mod_freq > 0u) {
+            fds.mod_acc += (u32)fds.mod_freq * n;
+            while (fds.mod_acc >= 0x10000u) {
+                fds.mod_acc -= 0x10000u;
+                static const signed char mod_delta[8] = { 0, 1, 2, 4, 0, -4, -2, -1 };
+                u8 step_code = fds.mod_tbl[fds.mod_pos & 31u] & 7u;
+                fds.mod_pos = (fds.mod_pos + 1u) & 31u;
+                if (step_code == 4u) {
+                    fds.mod_ctr = 0;
+                } else {
+                    s32 next_c = (s32)fds.mod_ctr + mod_delta[step_code];
+                    if (next_c > 63)       next_c -= 128;
+                    else if (next_c < -64) next_c += 128;
+                    fds.mod_ctr = (signed char)next_c;
+                }
+            }
+        }
+    }
+}
+
+static u8 fds_read_reg(u16 a)
+{
+    u32 now = cpu.cycles + op_cycles;
+    fds_sync(now);
+
+    if (a == 0x4030u) {
+        u8 v = 0x80u;
+        if (fds.timer_irq)                       v |= 0x01u;
+        if (fds.byte_xfer || fds.watchdog_irq)   v |= 0x02u;
+        if (fds.mirror_h)                        v |= 0x08u;
+        if (fds.crc_err)                         v |= 0x10u;
+        if (fds.end_of_head)                     v |= 0x40u;
+        fds.timer_irq = 0u;
+        fds.disk_irq = 0u;
+        fds.byte_xfer = 0u;
+        fds.watchdog_irq = 0u;
+        return v;
+    }
+    if (a == 0x4031u) {
+        fds.byte_xfer = 0u;
+        fds.disk_irq = 0u;
+        return fds.read_latch;
+    }
+    if (a == 0x4032u) {
+        u8 v = 0x40u;
+        if (fds.ejected)
+            v |= 0x07u;                         /* disk ejected + not ready + write-protected */
+        else if (!(fds.ctrl & 1u) || (fds.ctrl & 2u) || fds.spinup_cyc > 0u || fds.end_of_head)
+            v |= 0x02u;                         /* drive not ready / rewound / at end of track */
+        return v;
+    }
+    if (a == 0x4033u)
+        return (u8)(0x80u | (fds.ext_latch & 0x7Fu));
+
+    if (fds.io_enable & 2u) {
+        if (a >= 0x4040u && a <= 0x407Fu)
+            return (u8)(0x40u | (fds.wave[a & 0x3Fu] & 0x3Fu));
+        if (a == 0x4090u)
+            return (u8)(0x40u | (fds.vol_gain & 0x3Fu));
+        if (a == 0x4092u)
+            return (u8)(0x40u | (fds.mod_gain & 0x3Fu));
+        if (a == 0x4097u)
+            return (u8)(0x40u | ((u8)fds.mod_ctr & 0x7Fu));
+    }
+    return 0x40u;
+}
+
+static void fds_write_reg(u16 a, u8 v)
+{
+    u32 now = cpu.cycles + op_cycles;
+    fds_sync(now);
+
+    switch (a) {
+    case 0x4020:
+        fds.irq_reload = (u16)((fds.irq_reload & 0xFF00u) | v);
+        return;
+    case 0x4021:
+        fds.irq_reload = (u16)((fds.irq_reload & 0x00FFu) | ((u16)v << 8));
+        return;
+    case 0x4022:
+        if (!(fds.io_enable & 1u))
+            return;
+        fds.irq_repeat  = v & 1u;
+        fds.irq_enabled = (v >> 1) & 1u;
+        if (fds.irq_enabled)
+            fds.irq_counter = fds.irq_reload;
+        else
+            fds.timer_irq = 0u;
+        return;
+    case 0x4023:
+        fds.io_enable = (u8)(0x80u | (v & 0x03u));
+        if (!(v & 1u)) {
+            fds.timer_irq = 0u;
+            fds.disk_irq = 0u;
+            fds.byte_xfer = 0u;
+            fds.watchdog_irq = 0u;
+            fds.dram_starve = 0u;
+            fds.irq_enabled = 0u;
+            fds.irq_repeat = 0u;
+            fds.ctrl = 0u;
+            fds.mirror_h = 0u;
+            mirror(1);                          /* $4023.D0 = 0 resets nametable arrangement to vertical */
+        }
+        return;
+    case 0x4024:
+        if (!(fds.io_enable & 1u))
+            return;
+        fds.write_latch = v;
+        fds.byte_xfer = 0u;
+        fds.disk_irq = 0u;
+        return;
+    case 0x4025: {
+        if (!(fds.io_enable & 1u))
+            return;
+        u8 prev = fds.ctrl;
+        fds.ctrl = v;
+        fds.mirror_h = (v >> 3) & 1u;
+        mirror(fds.mirror_h ? 0 : 1);
+        if (!(v & 0x80u))
+            fds.disk_irq = 0u;
+        if (!(v & 1u) || (v & 2u)) {
+            fds.head_pos = 0u;
+            fds.in_block = 0u;
+            fds.end_of_head = 0u;
+            fds.crc_err = 0u;
+            fds.byte_cyc = 0u;
+            fds.byte_xfer = 0u;
+            fds.disk_irq = 0u;
+        } else if ((prev & 2u) && !(v & 2u)) {
+            /* Scan started from outer edge: brief 2ms ready pulse so WaitForDriveReady sees 1 -> 0 */
+            fds.spinup_cyc = 3600u;
+            fds.head_pos = 0u;
+            fds.in_block = 0u;
+            fds.end_of_head = 0u;
+            fds.byte_cyc = 0u;
+        }
+        if (!(v & 0x40u))
+            fds.in_block = 0u;
+        return;
+    }
+    case 0x4026:
+        if (fds.io_enable & 1u)
+            fds.ext_latch = v;
+        return;
+    }
+
+    /* FDS Expansion Audio ($4040..$408A) */
+    if (!(fds.io_enable & 2u))
+        return;
+    if (snd.rate)
+        snd_catch(cpu.cycles);
+
+    if (a >= 0x4040u && a <= 0x407Fu) {
+        if (fds.wave_write)
+            fds.wave[a & 0x3Fu] = v & 0x3Fu;
+        fds_update_snd_level();
+        if (snd.rate) snd_mix();
+        return;
+    }
+    switch (a) {
+    case 0x4080:
+        fds.vol_reg = v;
+        fds.vol_tmr = 0u;
+        if (v & 0x80u)
+            fds.vol_gain = v & 0x3Fu;
+        break;
+    case 0x4082:
+        fds.carr_freq = (u16)((fds.carr_freq & 0x0F00u) | v);
+        break;
+    case 0x4083:
+        fds.carr_freq = (u16)((fds.carr_freq & 0x00FFu) | ((u16)(v & 0x0Fu) << 8));
+        fds.env_halt  = (v >> 6) & 1u;
+        fds.wave_halt = (v >> 7) & 1u;
+        if (fds.wave_halt)
+            fds.wave_acc = 0u;
+        break;
+    case 0x4084:
+        fds.mod_reg = v;
+        fds.mod_tmr = 0u;
+        if (v & 0x80u)
+            fds.mod_gain = v & 0x3Fu;
+        break;
+    case 0x4085:
+        fds.mod_ctr = (signed char)((v & 0x40u) ? (v | 0x80u) : (v & 0x3Fu));
+        break;
+    case 0x4086:
+        fds.mod_freq = (u16)((fds.mod_freq & 0x0F00u) | v);
+        break;
+    case 0x4087:
+        fds.mod_freq = (u16)((fds.mod_freq & 0x00FFu) | ((u16)(v & 0x0Fu) << 8));
+        fds.mod_halt = (v >> 7) & 1u;
+        if (fds.mod_halt)
+            fds.mod_acc = 0u;
+        break;
+    case 0x4088:
+        if (fds.mod_halt) {
+            fds.mod_tbl[fds.mod_pos & 31u] = v & 7u;
+            fds.mod_tbl[(fds.mod_pos + 1u) & 31u] = v & 7u;
+            fds.mod_pos = (fds.mod_pos + 2u) & 31u;
+        }
+        break;
+    case 0x4089:
+        fds.master_vol = v & 3u;
+        fds.wave_write = (v >> 7) & 1u;
+        break;
+    case 0x408A:
+        fds.env_speed = v;
+        break;
+    }
+    fds_update_snd_level();
+    if (snd.rate)
+        snd_refresh();
+}
+
+/* ---- Clean-Room FDS BIOS Subroutines (used ONLY when no external disksys.rom is provided) ---- */
+static u16 hle_pop_inline_ptr(int advance_bytes)
+{
+    u16 ret = (u16)(ram[0x100 | (u8)(cpu.s + 1)] | (ram[0x100 | (u8)(cpu.s + 2)] << 8));
+    u16 arg_addr = (u16)(ret + 1u);
+    u16 new_ret  = (u16)(ret + (u16)advance_bytes);
+    ram[0x100 | (u8)(cpu.s + 1)] = (u8)new_ret;
+    ram[0x100 | (u8)(cpu.s + 2)] = (u8)(new_ret >> 8);
+    return arg_addr;
+}
+
+static u32 hle_vram_struct_exec(u16 ptr)
+{
+    u32 cyc = 40u;
+    u16 ret_stack[4];
+    int sp = 0;
+    for (int guard = 0; guard < 256; guard++) {
+        u8 hi = rd(ptr);
+        if (hi >= 0x80u)
+            break;
+        if (hi == 0x60u) {                      /* return from sub-structure */
+            if (sp > 0) {
+                ptr = ret_stack[--sp];
+                continue;
+            }
+            break;
+        }
+        if (hi == 0x4Cu) {                      /* call sub-structure */
+            u16 sub = rd16((u16)(ptr + 1u));
+            if (sp < 4)
+                ret_stack[sp++] = (u16)(ptr + 3u);
+            ptr = sub;
+            continue;
+        }
+        ptr++;
+        u8 lo = rd(ptr++);
+        u8 fl = rd(ptr++);
+        int inc32 = (fl & 0x80u) != 0;
+        int fill  = (fl & 0x40u) != 0;
+        int len   = fl & 0x3Fu;
+        if (len == 0) len = 64;
+
+        u8 c0 = (u8)((ram[0xFF] & ~0x04u) | (inc32 ? 0x04u : 0u));
+        ram[0xFF] = c0;
+        ppu_write(0, c0);
+        (void)ppu_read(2);
+        ppu_write(6, hi & 0x3Fu);
+        ppu_write(6, lo);
+        u8 fill_b = fill ? rd(ptr++) : 0u;
+        for (int i = 0; i < len; i++) {
+            u8 db = fill ? fill_b : rd(ptr++);
+            ppu_write(7, db);
+            cyc += 14u;
+        }
+    }
+    return cyc;
+}
+
+static void hle_poll_joy(u8 *j1, u8 *j2, u8 *e1, u8 *e2)
+{
+    wr(0x4016, 1);
+    wr(0x4016, 0);
+    u8 p1 = 0, p2 = 0, x1 = 0, x2 = 0;
+    for (int b = 0; b < 8; b++) {
+        u8 r6 = rd(0x4016);
+        u8 r7 = rd(0x4017);
+        p1 = (u8)((p1 << 1) | (r6 & 1u));
+        x1 = (u8)((x1 << 1) | ((r6 >> 1) & 1u));
+        p2 = (u8)((p2 << 1) | (r7 & 1u));
+        x2 = (u8)((x2 << 1) | ((r7 >> 1) & 1u));
+    }
+    *j1 = p1; *j2 = p2; *e1 = x1; *e2 = x2;
+}
+
+/* Locate start of Block 1 ($80,$01) and Block 2 ($80,$02) on current side's physical track */
+static int fds_track_find_header(int side, u32 *blk1_pos, u32 *after_blk2_pos)
+{
+    const u8 *trk = FDS_M->tracks[side];
+    u32 p = 0;
+    while (p + 60u < FDS_TRACK_LEN && !(trk[p] == 0x80u && trk[p + 1u] == 0x01u))
+        p++;
+    if (p + 60u >= FDS_TRACK_LEN)
+        return 0;
+    *blk1_pos = p + 1u;                         /* points at 0x01 */
+    p += 1u + 56u + 2u;                         /* past Block 1 + CRC */
+    while (p + 6u < FDS_TRACK_LEN && !(trk[p] == 0x80u && trk[p + 1u] == 0x02u))
+        p++;
+    if (p + 6u >= FDS_TRACK_LEN)
+        return 0;
+    *after_blk2_pos = p + 1u + 2u + 2u;         /* past Block 2 + CRC */
+    return 1;
+}
+
+/* Rebuild canonical 65500B buffer in-place when WriteFile / AppendFile updates current side */
+static void hle_write_disk_file(u8 file_num, u16 hdr_ptr)
+{
+    u8 *tmp_side = FDS_M->tmp_side;
+    for (u32 i = 0; i < FDS_SIDE_RAW; i++)
+        tmp_side[i] = 0;
+
+    u32 b1 = 0, p = 0;
+    if (!fds_track_find_header(fds.cur_side, &b1, &p))
+        return;
+    const u8 *trk = FDS_M->tracks[fds.cur_side];
+    for (u32 i = 0; i < 56u; i++)
+        tmp_side[i] = trk[b1 + i];
+
+    /* Walk existing files on track into tmp_side */
+    u8 orig_cnt = trk[p - 3u];
+    u32 dst = 58u;
+    u8 idx = 0;
+    while (p + 20u < FDS_TRACK_LEN && idx < 64u) {
+        while (p + 20u < FDS_TRACK_LEN && !(trk[p] == 0x80u && trk[p + 1u] == 0x03u))
+            p++;
+        if (p + 20u >= FDS_TRACK_LEN)
+            break;
+        if (idx == file_num)
+            break;
+        const u8 *fh = &trk[p + 1u];
+        u32 fsz = (u32)fh[13] | ((u32)fh[14] << 8);
+        p += 1u + 16u + 2u;
+        while (p + 2u + fsz < FDS_TRACK_LEN && !(trk[p] == 0x80u && trk[p + 1u] == 0x04u))
+            p++;
+        if (p + 2u + fsz >= FDS_TRACK_LEN || dst + 17u + fsz > FDS_SIDE_RAW)
+            break;
+        for (u32 i = 0; i < 16u; i++) tmp_side[dst++] = fh[i];
+        for (u32 i = 0; i < 1u + fsz; i++) tmp_side[dst++] = trk[p + 1u + i];
+        p += 1u + 1u + fsz + 2u;
+        idx++;
+    }
+
+    /* Append / overwrite the new file at `idx` */
+    u8 fid   = rd(hdr_ptr);
+    u16 dadr = rd16((u16)(hdr_ptr + 9u));
+    u16 fsz  = rd16((u16)(hdr_ptr + 11u));
+    u8 ftype = rd((u16)(hdr_ptr + 13u));
+    u16 sadr = rd16((u16)(hdr_ptr + 14u));
+    u8 stype = rd((u16)(hdr_ptr + 16u));
+
+    if (dst + 17u + fsz <= FDS_SIDE_RAW) {
+        tmp_side[dst++] = 0x03u;
+        tmp_side[dst++] = idx;
+        tmp_side[dst++] = fid;
+        for (int i = 0; i < 8; i++) tmp_side[dst++] = rd((u16)(hdr_ptr + 1u + i));
+        tmp_side[dst++] = (u8)dadr; tmp_side[dst++] = (u8)(dadr >> 8);
+        tmp_side[dst++] = (u8)fsz;  tmp_side[dst++] = (u8)(fsz >> 8);
+        tmp_side[dst++] = ftype;
+        tmp_side[dst++] = 0x04u;
+        for (u16 i = 0; i < fsz; i++)
+            tmp_side[dst++] = (stype == 0u) ? rd((u16)(sadr + i)) : ppu_get((u16)(sadr + i));
+        idx++;
+    }
+
+    tmp_side[56] = 0x02u;
+    tmp_side[57] = (file_num == 0xFFu) ? (u8)(orig_cnt + 1u) : (idx > orig_cnt ? idx : orig_cnt);
+    fds_build_track(fds.cur_side, tmp_side, FDS_SIDE_RAW);
+    fds.disk_dirty = 1u;
+}
+
+static u32 fds_hle_step(void)
+{
+    u16 pc = cpu.pc;
+    switch (pc) {
+    case 0xEE24: { /* Hardware RESET entry */
+        cpu.p |= FI;
+        cpu.p &= (u8)~FD;
+        cpu.s = 0xFFu;
+        fds_write_reg(0x4023, 0x00u);
+        fds_write_reg(0x4023, 0x83u);
+        ram[0xFA] = 0x2Eu;
+        fds_write_reg(0x4025, 0x2Eu);
+        fds_write_reg(0x408A, 0xE8u);
+        apu_write(0x4017, 0xC0u);
+
+        if (ram[0x0102] == 0x35u && (ram[0x0103] == 0xACu || ram[0x0103] == 0x53u)) {
+            ram[0x0103] = 0x53u;
+            cpu.pc = rd16(0xDFFCu);
+            return 48u;
+        }
+
+        /* Cold boot initialization */
+        for (int i = 0; i < 0x100; i++) ram[i] = 0;
+        for (int i = 0x200; i < 0x300; i++) ram[i] = 0xFFu;
+        for (int nt = 0; nt < 4; nt++) {
+            for (int i = 0; i < 960; i++) vram[(nt & 1) * 0x400 + i] = 0x24u;
+            for (int i = 960; i < 1024; i++) vram[(nt & 1) * 0x400 + i] = 0x00u;
+        }
+        ram[0xF9] = 0xFFu;
+        ram[0xFA] = 0x2Eu;
+        ram[0xFE] = 0x00u;
+        ram[0xFF] = 0x10u;
+        ram[0x0100] = 0xC0u;
+        ram[0x0101] = 0x80u;
+        ram[0x0300] = 0x7Du;
+        ram[0x0301] = 0x00u;
+        ram[0x0302] = 0xFFu;
+        fds_load_default_chr_font();
+        pal[0] = 0x0Fu; pal[1] = 0x30u; pal[2] = 0x10u; pal[3] = 0x30u;
+        cpu.pc = 0xEE40u;                       /* run 6502 JSR $E1F8 -> JMP ($DFFC) */
+        return 120u;
+    }
+
+    case 0xE1F8: { /* LoadFiles (.dw DiskIDPtr, FileListPtr) */
+        u16 args = hle_pop_inline_ptr(4);
+        fds.lf_disk_id_ptr   = rd16(args);
+        fds.lf_file_list_ptr = rd16((u16)(args + 2u));
+        fds.lf_loaded = 0u;
+        if (fds.ejected) {
+            cpu.a = 0x01u;                      /* Disk not set */
+            cpu.y = 0u;
+            nz(cpu.a);
+            cpu.p |= FC;
+            return 0u;                          /* execute RTS at $E1F8! */
+        }
+        u32 b1 = 0, after_b2 = 0;
+        if (!fds_track_find_header(fds.cur_side, &b1, &after_b2)) {
+            cpu.a = 0x02u;
+            cpu.y = 0u;
+            nz(cpu.a);
+            cpu.p |= FC;
+            return 0u;
+        }
+        const u8 *trk = FDS_M->tracks[fds.cur_side];
+        /* Check DiskID (10 bytes at Block 1 + 15, where 0xFF is wildcard) */
+        for (int i = 0; i < 10; i++) {
+            u8 want = rd((u16)(fds.lf_disk_id_ptr + (u16)i));
+            if (want != 0xFFu && want != trk[b1 + 15u + (u32)i]) {
+                cpu.a = (i == 5) ? 0x07u : 0x08u; /* wrong side / wrong disk */
+                cpu.y = 0u;
+                nz(cpu.a);
+                cpu.p |= FC;
+                return 0u;
+            }
+        }
+        fds.lf_boot    = (rd(fds.lf_file_list_ptr) == 0xFEu && rd((u16)(fds.lf_file_list_ptr + 1u)) == 0xFFu);
+        fds.lf_boot_id = trk[b1 + 25u];
+        fds.lf_rem     = trk[after_b2 - 3u];
+        fds.lf_scan_pos = after_b2;
+        cpu.pc = 0xE610u;
+        return 120u;
+    }
+
+    case 0xE610: { /* LoadFiles per-file dispatcher */
+        ram[0x0101] = 0x80u;                    /* restore BIOS skip/idle IRQ mode between blocks */
+        if (fds.lf_rem == 0u) {
+            cpu.pc = 0xE660u;
+            return 24u;
+        }
+        const u8 *trk = FDS_M->tracks[fds.cur_side];
+        u32 p = fds.lf_scan_pos;
+        while (p + 20u < FDS_TRACK_LEN && !(trk[p] == 0x80u && trk[p + 1u] == 0x03u))
+            p++;
+        if (p + 20u >= FDS_TRACK_LEN) {
+            /* More files requested than exist on track: scan to end of track so $2000 NMI bypass fires! */
+            fds.lf_rem = 0u;
+            fds.head_pos = FDS_TRACK_LEN - 260u;
+            fds.spinup_cyc = 0u;
+            fds.byte_cyc = 0u;
+            fds.in_block = 0u;
+            fds.end_of_head = 0u;
+            u8 c25 = (u8)((ram[0xFA] & 0x08u) | 0x65u);
+            ram[0xFA] = c25;
+            fds.ctrl = c25;
+            cpu.pc = 0xE650u;
+            return 32u;
+        }
+        const u8 *fh = &trk[p + 1u];
+        u8 fid   = fh[2];
+        u16 fadr = (u16)(fh[11] | (fh[12] << 8));
+        u16 fsz  = (u16)(fh[13] | (fh[14] << 8));
+        u8 ftype = fh[15];
+
+        u32 b4_mark = p + 1u + 16u + 2u;
+        while (b4_mark + 3u < FDS_TRACK_LEN && !(trk[b4_mark] == 0x80u && trk[b4_mark + 1u] == 0x04u))
+            b4_mark++;
+        if (b4_mark + 2u + fsz >= FDS_TRACK_LEN) {
+            cpu.pc = 0xE660u;
+            return 24u;
+        }
+        fds.lf_scan_pos = b4_mark + 1u + 1u + fsz + 2u;
+        fds.lf_rem--;
+
+        int match = 0;
+        if (fds.lf_boot) {
+            match = (fid <= fds.lf_boot_id);
+        } else {
+            for (int i = 0; i < 20; i++) {
+                u8 want = rd((u16)(fds.lf_file_list_ptr + (u16)i));
+                if (want == 0xFFu) break;
+                if (want == fid) { match = 1; break; }
+            }
+        }
+        if (!match) {
+            /* Advance disk head in real time (~260 bytes = 1.3 frames) so any pending $2000 NMI bypass fires! */
+            fds.head_pos = FDS_TRACK_LEN - 260u;
+            fds.spinup_cyc = 0u;
+            fds.byte_cyc = 0u;
+            fds.in_block = 0u;
+            fds.end_of_head = 0u;
+            u8 c25 = (u8)((ram[0xFA] & 0x08u) | 0x65u);
+            ram[0xFA] = c25;
+            fds.ctrl = c25;
+            cpu.pc = 0xE650u;
+            return 32u;
+        }
+
+        fds.lf_loaded++;
+        if (ftype == 1u || ftype == 2u) {
+            u16 base = (ftype == 1u) ? (fadr & 0x1FFFu) : (u16)(0x2000u + (fadr & 0x0FFFu));
+            for (u16 i = 0; i < fsz; i++)
+                ppu_put((u16)(base + i), trk[b4_mark + 2u + i]);
+            return 128u;                        /* stay at $E610 for next file */
+        }
+
+        if (fsz == 0u)
+            return 48u;
+
+        /* Type 0 (CPU PRG / Bypass): stream every byte via 6502 ($0A),Y + XferByte IRQ! */
+        ram[0x0A] = (u8)fadr;
+        ram[0x0B] = (u8)(fadr >> 8);
+        ram[0x0C] = (u8)fsz;
+        ram[0x0D] = (u8)(fsz >> 8);
+        ram[0x0101] = 0x40u;
+        fds.head_pos = b4_mark;
+        fds.spinup_cyc = 0u;
+        fds.byte_cyc = 0u;
+        fds.in_block = 0u;
+        fds.end_of_head = 0u;
+        fds.byte_xfer = 0u;
+        fds.disk_irq = 0u;
+        u8 c25 = (u8)((ram[0xFA] & 0x08u) | 0xE5u);
+        ram[0xFA] = c25;
+        fds.ctrl = c25;
+        cpu.pc = 0xE620u;
+        return 32u;
+    }
+
+    case 0xE660: { /* Finish LoadFiles cleanly */
+        u8 c25 = (u8)((ram[0xFA] & 0x08u) | 0x26u);
+        ram[0xFA] = c25;
+        fds_write_reg(0x4025, c25);
+        ram[0x0101] = 0x80u;
+        cpu.a = 0u;
+        cpu.y = fds.lf_loaded;
+        nz(0u);
+        cpu.p &= (u8)~FC;
+        return 0u;                              /* execute RTS at $E660! */
+    }
+
+    case 0xE237: /* AppendFile */
+    case 0xE239: { /* WriteFile */
+        u8 fnum = (pc == 0xE237u) ? 0xFFu : cpu.a;
+        u16 args = hle_pop_inline_ptr(4);
+        u16 hdr_ptr = rd16((u16)(args + 2u));
+        hle_write_disk_file(fnum, hdr_ptr);
+        cpu.a = 0u;
+        cpu.x = 0u;
+        nz(0u);
+        cpu.p &= (u8)~FC;
+        return 0u;                              /* execute RTS */
+    }
+
+    case 0xE2B7: /* CheckFileCount */
+    case 0xE2BB: /* AdjustFileCount */
+    case 0xE301: /* SetFileCount1 */
+    case 0xE305: { /* SetFileCount */
+        (void)hle_pop_inline_ptr(2);
+        u32 b1 = 0, after_b2 = 0;
+        if (fds_track_find_header(fds.cur_side, &b1, &after_b2)) {
+            u8 *trk = FDS_M->tracks[fds.cur_side];
+            u32 cnt_idx = after_b2 - 3u;
+            if (pc == 0xE2BBu)      trk[cnt_idx] = (u8)(trk[cnt_idx] - cpu.a);
+            else if (pc == 0xE301u) trk[cnt_idx] = (u8)(cpu.a + 1u);
+            else if (pc == 0xE305u) trk[cnt_idx] = cpu.a;
+            u16 crc = fds_crc_step(0, 0x80u);
+            crc = fds_crc_step(crc, 0x02u);
+            crc = fds_crc_step(crc, trk[cnt_idx]);
+            trk[cnt_idx + 1u] = (u8)crc;
+            trk[cnt_idx + 2u] = (u8)(crc >> 8);
+            fds.disk_dirty = 1u;
+        }
+        cpu.a = 0u;
+        nz(0u);
+        cpu.p &= (u8)~FC;
+        return 0u;
+    }
+
+    case 0xE32A: { /* GetDiskInfo */
+        u16 args = hle_pop_inline_ptr(2);
+        u16 dst  = rd16(args);
+        u32 b1 = 0, after_b2 = 0;
+        if (!fds_track_find_header(fds.cur_side, &b1, &after_b2)) {
+            cpu.a = 0x01u; nz(cpu.a); return 0u;
+        }
+        const u8 *trk = FDS_M->tracks[fds.cur_side];
+        for (int i = 0; i < 10; i++)
+            wr((u16)(dst + i), trk[b1 + 15u + i]);
+        wr((u16)(dst + 10u), trk[after_b2 - 3u]);
+        cpu.a = 0u;
+        nz(0u);
+        cpu.p &= (u8)~FC;
+        return 0u;
+    }
+
+    case 0xE161: ram[0xFE] &= (u8)~0x18u; ppu_write(1, ram[0xFE]); return 0u;
+    case 0xE16B: ram[0xFE] |= 0x18u;      ppu_write(1, ram[0xFE]); return 0u;
+    case 0xE171: ram[0xFE] &= (u8)~0x10u; ppu_write(1, ram[0xFE]); return 0u;
+    case 0xE178: ram[0xFE] |= 0x10u;      ppu_write(1, ram[0xFE]); return 0u;
+    case 0xE17E: ram[0xFE] &= (u8)~0x08u; ppu_write(1, ram[0xFE]); return 0u;
+    case 0xE185: ram[0xFE] |= 0x08u;      ppu_write(1, ram[0xFE]); return 0u;
+
+    case 0xE7BB: { /* VRAMStructWrite */
+        u16 args = hle_pop_inline_ptr(2);
+        u16 sptr = rd16(args);
+        (void)hle_vram_struct_exec(sptr);
+        return 0u;
+    }
+
+    case 0xE844: { /* FetchDirectPointer (from caller's caller stack!) */
+        u16 ret = (u16)(ram[0x100 | (u8)(cpu.s + 3)] | (ram[0x100 | (u8)(cpu.s + 4)] << 8));
+        u16 ptr = rd16((u16)(ret + 1u));
+        ram[0x00] = (u8)ptr;
+        ram[0x01] = (u8)(ptr >> 8);
+        u16 nret = (u16)(ret + 2u);
+        ram[0x100 | (u8)(cpu.s + 3)] = (u8)nret;
+        ram[0x100 | (u8)(cpu.s + 4)] = (u8)(nret >> 8);
+        return 0u;
+    }
+
+    case 0xE86A: { /* WriteVRAMBuffer */
+        ram[0x0302 + ram[0x0301]] = 0xFFu;
+        (void)hle_vram_struct_exec(0x0302u);
+        ram[0x0301] = 0u;
+        ram[0x0302] = 0xFFu;
+        return 0u;
+    }
+
+    case 0xE8D2: { /* PrepareVRAMString (A=hi, X=lo, Y=flags|len, inline .dw data) */
+        u16 args = hle_pop_inline_ptr(2);
+        u16 src  = rd16(args);
+        u8  end  = ram[0x0301];
+        u8  max  = ram[0x0300] ? ram[0x0300] : 0x7Du;
+        u8  fl   = cpu.y;
+        u8  dlen = (fl & 0x40u) ? 1u : (u8)((fl & 0x3Fu) ? (fl & 0x3Fu) : 64u);
+        if ((u32)end + 3u + dlen < max) {
+            ram[0x0302 + end++] = cpu.a;
+            ram[0x0302 + end++] = cpu.x;
+            ram[0x0302 + end++] = fl;
+            for (u8 i = 0; i < dlen; i++)
+                ram[0x0302 + end++] = rd((u16)(src + i));
+            ram[0x0302 + end] = 0xFFu;
+            ram[0x0301] = end;
+            cpu.a = 0u;
+        } else {
+            cpu.a = 1u;
+        }
+        nz(cpu.a);
+        return 0u;
+    }
+
+    case 0xE8E1: { /* PrepareVRAMStrings (inline .dw struct_ptr -> copy into $0302 buffer) */
+        u16 args = hle_pop_inline_ptr(2);
+        u16 src  = rd16(args);
+        u8  end  = ram[0x0301];
+        u8  max  = ram[0x0300] ? ram[0x0300] : 0x7Du;
+        u16 rstack[4];
+        int rsp = 0;
+        for (int g = 0; g < 64; g++) {
+            u8 hi = rd(src);
+            if (hi >= 0x80u) {
+                ram[0x0302 + end] = 0xFFu;
+                ram[0x0301] = end;
+                cpu.a = 0u;
+                nz(0u);
+                return 0u;
+            }
+            if (hi == 0x60u) {
+                if (rsp > 0) { src = rstack[--rsp]; continue; }
+                break;
+            }
+            if (hi == 0x4Cu) {
+                u16 sub = rd16((u16)(src + 1u));
+                if (rsp < 4) rstack[rsp++] = (u16)(src + 3u);
+                src = sub;
+                continue;
+            }
+            u8 lo = rd((u16)(src + 1u));
+            u8 fl = rd((u16)(src + 2u));
+            u8 dlen = (fl & 0x40u) ? 1u : (u8)((fl & 0x3Fu) ? (fl & 0x3Fu) : 64u);
+            if ((u32)end + 3u + dlen >= max) {
+                cpu.a = 1u;
+                nz(1u);
+                return 0u;
+            }
+            src += 3u;
+            ram[0x0302 + end++] = hi;
+            ram[0x0302 + end++] = lo;
+            ram[0x0302 + end++] = fl;
+            for (u8 i = 0; i < dlen; i++)
+                ram[0x0302 + end++] = rd(src++);
+        }
+        ram[0x0302 + end] = 0xFFu;
+        ram[0x0301] = end;
+        cpu.a = 0u;
+        nz(0u);
+        return 0u;
+    }
+
+    case 0xE97D: { /* Pixel2NamConv ($02=X, $03=Y -> $00=hi, $01=lo) */
+        u16 off = (u16)(((ram[0x03] >> 3) << 5) | (ram[0x02] >> 3));
+        ram[0x00] = (u8)(0x20u | (off >> 8));
+        ram[0x01] = (u8)off;
+        return 0u;
+    }
+    case 0xE997: { /* Nam2PixelConv ($00=hi, $01=lo -> $02=X, $03=Y) */
+        u16 off = (u16)(((ram[0x00] & 3u) << 8) | ram[0x01]);
+        ram[0x02] = (u8)((off & 31u) << 3);
+        ram[0x03] = (u8)(((off >> 5) & 31u) << 3);
+        return 0u;
+    }
+
+    case 0xE9B1: { /* Random (X=zp addr, Y=bytes) */
+        u8 cnt = cpu.y ? cpu.y : 2u;
+        u8 fb = (u8)(((ram[cpu.x] >> 1) ^ (ram[(u8)(cpu.x + 1u)] >> 1)) & 1u);
+        for (u8 i = 0; i < cnt; i++) {
+            u8 zp = (u8)(cpu.x + i);
+            u8 nb = ram[zp] & 1u;
+            ram[zp] = (u8)((ram[zp] >> 1) | (fb << 7));
+            fb = nb;
+        }
+        return 0u;
+    }
+
+    case 0xE9C8: /* SpriteDMA */
+        ppu_write(3, 0u);
+        wr(0x4014, 0x02u);
+        return 0u;
+
+    case 0xE9D3: { /* CounterLogic (A=decimal counter, X=start zp, Y=end zp) */
+        if (ram[cpu.x])
+            ram[cpu.x]--;
+        return 0u;
+    }
+
+    case 0xE9EB: /* ReadPads */
+    case 0xEA1A: /* ReadDownPads */
+    case 0xEA1F: /* ReadOrDownPads */
+    case 0xEA36: /* ReadDownVerifyPads */
+    case 0xEA4C: /* ReadOrDownVerifyPads */
+    case 0xEA68: { /* ReadDownExpPads */
+        u8 j1, j2, e1, e2;
+        hle_poll_joy(&j1, &j2, &e1, &e2);
+        if (pc == 0xE9EBu) {
+            ram[0xF5] = j1; ram[0xF6] = j2;
+            ram[0xF7] = e1; ram[0xF8] = e2;
+            return 0u;
+        }
+        if (pc == 0xEA1Fu || pc == 0xEA4Cu) {
+            j1 |= e1;
+            j2 |= e2;
+        }
+        u8 prev1 = ram[0xF7], prev2 = ram[0xF8];
+        ram[0xF5] = (u8)(j1 & ~prev1);
+        ram[0xF6] = (u8)(j2 & ~prev2);
+        ram[0xF7] = j1;
+        ram[0xF8] = j2;
+        if (pc == 0xEA68u) {
+            ram[0xF1] = ram[0xF5];
+            ram[0xF2] = ram[0xF6];
+            ram[0xF3] = 0u;
+            ram[0xF4] = 0u;
+        }
+        return 0u;
+    }
+
+    case 0xEA84: { /* VRAMFill (A=hi addr, X=fill byte, Y=attr byte) */
+        u8 c0 = (u8)(ram[0xFF] & ~0x04u);
+        ram[0xFF] = c0;
+        ppu_write(0, c0);
+        (void)ppu_read(2);
+        ppu_write(6, cpu.a & 0x3Fu);
+        ppu_write(6, 0x00u);
+        if (cpu.a < 0x20u) {
+            for (int i = 0; i < 1024; i++) ppu_write(7, cpu.x);
+        } else {
+            for (int i = 0; i < 960; i++)  ppu_write(7, cpu.x);
+            for (int i = 0; i < 64; i++)   ppu_write(7, cpu.y);
+        }
+        return 0u;
+    }
+
+    case 0xEAD2: { /* MemFill (A=val, X=first page, Y=last page inclusive) */
+        for (int p = cpu.x; p <= cpu.y && p < 256; p++) {
+            for (int i = 0; i < 256; i++)
+                wr((u16)((p << 8) | i), cpu.a);
+        }
+        return 0u;
+    }
+
+    case 0xEAEA: /* SetScroll */
+        (void)ppu_read(2);
+        ppu_write(5, ram[0xFD]);
+        ppu_write(5, ram[0xFC]);
+        ppu_write(0, ram[0xFF]);
+        return 0u;
+
+    case 0xEAFD: { /* JumpEngine (A = table index; table follows JSR $EAFD) */
+        u16 ret = pull();
+        ret |= (u16)(pull() << 8);
+        u16 tbl = (u16)(ret + 1u + (u16)cpu.a * 2u);
+        cpu.pc = rd16(tbl);
+        return 24u;
+    }
+
+    case 0xEB13: /* ReadKeyboard */
+        cpu.p &= (u8)~FC;
+        return 0u;
+
+    case 0xEBAF: { /* LoadTileset (A=flags|hi, Y=lo, X=tiles, inline .dw src) */
+        u16 args = hle_pop_inline_ptr(2);
+        u16 src  = rd16(args);
+        u16 dst  = (u16)(((u16)(cpu.a & 0x3Fu) << 8) | cpu.y);
+        u8  mode = (cpu.a >> 6) & 3u;
+        u8  c0   = (u8)(ram[0xFF] & ~0x04u);
+        ram[0xFF] = c0;
+        ppu_write(0, c0);
+        (void)ppu_read(2);
+        ppu_write(6, (u8)(dst >> 8));
+        ppu_write(6, (u8)dst);
+        int tiles = cpu.x ? cpu.x : 256;
+        for (int t = 0; t < tiles; t++) {
+            if (mode == 0u) {
+                for (int i = 0; i < 16; i++) ppu_write(7, rd(src++));
+            } else {
+                u8 row8[8];
+                for (int i = 0; i < 8; i++) row8[i] = rd(src++);
+                for (int i = 0; i < 8; i++) ppu_write(7, (mode == 2u) ? 0u : row8[i]);
+                for (int i = 0; i < 8; i++) ppu_write(7, (mode == 1u) ? 0u : row8[i]);
+            }
+        }
+        return 0u;
+    }
+
+    case 0xEC22: { /* UploadObject: ($00) -> 12-byte object descriptor */
+        u16 obj = (u16)(ram[0x00] | (ram[0x01] << 8));
+        u8 rflag = rd(obj);
+        u8 oy    = rd((u16)(obj + 1u));
+        u8 ox    = rd((u16)(obj + 3u));
+        u8 anim  = rd((u16)(obj + 5u));
+        u16 tptr = (u16)(((u16)rd((u16)(obj + 6u)) << 8) | rd((u16)(obj + 7u)));
+        u8 oflg  = rd((u16)(obj + 8u));
+        u8 opal  = rd((u16)(obj + 9u)) & 3u;
+        u8 dims  = rd((u16)(obj + 10u));
+        u8 oidx  = rd((u16)(obj + 11u));
+        int h = (dims >> 4) & 0x0F, w = dims & 0x0F;
+        if (rflag & 0x80u) {
+            for (int i = 0; i < h * w; i++, oidx = (u8)(oidx + 4u))
+                ram[0x0200 | oidx] = 0xF8u;
+            return 0u;
+        }
+        tptr = (u16)(tptr + (u16)anim * (u16)(h * w));
+        u8 attr = (u8)((oflg & 0xE0u) | opal);
+        for (int c = 0; c < w; c++) {
+            for (int r = 0; r < h; r++) {
+                int sc = (oflg & 0x40u) ? (w - 1 - c) : c;
+                int sr = (oflg & 0x80u) ? (h - 1 - r) : r;
+                u8 tile = rd((u16)(tptr + c * h + r));
+                ram[0x0200 | oidx]            = (u8)(oy + sr * 8);
+                ram[0x0200 | (u8)(oidx + 1u)] = tile;
+                ram[0x0200 | (u8)(oidx + 2u)] = attr;
+                ram[0x0200 | (u8)(oidx + 3u)] = (u8)(ox + sc * 8);
+                oidx = (u8)(oidx + 4u);
+            }
+        }
+        return 0u;
+    }
+    }
+    return 0u;
+}
+
+static void fds_reset_hw(void)
+{
+    for (u32 i = 0; i < sizeof(FDS_M->prg_ram); i++)
+        FDS_M->prg_ram[i] = 0;
+    for (u32 i = 0; i < sizeof(chr_ram); i++)
+        chr_ram[i] = 0;
+    cart.chr = chr_ram;
+    cart.chr1k = 8;
+    cart.chr_is_ram = 1;
+    cart.mapper = 20;
+    cart.four_screen = 0;
+    cart.mirroring = 1;
+
+    if (fds.ext_bios && fds.ext_bios_size == 0x2000u) {
+        for (u32 i = 0; i < 0x2000u; i++)
+            FDS_M->bios[i] = fds.ext_bios[i];
+        fds.using_hle_bios = 0u;
+    } else {
+        fds_build_clean_bios();
+        fds.using_hle_bios = 1u;
+    }
+
+    fds.cur_side = 0u;
+    fds.ejected = 0u;
+    fds.eject_frames = 0u;
+    fds.prev_flip = 0u;
+
+    fds.io_enable = 0x83u;
+    fds.ctrl = 0x26u;
+    fds.mirror_h = 0u;
+    fds.ext_latch = 0xFFu;
+    fds.read_latch = fds.write_latch = 0u;
+    fds.irq_reload = fds.irq_counter = 0u;
+    fds.irq_repeat = fds.irq_enabled = 0u;
+    fds.timer_irq = fds.disk_irq = fds.byte_xfer = fds.watchdog_irq = 0u;
+    fds.crc_err = fds.end_of_head = fds.in_block = fds.crc_write_idx = 0u;
+    fds.crc_acc = 0u;
+    fds.head_pos = fds.spinup_cyc = fds.byte_cyc = fds.dram_starve = 0u;
+    fds.at = 0u;
+
+    for (int i = 0; i < 64; i++) fds.wave[i] = 0u;
+    for (int i = 0; i < 32; i++) fds.mod_tbl[i] = 0u;
+    fds.mod_pos = 0u;
+    fds.vol_reg = fds.mod_reg = 0x80u;
+    fds.vol_gain = fds.mod_gain = 0u;
+    fds.env_speed = 0xE8u;
+    fds.vol_tmr = fds.mod_tmr = 0u;
+    fds.carr_freq = fds.mod_freq = 0u;
+    fds.env_halt = 0u;
+    fds.wave_halt = fds.mod_halt = 1u;
+    fds.wave_write = 0u;
+    fds.master_vol = 0u;
+    fds.mod_ctr = 0;
+    fds.wave_acc = fds.mod_acc = 0u;
+    fds.snd_level = 0u;
+}
+
+void fds_set_bios(const u8 *rom, u32 size)
+{
+    if (rom && size == 0x2000u) {
+        fds.ext_bios = rom;
+        fds.ext_bios_size = size;
+    } else {
+        fds.ext_bios = 0;
+        fds.ext_bios_size = 0;
+    }
+}
+
+const char *fds_load(u8 *image, u32 size)
+{
+    if (!image || size < FDS_SIDE_RAW)
+        return "too small to be a Famicom Disk System (.fds) image";
+
+    u32 off = 0, sides = 0;
+    if (size >= 16u + FDS_SIDE_RAW &&
+        image[0] == 'F' && image[1] == 'D' && image[2] == 'S' && image[3] == 0x1Au) {
+        sides = image[4];
+        off = 16u;
+        if (!sides || off + sides * FDS_SIDE_RAW > size)
+            return "the .fds file is shorter than its header's side count says";
+    } else if (size % FDS_SIDE_RAW == 0u) {
+        sides = size / FDS_SIDE_RAW;
+    } else {
+        return "not a valid Famicom Disk System (.fds) disk image";
+    }
+
+    if (sides > FDS_MAX_SIDES)
+        sides = FDS_MAX_SIDES;
+
+    static const char magic[] = "*NINTENDO-HVC*";
+    const u8 *s0 = image + off;
+    if (s0[0] != 0x01u)
+        return "not a valid FDS disk (missing Block 1 DiskInfo header)";
+    for (int i = 0; i < 14; i++)
+        if (s0[1 + i] != (u8)magic[i])
+            return "not a valid FDS disk (missing *NINTENDO-HVC* signature)";
+
+    const u8 *saved_bios = fds.ext_bios;
+    u32 saved_bios_sz = fds.ext_bios_size;
+    for (unsigned i = 0; i < sizeof(fds); i++)
+        ((u8 *)&fds)[i] = 0;
+    fds.ext_bios = saved_bios;
+    fds.ext_bios_size = saved_bios_sz;
+    fds.active = 1u;
+    fds.num_sides = (u8)sides;
+    fds.disk_dirty = 0u;
+
+    for (u32 s = 0; s < sides; s++)
+        fds_build_track((int)s, image + off + s * FDS_SIDE_RAW, FDS_SIDE_RAW);
+
+    init_mode_table();
+    nes_reset();
+
+    char gcode[5];
+    int gi = 0;
+    for (int i = 0; i < 4; i++) {
+        u8 c = s0[16 + i];
+        if (c >= 0x20u && c < 0x7Fu)
+            gcode[gi++] = (char)c;
+    }
+    while (gi > 0 && gcode[gi - 1] == ' ')
+        gi--;
+    gcode[gi] = 0;
+
+    char *p = text(info, "Famicom Disk System");
+    if (gi > 0) {
+        p = text(p, " '");
+        p = text(p, gcode);
+        p = text(p, "'");
+    }
+    p = text(p, " (");
+    p = number(p, sides);
+    p = text(p, sides == 1 ? " side" : " sides");
+    p = text(p, fds.using_hle_bios ? ", built-in BIOS, FDS audio)" : ", disksys.rom, FDS audio)");
+    return 0;
+}
+
+void fds_frame(u16 pad, u8 *picture)
+{
+    int flip_now = (pad & FDS_PAD_FLIP) != 0;
+    if (flip_now && !fds.prev_flip && fds.num_sides > 0u) {
+        fds.ejected = 1u;
+        fds.eject_frames = 12u;
+        fds.cur_side = (u8)((fds.cur_side + 1u) % fds.num_sides);
+        fds.head_pos = 0u;
+        fds.in_block = 0u;
+        fds.end_of_head = 0u;
+    }
+    fds.prev_flip = (u8)flip_now;
+
+    if (fds.eject_frames > 0u) {
+        fds.eject_frames--;
+        if (fds.eject_frames == 0u)
+            fds.ejected = 0u;
+    }
+
+    nes_frame((u8)pad, 0, picture);
 }

@@ -165,16 +165,15 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
                        = C, Enter = Start (klawiatura USB, UART, pilot);
                        pad 3-przyciskowy; pamiec kartridza w pliku .sav
   zx [-f klatki] [plik]
-                       ZX Spectrum 48K na TV (320 x 240 z ramka, 3 razy
-                       wiekszy, 50 klatek/s): snapshot (.sna, .z80) albo
-                       tasma (.tap, .tzx - LOAD "" wpisuje sie samo); bez
-                       pliku: BASIC. ROM Spectrum to plik 48.rom (nie ma go
-                       w demie) obok programu, w katalogu zx/ albo na
-                       szczycie dysku. Klawiatura USB jest klawiatura
-                       Spectrum (Shift = CAPS SHIFT, Ctrl / Alt = SYMBOL
-                       SHIFT, Backspace = DELETE), strzalki to tez joystick
-                       Kempston (ogien: OK na pilocie); znaki wpisane przez
-                       UART / telnet sa na nim wpisywane; Esc konczy
+                       ZX Spectrum 48K / 128K + Pentagon BetaDisk 128 na TV
+                       (320 x 240 z ramka, 3 razy wiekszy, 50 klatek/s):
+                       snapshot (.sna, .z80), tasma (.tap, .tzx) albo dyskietka
+                       TR-DOS (.trd, .scl) z dzwiekiem beeper + AY-3-8912 48 kHz;
+                       bez pliku: BASIC. Opcjonalne 48.rom, 128.rom i trdos.rom
+                       w katalogu zx/ albo wbudowany loader. Klawiatura USB jest
+                       klawiatura Spectrum (Shift = CAPS SHIFT, Ctrl / Alt =
+                       SYMBOL SHIFT, Backspace = DELETE), strzalki to tez
+                       joystick Kempston (ogien: OK na pilocie); Esc konczy
   a26 [-f klatki] <plik.a26>
                        gra Atari 2600 na TV (160 x 228, 5 razy szerszy i 3
                        razy wyzszy; kartridze 2K, 4K, F8, F6, F4 i ich RAM
@@ -216,6 +215,82 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
                        BIOS i DOS sa wbudowane, bez dzwieku. Klawiatura
                        USB jest klawiatura PC (Esc konczy); pilot: strzalki,
                        OK = gora, 0 = spacja, MENU = Enter, INFO = Esc
+  pce [-f klatki] <plik.pce>
+                       PC Engine / TurboGrafx-16 na TV z 6-kanalowym dzwiekiem
+                       PSG i 2 KB pamieci zapisu (.sav)
+  coleco [-f klatki] <plik.col>
+                       ColecoVision na TV (256 x 192 x3, MegaCart i Super Game
+                       Module, SN76489; coleco.rom w col/ albo wbudowany BIOS)
+  msx [-f klatki] <plik.rom|plik.mx1>
+                       MSX1 na TV (zwykle, Konami, Konami SCC, ASCII8/16,
+                       AY-3-8910 + SCC; msx.rom w msx/ albo wbudowany BIOS)
+  msx2 [-f klatki] <plik.mx2|plik.dsk|plik.rom>
+                       MSX2 na TV (Yamaha V9938 128 KB VRAM, SCREEN 0..8,
+                       sprzetowy blitter, 256 KB Mapper, RP5C01 RTC, dyskietki
+                       .dsk, dzwiek AY-3-8910 + SCC + YM2413; cbios_main_msx2.rom
+                       w msx2/ albo wbudowany BIOS MSX2)
+  ws [-f klatki] <plik.ws|plik.wsc>
+                       Bandai WonderSwan / WonderSwan Color na TV (224 x 144
+                       x5 albo pionowo 144 x 224 x3, dzwiek 4-kanalowy, .sav)
+  snes [-f klatki] <plik.sfc|plik.smc>
+                       Super Nintendo / Super Famicom na TV (LoROM, HiROM,
+                       ExHiROM, tryby 0-7, dzwiek SPC700 BRR, zapis .sav)
+  neogeo [-f klatki] <plik.neo>
+                       SNK Neo Geo AES / MVS na TV (320 x 224 x3, Z80 + YM2610,
+                       64 KB .sav; uni-bios.rom w neogeo/ albo wbudowany BIOS)
+  gba [-f klatki] <plik.gba>
+                       Game Boy Advance na TV (240 x 160 x4, DirectSound + PSG,
+                       SRAM / Flash / EEPROM .sav; gba_bios.bin albo wbudowany)
+  a78 [-f klatki] <plik.a78>
+                       Atari 7800 ProSystem na TV (MARIA, TIA + POKEY, .sav)
+  lynx [-f klatki] <plik.lnx|plik.lyx>
+                       Atari Lynx na TV (160 x 102 x6 albo pionowo, skalowanie
+                       Suzy, dzwiek Mikey; lynxboot.img albo wbudowany loader)
+  vectrex [-f klatki] [plik.vec]
+                       GCE Vectrex na TV (wektorowy ekran 540 x 720, AY-3-8912;
+                       bez pliku: Mine Storm z vectrex.rom albo Vector Storm)
+  fds [-f klatki] <plik.fds>
+                       Famicom Disk System na TV (1-8 stron, Q obraca dysk,
+                       dzwiek RP2C33, zapisy dysku w .sav, wbudowany BIOS)
+  ngp [-f klatki] <plik.ngp|plik.ngc>
+                       Neo Geo Pocket / Color na TV (160 x 152 x4, Z80 + T6W28
+                       + DAC, zapis Flash 64 KB w .sav, wbudowany BIOS)
+  odyssey2 [-f klatki] <plik.o2>
+                       Magnavox Odyssey2 / Videopac G7000 na TV (Intel 8048 +
+                       8244, 640 x 720, klawiatura 0..9, wbudowany BIOS)
+  intv [-f klatki] <plik.int|plik.rom>
+                       Mattel Intellivision na TV (CP1610 + STIC + AY-3-8914,
+                       704 x 624, wbudowane EXEC i GROM albo exec.bin/grom.bin)
+  psx [-f klatki] <plik.exe|plik.cue|plik.iso>
+                       Sony PlayStation 1 na TV (R3000A + GTE 3D, GPU 15/24bpp,
+                       MDEC, plyty CD .cue/.bin i .iso czytane strumieniowo,
+                       24-glosowy dzwiek SPU ADPCM, karta pamieci 128 KB .sav;
+                       scph1001.bin w psx/ albo wbudowany BIOS)
+  cps [-f klatki] <plik.cps|plik.zip>
+                       Automaty Capcom CPS-1 / CPS-1.5 / CPS-2 na TV (384 x 224
+                       x3, 68000 + Z80, deszyfrowanie CPS-2 .key i Kabuki, 3
+                       warstwy tla + rowscroll, dzwiek YM2151 + OKIM6295 oraz
+                       16-glosowy QSound DSP, zapis EEPROM 93C46 w .sav)
+  atarist [-f klatki] [plik.st|plik.msa|plik.prg]
+                       Atari 520ST / 1040STFM na TV (320 x 200 x3, 640 x 200,
+                       640 x 400; 68000 8 MHz, Shifter + STE Blitter, MFP, IKBD,
+                       WD1772 FDC, dzwiek YM2149F; darmowy EmuTOS etos256uk.img
+                       albo tos.img w atarist/, lub wbudowany TOS)
+  sys16 [-f klatki] <plik.s16|plik.zip>
+                       Automaty Sega System 16A / 16B / OutRun-Road na TV
+                       (320 x 224 x3, 68000 + Z80, mapper 315-5195, warstwy tli
+                       315-5197 + skalowane duszki + generator drogi, dzwiek
+                       YM2151 + uPD7759 + Sega 16-ch PCM, zapis NVRAM .sav)
+  atari8 [-f klatki] [plik.atr|plik.xex|plik.car|plik.rom]
+                       Atari 800XL / 130XE (128 KB) na TV (336 x 240 x3, SALLY
+                       6502C, ANTIC tryby 2..F + DLI + WSYNC, GTIA duszki P/M i
+                       tryby 9/10/11, bankowanie 130XE PORTB, dzwiek POKEY 48 kHz,
+                       zapis dyskietek .atr w .sav; wbudowany AltirraOS XL + BASIC
+                       albo atarixl.rom / ataribas.rom w atari8/; bez pliku: BASIC)
+  a5200 [-f klatki] <plik.a52|plik.car>
+                       Atari 5200 SuperSystem na TV (336 x 240 x3, kartridze
+                       4K..40K, ANTIC + GTIA + POKEY 48 kHz, drazek analogowy i
+                       klawiatura 0..9; wbudowany Altirra 5200 OS albo 5200.rom)
   snd <polecenie>      dzwiek (prototyp): snd init, snd beep [Hz] [ms] (ton
                        testowy), snd vol 0..100, snd status, snd stop -
                        48 kHz na HDMI (po "video init") i na SCART (L/P)
@@ -458,6 +533,19 @@ rozpoznawany po naglowku "C64 CARTRIDGE", nie po nazwie; ROM-y C64 nadal
 potrzebne. Klatka ok. 3,3 ms + 2,7 ms. Zapis do flasha EasyFlash jest
 ignorowany (gry nie zapisza stanu), zamrazarki (Action Replay itp.) i
 przycisk NMI Final Cartridge III nie sa obslugiwane.
+Kolejne konsole (wszystkie z dzwiekiem 48 kHz przez "snd", obsluga .zip/.gz,
+wbudowanymi czystymi zamiennikami BIOS-ow i otwieraniem z "explorer",
+sprawdzone na pudelku S3811 z darmowymi grami homebrew): PC Engine ("pce",
+4-10 ms/klatke), ColecoVision ("coleco", 2,5-3,5 ms) i MSX1 ("msx", 3-4,8 ms),
+WonderSwan / Color ("ws", 2-10 ms przy 75,5 Hz), Super Nintendo ("snes", 6-16
+ms, SPC700 BRR), Neo Geo AES/MVS ("neogeo", 2,5-14 ms, YM2610), Game Boy
+Advance ("gba", 5-17 ms, ARM7TDMI + DirectSound), Atari 7800 ("a78", 4,3-6 ms)
+i Atari Lynx ("lynx", 5-8,2 ms), Vectrex ("vectrex", 6-15,7 ms, 540 x 720),
+Famicom Disk System ("fds", 4,6-11,3 ms), Neo Geo Pocket Color ("ngp", 8,8-11
+ms), Odyssey2 / Videopac ("odyssey2", 2,5 ms), Intellivision ("intv", 4,4 ms)
+oraz Sony PlayStation 1 ("psx", R3000A + GTE 3D + SPU ADPCM, strumieniowe
+.cue/.bin i PS-X .exe: 2-15 ms/klatke na grach i demach 3D homebrew; eksplorator
+sam odroznia pliki .exe PlayStation od programow DOS).
 Archiwa: kazdy emulator bierze gre w .zip (metody stored i deflate; brany
 jest najwiekszy plik, ktory nie jest tekstem, obrazkiem ani katalogiem) albo
 w .gz (.adz Amigi tez); suma CRC-32 sprawdzana. Plik zapisu ma nazwe calego
