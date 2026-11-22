@@ -805,6 +805,9 @@ static player_fn player_for(const char *s, int on_disk)
     if (n - dot == 5 && (s[dot + 1] | 32) == 'c' && (s[dot + 2] | 32) == 'p' && (s[dot + 3] | 32) == 's' &&
         (s[dot + 4] == '1' || s[dot + 4] == '2'))
         return cps_play;
+    if (n - dot == 5 && (s[dot + 1] | 32) == 'd' && (s[dot + 2] | 32) == 'u' && (s[dot + 3] | 32) == 'c' &&
+        (s[dot + 4] | 32) == 'k')
+        return megaduck_play;
     if (n - dot > 4)
         return 0;
     char e[4] = {0, 0, 0, 0};
@@ -911,6 +914,25 @@ static player_fn player_for(const char *s, int on_disk)
     if (((e[0] == 'm' && e[1] == 'd' && !e[2]) || (e[0] == 'g' && e[1] == 'e' && e[2] == 'n') ||
          (e[0] == 's' && e[1] == 'm' && e[2] == 'd')) && !e[3])
         return md_play;
+    if (e[0] == 'm' && e[1] == 'd' && (e[2] == '1' || e[2] == '2') && !e[3])
+        return megaduck_play;
+    if (e[0] == 's' && e[1] == 'v' && !e[2])
+        return sv_play;
+    if (((e[0] == 'c' && e[1] == 'h' && e[2] == '8') ||
+         (e[0] == 's' && e[1] == 'c' && (e[2] == '8' || e[2] == 'h')) ||
+         (e[0] == 'x' && e[1] == 'o' && e[2] == '8')) && !e[3])
+        return chip8_play;
+    if (e[0] == 'c' && e[1] == 'h' && e[2] == 'f' && !e[3])
+        return channelf_play;
+    if (e[0] == 'm' && e[1] == 'i' && e[2] == 'n' && !e[3]) {
+        const char *bn = s;
+        for (const char *q = s; *q; q++)
+            if (*q == '/' || *q == '\\' || *q == ':')
+                bn = q + 1;
+        if ((bn[0] | 32) == 'b' && (bn[1] | 32) == 'i' && (bn[2] | 32) == 'o' && (bn[3] | 32) == 's' && bn[4] == '.')
+            return 0;
+        return pokemini_play;
+    }
     if (e[0] == 'p' && e[1] == 'c' && e[2] == 'e' && !e[3])
         return pce_play;
     if (e[0] == 'c' && e[1] == 'o' && e[2] == 'l' && !e[3])
@@ -993,6 +1015,15 @@ static player_fn player_for(const char *s, int on_disk)
         if (got >= 16 && size >= 18u * 2352u && head[0] == 0x00 && head[1] == 0xFF && head[2] == 0xFF &&
             head[3] == 0xFF && head[10] == 0xFF && head[11] == 0x00 && (head[15] == 1 || head[15] == 2))
             return psx_play;
+        const char *cwd = disk_cwd();
+        for (const char *q = cwd; *q; q++)
+            if ((q[0] | 32) == 'm' && (q[1] | 32) == 'e' && (q[2] | 32) == 'g' && (q[3] | 32) == 'a' &&
+                (q[4] | 32) == 'd' && (q[5] | 32) == 'u')
+                return megaduck_play;
+        for (const char *q = s; *q; q++)
+            if ((q[0] | 32) == 'm' && (q[1] | 32) == 'e' && (q[2] | 32) == 'g' && (q[3] | 32) == 'a' &&
+                (q[4] | 32) == 'd' && (q[5] | 32) == 'u')
+                return megaduck_play;
         return 0;
     }
     return 0;

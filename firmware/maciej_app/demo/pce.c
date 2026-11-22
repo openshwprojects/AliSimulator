@@ -63,6 +63,9 @@ static struct {
     u16 vdc[20], vram_rbuf;
     u16 bg_y;
     u8 byr_latched, satb_dirty;
+    u8 burst_mode, sat_dma_slcounter;
+    u16 frame_counter, display_counter, rcr_count;
+    u16 lat_vds, lat_vsw, lat_vdw, lat_vcr, vblank_fl;
     /* VCE */
     u8 vce_ctrl;
     u16 vce_addr;
@@ -271,13 +274,10 @@ static void vdc_satb_dma(void)
     u16 src = S.vdc[19];
     for (int i = 0; i < 256; i++) {
         u16 a = (u16)(src + i);
-        M->satb[i] = a < 0x8000 ? M->vram[a] : 0;
+        M->satb[i] = M->vram[a & 0x7FFFu];
     }
     S.satb_dirty = 0;
-    if (S.vdc[15] & 0x01) {
-        S.vdc_status |= 0x08;           /* DS */
-        vdc_update_irq();
-    }
+    S.sat_dma_slcounter = 2;
 }
 
 static void vdc_vram_dma(void)
@@ -1307,7 +1307,8 @@ static void render_scanline(int y, u16 *dst, int w)
         if (y < sy || y >= sy + sh)
             continue;
         int cgx = (s[3] >> 8) & 1;
-        int sw_cells = cgx ? 2 : 1;
+        int orig_cells = cgx ? 2 : 1;
+        int sw_cells = orig_cells;
         if (cells + sw_cells > 16) {
             if (cells >= 16) {
                 if (cr & 0x02) {
@@ -1343,7 +1344,7 @@ static void render_scanline(int y, u16 *dst, int w)
             int cx = sx + c * 16;
             if (cx + 16 <= 0 || cx >= w)
                 continue;
-            u32 cell_pat = pat_y + (u32)(xflip ? (sw_cells - 1 - c) : c);
+            u32 cell_pat = pat_y + (u32)(xflip ? (orig_cells - 1 - c) : c);
             u32 base = (cell_pat << 6) + line_in_cell;
             if (base + 48u >= 0x8000u)
                 continue;
@@ -1505,10 +1506,41 @@ void pce_reset(void)
     S.vdc[12] = 0x0F02;
     S.vdc[13] = 239;                    /* VDW = 239 -> 240 lines */
     S.vdc[14] = 0x000C;
+    S.frame_counter = 0;
+    S.display_counter = 0;
+    S.rcr_count = 0;
+    S.lat_vds = 0x0F;
+    S.lat_vsw = 0x02;
+    S.lat_vdw = 239;
+    S.lat_vcr = 0x0C;
+    S.vblank_fl = 0x0F + 0x02 + 239 + 1;
+    S.burst_mode = 1;
+    S.sat_dma_slcounter = 0;
     for (int i = 0; i < 6; i++)
         S.psg[i].lfsr = 1u;
     rebuild_pages();
     S.pc = bus_read(0xFFFE) | ((u16)bus_read(0xFFFF) << 8);
+}
+
+static u32 calc_line_leadin(void)
+{
+    int hds = (S.vdc[10] >> 8) & 0x7F;
+    int hdw = S.vdc[11] & 0x7F;
+    int hde = (S.vdc[11] >> 8) & 0x7F;
+    int magical = ((hds + hdw + 1 + hde + 2) & ~1) - (hdw + 1);
+    int cyc = magical * 8 - 2;
+    int dc = S.vce_ctrl & 1;
+    if (S.vce_ctrl & 2)
+        dc = 2;
+    if (dc == 0)
+        cyc = (cyc * 4) / 3;
+    else if (dc == 2)
+        cyc = (cyc * 2) / 3;
+    if (cyc < 16)
+        cyc = 16;
+    if (cyc > 380)
+        cyc = 380;
+    return (u32)cyc;
 }
 
 void pce_frame(u16 pad, u16 *picture)
@@ -1518,54 +1550,102 @@ void pce_frame(u16 pad, u16 *picture)
     S.audio_cyc_last = S.cycles;
 
     int w = calc_width();
-    int vdw = (int)(S.vdc[13] & 0x1FFu) + 1;
-    int h = vdw < 160 ? PCE_H_DEF : vdw > PCE_H_MAX ? PCE_H_MAX : vdw;
-    S.out_w = w;
-    S.out_h = h;
+    int h_latched = 0;
+    int h = S.out_h;
+    int safety = 0;
 
-    int total_lines = (S.vce_ctrl & 0x04) ? 262 : 263;
-    int active_start = 14;              /* lines 0..13 top blank/sync, 14..14+h-1 active */
-    int vblank_line = active_start + h;
-    if (vblank_line >= total_lines - 2)
-        vblank_line = total_lines - 3;
-
-    S.byr_latched = 0;
-
-    for (int sl = 0; sl < total_lines; sl++) {
-        int ay = sl - active_start;
-        u16 rcr_val = (u16)(64 + ay);
-
-        if (ay >= 0 && ay < h) {
-            if (ay == 0 && !S.byr_latched) {
-                S.bg_y = S.vdc[8] & 0x1FFu;
-                S.byr_latched = 1;
-            }
-            /* Run active scan (~340 of 455 cycles), render line, fire RCR in HBlank, run HBlank */
-            run_cycles_7m(340);
-            if (picture)
-                render_scanline(ay, picture + ay * w, w);
-            if ((S.vdc[6] & 0x3FFu) == rcr_val && (S.vdc[5] & 0x04)) {
-                S.vdc_status |= 0x04;   /* RR */
-                vdc_update_irq();
-            }
-            run_cycles_7m(LINE_CYC - 340);
-            S.bg_y = (S.bg_y + 1u) & 0x1FFu;
-        } else {
-            if (sl == vblank_line) {
-                if (S.vdc[5] & 0x08) {
-                    S.vdc_status |= 0x20;   /* VD (VBlank) */
-                    vdc_update_irq();
-                }
-                if (S.satb_dirty || (S.vdc[15] & 0x10))
-                    vdc_satb_dma();
-            }
-            run_cycles_7m(340);
-            if ((S.vdc[6] & 0x3FFu) == rcr_val && (S.vdc[5] & 0x04)) {
-                S.vdc_status |= 0x04;
-                vdc_update_irq();
-            }
-            run_cycles_7m(LINE_CYC - 340);
+    do {
+        if (S.frame_counter == 0) {
+            S.lat_vsw = S.vdc[12] & 0x1Fu;
+            S.lat_vds = (S.vdc[12] >> 8) & 0xFFu;
+            S.lat_vdw = S.vdc[13] & 0x1FFu;
+            S.lat_vcr = S.vdc[14] & 0xFFu;
+            S.vblank_fl = S.lat_vds + S.lat_vsw + S.lat_vdw + 1u;
+            if (S.vblank_fl > 261u)
+                S.vblank_fl = 261u;
+            S.display_counter = 0;
+            S.burst_mode = !(S.vdc[5] & 0xC0u);
         }
+
+        u16 active_dc = S.lat_vds + S.lat_vsw;
+        if (S.display_counter == active_dc) {
+            S.burst_mode = !(S.vdc[5] & 0xC0u);
+            S.rcr_count = 0;
+            w = calc_width();
+            int vdw = (int)S.lat_vdw + 1;
+            h = vdw < 160 ? PCE_H_DEF : vdw > PCE_H_MAX ? PCE_H_MAX : vdw;
+            S.out_w = w;
+            S.out_h = h;
+            h_latched = 1;
+        }
+
+        int need_vbi = 0;
+        if (S.display_counter == S.vblank_fl) {
+            need_vbi = 1;
+            if (S.satb_dirty || (S.vdc[15] & 0x10u))
+                vdc_satb_dma();
+        }
+
+        if ((int)S.rcr_count == ((int)(S.vdc[6] & 0x3FFu) - 0x40) && (S.vdc[5] & 0x04u)) {
+            S.vdc_status |= 0x04u;      /* RR */
+            vdc_update_irq();
+        }
+
+        u32 leadin = calc_line_leadin();
+        run_cycles_7m(leadin);
+
+        if (!S.burst_mode && S.display_counter >= active_dc &&
+            S.display_counter < active_dc + S.lat_vdw + 1u) {
+            if (S.display_counter == active_dc)
+                S.bg_y = S.vdc[8] & 0x1FFu;
+            else
+                S.bg_y = (S.bg_y + 1u) & 0x1FFu;
+
+            int ay = (int)(S.display_counter - active_dc);
+            if (picture && ay >= 0 && ay < h)
+                render_scanline(ay, picture + ay * w, w);
+        } else if (S.burst_mode && S.display_counter >= active_dc &&
+                   S.display_counter < active_dc + S.lat_vdw + 1u) {
+            int ay = (int)(S.display_counter - active_dc);
+            if (picture && ay >= 0 && ay < h) {
+                u16 os = M->vce_pal[0x100];
+                u16 *row = picture + ay * w;
+                for (int x = 0; x < w; x++)
+                    row[x] = os;
+            }
+        }
+
+        if (need_vbi && (S.vdc[5] & 0x08u))
+            S.vdc_status |= 0x20u;      /* VD (VBlank) */
+
+        run_cycles_7m(2);
+
+        if (S.vdc_status & 0x20u)
+            vdc_update_irq();
+
+        run_cycles_7m(LINE_CYC - leadin - 2u);
+
+        S.rcr_count++;
+        S.display_counter++;
+
+        if (S.sat_dma_slcounter) {
+            S.sat_dma_slcounter--;
+            if (!S.sat_dma_slcounter && (S.vdc[15] & 0x01u)) {
+                S.vdc_status |= 0x08u;  /* DS */
+                vdc_update_irq();
+            }
+        }
+
+        if (S.display_counter == active_dc + S.lat_vdw + S.lat_vcr + 3u)
+            S.display_counter = 0;
+
+        u16 total_lines = (S.vce_ctrl & 0x04u) ? 263u : 262u;
+        S.frame_counter = (u16)((S.frame_counter + 1u) % total_lines);
+    } while (S.frame_counter != S.vblank_fl && ++safety < 300);
+
+    if (!h_latched) {
+        S.out_w = w;
+        S.out_h = h;
     }
     psg_catch_up();
 }

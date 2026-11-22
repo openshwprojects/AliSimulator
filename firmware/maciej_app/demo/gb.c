@@ -1,4 +1,4 @@
-/* A Game Boy (DMG): see gb.h.
+/* A Game Boy (DMG) and Mega Duck / Cougar Boy: see gb.h.
 
    The CPU (a Z80's cousin, Sharp's SM83) runs one machine cycle -- four
    ticks of the 4.194304 MHz clock -- per memory access, and everything else
@@ -21,6 +21,7 @@
    picture memory (all at once, or 16 bytes in each line's waiting time),
    the double speed (the CPU and the timer twice as fast, the picture chip
    not).  An older game runs as on the first Game Boy, in its four shades. */
+#pragma GCC optimize("O2")
 #include "gb.h"
 
 typedef signed char s8;
@@ -67,10 +68,12 @@ const u8 gb_rgb[4][3] = {{0xE0, 0xF8, 0xD0}, {0x88, 0xC0, 0x70}, {0x34, 0x68, 0x
 void (*gb_serial_out)(u8 byte);
 
 /* ---- the cartridge ---- */
-enum { ROM_ONLY, MBC1, MBC2, MBC3, MBC5 };
+enum { ROM_ONLY, MBC1, MBC2, MBC3, MBC5, MD_MAPPER };
 static u8 *rom;
+static u32 rom_bytes;                   /* exact image byte count */
 static u32 rom_banks;                   /* 16 KB each */
-static u8 mbc, has_battery, has_ram, has_clock;
+static u8 mbc, has_battery, has_ram, has_clock, megaduck;
+static u32 md_lo, md_hi;                /* Mega Duck 16 KB bank indices for $0000 and $4000 */
 static u8 cart_ram[0x20000];
 static u32 ram_size;
 static u8 ram_on, bank_lo, bank_hi, mode, ram_bank, ram_dirty;
@@ -134,6 +137,10 @@ static void map_banks(void)
         x = (u32)(bank_hi << 8) | bank_lo;
         r = ram_bank;
         break;
+    case MD_MAPPER:
+        lo = md_lo;
+        x = md_hi;
+        break;
     }
     rom0_at = (lo % rom_banks) << 14;
     romx_at = (x % rom_banks) << 14;
@@ -143,6 +150,16 @@ static void map_banks(void)
 static void cart_write(u16 a, u8 v)
 {
     switch (mbc) {
+    case MD_MAPPER:
+        if (a == 0x0001) {
+            md_hi = (u32)v % rom_banks;
+        } else if (a == 0x1000 && rom_banks > 2) {
+            md_lo = ((u32)(v & 0x0F) * 2u) % rom_banks;
+            md_hi = (md_lo + 1u) % rom_banks;
+        } else if (a >= 0x2000 && a < 0x3000 && rom_banks > 1) {
+            md_hi = (u32)v % rom_banks;
+        }
+        break;
     case MBC1:
         if (a < 0x2000)
             ram_on = (v & 0x0F) == 0x0A;
@@ -441,6 +458,231 @@ static void lcd_switch(u8 was, u8 now)
     }
 }
 
+/* ---- 4-channel 48 kHz APU (Game Boy & Mega Duck) ---- */
+static u32 apu_hz, apu_acc, apu_fseq;
+static u8 apu_seq_step;
+static u8 ch_on[4];
+static u16 ch_len[4];
+static u8 ch_vol[4], ch_env_per[4], ch_env_cnt[4], ch_env_up[4];
+static u16 ch_freq[3];
+static u32 ch_phase[4];
+static u8 sw_per, sw_cnt, sw_en;
+static u16 sw_shadow;
+static u16 lfsr_reg;
+static s16 apu_ring[4096];
+static u32 apu_head, apu_count;
+
+static void apu_reset(void)
+{
+    apu_acc = apu_fseq = apu_seq_step = 0;
+    for (int i = 0; i < 4; i++) {
+        ch_on[i] = 0;
+        ch_len[i] = 0;
+        ch_vol[i] = ch_env_per[i] = ch_env_cnt[i] = ch_env_up[i] = 0;
+        ch_phase[i] = 0;
+    }
+    ch_freq[0] = ch_freq[1] = ch_freq[2] = 0;
+    sw_per = sw_cnt = sw_en = 0;
+    sw_shadow = 0;
+    lfsr_reg = 0x7FFFu;
+}
+
+static u16 sweep_calc(void)
+{
+    u8 shift = io[0x10] & 7;
+    u16 delta = sw_shadow >> shift;
+    u16 next = (io[0x10] & 8) ? (u16)(sw_shadow - delta) : (u16)(sw_shadow + delta);
+    if (next > 2047)
+        ch_on[0] = 0;
+    return next;
+}
+
+static void apu_trigger(int ch)
+{
+    if (!(io[0x26] & 0x80))
+        return;
+    ch_on[ch] = 1;
+    ch_phase[ch] = 0;
+    switch (ch) {
+    case 0:
+        if (!ch_len[0]) ch_len[0] = 64;
+        ch_vol[0] = io[0x12] >> 4;
+        ch_env_up[0] = (io[0x12] >> 3) & 1;
+        ch_env_per[0] = ch_env_cnt[0] = io[0x12] & 7;
+        ch_freq[0] = (u16)(((io[0x14] & 7) << 8) | io[0x13]);
+        sw_shadow = ch_freq[0];
+        sw_per = (io[0x10] >> 4) & 7;
+        sw_cnt = sw_per ? sw_per : 8;
+        sw_en = (sw_per != 0) || ((io[0x10] & 7) != 0);
+        if ((io[0x10] & 7) != 0)
+            (void)sweep_calc();
+        if (!(io[0x12] & 0xF8))
+            ch_on[0] = 0;
+        break;
+    case 1:
+        if (!ch_len[1]) ch_len[1] = 64;
+        ch_vol[1] = io[0x17] >> 4;
+        ch_env_up[1] = (io[0x17] >> 3) & 1;
+        ch_env_per[1] = ch_env_cnt[1] = io[0x17] & 7;
+        ch_freq[1] = (u16)(((io[0x19] & 7) << 8) | io[0x18]);
+        if (!(io[0x17] & 0xF8))
+            ch_on[1] = 0;
+        break;
+    case 2:
+        if (!ch_len[2]) ch_len[2] = 256;
+        ch_freq[2] = (u16)(((io[0x1E] & 7) << 8) | io[0x1D]);
+        if (!(io[0x1A] & 0x80))
+            ch_on[2] = 0;
+        break;
+    case 3:
+        if (!ch_len[3]) ch_len[3] = 64;
+        ch_vol[3] = io[0x21] >> 4;
+        ch_env_up[3] = (io[0x21] >> 3) & 1;
+        ch_env_per[3] = ch_env_cnt[3] = io[0x21] & 7;
+        lfsr_reg = 0x7FFFu;
+        if (!(io[0x21] & 0xF8))
+            ch_on[3] = 0;
+        break;
+    }
+}
+
+static void apu_step_seq(void)
+{
+    if (!(io[0x26] & 0x80))
+        return;
+    /* 256 Hz length counters (steps 0, 2, 4, 6) */
+    if (!(apu_seq_step & 1)) {
+        static const u8 len_reg[4] = {0x14, 0x19, 0x1E, 0x23};
+        for (int i = 0; i < 4; i++) {
+            if ((io[len_reg[i]] & 0x40) && ch_len[i]) {
+                if (--ch_len[i] == 0)
+                    ch_on[i] = 0;
+            }
+        }
+    }
+    /* 128 Hz sweep on Channel 1 (steps 2, 6) */
+    if ((apu_seq_step & 3) == 2 && sw_en && ch_on[0]) {
+        if (sw_cnt && --sw_cnt == 0) {
+            sw_cnt = sw_per ? sw_per : 8;
+            if (sw_per) {
+                u16 nf = sweep_calc();
+                if (nf <= 2047 && (io[0x10] & 7)) {
+                    sw_shadow = ch_freq[0] = nf;
+                    io[0x13] = (u8)nf;
+                    io[0x14] = (u8)((io[0x14] & 0xF8) | (nf >> 8));
+                    (void)sweep_calc();
+                }
+            }
+        }
+    }
+    /* 64 Hz volume envelopes (step 7) */
+    if (apu_seq_step == 7) {
+        for (int i = 0; i < 4; i++) {
+            if (i == 2 || !ch_on[i] || !ch_env_per[i])
+                continue;
+            if (--ch_env_cnt[i] == 0) {
+                ch_env_cnt[i] = ch_env_per[i];
+                if (ch_env_up[i] && ch_vol[i] < 15)
+                    ch_vol[i]++;
+                else if (!ch_env_up[i] && ch_vol[i] > 0)
+                    ch_vol[i]--;
+            }
+        }
+    }
+    apu_seq_step = (apu_seq_step + 1) & 7;
+}
+
+static void apu_sample(void)
+{
+    static const u8 duty_tab[4] = {0x01, 0x81, 0x87, 0x7E};
+    s32 mix = 0;
+    if ((io[0x26] & 0x80) && apu_hz) {
+        u32 dt = 4194304u / apu_hz;         /* T-cycles per sample (~87 at 48 kHz) */
+        u8 pan = io[0x25];
+        /* Pulse 1 & Pulse 2 */
+        for (int c = 0; c < 2; c++) {
+            if (!ch_on[c] || !ch_vol[c])
+                continue;
+            u16 f = c == 0 ? ch_freq[0] : (u16)(((io[0x19] & 7) << 8) | io[0x18]);
+            u32 per = (u32)(2048u - (f & 2047u)) * 4u;
+            if (per < 8) per = 8;
+            ch_phase[c] = (ch_phase[c] + dt) % (per * 8u);
+            u8 step = (u8)(ch_phase[c] / per);
+            u8 duty = duty_tab[(io[c == 0 ? 0x11 : 0x16] >> 6) & 3];
+            s32 s = ((duty >> step) & 1) ? (s32)ch_vol[c] : -(s32)ch_vol[c];
+            if (pan & (0x11u << c))
+                mix += s;
+        }
+        /* Wave Channel 3 */
+        if (ch_on[2] && (io[0x1A] & 0x80)) {
+            u8 vcode = (io[0x1C] >> 5) & 3;
+            if (vcode) {
+                u16 f = (u16)(((io[0x1E] & 7) << 8) | io[0x1D]);
+                u32 per = (u32)(2048u - (f & 2047u)) * 2u;
+                if (per < 4) per = 4;
+                ch_phase[2] = (ch_phase[2] + dt) % (per * 32u);
+                u8 idx = (u8)(ch_phase[2] / per);
+                u8 byte = io[0x30 + (idx >> 1)];
+                u8 nib = (idx & 1) ? (byte & 0x0F) : (byte >> 4);
+                s32 s = ((s32)nib - 8) >> (vcode - 1);
+                if (pan & 0x44u)
+                    mix += s;
+            }
+        }
+        /* Noise Channel 4 */
+        if (ch_on[3] && ch_vol[3]) {
+            static const u8 divs[8] = {8, 16, 32, 48, 64, 80, 96, 112};
+            u8 nr43 = io[0x22];
+            u32 shift = nr43 >> 4;
+            if (shift < 14) {
+                u32 per = (u32)divs[nr43 & 7] << shift;
+                ch_phase[3] += dt;
+                while (ch_phase[3] >= per) {
+                    ch_phase[3] -= per;
+                    u16 x = (u16)((lfsr_reg ^ (lfsr_reg >> 1)) & 1u);
+                    lfsr_reg = (u16)((lfsr_reg >> 1) | (x << 14));
+                    if (nr43 & 8)
+                        lfsr_reg = (u16)((lfsr_reg & ~0x40u) | (x << 6));
+                }
+            }
+            s32 s = (lfsr_reg & 1u) ? -(s32)ch_vol[3] : (s32)ch_vol[3];
+            if (pan & 0x88u)
+                mix += s;
+        }
+        u32 mvol = ((io[0x24] & 7u) + ((io[0x24] >> 4) & 7u) + 2u); /* 2..16 */
+        mix = (mix * (s32)mvol * 28);
+        if (mix > 32767) mix = 32767;
+        if (mix < -32768) mix = -32768;
+    }
+    u32 cap = (u32)(sizeof(apu_ring) / sizeof(apu_ring[0]));
+    if (apu_count < cap) {
+        apu_ring[(apu_head + apu_count) % cap] = (s16)mix;
+        apu_count++;
+    } else {
+        apu_ring[apu_head] = (s16)mix;
+        apu_head = (apu_head + 1) % cap;
+    }
+}
+
+void gb_audio_rate(u32 hz)
+{
+    apu_hz = (hz >= 8000u && hz <= 192000u) ? hz : 0;
+    apu_acc = 0;
+    apu_head = apu_count = 0;
+}
+
+int gb_audio(s16 *out, int max)
+{
+    u32 cap = (u32)(sizeof(apu_ring) / sizeof(apu_ring[0]));
+    int n = 0;
+    while (n < max && apu_count) {
+        out[n++] = apu_ring[apu_head];
+        apu_head = (apu_head + 1) % cap;
+        apu_count--;
+    }
+    return n;
+}
+
 /* ---- timer, link port ---- */
 static u16 timer_bit(void)
 {
@@ -496,6 +738,16 @@ static void tick(void)
         rtc_cycles = 0;
         rtc_second();
     }
+    if (apu_hz) {
+        if ((apu_fseq += dstep) >= 8192u) {
+            apu_fseq -= 8192u;
+            apu_step_seq();
+        }
+        if ((apu_acc += apu_hz * dstep) >= 4194304u) {
+            apu_acc -= 4194304u;
+            apu_sample();
+        }
+    }
     ppu_tick();
 }
 
@@ -526,6 +778,11 @@ static u8 io_read(u8 r)
     case TAC: return io[TAC] | 0xF8;
     case IF: return io[IF] | 0xE0;
     case STAT: return (u8)((io[STAT] & 0x7C) | mode_read | 0x80);
+    }
+    if (r == 0x26) {
+        u8 st = apu_hz ? (u8)((ch_on[0] ? 1 : 0) | (ch_on[1] ? 2 : 0) |
+                              (ch_on[2] ? 4 : 0) | (ch_on[3] ? 8 : 0)) : 0;
+        return (u8)((io[0x26] & 0x80) | 0x70 | st);
     }
     if (r >= 0x10 && r < 0x30)
         return io[r] | sound_or[r - 0x10];
@@ -606,11 +863,14 @@ static void io_write(u8 r, u8 v)
     case IF:
         io[IF] = v & 0x1F;
         return;
-    case 0x26:                          /* sound on/off: off clears its registers; no channel ever plays */
+    case 0x26:                          /* sound on/off: off clears its registers */
         io[0x26] = v & 0x80;
-        if (!(v & 0x80))
+        if (!(v & 0x80)) {
             for (int i = 0x10; i < 0x26; i++)
                 io[i] = 0;
+            for (int i = 0; i < 4; i++)
+                ch_on[i] = 0;
+        }
         return;
     case LCDC: {
         u8 was = io[LCDC];
@@ -672,8 +932,87 @@ static void io_write(u8 r, u8 v)
         case 0x74: r74 = v; return;
         case 0x75: r75 = v & 0x70; return;
         }
+    if (r >= 0x10 && r < 0x26) {
+        if (!(io[0x26] & 0x80) && r != 0x11 && r != 0x16 && r != 0x1B && r != 0x20)
+            return;
+        if (io[0x26] & 0x80)
+            io[r] = v;
+        switch (r) {
+        case 0x11: ch_len[0] = (u16)(64 - (v & 0x3F)); break;
+        case 0x12: if (!(v & 0xF8)) ch_on[0] = 0; break;
+        case 0x13: ch_freq[0] = (u16)((ch_freq[0] & 0x700) | v); break;
+        case 0x14: ch_freq[0] = (u16)((ch_freq[0] & 0xFF) | ((v & 7) << 8)); if (v & 0x80) apu_trigger(0); break;
+        case 0x16: ch_len[1] = (u16)(64 - (v & 0x3F)); break;
+        case 0x17: if (!(v & 0xF8)) ch_on[1] = 0; break;
+        case 0x19: if (v & 0x80) apu_trigger(1); break;
+        case 0x1A: if (!(v & 0x80)) ch_on[2] = 0; break;
+        case 0x1B: ch_len[2] = (u16)(256 - v); break;
+        case 0x1E: if (v & 0x80) apu_trigger(2); break;
+        case 0x20: ch_len[3] = (u16)(64 - (v & 0x3F)); break;
+        case 0x21: if (!(v & 0xF8)) ch_on[3] = 0; break;
+        case 0x23: if (v & 0x80) apu_trigger(3); break;
+        }
+        return;
+    }
     if (r < 0x80)
         io[r] = v;
+}
+
+/* Mega Duck / Cougar Boy I/O & LCDC swizzling (MiSTer megaswizzle.sv & GBDK duck/sfr.s) */
+static u8 duck_to_gb_lcdc(u8 d)
+{
+    return (u8)((d & 0xB0u) | ((d & 0x40u) >> 6) | ((d & 0x08u) << 3) |
+                ((d & 0x04u) << 1) | ((d & 0x02u) << 1) | ((d & 0x01u) << 1));
+}
+
+static u8 gb_to_duck_lcdc(u8 g)
+{
+    return (u8)((g & 0xB0u) | ((g & 0x01u) << 6) | ((g & 0x40u) >> 3) |
+                ((g & 0x08u) >> 1) | ((g & 0x04u) >> 1) | ((g & 0x02u) >> 1));
+}
+
+static u8 duck_io_map(u8 r)
+{
+    static const u8 vid[12] = {0x40, 0x41, 0x42, 0x43, 0x48, 0x49, 0x4A, 0x4B, 0x44, 0x45, 0x46, 0x47};
+    static const u8 snd1[15] = {0x10, 0x12, 0x11, 0x13, 0x14, 0x16, 0xFF, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1E, 0x1D};
+    static const u8 snd2[7] = {0x20, 0x22, 0x21, 0x23, 0x24, 0x26, 0x25};
+    if (r < 0x10) return r;
+    if (r <= 0x1B) return vid[r - 0x10];
+    if (r < 0x20) return 0xFF;
+    if (r <= 0x2E) return snd1[r - 0x20];
+    if (r == 0x2F) return 0xFF;
+    if (r < 0x40) return r;
+    if (r <= 0x46) return snd2[r - 0x40];
+    return 0xFF;
+}
+
+static u8 duck_io_read(u8 r)
+{
+    u8 g = duck_io_map(r);
+    if (g == 0xFF)
+        return 0xFF;
+    u8 v = io_read(g);
+    if (r == 0x10)
+        return gb_to_duck_lcdc(v);
+    if (r == 0x21 || r == 0x27 || r == 0x41 || r == 0x42)
+        return (u8)((v << 4) | (v >> 4));
+    if (r == 0x2C)
+        return (u8)(v ^ ((v & 0x20u) << 1));
+    return v;
+}
+
+static void duck_io_write(u8 r, u8 v)
+{
+    u8 g = duck_io_map(r);
+    if (g == 0xFF)
+        return;
+    if (r == 0x10)
+        v = duck_to_gb_lcdc(v);
+    else if (r == 0x21 || r == 0x27 || r == 0x41 || r == 0x42)
+        v = (u8)((v << 4) | (v >> 4));
+    else if (r == 0x2C)
+        v = (u8)(v ^ ((v & 0x20u) << 1));
+    io_write(g, v);
 }
 
 /* into picture memory (its bank now) 16 bytes at a time, 8 machine cycles each at normal speed, 16 at double:
@@ -701,10 +1040,14 @@ static void hdma_run(void)
 static u8 peek(u16 a)
 {
     switch (a >> 12) {
-    case 0: case 1: case 2: case 3:
-        return rom[rom0_at + a];
-    case 4: case 5: case 6: case 7:
-        return rom[romx_at + (a & 0x3FFF)];
+    case 0: case 1: case 2: case 3: {
+        u32 at = rom0_at + a;
+        return at < rom_bytes ? rom[at] : 0xFF;
+    }
+    case 4: case 5: case 6: case 7: {
+        u32 at = romx_at + (a & 0x3FFF);
+        return at < rom_bytes ? rom[at] : 0xFF;
+    }
     case 8: case 9:
         return vram[(vbank << 13) | (a & 0x1FFF)];
     case 0xA: case 0xB:
@@ -719,7 +1062,7 @@ static u8 peek(u16 a)
     if (a < 0xFF00)
         return 0x00;
     if (a < 0xFF80)
-        return io_read((u8)a);
+        return megaduck ? duck_io_read((u8)a) : io_read((u8)a);
     if (a < 0xFFFF)
         return hram[a - 0xFF80];
     return ie;
@@ -735,6 +1078,12 @@ static void poke(u16 a, u8 v)
         vram[(vbank << 13) | (a & 0x1FFF)] = v;
         return;
     case 0xA: case 0xB:
+        if (mbc == MD_MAPPER && a == 0xB000 && rom_banks > 2) {
+            md_lo = ((u32)v * 2u) % rom_banks;
+            md_hi = (md_lo + 1u) % rom_banks;
+            map_banks();
+            return;
+        }
         ram_write(a, v);
         return;
     case 0xC: case 0xD: case 0xE:
@@ -748,9 +1097,12 @@ static void poke(u16 a, u8 v)
             oam[a - 0xFE00] = v;
     } else if (a < 0xFF00)
         ;
-    else if (a < 0xFF80)
-        io_write((u8)a, v);
-    else if (a < 0xFFFF)
+    else if (a < 0xFF80) {
+        if (megaduck)
+            duck_io_write((u8)a, v);
+        else
+            io_write((u8)a, v);
+    } else if (a < 0xFFFF)
         hram[a - 0xFF80] = v;
     else
         ie = v;
@@ -1247,7 +1599,9 @@ const char *gb_load(u8 *image, u32 size)
     default:
         return "a cartridge board this player does not have (it has plain ROM, MBC1, MBC2, MBC3 and MBC5)";
     }
+    megaduck = 0;
     rom = image;
+    rom_bytes = size;
     rom_banks = size >> 14;
     ram_size = 0;
     if (mbc == MBC2)
@@ -1290,8 +1644,36 @@ const char *gb_load(u8 *image, u32 size)
     return 0;
 }
 
+const char *megaduck_load(u8 *image, u32 size)
+{
+    if (!image || size < 256 || size > 0x400000u)
+        return "not a Mega Duck cartridge file (expected 256 B .. 4 MB)";
+    megaduck = 1;
+    cgb = 0;
+    mbc = MD_MAPPER;
+    rom = image;
+    rom_bytes = size;
+    rom_banks = (size + 0x3FFFu) >> 14;
+    if (!rom_banks)
+        rom_banks = 1;
+    has_clock = 0;
+    has_ram = 1;
+    has_battery = 1;
+    ram_size = 0x2000;
+    for (unsigned i = 0; i < sizeof(cart_ram); i++)
+        cart_ram[i] = 0xFF;
+    char *p = info;
+    put(&p, "Mega Duck / Cougar Boy, ");
+    put(&p, rom_banks > 2 ? "banked ($0001 / $B000)" : "flat ROM");
+    put(&p, ", ROM ");
+    put_kb(&p, size);
+    gb_reset();
+    return 0;
+}
+
 void gb_reset(void)
 {
+    apu_reset();
     for (unsigned i = 0; i < sizeof(vram); i++)
         vram[i] = 0;
     for (unsigned i = 0; i < sizeof(wram); i++)
@@ -1322,7 +1704,7 @@ void gb_reset(void)
     else
         A = 0x01, F = 0xB0, B = 0x00, C = 0x13, D = 0x00, E = 0xD8, H = 0x01, L = 0x4D;
     SP = 0xFFFE;
-    PC = 0x0100;
+    PC = megaduck ? 0x0000 : 0x0100;
     static const u8 start[][2] = {{0x10, 0x80}, {0x11, 0xBF}, {0x12, 0xF3}, {0x14, 0xBF}, {0x16, 0x3F}, {0x19, 0xBF},
                                   {0x1A, 0x7F}, {0x1B, 0xFF}, {0x1C, 0x9F}, {0x1E, 0xBF}, {0x20, 0xFF}, {0x23, 0xBF},
                                   {0x24, 0x77}, {0x25, 0xF3}, {0x26, 0x80}, {LCDC, 0x91}, {BGP, 0xFC}, {OBP0, 0xFF},
@@ -1332,12 +1714,13 @@ void gb_reset(void)
     ie = 0;
     ime = ei_pending = halted = halt_bug = stopped = jammed = test_done = 0;
     cycles = 0;
-    divc = 0xABC8;
+    divc = megaduck ? 0 : 0xABC8;
     tima_state = 0;
     dma_delay = 0, dma_at = 0xA0, dma_block = 0, dma_from = 0;
     serial_left = 0;
     pad_now = 0;
-    ram_on = 0, bank_lo = 1, bank_hi = 0, mode = 0, ram_bank = 0, ram_dirty = 0;
+    ram_on = megaduck ? 1 : 0, bank_lo = 1, bank_hi = 0, mode = 0, ram_bank = 0, ram_dirty = 0;
+    md_lo = 0, md_hi = rom_banks > 1 ? 1 : 0;
     rtc_latch = rtc_reg = 0;
     rtc_cycles = 0;
     map_banks();

@@ -39,7 +39,7 @@ DEMO_SOURCES = ("demo/main.c", "demo/time.c", "demo/uart.c", "demo/gfx.c",
                 "demo/tls_anchors.S", "demo/ssdp.c", "demo/jpeghw.c", "demo/pce.c", "demo/col.c", "demo/msx.c",
                 "demo/ws.c", "demo/snes.c", "demo/neo.c", "demo/gba.c", "demo/a78.c", "demo/lnx.c", "demo/vec.c",
                 "demo/o2.c", "demo/intv.c", "demo/ngp.c", "demo/psx.c", "demo/cps.c", "demo/st.c", "demo/s16.c",
-                "demo/a8.c")
+                "demo/a8.c", "demo/sv.c", "demo/chip8.c", "demo/channelf.c", "demo/pokemini.c")
 BEARSSL = HERE / "bearssl"                      # BearSSL 0.6's files a TLS client needs (bearssl/README.txt)
 
 

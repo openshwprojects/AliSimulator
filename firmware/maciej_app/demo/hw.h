@@ -537,6 +537,11 @@ int st_play(const char *path, u32 frames, const char *script);     /* 'atarist':
 int s16_play(const char *path, u32 frames, const char *script);    /* 'sys16': a Sega System 16A / 16B / OutRun arcade game (.s16, .zip) */
 int a8_play(const char *path, u32 frames, const char *script);     /* 'atari8': an Atari 800XL / 130XE disk, .xex or cart ("": BASIC) */
 int a52_play(const char *path, u32 frames, const char *script);    /* 'a5200': an Atari 5200 SuperSystem cartridge (.a52, .car) */
+int megaduck_play(const char *path, u32 frames, const char *script); /* 'megaduck': a Mega Duck / Cougar Boy cartridge (.duck, .md1, .md2, .bin) */
+int sv_play(const char *path, u32 frames, const char *script);     /* 'sv': a Watara Supervision cartridge (.sv) */
+int chip8_play(const char *path, u32 frames, const char *script);  /* 'chip8': a CHIP-8 / SCHIP / XO-CHIP program (.ch8, .sc8, .xo8) */
+int channelf_play(const char *path, u32 frames, const char *script); /* 'channelf': a Fairchild Channel F cartridge (.chf, .bin, .rom) */
+int pokemini_play(const char *path, u32 frames, const char *script); /* 'pokemini': a Nintendo Pokemon Mini cartridge (.min) */
 
 /* view.c: the picture viewer (image.c decodes JPEG, PNG, GIF, BMP) */
 #define IMAGE_WORK_PHYS  0x06900000u      /* the picture as shown, and the decoder's memory (a progressive JPEG's */

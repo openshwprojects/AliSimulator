@@ -50,6 +50,10 @@
 #include "st.h"
 #include "s16.h"
 #include "a8.h"
+#include "sv.h"
+#include "chip8.h"
+#include "channelf.h"
+#include "pokemini.h"
 #include "snd.h"
 #include "zip.h"
 #include "image.h"
@@ -109,7 +113,18 @@ static const struct machine nes_machine = {NES_W, NES_H, 3, 3, 16639, nes_open, 
                                            nes_save_changed, nes_jammed, nes_rgb, 64, "the 6502", 0, 0, 0, 0,
                                            nes_audio_rate, nes_audio};
 static const struct machine gb_machine = {GB_W, GB_H, 5, 5, 16743, gb_open, gb_info, gb_one, gb_save_ram,
-                                          gb_save_changed, gb_jammed, 0, 0, "the Game Boy's CPU", 0, 0, 0, 0, 0, 0};
+                                          gb_save_changed, gb_jammed, 0, 0, "the Game Boy's CPU", 0, 0, 0, 0,
+                                          gb_audio_rate, gb_audio};
+
+static const char *megaduck_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return megaduck_load(image, size);
+}
+
+static const struct machine megaduck_machine = {GB_W, GB_H, 5, 5, 16743, megaduck_open, gb_info, gb_one, gb_save_ram,
+                                                gb_save_changed, gb_jammed, 0, 0, "the Mega Duck's SM83", 0, 0, 0, 0,
+                                                gb_audio_rate, gb_audio};
 
 /* the Master System (256 x 192, three times: 768 x 576) and the Game Gear (its 160 x 144 screen five times) */
 static const char *sms_open(u8 *image, u32 size, const char *path)
@@ -2452,4 +2467,118 @@ static struct machine a52_machine = {
 int a52_play(const char *path, u32 frames, const char *script)
 {
     return play(&a52_machine, path, frames, script);
+}
+
+int megaduck_play(const char *path, u32 frames, const char *script)
+{
+    return play(&megaduck_machine, path, frames, script);
+}
+
+/* Watara Supervision (.sv): 160 x 160 four times as large (640 x 640) at ~61 frames a second */
+static const char *sv_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return sv_load(image, size);
+}
+
+static void sv_one(u16 pad, void *pic_out)
+{
+    sv_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine sv_machine = {
+    SV_W, SV_H, 4, 4, SV_FRAME_US, sv_open, sv_info, sv_one, sv_save_ram, sv_save_changed,
+    sv_jammed, 0, 0, "the 65SC02", 0, 0, 0, 0, sv_audio_rate, sv_audio
+};
+
+int sv_play(const char *path, u32 frames, const char *script)
+{
+    return play(&sv_machine, path, frames, script);
+}
+
+/* CHIP-8 / SUPER-CHIP 1.1 / XO-CHIP (.ch8, .sc8, .xo8): 128 x 64 ten times as large (1280 x 640) at 60 Hz */
+static const char *chip8_open(u8 *image, u32 size, const char *path)
+{
+    return chip8_load(image, size, path);
+}
+
+static void chip8_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    chip8_frame(pad, hid, n, (u16 *)pic_out);
+}
+
+static const struct machine chip8_machine = {
+    CHIP8_W, CHIP8_H, 10, 10, CHIP8_FRAME_US, chip8_open, chip8_info, chip8_one, chip8_save_ram, chip8_save_changed,
+    chip8_jammed, 0, 0, "the CHIP-8 VM", 0, 0,
+    "arrows or W A S D (5/8/7/9), X/E/Space = 6 (action), Z/Q = 4, or full 1234/QWER/ASDF/ZXCV hex pad on USB keyboard; "
+    "Ctrl-C or Esc ends",
+    0, chip8_audio_rate, chip8_audio
+};
+
+int chip8_play(const char *path, u32 frames, const char *script)
+{
+    return play(&chip8_machine, path, frames, script);
+}
+
+/* Fairchild Channel F / VES (.chf, .bin, .rom): 102 x 58 ten times as large (1020 x 580) at 60 Hz */
+static const char *channelf_open(u8 *image, u32 size, const char *path)
+{
+    u8 *psu1 = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *psu2 = psu1 + 1024u;
+    u32 g1 = rom_find(path, "channelf", "sl31253.bin", psu1, 1024u, 1024u);
+    if (g1 != 1024u)
+        g1 = rom_find(path, "channelf", "sl31253.rom", psu1, 1024u, 1024u);
+    u32 g2 = rom_find(path, "channelf", "sl31254.bin", psu2, 1024u, 1024u);
+    if (g2 != 1024u)
+        g2 = rom_find(path, "channelf", "sl31254.rom", psu2, 1024u, 1024u);
+    return channelf_load(g1 == 1024u ? psu1 : 0, g2 == 1024u ? psu2 : 0, image, size);
+}
+
+static void channelf_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    channelf_frame(pad, hid, n, (u16 *)pic_out);
+}
+
+static const struct machine channelf_machine = {
+    CHF_W, CHF_H, 10, 10, CHF_FRAME_US, channelf_open, channelf_info, channelf_one, channelf_save_ram,
+    channelf_save_changed, channelf_jammed, 0, 0, "the Fairchild F8", 0, 0,
+    "arrows or W A S D, X/Space = Push (fire), Z/C = Pull, Q/E = Rotate CCW/CW, 1..4 or F1..F4 = TIME/MODE/HOLD/START "
+    "(Enter = START, Tab = MODE, F5 = Reset); Ctrl-C or Esc ends",
+    0, channelf_audio_rate, channelf_audio
+};
+
+int channelf_play(const char *path, u32 frames, const char *script)
+{
+    return play(&channelf_machine, path, frames, script);
+}
+
+/* Nintendo Pokemon Mini (.min): 96 x 64 ten times as large (960 x 640) at 72 Hz */
+static const char *pokemini_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 got = rom_find(path, "pokemini", "bios.min", bios, 4096u, 4096u);
+    return pokemini_load(got == 4096u ? bios : 0, image, size);
+}
+
+static void pokemini_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    pokemini_frame(pad, hid, n, (u16 *)pic_out);
+}
+
+static const struct machine pokemini_machine = {
+    PM_W, PM_H, 10, 10, PM_FRAME_US, pokemini_open, pokemini_info, pokemini_one, pokemini_save_ram,
+    pokemini_save_changed, pokemini_jammed, 0, 0, "the Seiko S1C88", 0, 0,
+    "arrows or W A S D, X = A, Z = B, Enter/C/E = C, Q/Space = Shake/Shock, Tab/P = Power; Ctrl-C or Esc ends",
+    0, pokemini_audio_rate, pokemini_audio
+};
+
+int pokemini_play(const char *path, u32 frames, const char *script)
+{
+    return play(&pokemini_machine, path, frames, script);
 }

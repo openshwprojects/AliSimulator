@@ -291,6 +291,27 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
                        Atari 5200 SuperSystem na TV (336 x 240 x3, kartridze
                        4K..40K, ANTIC + GTIA + POKEY 48 kHz, drazek analogowy i
                        klawiatura 0..9; wbudowany Altirra 5200 OS albo 5200.rom)
+  megaduck [-f klatki] <plik.duck|plik.md1|plik.bin>
+                       Mega Duck / Cougar Boy na TV (160 x 144 x5, 59,7 klatek/s,
+                       kartridze zwykle i bankowane $0001 / $B000, dzwiek 48 kHz,
+                       zapis SRAM w .sav)
+  sv [-f klatki] <plik.sv>
+                       Watara Supervision na TV (160 x 160 x4, 61 klatek/s,
+                       65SC02 4 MHz, kartridze 16..512 KB Magnum, dzwiek 48 kHz)
+  chip8 [-f klatki] <plik.ch8|plik.sc8|plik.xo8>
+                       CHIP-8 / SUPER-CHIP 1.1 / XO-CHIP na TV (128 x 64 x10 =
+                       1280 x 640, 4 warstwy 16 kolorow, dzwiek 48 kHz + wzorce
+                       XO-CHIP, zapis flag RPL w .sav)
+  channelf [-f klatki] <plik.chf|plik.bin|plik.rom>
+                       Fairchild Channel F / VES na TV (102 x 58 x10 = 1020 x 580,
+                       60 klatek/s, procesor Fairchild F8, pamiec F2102 + Schach,
+                       wbudowany HLE PSU albo sl31253.bin + sl31254.bin w channelf/,
+                       3-tonowy dzwiek 48 kHz)
+  pokemini [-f klatki] <plik.min>
+                       Nintendo Pokemon Mini na TV (96 x 64 x10 = 960 x 640, 72
+                       klatki/s, Seiko S1C88 4 MHz, PRC tlo + duszki, wbudowany
+                       FreeBIOS albo bios.min w pokemini/, dzwiek piezo PWM 48 kHz,
+                       zapis 8 KB EEPROM w .sav)
   snd <polecenie>      dzwiek (prototyp): snd init, snd beep [Hz] [ms] (ton
                        testowy), snd vol 0..100, snd status, snd stop -
                        48 kHz na HDMI (po "video init") i na SCART (L/P)

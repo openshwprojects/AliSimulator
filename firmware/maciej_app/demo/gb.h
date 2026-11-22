@@ -9,6 +9,7 @@
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef signed short s16;
 typedef signed int s32;
 
 #define GB_W 160
@@ -25,6 +26,7 @@ typedef signed int s32;
 #define GB_RIGHT  0x80
 
 const char *gb_load(u8 *image, u32 size);       /* a .gb file in RAM (used where it is): 0, or why it cannot run */
+const char *megaduck_load(u8 *image, u32 size); /* a Mega Duck / Cougar Boy (.duck, .md1, .md2, .bin) cartridge */
 void gb_reset(void);
 void gb_frame(u8 pad, u16 *picture);            /* one frame (70224 clock ticks): GB_W x GB_H colours, the
                                                    Color's 15 bits (0bbbbbgggggrrrrr) -- a game for the first
@@ -36,6 +38,9 @@ int gb_save_changed(void);                      /* written since the last call *
 u32 gb_cpu_cycles(void);                        /* machine cycles (4 clock ticks each) since the reset */
 int gb_jammed(void);                            /* the program ran into an instruction that stops the CPU */
 extern const u8 gb_rgb[4][3];
+
+void gb_audio_rate(u32 hz);
+int gb_audio(s16 *out, int max);
 
 /* for tests: a byte the program sent out of the link port (the test cartridges print through it); the CPU's
    registers B C D E H L, and whether the program has run LD B,B (the mooneye tests' "done") since the reset */

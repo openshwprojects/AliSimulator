@@ -522,6 +522,11 @@ static void cmd_atarist(int argc, char **argv);
 static void cmd_sys16(int argc, char **argv);
 static void cmd_atari8(int argc, char **argv);
 static void cmd_a5200(int argc, char **argv);
+static void cmd_megaduck(int argc, char **argv);
+static void cmd_sv(int argc, char **argv);
+static void cmd_chip8(int argc, char **argv);
+static void cmd_channelf(int argc, char **argv);
+static void cmd_pokemini(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_rf(int argc, char **argv);
 static void cmd_history(int argc, char **argv);
@@ -624,7 +629,7 @@ static const struct command commands[] = {
     {"explorer", "[n:][path]", "a file explorer on the TV, in the current directory (cd follows it, it follows cd; "
      "with a path: cd there first): USB keyboard Up/Down/PgUp/PgDn/Home/End, Enter opens (a picture: the viewer, "
      "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .trd, .scl, .a26, .prg, .t64, .d64, .crt, "
-     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
+     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
      "Backspace goes up, "
      "'/' or Tab types a path, Esc: the console again; the mouse clicks, double-clicks, scrolls; on FAT: F2 "
      "renames, F7 makes a directory, Delete / F8 deletes (y), F5 / F6 mark a file to copy / move and Insert "
@@ -763,6 +768,23 @@ static const struct command commands[] = {
      "the TV with its ANTIC + GTIA + POKEY 48 kHz sound (5200.rom in a5200/ if present, else built-in Altirra 5200 OS): "
      "arrows or W A S D (analog stick), X = Bottom Fire, Z = Top Fire, Enter = Start, C = Pause, Tab = Reset, 0..9 on "
      "USB keyboard; the options of nes", cmd_a5200},
+    {"megaduck", "[-f frames] [-k script] <file>", "play a Mega Duck / Cougar Boy cartridge (.duck, .md1, .md2, .bin) on "
+     "the TV (160 x 144 five times as large, 59.7 frames a second; flat and $0001 / $B000 banked cartridges) with 48 kHz "
+     "4-channel sound and SRAM kept in a .sav file: the keys and the options of nes", cmd_megaduck},
+    {"sv", "[-f frames] [-k script] <file>", "play a Watara Supervision cartridge (.sv: 16 KB..512 KB Magnum) on the TV "
+     "(160 x 160 four times as large, 61 frames a second) with its 4 MHz 65SC02 and 4-channel 48 kHz sound (2 pulse + "
+     "ADPCM DMA + LFSR noise): the keys and the options of nes", cmd_sv},
+    {"chip8", "[-f frames] [-k script] <file>", "play a CHIP-8, SUPER-CHIP 1.1 or XO-CHIP program (.ch8, .sc8, .xo8) on "
+     "the TV (128 x 64 ten times as large: 1280 x 640, 4-plane 16 colours, 60 frames a second) with 48 kHz buzzer & "
+     "XO-CHIP 128-bit pattern sound and RPL flags in .sav: arrows/WASD/X/Z or 1234/QWER/ASDF/ZXCV hex pad", cmd_chip8},
+    {"channelf", "[-f frames] [-k script] <file>", "play a Fairchild Channel F / VES cartridge (.chf, .bin, .rom) on the "
+     "TV (102 x 58 ten times as large: 1020 x 580, 60 frames a second; Fairchild F8 CPU, F2102 + Schach SRAM, built-in HLE "
+     "PSU or sl31253.bin + sl31254.bin in channelf/) with 3-tone 48 kHz sound: X = Push, Z = Pull, Q/E = Twist, 1..4 = "
+     "TIME/MODE/HOLD/START", cmd_channelf},
+    {"pokemini", "[-f frames] [-k script] <file>", "play a Nintendo Pokemon Mini cartridge (.min) on the TV (96 x 64 ten "
+     "times as large: 960 x 640, 72 frames a second; 4 MHz Seiko S1C88, PRC tile/sprite engine, built-in FreeBIOS or "
+     "bios.min in pokemini/) with 48 kHz piezo PWM sound and 8 KB EEPROM (.sav): X = A, Z = B, Enter/C = C, Q/Space = "
+     "Shake, Tab/P = Power", cmd_pokemini},
     {"rf", "<init|tune|status|scan|services|ts|spectrum|live|...>", "the aerial input (DVB-T): init the MxL603 tuner and the "
      "chip's demodulator, tune <MHz|channel> [6|7|8], status (lock, level, quality), scan [vhf|all|<from> <to>], "
      "services (the multiplex's channel names), ts <s> [file] [-p pids] (the stream's PIDs, or recorded to a .ts "
@@ -1542,11 +1564,14 @@ static void cmd_game(int argc, char **argv, int (*play)(const char *, u32, const
 {
     u32 frames = 0;
     const char *script = "";
-    int first = 1;
-    while (argc > first + 1 && argv[first][0] == '-') {
-        if (str_eq(argv[first], "-f") && parse_u32(argv[first + 1], &frames))
+    int first = 1, stay = 0;
+    while (argc > first && argv[first][0] == '-') {
+        if (str_eq(argv[first], "-s")) {
+            stay = 1;
+            first++;
+        } else if (argc > first + 1 && str_eq(argv[first], "-f") && parse_u32(argv[first + 1], &frames)) {
             first += 2;
-        else if (str_eq(argv[first], "-k")) {
+        } else if (argc > first + 1 && str_eq(argv[first], "-k")) {
             script = argv[first + 1];
             first += 2;
         } else {
@@ -1562,7 +1587,8 @@ static void cmd_game(int argc, char **argv, int (*play)(const char *, u32, const
         explorer_hide();
     demo_shown = 0;
     (void)play(joined(argc - first + 1, argv + first - 1), frames, script);
-    picture_back(console, explorer);
+    if (!stay)
+        picture_back(console, explorer);
 }
 
 static void cmd_nes(int argc, char **argv)
@@ -1825,6 +1851,31 @@ static void cmd_atari8(int argc, char **argv)
 static void cmd_a5200(int argc, char **argv)
 {
     cmd_game(argc, argv, a52_play);
+}
+
+static void cmd_megaduck(int argc, char **argv)
+{
+    cmd_game(argc, argv, megaduck_play);
+}
+
+static void cmd_sv(int argc, char **argv)
+{
+    cmd_game(argc, argv, sv_play);
+}
+
+static void cmd_chip8(int argc, char **argv)
+{
+    cmd_game(argc, argv, chip8_play);
+}
+
+static void cmd_channelf(int argc, char **argv)
+{
+    cmd_game(argc, argv, channelf_play);
+}
+
+static void cmd_pokemini(int argc, char **argv)
+{
+    cmd_game(argc, argv, pokemini_play);
 }
 
 static void cmd_rf(int argc, char **argv)

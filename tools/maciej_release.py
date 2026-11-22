@@ -195,6 +195,20 @@ COMMANDS = {
         "a5200": "[-f frames] [-k script] <file.a52|file.car>: an Atari 5200 SuperSystem cartridge on the TV (336 x 240 "
                  "three times as large; 4K..40K mappers, ANTIC + GTIA + POKEY 48 kHz sound, analog stick + 12-key pad; "
                  "built-in Altirra 5200 OS or 5200.rom in a5200/)",
+        "megaduck": "[-f frames] [-k script] <file.duck|file.md1|file.md2|file.bin>: a Mega Duck / Cougar Boy cartridge "
+                    "on the TV (160 x 144 five times as large, 59.7 frames a second; flat and $0001 / $B000 banked "
+                    "cartridges) with 48 kHz 4-channel sound and SRAM (.sav)",
+        "sv": "[-f frames] [-k script] <file.sv>: a Watara Supervision cartridge on the TV (160 x 160 four times as "
+              "large, 61 frames a second; 16 KB..512 KB Magnum banking) with 4-channel 48 kHz sound",
+        "chip8": "[-f frames] [-k script] <file.ch8|file.sc8|file.xo8>: a CHIP-8, SUPER-CHIP 1.1 or XO-CHIP program on "
+                 "the TV (128 x 64 ten times as large: 1280 x 640, 4-plane 16 colours) with 48 kHz buzzer & XO-CHIP "
+                 "pattern sound and RPL .sav",
+        "channelf": "[-f frames] [-k script] <file.chf|file.bin|file.rom>: a Fairchild Channel F / VES cartridge on the "
+                    "TV (102 x 58 ten times as large: 1020 x 580; Fairchild F8 CPU, F2102 + Schach SRAM, built-in HLE "
+                    "PSU or sl31253.bin + sl31254.bin in channelf/) with 3-tone 48 kHz sound",
+        "pokemini": "[-f frames] [-k script] <file.min>: a Nintendo Pokemon Mini cartridge on the TV (96 x 64 ten times "
+                    "as large: 960 x 640, 72 frames a second; 4 MHz Seiko S1C88, PRC tile/sprite engine, built-in FreeBIOS "
+                    "or bios.min in pokemini/) with 48 kHz piezo PWM sound and 8 KB EEPROM (.sav)",
         "rf": "the aerial input: the MxL603 tuner (I2C 0x60) and the S3811's DVB-T demodulator as dump.bin drives "
               "them -- init, tune <MHz|channel> [6|7|8], status (lock, level, quality, errors, the stream's "
               "parameters), scan, services (the multiplex's channel names), ts <s> [file] (the PIDs, or a .ts "
