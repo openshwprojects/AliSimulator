@@ -912,20 +912,17 @@ void sv_frame(u16 pad, u16 *picture)
         } else {
             step_adma_silent(ran);
         }
-    }
 
-    /* Render 160x160 2bpp linear LCD framebuffer */
-    if (picture) {
-        u32 scan = ((u32)M->regs[0x02] >> 2) + (u32)M->regs[0x03] * 0x30u;
-        u8 inner = M->regs[0x02] & 3u;
-        u8 xsize = M->regs[0x00];
-        int w = (xsize == 0 || xsize > SV_W) ? SV_W : (int)xsize;
-
-        for (int y = 0; y < SV_H; y++) {
-            if (scan >= 0x1FE0u)
+        if (picture && s < SV_H) {
+            u8 xsize = M->regs[0x00];
+            int w = (xsize == 0 || xsize > SV_W) ? SV_W : (int)xsize;
+            u32 y_sc = (u32)M->regs[0x03] + (u32)s;
+            u32 scan = ((u32)M->regs[0x02] >> 2) + y_sc * 0x30u;
+            while (scan >= 0x1FE0u)
                 scan -= 0x1FE0u;
+            u8 inner = M->regs[0x02] & 3u;
             const u8 *vp = M->vram + scan;
-            u16 *out = picture + y * SV_W;
+            u16 *out = picture + s * SV_W;
             u8 j = inner, b = 0;
             if (j & 3u)
                 b = (u8)((*vp++) >> ((j & 3u) * 2u));
@@ -937,12 +934,11 @@ void sv_frame(u16 pad, u16 *picture)
             }
             for (int x = w; x < SV_W; x++)
                 out[x] = S.pal[0];
-            scan += 0x30u;
         }
-    }
 
-    if ((M->regs[0x26] & 0x01u) && !S.jammed)
-        trigger_nmi();
+        if (s == SV_H && (M->regs[0x26] & 0x01u) && !S.jammed)
+            trigger_nmi();
+    }
 
     if (S.ch[0].count) S.ch[0].count--;
     if (S.ch[1].count) S.ch[1].count--;

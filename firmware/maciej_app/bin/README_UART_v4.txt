@@ -312,6 +312,40 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
                        klatki/s, Seiko S1C88 4 MHz, PRC tlo + duszki, wbudowany
                        FreeBIOS albo bios.min w pokemini/, dzwiek piezo PWM 48 kHz,
                        zapis 8 KB EEPROM w .sav)
+  cpc [-f klatki] [plik.sna|plik.dsk|plik.cpr|plik.bin]
+                       Amstrad CPC 464 / 6128 + GX4000 na TV (384 x 240 x3 w
+                       Mode 0/1, 640 x 200 w Mode 2, 50 klatek/s, Z80 4 MHz,
+                       UM6845R CRTC, 40010 Gate Array, 128 KB RAM, uPD765 FDC z
+                       zapisem w .sav, dzwiek AY-3-8912 48 kHz, wbudowany OS +
+                       Locomotive BASIC 1.1 + AMSDOS; bez pliku: BASIC)
+  vic20 [-f klatki] [plik.prg|plik.crt|plik.a0|plik.d64]
+                       Commodore VIC-20 PAL na TV (224 x 240 x3, 50 klatek/s,
+                       MOS 6502, MOS 6561 VIC-I wideo + 4-kanalowy dzwiek 48 kHz,
+                       2x 6522 VIA, automatyczne rozszerzenie RAM 5K / +3K / +24K,
+                       wbudowane ROM-y KERNAL + BASIC V2 + chargen; bez pliku: BASIC)
+  apple2 [-f klatki] [plik.dsk|plik.do|plik.po|plik.nib|plik.bin]
+                       Apple IIe Enhanced (128 KB) na TV (280 x 192 x3 albo
+                       560 x 192 80-kol / Double Hi-Res, 59,92 klatek/s, WDC
+                       65C02, kolor artefaktowy NTSC Hi-Res, stacja Disk II GCR
+                       z zapisem .sav, glosnik $C030 + Mockingboard AY 48 kHz,
+                       wbudowane ROM-y Apple IIe + Disk II; bez pliku: BASIC)
+  coco [-f klatki] [plik.ccc|plik.rom|plik.bin|plik.cas]
+                       TRS-80 Color Computer 64K (NTSC 60 Hz) na TV (320 x 240
+                       x3 z ramka, Motorola MC6809, SAM MC6883, 2x MC6821 PIA,
+                       MC6847 VDG + kolory artefaktowe RG6, dzwiek 6-bit DAC +
+                       1-bit 48 kHz, wbudowany Color BASIC albo bas13.rom w coco/)
+  dragon [-f klatki] [plik.ccc|plik.rom|plik.bin|plik.cas]
+                       Dragon 32 / 64 (PAL 50 Hz) na TV (320 x 240 x3 z ramka,
+                       MC6809, SAM, 2x PIA z matryca klawiatury Dragona, MC6847
+                       VDG, dzwiek DAC 48 kHz, wbudowany BASIC albo d32.rom)
+  cv [-f klatki] <plik.cv|plik.rom|plik.bin>
+                       VTech CreatiVision / Dick Smith Wizzard na TV (256 x 192
+                       x3, 50 Hz PAL, 6502 2 MHz, PIA, TMS9929A VDP, dzwiek
+                       SN76489A 48 kHz, wbudowany BIOS albo bioscv.rom w cv/)
+  m5 [-f klatki] <plik.m5|plik.rom|plik.bin>
+                       Sord M5 / CGL M5 na TV (256 x 192 x3, 60 Hz NTSC, Z80
+                       3,58 MHz + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, dzwiek
+                       SN76489AN 48 kHz, wbudowany Monitor BIOS albo m5.rom)
   snd <polecenie>      dzwiek (prototyp): snd init, snd beep [Hz] [ms] (ton
                        testowy), snd vol 0..100, snd status, snd stop -
                        48 kHz na HDMI (po "video init") i na SCART (L/P)

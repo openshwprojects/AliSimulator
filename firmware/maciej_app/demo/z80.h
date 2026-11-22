@@ -54,6 +54,7 @@ struct z80 {
     void (*write)(struct z80 *c, u16 address, u8 value);
     u8 (*in)(struct z80 *c, u16 port);
     void (*out)(struct z80 *c, u16 port, u8 value);
+    void (*irq_ack)(struct z80 *c);     /* optional M1|IORQ interrupt acknowledge hook (Amstrad CPC Gate Array) */
     /* contended memory (the ZX Spectrum's): an access to an address from cont_lo to cont_lo + cont_n - 1 at
        T-state t is first held up by cont[t] T-states; I/O ports are held up as the Spectrum's ULA holds them.
        cont_n 0: none (cont is then never read) */

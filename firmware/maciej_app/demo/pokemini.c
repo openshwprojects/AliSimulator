@@ -1574,9 +1574,9 @@ static void MinxIO_WriteReg(uint8_t reg, uint8_t val)
     case 0x47: PMR_REG_47 = val & 0x0F; break;
     case 0x50: PMR_REG_50 = val; break;
     case 0x51: PMR_REG_51 = val & 0x03; break;
-    case 0x53: PMR_REG_53 = 0x00;
-    case 0x54: PMR_REG_54 = val & 0x77;
-    case 0x55: PMR_REG_55 = val & 0x07;
+    case 0x53: PMR_REG_53 = 0x00; break;
+    case 0x54: PMR_REG_54 = val & 0x77; break;
+    case 0x55: PMR_REG_55 = val & 0x07; break;
     case 0x60:
         PMR_IO_DIR = val;
         { uint8_t out = (0x40 & ~PMR_IO_DIR) | (PMR_IO_DATA & PMR_IO_DIR); PokeMini_Rumbling = out & 0x10; MinxIO_EEPWEvent(out); }

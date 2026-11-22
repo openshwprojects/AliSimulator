@@ -806,6 +806,8 @@ static void take_nmi(struct z80 *c)
 
 static void take_irq(struct z80 *c)
 {
+    if (c->irq_ack)
+        c->irq_ack(c);
     c->halted = 0;
     c->iff1 = c->iff2 = 0;
     c->r++;
@@ -891,6 +893,7 @@ void z80_init(struct z80 *c)
     c->cycles = 0;
     c->trap = -1;
     c->cont_n = 0;
+    c->irq_ack = 0;
     for (int i = 0; i < 64; i++)
         c->op[i] = 0;
     z80_reset(c);

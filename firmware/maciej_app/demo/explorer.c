@@ -744,6 +744,26 @@ static int ends_gb(const char *s)        /* .gb, and .gbc (the Game Boy Color's)
 }
 
 typedef int (*player_fn)(const char *, u32, const char *);
+static int path_has_seg(const char *p, const char *seg)
+{
+    if (!p) return 0;
+    for (const char *q = p; *q; q++) {
+        if (q != p && q[-1] != '/' && q[-1] != '\\' && q[-1] != ':')
+            continue;
+        int k = 0;
+        while (seg[k] && (q[k] | 32) == seg[k])
+            k++;
+        if (!seg[k] && (!q[k] || q[k] == '/' || q[k] == '\\'))
+            return 1;
+    }
+    return 0;
+}
+
+static int in_sys_dir(const char *s, const char *seg)
+{
+    return path_has_seg(disk_cwd(), seg) || path_has_seg(s, seg);
+}
+
 static player_fn player_for(const char *s, int on_disk);
 
 /* the name of the game in a .zip / .gz / .adz: a .gz's own (kept in its header), else its file's name without
@@ -848,7 +868,22 @@ static player_fn player_for(const char *s, int on_disk)
         return sg_play;
     if (e[0] == 'a' && e[1] == '2' && e[2] == '6' && !e[3])
         return a26_play;
-    if ((e[0] == 's' && e[1] == 'n' && e[2] == 'a') || (e[0] == 'z' && e[1] == '8' && e[2] == '0') ||
+    if (e[0] == 'c' && e[1] == 'p' && e[2] == 'r' && !e[3])
+        return cpc_play;
+    if ((e[0] == 'a' && e[1] == '0' && !e[2]) ||
+        ((e[0] == '2' || e[0] == '4' || e[0] == '6') && e[1] == '0' && !e[2]))
+        return vic20_play;
+    if (e[0] == 's' && e[1] == 'n' && e[2] == 'a' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 8 && head[0] == 'M' && head[1] == 'V' && head[2] == ' ' && head[3] == '-' &&
+                head[4] == ' ' && head[5] == 'S' && head[6] == 'N' && head[7] == 'A')
+                return cpc_play;
+        }
+        return zx_play;
+    }
+    if ((e[0] == 'z' && e[1] == '8' && e[2] == '0') ||
         (e[0] == 't' && e[1] == 'a' && e[2] == 'p') || (e[0] == 't' && e[1] == 'z' && e[2] == 'x') ||
         (e[0] == 't' && e[1] == 'r' && e[2] == 'd') || (e[0] == 's' && e[1] == 'c' && e[2] == 'l'))
         return e[3] ? 0 : zx_play;
@@ -863,13 +898,46 @@ static player_fn player_for(const char *s, int on_disk)
             int got = disk_read_head(s, head, HEAD_BYTES, &size);
             if (got >= 2 && head[0] == 0x60 && head[1] == 0x1A)
                 return st_play;
+            if (got >= 4 && head[0] == 0x01 && (head[1] == 0x10 || head[1] == 0x12 || head[1] == 0x04))
+                return vic20_play;
+            if (got >= 11 && head[0] == 0x00 && head[1] == 0xA0 &&
+                head[6] == 0x41 && head[7] == 0x30 && head[8] == 0xC3)
+                return vic20_play;
+        }
+        const char *cwd = disk_cwd();
+        for (const char *q = cwd; *q; q++)
+            if ((q[0] | 32) == 'v' && (q[1] | 32) == 'i' && (q[2] | 32) == 'c' && q[3] == '2' && q[4] == '0')
+                return vic20_play;
+        for (const char *q = s; *q; q++)
+            if ((q[0] | 32) == 'v' && (q[1] | 32) == 'i' && (q[2] | 32) == 'c' && q[3] == '2' && q[4] == '0')
+                return vic20_play;
+        return c64_play;
+    }
+    if (e[0] == 'c' && e[1] == 'r' && e[2] == 't' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if ((got >= 6 && head[0] == 'V' && head[1] == 'I' && head[2] == 'C' &&
+                 head[3] == '2' && head[4] == '0' && head[5] == ' ') ||
+                (got >= 9 && head[4] == 0x41 && head[5] == 0x30 && head[6] == 0xC3 &&
+                 head[7] == 0xC2 && head[8] == 0xCD))
+                return vic20_play;
         }
         return c64_play;
     }
     if ((e[0] == 't' && e[1] == '6' && e[2] == '4') ||
-        (e[0] == 'd' && e[1] == '6' && e[2] == '4') || (e[0] == 'p' && e[1] == '0' && e[2] == '0') ||
-        (e[0] == 'c' && e[1] == 'r' && e[2] == 't'))
-        return e[3] ? 0 : c64_play;
+        (e[0] == 'd' && e[1] == '6' && e[2] == '4') || (e[0] == 'p' && e[1] == '0' && e[2] == '0')) {
+        if (e[3])
+            return 0;
+        const char *cwd = disk_cwd();
+        for (const char *q = cwd; *q; q++)
+            if ((q[0] | 32) == 'v' && (q[1] | 32) == 'i' && (q[2] | 32) == 'c' && q[3] == '2' && q[4] == '0')
+                return vic20_play;
+        for (const char *q = s; *q; q++)
+            if ((q[0] | 32) == 'v' && (q[1] | 32) == 'i' && (q[2] | 32) == 'c' && q[3] == '2' && q[4] == '0')
+                return vic20_play;
+        return c64_play;
+    }
     if (e[0] == 'a' && e[1] == 'd' && e[2] == 'f' && !e[3])
         return amiga_play;
     if (e[0] == 'e' && e[1] == 'x' && e[2] == 'e' && !e[3]) {
@@ -939,8 +1007,36 @@ static player_fn player_for(const char *s, int on_disk)
         return col_play;
     if (e[0] == 'm' && e[1] == 'x' && e[2] == '1' && !e[3])
         return msx_play;
-    if (((e[0] == 'm' && e[1] == 'x' && e[2] == '2') || (e[0] == 'd' && e[1] == 's' && e[2] == 'k')) && !e[3])
+    if (e[0] == 'm' && e[1] == 'x' && e[2] == '2' && !e[3])
         return msx2_play;
+    if (((e[0] == 'd' || e[0] == 'p') && e[1] == 'o' && !e[2]) ||
+        (e[0] == 'n' && e[1] == 'i' && e[2] == 'b' && !e[3]))
+        return apple2_play;
+    if (e[0] == 'c' && e[1] == 'c' && e[2] == 'c' && !e[3])
+        return in_sys_dir(s, "dragon") ? dragon_play : coco_play;
+    if (e[0] == 'c' && e[1] == 'a' && e[2] == 's' && !e[3])
+        return in_sys_dir(s, "dragon") ? dragon_play : coco_play;
+    if (e[0] == 'c' && e[1] == 'v' && !e[2])
+        return cv_play;
+    if (e[0] == 'm' && e[1] == '5' && !e[2])
+        return m5_play;
+    if (e[0] == 'd' && e[1] == 's' && e[2] == 'k' && !e[3]) {
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 8 && ((head[0] == 'M' && head[1] == 'V' && head[2] == ' ' && head[3] == '-' &&
+                              head[4] == ' ' && head[5] == 'C' && head[6] == 'P' && head[7] == 'C') ||
+                             (head[0] == 'E' && head[1] == 'X' && head[2] == 'T' && head[3] == 'E' &&
+                              head[4] == 'N' && head[5] == 'D' && head[6] == 'E' && head[7] == 'D')))
+                return cpc_play;
+            if (size == 143360u ||
+                (size == 143424u && got >= 4 && head[0] == '2' && head[1] == 'I' && head[2] == 'M' && head[3] == 'G'))
+                return apple2_play;
+        }
+        if (in_sys_dir(s, "apple2"))
+            return apple2_play;
+        return msx2_play;
+    }
     if (e[0] == 'w' && e[1] == 's' && (!e[2] || (e[2] == 'c' && !e[3])))
         return ws_play;
     if (e[0] == 's' && (e[1] == 'f' || e[1] == 'm') && e[2] == 'c' && !e[3])
@@ -1004,6 +1100,10 @@ static player_fn player_for(const char *s, int on_disk)
                     (q[4] | 32) == 'i' && q[5] == '8')
                     return a8_play;
             }
+            if (in_sys_dir(s, "cv"))     return cv_play;
+            if (in_sys_dir(s, "m5"))     return m5_play;
+            if (in_sys_dir(s, "dragon")) return dragon_play;
+            if (in_sys_dir(s, "coco"))   return coco_play;
         }
         return 0;
     }
@@ -1015,6 +1115,11 @@ static player_fn player_for(const char *s, int on_disk)
         if (got >= 16 && size >= 18u * 2352u && head[0] == 0x00 && head[1] == 0xFF && head[2] == 0xFF &&
             head[3] == 0xFF && head[10] == 0xFF && head[11] == 0x00 && (head[15] == 1 || head[15] == 2))
             return psx_play;
+        if (in_sys_dir(s, "apple2")) return apple2_play;
+        if (in_sys_dir(s, "dragon")) return dragon_play;
+        if (in_sys_dir(s, "coco"))   return coco_play;
+        if (in_sys_dir(s, "cv"))     return cv_play;
+        if (in_sys_dir(s, "m5"))     return m5_play;
         const char *cwd = disk_cwd();
         for (const char *q = cwd; *q; q++)
             if ((q[0] | 32) == 'm' && (q[1] | 32) == 'e' && (q[2] | 32) == 'g' && (q[3] | 32) == 'a' &&
@@ -1024,6 +1129,12 @@ static player_fn player_for(const char *s, int on_disk)
             if ((q[0] | 32) == 'm' && (q[1] | 32) == 'e' && (q[2] | 32) == 'g' && (q[3] | 32) == 'a' &&
                 (q[4] | 32) == 'd' && (q[5] | 32) == 'u')
                 return megaduck_play;
+        for (const char *q = cwd; *q; q++)
+            if ((q[0] | 32) == 'c' && (q[1] | 32) == 'p' && (q[2] | 32) == 'c')
+                return cpc_play;
+        for (const char *q = s; *q; q++)
+            if ((q[0] | 32) == 'c' && (q[1] | 32) == 'p' && (q[2] | 32) == 'c')
+                return cpc_play;
         return 0;
     }
     return 0;

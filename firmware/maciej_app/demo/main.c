@@ -527,6 +527,13 @@ static void cmd_sv(int argc, char **argv);
 static void cmd_chip8(int argc, char **argv);
 static void cmd_channelf(int argc, char **argv);
 static void cmd_pokemini(int argc, char **argv);
+static void cmd_cpc(int argc, char **argv);
+static void cmd_vic20(int argc, char **argv);
+static void cmd_apple2(int argc, char **argv);
+static void cmd_coco(int argc, char **argv);
+static void cmd_dragon(int argc, char **argv);
+static void cmd_cv(int argc, char **argv);
+static void cmd_m5(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_rf(int argc, char **argv);
 static void cmd_history(int argc, char **argv);
@@ -629,7 +636,7 @@ static const struct command commands[] = {
     {"explorer", "[n:][path]", "a file explorer on the TV, in the current directory (cd follows it, it follows cd; "
      "with a path: cd there first): USB keyboard Up/Down/PgUp/PgDn/Home/End, Enter opens (a picture: the viewer, "
      "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .trd, .scl, .a26, .prg, .t64, .d64, .crt, "
-     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
+     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .do, .po, .nib, .ccc, .cas, .cv, .m5, .cpr, .a0, .20, .60, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
      "Backspace goes up, "
      "'/' or Tab types a path, Esc: the console again; the mouse clicks, double-clicks, scrolls; on FAT: F2 "
      "renames, F7 makes a directory, Delete / F8 deletes (y), F5 / F6 mark a file to copy / move and Insert "
@@ -785,6 +792,31 @@ static const struct command commands[] = {
      "times as large: 960 x 640, 72 frames a second; 4 MHz Seiko S1C88, PRC tile/sprite engine, built-in FreeBIOS or "
      "bios.min in pokemini/) with 48 kHz piezo PWM sound and 8 KB EEPROM (.sav): X = A, Z = B, Enter/C = C, Q/Space = "
      "Shake, Tab/P = Power", cmd_pokemini},
+    {"cpc", "[-f frames] [-k script] [file]", "an Amstrad CPC 464 / 6128 + GX4000 on the TV (384 x 240 x3 in Mode 0/1, "
+     "640 x 200 in Mode 2, 50 frames a second; 4 MHz Z80, UM6845R CRTC, 40010 Gate Array, 128 KB RAM, uPD765 FDC with "
+     ".sav writeback, AY-3-8912 48 kHz sound; built-in OS + Locomotive BASIC 1.1 + AMSDOS): .sna, .dsk, .cpr, .bin, or "
+     "no file for BASIC; USB keyboard + joystick 0; Esc ends", cmd_cpc},
+    {"vic20", "[-f frames] [-k script] [file]", "a Commodore VIC-20 (PAL) on the TV (224 x 240 three times as large, 50 "
+     "frames a second; MOS 6502, MOS 6561 VIC-I video + 4-channel 48 kHz sound, dual 6522 VIAs, automatic unexpanded / "
+     "+3K / +24K RAM expansion, built-in KERNAL + BASIC V2 + chargen or in vic20/): .prg, .crt, .a0, .20, .60, .d64, or "
+     "no file for BASIC; USB keyboard + joystick; Esc ends", cmd_vic20},
+    {"apple2", "[-f frames] [-k script] [file]", "an Apple IIe Enhanced (128 KB) on the TV (280 x 192 x3 or 560 x 192 "
+     "80-col / Double Hi-Res, 59.92 frames a second; WDC 65C02, NTSC artifact Hi-Res, Disk II GCR .sav writeback, 48 kHz "
+     "$C030 speaker + Mockingboard AY-3-8910, embedded Apple IIe + Disk II ROMs): .dsk, .do, .po, .nib, .bin, or no file "
+     "for Applesoft BASIC; USB keyboard + joystick; Esc ends", cmd_apple2},
+    {"coco", "[-f frames] [-k script] [file]", "a TRS-80 Color Computer 64K (NTSC 60 Hz) on the TV (320 x 240 x3 with "
+     "border; Motorola MC6809, SAM MC6883, dual MC6821 PIAs, MC6847 VDG + NTSC RG6 artifact colours, 48 kHz 6-bit DAC + "
+     "1-bit sound, built-in Color BASIC exec or bas13.rom/extbas11.rom in coco/): .ccc, .rom, .bin, .cas, or no file for "
+     "BASIC; USB keyboard + joystick; Esc ends", cmd_coco},
+    {"dragon", "[-f frames] [-k script] [file]", "a Dragon 32 / 64 (PAL 50 Hz) on the TV (320 x 240 x3 with border; "
+     "Motorola MC6809, SAM, dual PIAs with Dragon keyboard matrix, MC6847 VDG, 48 kHz 6-bit DAC + 1-bit sound, built-in "
+     "BASIC exec or d32.rom in dragon/): .ccc, .rom, .bin, .cas, or no file for BASIC; Esc ends", cmd_dragon},
+    {"cv", "[-f frames] [-k script] <file>", "play a VTech CreatiVision / Dick Smith Wizzard cartridge (.cv, .rom, .bin: "
+     "4K..32K) on the TV (256 x 192 three times as large, 50 Hz PAL; 2 MHz 6502, MC6821 PIA, TMS9929A VDP, SN76489A 48 kHz "
+     "sound, built-in BIOS or bioscv.rom in cv/): USB keyboard or joystick; Esc ends", cmd_cv},
+    {"m5", "[-f frames] [-k script] <file>", "play a Sord M5 / CGL M5 cartridge (.m5, .rom, .bin: 4K..20K) on the TV "
+     "(256 x 192 three times as large, 60 Hz NTSC; 3.58 MHz Z80 + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, SN76489AN 48 kHz "
+     "sound, built-in Monitor BIOS or m5.rom in m5/): USB keyboard or joystick; Esc ends", cmd_m5},
     {"rf", "<init|tune|status|scan|services|ts|spectrum|live|...>", "the aerial input (DVB-T): init the MxL603 tuner and the "
      "chip's demodulator, tune <MHz|channel> [6|7|8], status (lock, level, quality), scan [vhf|all|<from> <to>], "
      "services (the multiplex's channel names), ts <s> [file] [-p pids] (the stream's PIDs, or recorded to a .ts "
@@ -1877,6 +1909,72 @@ static void cmd_pokemini(int argc, char **argv)
 {
     cmd_game(argc, argv, pokemini_play);
 }
+
+static void cmd_cpc(int argc, char **argv)
+{
+    int i = 1;
+    while (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k")))
+        i += 2;
+    if (i == argc) {                    /* (no file: boot Locomotive BASIC 1.1) */
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, cpc_play);
+        return;
+    }
+    cmd_game(argc, argv, cpc_play);
+}
+
+static void cmd_vic20(int argc, char **argv)
+{
+    int i = 1;
+    while (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k")))
+        i += 2;
+    if (i == argc) {                    /* (no file: boot +24K Commodore BASIC V2) */
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, vic20_play);
+        return;
+    }
+    cmd_game(argc, argv, vic20_play);
+}
+
+static void cmd_opt_basic(int argc, char **argv, int (*play)(const char *, u32, const char *))
+{
+    int i = 1;
+    while (i < argc) {
+        if (str_eq(argv[i], "-s")) i++;
+        else if (i + 1 < argc && (str_eq(argv[i], "-f") || str_eq(argv[i], "-k"))) i += 2;
+        else break;
+    }
+    if (i == argc) {
+        static char none[] = "";
+        char *with[8];
+        int k = 0;
+        for (; k < argc && k < 6; k++)
+            with[k] = argv[k];
+        with[k++] = none;
+        with[k] = 0;
+        cmd_game(k, with, play);
+        return;
+    }
+    cmd_game(argc, argv, play);
+}
+
+static void cmd_apple2(int argc, char **argv) { cmd_opt_basic(argc, argv, apple2_play); }
+static void cmd_coco(int argc, char **argv)   { cmd_opt_basic(argc, argv, coco_play); }
+static void cmd_dragon(int argc, char **argv) { cmd_opt_basic(argc, argv, dragon_play); }
+static void cmd_cv(int argc, char **argv)     { cmd_game(argc, argv, cv_play); }
+static void cmd_m5(int argc, char **argv)     { cmd_game(argc, argv, m5_play); }
 
 static void cmd_rf(int argc, char **argv)
 {

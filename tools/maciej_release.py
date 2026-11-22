@@ -209,6 +209,32 @@ COMMANDS = {
         "pokemini": "[-f frames] [-k script] <file.min>: a Nintendo Pokemon Mini cartridge on the TV (96 x 64 ten times "
                     "as large: 960 x 640, 72 frames a second; 4 MHz Seiko S1C88, PRC tile/sprite engine, built-in FreeBIOS "
                     "or bios.min in pokemini/) with 48 kHz piezo PWM sound and 8 KB EEPROM (.sav)",
+        "cpc": "[-f frames] [-k script] [file.sna|file.dsk|file.cpr|file.bin]: an Amstrad CPC 464 / 6128 + GX4000 on the "
+               "TV (384 x 240 three times as large in Mode 0/1, 640 x 200 in Mode 2, 50 frames a second; 4 MHz Z80, UM6845R "
+               "CRTC, 40010 Gate Array, 128 KB RAM, uPD765 FDC with .sav writeback, built-in OS + Locomotive BASIC 1.1 + "
+               "AMSDOS) with AY-3-8912 48 kHz sound; no file: BASIC",
+        "vic20": "[-f frames] [-k script] [file.prg|file.crt|file.a0|file.d64]: a Commodore VIC-20 (PAL) on the TV (224 x "
+                 "240 three times as large, 50 frames a second; MOS 6502, MOS 6561 VIC-I video + 4-channel 48 kHz sound, "
+                 "dual 6522 VIAs, automatic unexpanded / +3K / +24K RAM expansion, built-in KERNAL + BASIC V2 + chargen) "
+                 "; no file: BASIC",
+        "apple2": "[-f frames] [-k script] [file.dsk|file.do|file.po|file.nib|file.bin]: an Apple IIe Enhanced (128 KB) on "
+                  "the TV (280 x 192 three times as large or 560 x 192 80-col / Double Hi-Res, 59.92 frames a second; WDC "
+                  "65C02, NTSC artifact Hi-Res, Disk II GCR .sav writeback, 48 kHz $C030 speaker + Mockingboard AY-3-8910, "
+                  "embedded Apple IIe + Disk II ROMs); no file: Applesoft BASIC",
+        "coco": "[-f frames] [-k script] [file.ccc|file.rom|file.bin|file.cas]: a TRS-80 Color Computer 64K (NTSC 60 Hz) "
+                "on the TV (320 x 240 three times as large with border; Motorola MC6809, SAM MC6883, dual MC6821 PIAs, "
+                "MC6847 VDG + NTSC RG6 artifact colours, 48 kHz 6-bit DAC + 1-bit sound, built-in Color BASIC exec or "
+                "bas13.rom/extbas11.rom in coco/); no file: BASIC",
+        "dragon": "[-f frames] [-k script] [file.ccc|file.rom|file.bin|file.cas]: a Dragon 32 / 64 (PAL 50 Hz) on the TV "
+                  "(320 x 240 three times as large with border; Motorola MC6809, SAM, dual PIAs with Dragon keyboard "
+                  "matrix, MC6847 VDG, 48 kHz 6-bit DAC + 1-bit sound, built-in BASIC exec or d32.rom in dragon/); no "
+                  "file: BASIC",
+        "cv": "[-f frames] [-k script] <file.cv|file.rom|file.bin>: a VTech CreatiVision / Dick Smith Wizzard cartridge "
+              "(4K..32K) on the TV (256 x 192 three times as large, 50 Hz PAL; 2 MHz 6502, MC6821 PIA, TMS9929A VDP, "
+              "SN76489A 48 kHz sound, built-in BIOS or bioscv.rom in cv/)",
+        "m5": "[-f frames] [-k script] <file.m5|file.rom|file.bin>: a Sord M5 / CGL M5 cartridge (4K..20K) on the TV "
+              "(256 x 192 three times as large, 60 Hz NTSC; 3.58 MHz Z80 + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, "
+              "SN76489AN 48 kHz sound, built-in Monitor BIOS or m5.rom in m5/)",
         "rf": "the aerial input: the MxL603 tuner (I2C 0x60) and the S3811's DVB-T demodulator as dump.bin drives "
               "them -- init, tune <MHz|channel> [6|7|8], status (lock, level, quality, errors, the stream's "
               "parameters), scan, services (the multiplex's channel names), ts <s> [file] (the PIDs, or a .ts "

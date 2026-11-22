@@ -54,6 +54,11 @@
 #include "chip8.h"
 #include "channelf.h"
 #include "pokemini.h"
+#include "cpc.h"
+#include "vic20.h"
+#include "apple2.h"
+#include "coco.h"
+#include "cvm5.h"
 #include "snd.h"
 #include "zip.h"
 #include "image.h"
@@ -845,9 +850,9 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     }
     uprintf("%s: %s\n", path, m->info());
     char sav[128], old_sav[128];
-    u32 ram_size;
-    int battery, have_sav = save_path(path, sav, sizeof(sav), 0), foreign = 0;
-    u8 *ram = m->save_ram(&ram_size, &battery);
+    u32 ram_size = 0;
+    int battery = 0, have_sav = save_path(path, sav, sizeof(sav), 0), foreign = 0;
+    u8 *ram = m->save_ram ? m->save_ram(&ram_size, &battery) : 0;
     if (battery && have_sav) {
         const char *from = 0;
         static struct disk_entry e;
@@ -978,7 +983,7 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
         if (dropped)
             uprintf("sound: %u samples did not fit in the sound's ring\n", dropped);
     }
-    if (battery && have_sav && !foreign && m->save_changed())
+    if (battery && have_sav && !foreign && m->save_changed && m->save_changed())
         disk_write_file(sav, ram, ram_size, 0);
     return 0;
 }
@@ -2581,4 +2586,229 @@ static const struct machine pokemini_machine = {
 int pokemini_play(const char *path, u32 frames, const char *script)
 {
     return play(&pokemini_machine, path, frames, script);
+}
+
+/* Amstrad CPC 464 / 6128 + GX4000 (.sna, .dsk, .cpr, .bin; "": boot Locomotive BASIC 1.1): 384 x 240 three times as
+   large (1152 x 720) in Mode 0/1, or 640 x 200 (1280 x 600) in Mode 2, at 50.08 frames a second */
+static struct machine cpc_machine;
+
+static const char *cpc_open(u8 *image, u32 size, const char *path)
+{
+    u8 *os_buf = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *bas_buf = os_buf + 0x4000u;
+    u8 *ams_buf = bas_buf + 0x4000u;
+    u32 got_os  = rom_find(path, "cpc", "cpc6128.rom", os_buf,  0x4000u, 0x4000u);
+    u32 got_bas = rom_find(path, "cpc", "basic.rom",   bas_buf, 0x4000u, 0x4000u);
+    u32 got_ams = rom_find(path, "cpc", "amsdos.rom",  ams_buf, 0x4000u, 0x4000u);
+    return cpc_load(got_os == 0x4000u ? os_buf : 0,
+                    got_bas == 0x4000u ? bas_buf : 0,
+                    got_ams == 0x4000u ? ams_buf : 0,
+                    size ? image : 0, size, path);
+}
+
+static void cpc_one(u16 pad, void *pic_out)
+{
+    cpc_frame(pad, (u16 *)pic_out);
+}
+
+static void cpc_size(int *w, int *h)
+{
+    *w = cpc_width();
+    *h = cpc_height();
+    cpc_machine.xs = (*w <= 384) ? 3 : 2;
+    cpc_machine.ys = 3;
+}
+
+static struct machine cpc_machine = {
+    CPC_W_STD, CPC_H_STD, 3, 3, CPC_FRAME_US, cpc_open, cpc_info, cpc_one, cpc_save_ram, cpc_save_changed,
+    cpc_jammed, 0, 0, "the Z80", cpc_keyboard, cpc_typed,
+    "the USB keyboard is the Amstrad CPC's, its arrows also joystick 0 (fire 1/2: X/Z or remote OK/0; remote MENU = "
+    "Return, INFO = Space); what is typed on this console is typed on it; Esc ends",
+    cpc_size, cpc_audio_rate, cpc_audio
+};
+
+int cpc_play(const char *path, u32 frames, const char *script)
+{
+    return play(&cpc_machine, path, frames, script);
+}
+
+/* Commodore VIC-20 PAL (.prg, .crt, .a0, .20, .40, .60, .d64; "": boot +24K BASIC V2): 224 x 240 three times as large
+   (672 x 720) at 50 frames a second, with MOS 6502, MOS 6561 VIC-I video + 4-channel 48 kHz sound, dual MOS 6522 VIAs,
+   automatic unexpanded / +3K / +24K RAM expansion selection, and embedded KERNAL + BASIC + Character ROMs */
+static const char *vic20_open(u8 *image, u32 size, const char *path)
+{
+    u8 *k_buf = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *b_buf = k_buf + 0x2000u;
+    u8 *c_buf = b_buf + 0x2000u;
+    u32 gk = rom_find(path, "vic20", "kernal.rom",  k_buf, 0x2000u, 0x2000u);
+    u32 gb = rom_find(path, "vic20", "basic.rom",   b_buf, 0x2000u, 0x2000u);
+    u32 gc = rom_find(path, "vic20", "chargen.rom", c_buf, 0x1000u, 0x1000u);
+    return vic20_load(gk == 0x2000u ? k_buf : 0,
+                      gb == 0x2000u ? b_buf : 0,
+                      gc == 0x1000u ? c_buf : 0,
+                      size ? image : 0, size, path);
+}
+
+static void vic20_one(u16 pad, void *pic_out)
+{
+    vic20_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine vic20_machine = {
+    VIC20_W, VIC20_H, 3, 3, VIC20_FRAME_US, vic20_open, vic20_info, vic20_one, vic20_save_ram, vic20_save_changed,
+    vic20_jammed, 0, 0, "the 6502", vic20_keyboard, vic20_typed,
+    "the USB keyboard is the VIC-20's (Tab = RUN/STOP, PageUp = RESTORE, Alt = C=, F1/F3/F5/F7), its arrows also the "
+    "joystick (fire: right Ctrl or remote OK; remote 0 = Space, MENU = F1, INFO = F3); Esc ends",
+    0, vic20_audio_rate, vic20_audio
+};
+
+int vic20_play(const char *path, u32 frames, const char *script)
+{
+    return play(&vic20_machine, path, frames, script);
+}
+
+/* Apple IIe Enhanced (128 KB; .dsk, .do, .po, .nib, .bin; "": boot Applesoft BASIC): 280 x 192 three times as large
+   (840 x 576) or 560 x 192 twice as wide and three times as high (1120 x 576) in 80-col / Double Hi-Res, at 59.92 frames
+   a second, with WDC 65C02, Disk II GCR 6-and-2 (.sav writeback), 48 kHz $C030 speaker + Mockingboard AY-3-8910, and
+   embedded Apple IIe Enhanced + Video + Disk II ROMs */
+static struct machine apple2_machine;
+
+static const char *apple2_open(u8 *image, u32 size, const char *path)
+{
+    u8 *r_main = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *r_char = r_main + 0x4000u;
+    u8 *r_dsk  = r_char + 0x1000u;
+    u32 gm = rom_find(path, "apple2", "apple2e.rom", r_main, 0x4000u, 0x4000u);
+    u32 gc = rom_find(path, "apple2", "video.rom",   r_char, 0x1000u, 0x1000u);
+    u32 gd = rom_find(path, "apple2", "disk2.rom",   r_dsk,  0x0100u, 0x0100u);
+    apple2_machine.xs = 3;
+    apple2_machine.ys = 3;
+    return apple2_load(gm == 0x4000u ? r_main : 0,
+                       gc == 0x1000u ? r_char : 0,
+                       gd == 0x0100u ? r_dsk  : 0,
+                       size ? image : 0, size, path);
+}
+
+static void apple2_one(u16 pad, void *pic_out)
+{
+    apple2_frame(pad, (u16 *)pic_out);
+}
+
+static void apple2_size(int *w, int *h)
+{
+    *w = apple2_width();
+    *h = apple2_height();
+    apple2_machine.xs = (*w <= 280) ? 3 : 2;
+    apple2_machine.ys = 3;
+}
+
+static struct machine apple2_machine = {
+    A2_W_STD, A2_H, 3, 3, A2_FRAME_US, apple2_open, apple2_info, apple2_one, apple2_save_ram, apple2_save_changed,
+    apple2_jammed, 0, 0, "the 65C02", apple2_keyboard, apple2_typed,
+    "the USB keyboard is the Apple IIe's (left/right Alt = Open/Closed Apple), its arrows also the analog joystick "
+    "(button 0/1: remote OK/0; remote MENU = Return, INFO = Space); what is typed on this console is typed on it; Esc ends",
+    apple2_size, apple2_audio_rate, apple2_audio
+};
+
+int apple2_play(const char *path, u32 frames, const char *script)
+{
+    return play(&apple2_machine, path, frames, script);
+}
+
+/* TRS-80 Color Computer 1/2 (NTSC 60 Hz) & Dragon 32/64 (PAL 50 Hz) (.ccc, .rom, .bin, .cas; "": boot Color BASIC):
+   320 x 240 with border three times as large (960 x 720), with Motorola MC6809, SAM MC6883, dual MC6821 PIAs, MC6847
+   VDG (all text/SG4/SG6/CG1..CG6/RG1..RG6 modes + CoCo NTSC RG6 artifact colours), and 48 kHz 6-bit DAC + 1-bit sound */
+static const char *coco_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bas = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *ext = bas + 0x2000u;
+    u32 gb = rom_find(path, "coco", "bas13.rom",    bas, 0x2000u, 0x2000u);
+    u32 ge = rom_find(path, "coco", "extbas11.rom", ext, 0x2000u, 0x2000u);
+    return coco_load(gb == 0x2000u ? bas : 0, ge == 0x2000u ? ext : 0,
+                     size ? image : 0, size, path);
+}
+
+static const char *dragon_open(u8 *image, u32 size, const char *path)
+{
+    u8 *d32 = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gd = rom_find(path, "dragon", "d32.rom", d32, 0x4000u, 0x4000u);
+    return dragon_load(gd == 0x4000u ? d32 : 0, size ? image : 0, size, path);
+}
+
+static void coco_one(u16 pad, void *pic_out)
+{
+    coco_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine coco_machine = {
+    COCO_W, COCO_H, 3, 3, COCO_FRAME_US, coco_open, coco_info, coco_one, 0, 0,
+    coco_jammed, 0, 0, "the 6809", coco_keyboard, coco_typed,
+    "the USB keyboard is the CoCo's, its arrows also the right joystick (fire: Space / remote OK, Shift / remote 0 = "
+    "button 2, remote MENU = Enter); what is typed on this console is typed on it; Esc ends",
+    0, coco_audio_rate, coco_audio
+};
+
+static const struct machine dragon_machine = {
+    COCO_W, COCO_H, 3, 3, DRAGON_FRAME_US, dragon_open, coco_info, coco_one, 0, 0,
+    coco_jammed, 0, 0, "the 6809", coco_keyboard, coco_typed,
+    "the USB keyboard is the Dragon's, its arrows also the right joystick (fire: Space / remote OK, Shift / remote 0 = "
+    "button 2, remote MENU = Enter); what is typed on this console is typed on it; Esc ends",
+    0, coco_audio_rate, coco_audio
+};
+
+int coco_play(const char *path, u32 frames, const char *script)
+{
+    return play(&coco_machine, path, frames, script);
+}
+
+int dragon_play(const char *path, u32 frames, const char *script)
+{
+    return play(&dragon_machine, path, frames, script);
+}
+
+/* VTech CreatiVision / Dick Smith Wizzard (.cv, .rom, .bin) & Sord M5 (.m5, .rom, .bin):
+   256 x 192 three times as large (768 x 576), with TMS9929A/TMS9918A VDP and TI SN76489A 48 kHz sound */
+static const char *cv_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "cv", "bioscv.rom", bios, 0x0800u, 0x0800u);
+    return cv_load(gb == 0x0800u ? bios : 0, image, size);
+}
+
+static const char *m5_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "m5", "m5.rom", bios, 0x2000u, 0x2000u);
+    return m5_load(gb == 0x2000u ? bios : 0, image, size);
+}
+
+static void cvm5_one(u16 pad, void *pic_out)
+{
+    cvm5_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine cv_machine = {
+    CVM5_W, CVM5_H, 3, 3, CV_FRAME_US, cv_open, cvm5_info, cvm5_one, 0, 0,
+    cvm5_jammed, 0, 0, "the 6502", cvm5_keyboard, cvm5_typed,
+    "arrows or USB keyboard = joystick, Space/Ctrl/remote OK = fire 1, Shift/remote 0 = fire 2, F2 = Reset/Select; "
+    "Esc ends",
+    0, cvm5_audio_rate, cvm5_audio
+};
+
+static const struct machine m5_machine = {
+    CVM5_W, CVM5_H, 3, 3, M5_FRAME_US, m5_open, cvm5_info, cvm5_one, 0, 0,
+    cvm5_jammed, 0, 0, "the Z80", cvm5_keyboard, cvm5_typed,
+    "the USB keyboard is the Sord M5's, its arrows also joystick 1 (fire 1: Space/Ctrl/remote OK, fire 2: Shift/remote 0); "
+    "Esc ends",
+    0, cvm5_audio_rate, cvm5_audio
+};
+
+int cv_play(const char *path, u32 frames, const char *script)
+{
+    return play(&cv_machine, path, frames, script);
+}
+
+int m5_play(const char *path, u32 frames, const char *script)
+{
+    return play(&m5_machine, path, frames, script);
 }

@@ -542,6 +542,13 @@ int sv_play(const char *path, u32 frames, const char *script);     /* 'sv': a Wa
 int chip8_play(const char *path, u32 frames, const char *script);  /* 'chip8': a CHIP-8 / SCHIP / XO-CHIP program (.ch8, .sc8, .xo8) */
 int channelf_play(const char *path, u32 frames, const char *script); /* 'channelf': a Fairchild Channel F cartridge (.chf, .bin, .rom) */
 int pokemini_play(const char *path, u32 frames, const char *script); /* 'pokemini': a Nintendo Pokemon Mini cartridge (.min) */
+int cpc_play(const char *path, u32 frames, const char *script);     /* 'cpc': an Amstrad CPC 464/6128 / GX4000 (.sna, .dsk, .cpr, .bin; "": BASIC) */
+int vic20_play(const char *path, u32 frames, const char *script);   /* 'vic20': a Commodore VIC-20 program, cart or disk (.prg, .crt, .a0, .d64; "": BASIC) */
+int apple2_play(const char *path, u32 frames, const char *script);  /* 'apple2': an Apple IIe Enhanced disk or binary (.dsk, .do, .po, .nib, .bin; "": BASIC) */
+int coco_play(const char *path, u32 frames, const char *script);    /* 'coco': a TRS-80 Color Computer 64K Pak, binary or tape (.ccc, .rom, .bin, .cas; "": BASIC) */
+int dragon_play(const char *path, u32 frames, const char *script);  /* 'dragon': a Dragon 32/64 PAL Pak, binary or tape (.ccc, .rom, .bin, .cas; "": BASIC) */
+int cv_play(const char *path, u32 frames, const char *script);      /* 'cv': a VTech CreatiVision / Dick Smith Wizzard cartridge (.cv, .rom, .bin) */
+int m5_play(const char *path, u32 frames, const char *script);      /* 'm5': a Sord M5 / CGL M5 cartridge (.m5, .rom, .bin) */
 
 /* view.c: the picture viewer (image.c decodes JPEG, PNG, GIF, BMP) */
 #define IMAGE_WORK_PHYS  0x06900000u      /* the picture as shown, and the decoder's memory (a progressive JPEG's */
