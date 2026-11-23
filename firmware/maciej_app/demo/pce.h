@@ -1,16 +1,20 @@
-/* pce.c: a NEC PC Engine / TurboGrafx-16 -- its HuC6280 at 7.16 MHz (the 65C02
-   with its memory mapping registers MPR0..MPR7, zero page at $2000 and stack
-   at $2100, the T-flag memory operations, the block transfers TII / TDD / TIN
-   / TIA / TAI, ST0 / ST1 / ST2, TST, BBR / BBS / RMB / SMB, the 7 kHz timer
-   and interrupt mask), the HuC6270 VDC and HuC6260 VCE (64 KB VRAM, scrolled
-   background, 64 sprites up to 32 x 64, raster counter interrupts, VRAM and
-   SATB DMA, 256 / 320 / 512 widths, 512 9-bit colours), the 6-channel PSG
-   (wavetable, noise, DDA samples and LFO), Street Fighter II' banking and
-   2 KB backup RAM (.sav).  Nothing in it knows the box: a HuCard image in RAM
-   goes in, pictures of 15-bit colours come out (play.c puts them on the TV
-   and reads the buttons; a PC harness runs the same file). */
+/* pce.c: NEC PC Engine / TurboGrafx-16 ('pce'), NEC SuperGrafx ('sgx'), and
+   PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card ('pcecd'):
+   - HuC6280 CPU at 7.16 / 1.79 MHz (MPR0..MPR7, $2000 ZP, $2100 stack, T-flag,
+     TII/TDD/TIN/TIA/TAI, ST0/ST1/ST2, TST, BBR/BBS/RMB/SMB, 7 kHz timer)
+   - Single HuC6270 VDC (64 KB VRAM) on PCE/PCE-CD, or Dual HuC6270 VDCs
+     (128 KB VRAM) + HuC6202 VPC window/priority mixer + 32 KB WRAM on SuperGrafx
+   - HuC6260 VCE (512 9-bit GRB colours, 256 / 320 / 512 widths)
+   - 6-channel wavetable/noise/DDA/LFO PSG + OKI MSM5205 12-bit ADPCM (64 KB)
+     + streamed 44.1 kHz Redbook CD-DA mixed at 48 kHz
+   - NEC SCSI CD-ROM2 drive ($1800..$180F), 256 KB Super System Card 3.0 RAM
+     ($68..$87), 2 MB Arcade Card Pro/Duo RAM ($40..$43 / $1A00..$1AFF),
+     2 KB battery-backed BRAM (.sav), and clean-room System Card 3.0 BIOS
+     (with optional external syscard3.pce override). */
 #ifndef DEMO_PCE_H
 #define DEMO_PCE_H
+
+#include "cdrom.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -43,6 +47,9 @@ typedef signed int s32;
 
 const char *pce_load(u8 *image, u32 size);      /* a .pce HuCard image in RAM (a 512-byte header skipped; bit-reversed
                                                    US dumps unreversed in place): 0, or why it cannot run */
+const char *sgx_load(u8 *image, u32 size);      /* a .sgx SuperGrafx HuCard image (dual VDC + VPC + 32 KB WRAM) */
+const char *pcecd_load(const u8 *bios, u32 bios_size, const struct cdrom_toc *cd);
+                                                /* PC Engine CD / TurboGrafx-CD + Super System Card 3.0 + Arcade Card */
 void pce_reset(void);
 void pce_frame(u16 pad, u16 *picture);          /* one frame: pce_width() x pce_height() 15-bit colours
                                                    (0bbbbbgggggrrrrr; 0: no picture kept) */

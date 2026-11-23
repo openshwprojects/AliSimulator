@@ -48,16 +48,18 @@ struct psx_work {
     s16 aud_buf[PSX_AUD_MAX];      /* 4 KB 48 kHz mono output */
     u8 cd_buf[2352];               /* Current CD sector raw buffer */
     u8 cd_fifo[2352];              /* Active CD data FIFO */
-    u32 mdec_in[8192];             /* MDEC input buffer */
+    u32 mdec_in[16384];            /* MDEC input buffer (up to 64 KB frame VLC output) */
     u8 mdec_out[24576];            /* MDEC decoded macroblock output FIFO */
 
-    /* Main memories in EMU_RAM_PHYS (total ~4.65 MB + 4.00 MB MIPS32 JIT = ~8.69 MB of 9.50 MB available) */
+    /* Main memories in EMU_RAM_PHYS (total ~4.69 MB + 4.00 MB MIPS32 JIT = ~8.73 MB of 9.50 MB available) */
     u8 ram[PSX_RAM_SIZE];
     u16 vram[1024 * 512];
     u8 spu_ram[PSX_SPU_SIZE];
     u8 bios[PSX_BIOS_SIZE];
     u8 ext_bios[PSX_BIOS_SIZE];
     u8 mcd[PSX_MCD_SIZE];
+    u8 exec_top_stack[4096];
+    u8 exec_low_tables[1024];
 #ifdef __mips__
 #define JIT_RAM_WORDS 524288u
 #define JIT_BUF_WORDS 524288u
@@ -159,7 +161,7 @@ static struct psx_state_s {
     u8 set_mask, check_mask, dither, tex_disable;
     u16 disp_x, disp_y;
     int disp_w, disp_h;
-    u8 disp_24bpp, disp_disabled;
+    u8 disp_24bpp, disp_disabled, vram_full_clear;
     u32 vram_gen;
     u32 clut4_gen[4], clut4_klo[4], clut4_khi[4];
     s32 clut4_cache[4][16];
@@ -167,7 +169,7 @@ static struct psx_state_s {
 
     /* MDEC state */
     u32 mdec_cmd, mdec_stat;
-    u32 mdec_words_rem, mdec_in_cnt;
+    u32 mdec_words_rem, mdec_in_cnt, mdec_in_pos;
     u32 mdec_out_pos, mdec_out_len;
     u8 mdec_iq_y[64], mdec_iq_uv[64];
     s16 mdec_scale[64];
@@ -175,12 +177,14 @@ static struct psx_state_s {
     /* CD-ROM controller */
     u8 cd_index;
     u8 cd_param[16], cd_param_n;
+    u8 cd_req_param[16], cd_req_param_n, cd_req_valid, cd_req_cmd;
     u8 cd_resp[16], cd_resp_n, cd_resp_p;
     u8 cd_irq_flag, cd_irq_en;
     u8 cd_stat;            /* bit1=motor, bit5=reading */
     u8 cd_mode;            /* bit7=2x, bit5=2340B */
     u8 cd_pend_cmd;
     u8 cd_xa_streak, cd_xa_file, cd_xa_ch, cd_xa_sub, cd_xa_cod, cd_flt_file, cd_flt_ch;
+    int cd_req_delay;
     int cd_cmd_delay;
     int cd_read_delay;
     u32 cd_set_lba, cd_cur_lba;
@@ -206,6 +210,7 @@ static struct psx_state_s {
     u32 aud_frac;
 
     /* Clean-room HLE BIOS state */
+    u32 exc_r[32], exc_epc, exc_hi, exc_lo;
     struct psx_event events[32];
     u32 pad_buf1, pad_buf2, pad_init_ptr;
     u8 pad_auto;
@@ -214,6 +219,16 @@ static struct psx_state_s {
     u32 hook_entry_int;    /* HookEntryInt jumpbuf */
     u32 heap_base, heap_size, heap_cur;
     u32 vblank_count;
+    struct {
+        u32 sp, fp, gp, ra, s[8];
+        u32 hook_entry_int, pad_init_ptr, pad_buf1, pad_buf2;
+        u32 heap_base, heap_size, heap_cur;
+        u32 sys_int_rp[8];
+        struct psx_event events[32];
+        u16 i_mask;
+        u8 pad_auto;
+        u8 auto_clear_rcnt[4];
+    } exec_saved;
 
     u16 pad;
     int scan_y;
@@ -480,6 +495,8 @@ static void cd_exec_cmd(u8 cmd)
     S.cd_resp_n = 0;
     S.cd_resp_p = 0;
     u8 stat = (u8)(0x02u | (S.cd_stat & 0x20u)); /* motor on + optional reading */
+    if (cmd != 0x01u && cmd != 0x10u && cmd != 0x11u)
+        S.cd_pend_cmd = 0u;
 
     switch (cmd) {
     case 0x01u: /* CdlNop */
@@ -488,10 +505,10 @@ static void cd_exec_cmd(u8 cmd)
         break;
     case 0x02u: /* CdlSetloc (MM, SS, FF in BCD) */
         S.cd_xa_streak = 0u;
-        if (S.cd_param_n >= 3u) {
-            u32 mm = from_bcd(S.cd_param[0]);
-            u32 ss = from_bcd(S.cd_param[1]);
-            u32 ff = from_bcd(S.cd_param[2]);
+        if (S.cd_req_param_n >= 3u) {
+            u32 mm = from_bcd(S.cd_req_param[0]);
+            u32 ss = from_bcd(S.cd_req_param[1]);
+            u32 ff = from_bcd(S.cd_req_param[2]);
             u32 abs_f = (mm * 60u + ss) * 75u + ff;
             S.cd_set_lba = (abs_f >= 150u) ? (abs_f - 150u) : 0u;
         }
@@ -500,6 +517,7 @@ static void cd_exec_cmd(u8 cmd)
         break;
     case 0x03u: /* CdlPlay */
         S.cd_xa_streak = 0u;
+        S.cd_cur_lba = S.cd_set_lba;
         S.cd_stat = 0x82u;
         cd_push_resp(S.cd_stat);
         cd_fire_irq(3u);
@@ -534,17 +552,17 @@ static void cd_exec_cmd(u8 cmd)
         cd_fire_irq(3u);
         break;
     case 0x0Du: /* CdlSetfilter */
-        if (S.cd_param_n >= 2u) {
-            S.cd_flt_file = S.cd_param[0];
-            S.cd_flt_ch   = S.cd_param[1];
+        if (S.cd_req_param_n >= 2u) {
+            S.cd_flt_file = S.cd_req_param[0];
+            S.cd_flt_ch   = S.cd_req_param[1];
         }
         cd_push_resp(stat);
         cd_fire_irq(3u);
         break;
     case 0x0Eu: /* CdlSetmode */
         S.cd_xa_streak = 0u;
-        if (S.cd_param_n >= 1u)
-            S.cd_mode = S.cd_param[0];
+        if (S.cd_req_param_n >= 1u)
+            S.cd_mode = S.cd_req_param[0];
         cd_push_resp(stat);
         cd_fire_irq(3u);
         break;
@@ -583,7 +601,7 @@ static void cd_exec_cmd(u8 cmd)
         cd_fire_irq(3u);
         break;
     case 0x14u: { /* CdlGetTD */
-        u8 trk = S.cd_param_n ? from_bcd(S.cd_param[0]) : 0u;
+        u8 trk = S.cd_req_param_n ? from_bcd(S.cd_req_param[0]) : 0u;
         u32 frames = (trk == 0u) ? (S.disc_sectors + 150u) : 150u;
         cd_push_resp(stat);
         cd_push_resp(to_bcd(frames / (60u * 75u)));
@@ -596,13 +614,14 @@ static void cd_exec_cmd(u8 cmd)
         S.cd_xa_streak = 0u;
         S.cd_cur_lba = S.cd_set_lba;
         S.cd_stat = 0x02u;
+        S.cd_read_delay = 0;
         cd_push_resp(0x42u);
         cd_fire_irq(3u);
         S.cd_pend_cmd = 0xF2u;
         S.cd_cmd_delay = 4096;
         break;
     case 0x19u: /* CdlTest */
-        if (S.cd_param_n >= 1u && S.cd_param[0] == 0x20u) {
+        if (S.cd_req_param_n >= 1u && S.cd_req_param[0] == 0x20u) {
             cd_push_resp(0x98u);
             cd_push_resp(0x06u);
             cd_push_resp(0x10u);
@@ -630,11 +649,21 @@ static void cd_exec_cmd(u8 cmd)
         cd_fire_irq(3u);
         break;
     }
-    S.cd_param_n = 0;
 }
 
 static void cd_step(int cycles)
 {
+    if (S.cd_req_valid) {
+        S.cd_req_delay -= cycles;
+        if ((S.cd_req_delay <= 0 && !(S.cd_irq_flag & 0x07u)) || S.cd_req_delay <= -2048) {
+            u8 cmd = S.cd_req_cmd;
+            S.cd_req_valid = 0u;
+            S.cd_irq_flag = 0u;
+            cd_exec_cmd(cmd);
+        }
+        return;
+    }
+
     if (S.cd_pend_cmd && !(S.cd_irq_flag & 0x07u)) {
         S.cd_cmd_delay -= cycles;
         if (S.cd_cmd_delay <= 0) {
@@ -738,6 +767,8 @@ static const u8 mdec_zagzig[64] = {
     53, 60, 61, 54, 47, 55, 62, 63
 };
 
+static inline s32 clamp_s8(s32 v) { return v < -128 ? -128 : (v > 127 ? 127 : v); }
+
 static int mdec_rl_decode_block(s16 *blk, const u16 **src, const u16 *end, const u8 *iq)
 {
     for (int i = 0; i < 64; i++) blk[i] = 0;
@@ -747,58 +778,180 @@ static int mdec_rl_decode_block(s16 *blk, const u16 **src, const u16 *end, const
 
     u16 cur = *p++;
     u32 q_scale = (cur >> 10) & 0x3Fu;
-    s32 val = (cur & 0x0200u) ? (s32)(cur | ~0x03FFu) : (s32)(cur & 0x03FFu);
-    val = val * (s32)iq[0];
-    if (q_scale == 0u)
-        val = (cur & 0x0200u) ? ((s32)(cur | ~0x03FFu) * 2) : ((s32)(cur & 0x03FFu) * 2);
+    s32 dc = (cur & 0x0200u) ? (s32)(cur | ~0x03FFu) : (s32)(cur & 0x03FFu);
+    if (q_scale == 0u) {
+        s32 val = dc * 2;
+        if (val < -0x400) val = -0x400;
+        if (val >  0x3FF) val =  0x3FF;
+        blk[0] = (s16)val;
+        int has_ac = 0;
+        for (int k = 1; k < 64 && p < end; k++) {
+            cur = *p++;
+            s32 ac = (cur & 0x0200u) ? (s32)(cur | ~0x03FFu) : (s32)(cur & 0x03FFu);
+            val = ac * 2;
+            if (val < -0x400) val = -0x400;
+            if (val >  0x3FF) val =  0x3FF;
+            if (val) has_ac = 1;
+            blk[k] = (s16)val;
+        }
+        *src = p;
+        return has_ac ? 2 : 1;
+    }
+
+    s32 val = dc * (s32)iq[0];
     if (val < -0x400) val = -0x400;
     if (val >  0x3FF) val =  0x3FF;
     blk[0] = (s16)val;
 
-    int k = 0;
+    int k = 0, has_ac = 0;
     while (p < end) {
         cur = *p++;
         if (cur == 0xFE00u) break;
         k += ((cur >> 10) & 0x3Fu) + 1;
-        if (k >= 64) break;
+        if (k >= 64) {
+            while (p < end && *p++ != 0xFE00u) {}
+            break;
+        }
         s32 ac = (cur & 0x0200u) ? (s32)(cur | ~0x03FFu) : (s32)(cur & 0x03FFu);
-        if (q_scale == 0u)
-            val = ac * 2;
-        else
-            val = (ac * (s32)iq[k] * (s32)q_scale + 4) >> 3;
+        val = (ac * (s32)iq[k] * (s32)q_scale + 4) >> 3;
         if (val < -0x400) val = -0x400;
         if (val >  0x3FF) val =  0x3FF;
-        blk[q_scale ? mdec_zagzig[k] : k] = (s16)val;
+        if (val) {
+            blk[mdec_zagzig[k]] = (s16)val;
+            has_ac = 1;
+        }
     }
     *src = p;
-    return 1;
+    return has_ac ? 2 : 1;
 }
 
-static void mdec_idct(s16 *blk)
+static void mdec_idct(s16 *blk, int mode)
 {
-    s32 tmp[64];
-    for (int x = 0; x < 8; x++) {
+    if (mode == 1) { /* DC-only fast path */
+        s32 b0 = blk[0];
+        if (b0 == 0)
+            return;
         for (int y = 0; y < 8; y++) {
-            s32 sum = 0;
-            for (int u = 0; u < 8; u++)
-                sum += (s32)blk[u * 8 + x] * (s32)S.mdec_scale[u * 8 + y];
-            tmp[y * 8 + x] = (sum + 0x1000) >> 13;
+            s32 ty = (b0 * (s32)S.mdec_scale[y] + 0x8000) >> 16;
+            for (int x = 0; x < 8; x++)
+                blk[y * 8 + x] = (s16)clamp_s8((ty * (s32)S.mdec_scale[x] + 0x8000) >> 16);
+        }
+        return;
+    }
+
+    s32 tmp[64];
+    const s16 *sc = S.mdec_scale;
+    for (int x = 0; x < 8; x++) {
+        s32 c0 = blk[x], c1 = blk[8 + x], c2 = blk[16 + x], c3 = blk[24 + x];
+        s32 c4 = blk[32 + x], c5 = blk[40 + x], c6 = blk[48 + x], c7 = blk[56 + x];
+        if ((c1 | c2 | c3 | c4 | c5 | c6 | c7) == 0) {
+            if (c0 == 0) {
+                for (int y = 0; y < 8; y++) tmp[y * 8 + x] = 0;
+            } else {
+                for (int y = 0; y < 8; y++) tmp[y * 8 + x] = (c0 * (s32)sc[y] + 0x8000) >> 16;
+            }
+            continue;
+        }
+        for (int y = 0; y < 8; y++) {
+            s32 sum = c0 * sc[y] + c1 * sc[8 + y] + c2 * sc[16 + y] + c3 * sc[24 + y]
+                    + c4 * sc[32 + y] + c5 * sc[40 + y] + c6 * sc[48 + y] + c7 * sc[56 + y];
+            tmp[y * 8 + x] = (sum + 0x8000) >> 16;
         }
     }
     for (int y = 0; y < 8; y++) {
+        const s32 *tr = &tmp[y * 8];
+        s32 t0 = tr[0], t1 = tr[1], t2 = tr[2], t3 = tr[3];
+        s32 t4 = tr[4], t5 = tr[5], t6 = tr[6], t7 = tr[7];
+        if ((t1 | t2 | t3 | t4 | t5 | t6 | t7) == 0) {
+            if (t0 == 0) {
+                for (int x = 0; x < 8; x++) blk[y * 8 + x] = 0;
+            } else {
+                for (int x = 0; x < 8; x++) blk[y * 8 + x] = (s16)clamp_s8((t0 * (s32)sc[x] + 0x8000) >> 16);
+            }
+            continue;
+        }
         for (int x = 0; x < 8; x++) {
-            s32 sum = 0;
-            for (int u = 0; u < 8; u++)
-                sum += tmp[y * 8 + u] * (s32)S.mdec_scale[u * 8 + x];
-            s32 v = (sum + 0x4000) >> 15;
-            if (v < -128) v = -128;
-            if (v >  127) v =  127;
-            blk[y * 8 + x] = (s16)v;
+            s32 sum = t0 * sc[x] + t1 * sc[8 + x] + t2 * sc[16 + x] + t3 * sc[24 + x]
+                    + t4 * sc[32 + x] + t5 * sc[40 + x] + t6 * sc[48 + x] + t7 * sc[56 + x];
+            blk[y * 8 + x] = (s16)clamp_s8((sum + 0x8000) >> 16);
         }
     }
 }
 
-static inline u8 clamp_u8(int v) { return v < 0 ? 0u : (v > 255 ? 255u : (u8)v); }
+static void mdec_decode_chunk(void)
+{
+    u32 depth = (S.mdec_cmd >> 27) & 3u; /* 0=4bpp, 1=8bpp, 2=24bpp, 3=15bpp */
+    int is_signed = (S.mdec_cmd >> 26) & 1;
+    u16 stp = (S.mdec_cmd & (1u << 25)) ? 0x8000u : 0u;
+    const u16 *base = (const u16 *)W.mdec_in;
+    const u16 *p = base + S.mdec_in_pos;
+    const u16 *end = base + S.mdec_in_cnt * 2u;
+    u32 out_p = 0;
+
+    while (p < end && out_p + 768u <= sizeof(W.mdec_out)) {
+        s16 b_cr[64], b_cb[64], b_y[4][64];
+        if (depth <= 1u) { /* Monochrome 8x8 */
+            int m0 = mdec_rl_decode_block(b_y[0], &p, end, S.mdec_iq_y);
+            if (!m0) break;
+            mdec_idct(b_y[0], m0);
+            for (int i = 0; i < 64; i++) {
+                s32 yv = clamp_s8(b_y[0][i]);
+                u8 b8 = (u8)(yv + (is_signed ? 0 : 128));
+                if (depth == 1u) {
+                    W.mdec_out[out_p++] = b8;
+                } else {
+                    u8 n4 = (u8)(b8 >> 4);
+                    if ((i & 1) == 0) W.mdec_out[out_p] = n4;
+                    else              W.mdec_out[out_p++] |= (u8)(n4 << 4);
+                }
+            }
+        } else { /* Color 16x16: Cr, Cb, Y0, Y1, Y2, Y3 */
+            int mcr = mdec_rl_decode_block(b_cr, &p, end, S.mdec_iq_uv);
+            if (!mcr) break;
+            int mcb = mdec_rl_decode_block(b_cb, &p, end, S.mdec_iq_uv);
+            if (!mcb) break;
+            int ok_y = 1;
+            for (int q = 0; q < 4; q++) {
+                int my = mdec_rl_decode_block(b_y[q], &p, end, S.mdec_iq_y);
+                if (!my) { ok_y = 0; break; }
+                mdec_idct(b_y[q], my);
+            }
+            if (!ok_y) break;
+            mdec_idct(b_cr, mcr);
+            mdec_idct(b_cb, mcb);
+            for (int py = 0; py < 16; py++) {
+                for (int px = 0; px < 16; px++) {
+                    int q = ((py >> 3) << 1) | (px >> 3);
+                    int yv = b_y[q][(py & 7) * 8 + (px & 7)];
+                    int cr = b_cr[(py >> 1) * 8 + (px >> 1)];
+                    int cb = b_cb[(py >> 1) * 8 + (px >> 1)];
+                    s32 r = clamp_s8(yv + ((359 * cr + 128) >> 8));
+                    s32 g = clamp_s8(yv - ((88 * cb + 183 * cr + 128) >> 8));
+                    s32 b = clamp_s8(yv + ((454 * cb + 128) >> 8));
+                    u8 r8 = (u8)(r + (is_signed ? 0 : 128));
+                    u8 g8 = (u8)(g + (is_signed ? 0 : 128));
+                    u8 b8 = (u8)(b + (is_signed ? 0 : 128));
+                    if (depth == 2u) {
+                        W.mdec_out[out_p++] = r8;
+                        W.mdec_out[out_p++] = g8;
+                        W.mdec_out[out_p++] = b8;
+                    } else {
+                        u16 c15 = (u16)(stp | ((u16)(b8 >> 3) << 10) | ((u16)(g8 >> 3) << 5) | (r8 >> 3));
+                        W.mdec_out[out_p++] = (u8)c15;
+                        W.mdec_out[out_p++] = (u8)(c15 >> 8);
+                    }
+                }
+            }
+        }
+    }
+    S.mdec_in_pos = (u32)(p - base);
+    S.mdec_out_pos = 0;
+    S.mdec_out_len = out_p;
+    S.mdec_stat = (S.mdec_stat & ~(0x1FFu << 23)) | ((depth & 3u) << 25)
+                | (out_p ? (1u << 29) : ((1u << 31) & ~(1u << 29)));
+    if (!out_p)
+        S.mdec_stat &= ~(1u << 29);
+}
 
 static void mdec_execute(void)
 {
@@ -818,66 +971,8 @@ static void mdec_execute(void)
         return;
     }
     if (op == 1u) { /* Decode Macroblock(s) */
-        u32 depth = (S.mdec_cmd >> 27) & 3u; /* 0=4bpp, 1=8bpp, 2=24bpp, 3=15bpp */
-        int is_signed = (S.mdec_cmd >> 26) & 1;
-        u16 stp = (S.mdec_cmd & (1u << 25)) ? 0x8000u : 0u;
-        const u16 *p = (const u16 *)W.mdec_in;
-        const u16 *end = p + S.mdec_in_cnt * 2u;
-        u32 out_p = 0;
-
-        while (p < end && out_p + 768u <= sizeof(W.mdec_out)) {
-            s16 b_cr[64], b_cb[64], b_y[4][64];
-            if (depth <= 1u) { /* Monochrome 8x8 */
-                if (!mdec_rl_decode_block(b_y[0], &p, end, S.mdec_iq_y)) break;
-                mdec_idct(b_y[0]);
-                for (int i = 0; i < 64; i++) {
-                    int yv = b_y[0][i] + (is_signed ? 0 : 128);
-                    u8 b8 = is_signed ? (u8)(yv & 0xFF) : clamp_u8(yv);
-                    if (depth == 1u) {
-                        W.mdec_out[out_p++] = b8;
-                    } else {
-                        u8 n4 = (u8)(b8 >> 4);
-                        if ((i & 1) == 0) W.mdec_out[out_p] = n4;
-                        else              W.mdec_out[out_p++] |= (u8)(n4 << 4);
-                    }
-                }
-            } else { /* Color 16x16: Cr, Cb, Y0, Y1, Y2, Y3 */
-                if (!mdec_rl_decode_block(b_cr, &p, end, S.mdec_iq_uv)) break;
-                if (!mdec_rl_decode_block(b_cb, &p, end, S.mdec_iq_uv)) break;
-                for (int q = 0; q < 4; q++) {
-                    if (!mdec_rl_decode_block(b_y[q], &p, end, S.mdec_iq_y)) break;
-                    mdec_idct(b_y[q]);
-                }
-                mdec_idct(b_cr);
-                mdec_idct(b_cb);
-                for (int py = 0; py < 16; py++) {
-                    for (int px = 0; px < 16; px++) {
-                        int q = ((py >> 3) << 1) | (px >> 3);
-                        int yv = b_y[q][(py & 7) * 8 + (px & 7)];
-                        int cr = b_cr[(py >> 1) * 8 + (px >> 1)];
-                        int cb = b_cb[(py >> 1) * 8 + (px >> 1)];
-                        int r = yv + ((359 * cr + 128) >> 8) + (is_signed ? 0 : 128);
-                        int g = yv - ((88 * cb + 183 * cr + 128) >> 8) + (is_signed ? 0 : 128);
-                        int b = yv + ((454 * cb + 128) >> 8) + (is_signed ? 0 : 128);
-                        u8 r8 = is_signed ? (u8)r : clamp_u8(r);
-                        u8 g8 = is_signed ? (u8)g : clamp_u8(g);
-                        u8 b8 = is_signed ? (u8)b : clamp_u8(b);
-                        if (depth == 2u) {
-                            W.mdec_out[out_p++] = r8;
-                            W.mdec_out[out_p++] = g8;
-                            W.mdec_out[out_p++] = b8;
-                        } else {
-                            u16 c15 = (u16)(stp | ((u16)(b8 >> 3) << 10) | ((u16)(g8 >> 3) << 5) | (r8 >> 3));
-                            W.mdec_out[out_p++] = (u8)c15;
-                            W.mdec_out[out_p++] = (u8)(c15 >> 8);
-                        }
-                    }
-                }
-            }
-        }
-        S.mdec_out_pos = 0;
-        S.mdec_out_len = out_p;
-        S.mdec_stat = (S.mdec_stat & ~(0x1FFu << 23)) | ((depth & 3u) << 25) | (out_p ? 0u : (1u << 31));
+        S.mdec_in_pos = 0;
+        mdec_decode_chunk();
     }
 }
 
@@ -1931,11 +2026,17 @@ static const u8 gp0_poly_words[32] = {
     8, 8, 8, 8, 12, 12, 12, 12
 };
 
+static inline int gpu_can_skip_draw(void)
+{
+    return S.skip_render >= 2u && S.vram_full_clear &&
+           S.clip_x1 == 0 && S.clip_x2 < S.disp_w;
+}
+
 static inline void gpu_exec_poly_words(const u32 *buf, u8 op)
 {
     int tex  = (op >> 2) & 1;
     int gour = (op >> 4) & 1;
-    if (S.skip_render >= 2u) {
+    if (gpu_can_skip_draw()) {
         if (tex) {
             u32 tpage = (buf[gour ? 5 : 4] >> 16) & 0x9FFu;
             S.gpustat = (S.gpustat & ~0x9FFu) | tpage;
@@ -2004,16 +2105,18 @@ static void gp0_exec_packet(void)
     if (top == 0u) {
         if (op == 0x02u) { /* Quick VRAM Fill (16-pixel X aligned) */
             u32 x0 = S.gp0_buf[1] & 0x3F0u;
-            if (S.skip_render >= 2u && x0 < 640u)
+            u32 y0 = (S.gp0_buf[1] >> 16) & 0x1FFu;
+            u32 fw = ((S.gp0_buf[2] & 0x3FFu) + 0x0Fu) & ~0x0Fu;
+            u32 fh = (S.gp0_buf[2] >> 16) & 0x1FFu;
+            if (x0 == 0u && fw >= (u32)S.disp_w && fh >= (u32)(S.disp_h > 240 ? 240 : S.disp_h))
+                S.vram_full_clear = 1u;
+            if (S.skip_render >= 2u && S.vram_full_clear && x0 == 0u && x0 + fw <= (u32)S.disp_w)
                 return;
             S.vram_gen++;
             u16 r5 = (u16)((w0 >> 3) & 31u);
             u16 g5 = (u16)(((w0 >> 11) & 31u) << 5);
             u16 b5 = (u16)(((w0 >> 19) & 31u) << 10);
             u16 col = r5 | g5 | b5;
-            u32 y0 = (S.gp0_buf[1] >> 16) & 0x1FFu;
-            u32 fw = ((S.gp0_buf[2] & 0x3FFu) + 0x0Fu) & ~0x0Fu;
-            u32 fh = (S.gp0_buf[2] >> 16) & 0x1FFu;
             u32 col32 = (u32)col | ((u32)col << 16);
             u32 dy_step = (S.skip_render == 1u && S.disp_h > 240 && x0 + fw <= (u32)S.disp_w && fh > 240u) ? 2u : 1u;
             u32 dy_init = (dy_step == 2u && (y0 & 1u)) ? 1u : 0u;
@@ -2047,7 +2150,7 @@ static void gp0_exec_packet(void)
         u32 c0 = S.gp0_buf[0], xy0 = S.gp0_buf[1];
         u32 c1 = gour ? S.gp0_buf[2] : c0;
         u32 xy1 = S.gp0_buf[gour ? 3 : 2];
-        if (S.skip_render < 2u)
+        if (!gpu_can_skip_draw())
             gpu_draw_line(sign_ext11(xy0) + S.off_x, sign_ext11(xy0 >> 16) + S.off_y, c0,
                           sign_ext11(xy1) + S.off_x, sign_ext11(xy1 >> 16) + S.off_y, c1, gour, semi);
         if (poly) {
@@ -2062,7 +2165,7 @@ static void gp0_exec_packet(void)
     }
 
     if (top == 3u) { /* Rectangle */
-        if (S.skip_render < 2u)
+        if (!gpu_can_skip_draw())
             gpu_draw_rect(op);
         return;
     }
@@ -2174,7 +2277,7 @@ static void gpu_gp0(u32 word)
         if (S.gp0_len >= need) {
             u32 nc = S.gp0_poly_gouraud ? S.gp0_buf[0] : S.gp0_poly_prev_col;
             u32 nxy = S.gp0_buf[S.gp0_poly_gouraud ? 1 : 0];
-            if (S.skip_render < 2u)
+            if (!gpu_can_skip_draw())
                 gpu_draw_line(sign_ext11(S.gp0_poly_prev_xy) + S.off_x, sign_ext11(S.gp0_poly_prev_xy >> 16) + S.off_y, S.gp0_poly_prev_col,
                               sign_ext11(nxy) + S.off_x, sign_ext11(nxy >> 16) + S.off_y, nc,
                               S.gp0_poly_gouraud, S.gp0_poly_semi);
@@ -2238,7 +2341,7 @@ static void gpu_gp1(u32 word)
         S.disp_x = S.disp_y = 0;
         S.disp_w = PSX_W_DEF;
         S.disp_h = PSX_H_DEF;
-        S.disp_disabled = 0;
+        S.disp_disabled = S.vram_full_clear = 0;
         break;
     case 0x01u: /* Reset Command Buffer */
         S.gp0_len = S.gp0_mode = 0;
@@ -2494,7 +2597,7 @@ static void dma_run(int ch)
                 S.mdec_in_cnt = 0;
                 S.mdec_stat |= (1u << 29);
             } else {
-                if (S.mdec_in_cnt < 8192u)
+                if (S.mdec_in_cnt < 16384u)
                     W.mdec_in[S.mdec_in_cnt++] = w;
                 if (--S.mdec_words_rem == 0u)
                     mdec_execute();
@@ -2502,16 +2605,26 @@ static void dma_run(int ch)
         }
         S.dma_madr[0] = addr;
     } else if (ch == 1) { /* MDECout (MDEC -> RAM) */
+        if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_in_pos < S.mdec_in_cnt * 2u)
+            mdec_decode_chunk();
+        if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_words_rem > 0u)
+            return; /* Defer DMA1 until DMA0 finishes feeding MDEC */
         for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu) {
             u32 w = 0;
             for (int b = 0; b < 4; b++) {
+                if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_in_pos < S.mdec_in_cnt * 2u)
+                    mdec_decode_chunk();
                 u8 v = (S.mdec_out_pos < S.mdec_out_len) ? W.mdec_out[S.mdec_out_pos++] : 0u;
                 w |= (u32)v << (b * 8);
             }
             ram_wr32(addr, w);
         }
-        if (S.mdec_out_pos >= S.mdec_out_len)
+        if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_in_pos < S.mdec_in_cnt * 2u)
+            mdec_decode_chunk();
+        if (S.mdec_out_pos >= S.mdec_out_len) {
             S.mdec_stat |= (1u << 31);
+            S.mdec_stat &= ~(1u << 29);
+        }
         S.dma_madr[1] = addr;
     }
 
@@ -2519,6 +2632,8 @@ static void dma_run(int ch)
     if (S.dicr & (1u << (16 + ch)))
         S.dicr |= (1u << (24 + ch));
     dicr_update_irq();
+    if (ch == 0 && (S.dma_chcr[1] & (1u << 24)))
+        dma_run(1);
 }
 
 /* ---- Root Counters 0..2 ($1F801100..$1F80112F) ---- */
@@ -2566,6 +2681,10 @@ static void rcnt_step(int sys_cycles, int hblank_edge, int in_vblank)
 }
 
 /* ---- MMIO Bus ($1F801000..$1F801FFF) ---- */
+static u8 hle_ev_cb_cursor;
+static u32 io_read32(u32 off);
+static void io_write32(u32 off, u32 val);
+
 static u8 io_read8(u32 off)
 {
     if (off == 0x040u) {
@@ -2589,6 +2708,7 @@ static u8 io_read8(u32 off)
         if (S.cd_param_n < 16u) st |= 0x10u; /* PRMWRDY */
         if (S.cd_resp_p < S.cd_resp_n) st |= 0x20u; /* RSLRRDY */
         if (S.cd_fifo_pos < S.cd_fifo_len) st |= 0x40u; /* DRQSTS */
+        if (S.cd_req_valid && S.cd_req_delay > 0) st |= 0x80u; /* BUSYSTS */
         return st;
     }
     if (off == 0x801u) {
@@ -2601,10 +2721,12 @@ static u8 io_read8(u32 off)
     if (off == 0x803u) {
         return (S.cd_index & 1u) ? (u8)(0xE0u | S.cd_irq_flag) : (u8)(0xE0u | S.cd_irq_en);
     }
+    if ((off >= 0x070u && off < 0x078u) || (off >= 0x080u && off < 0x0F8u)) {
+        u32 v32 = io_read32(off & ~3u);
+        return (u8)(v32 >> ((off & 3u) * 8u));
+    }
     return W.io[off & 0xFFFu];
 }
-
-static u32 io_read32(u32 off);
 
 static u16 io_read16(u32 off)
 {
@@ -2671,18 +2793,27 @@ static u32 io_read32(u32 off)
     if (off == 0x0F4u) return S.dicr;
     if (off == 0x810u) return gpu_read_data();
     if (off == 0x814u) {
-        /* Toggle LCF bit 31 per scanline so VSync/interlace pollers never hang */
-        u32 lcf = ((S.scan_y & 1) && S.scan_y < PSX_VBL_LINE) ? 0x80000000u : 0u;
-        return (S.gpustat & ~0x80000000u) | 0x1C000000u | lcf;
+        /* 480i interlace: bit 31 tracks odd/even field (flips at VBlank); 240p: alternates per active line */
+        u32 lcf = ((S.gpustat & ((1u << 22) | (1u << 19))) == ((1u << 22) | (1u << 19)))
+                ? ((S.vblank_count & 1u) << 31)
+                : (((S.scan_y & 1) && S.scan_y < PSX_VBL_LINE) ? 0x80000000u : 0u);
+        u32 fld = (S.gpustat & (1u << 22)) ? ((S.vblank_count & 1u) << 13) : (1u << 13);
+        return (S.gpustat & ~0x80002000u) | 0x1C000000u | fld | lcf;
     }
     if (off == 0x820u) {
         u32 w = 0;
         for (int b = 0; b < 4; b++) {
+            if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_in_pos < S.mdec_in_cnt * 2u)
+                mdec_decode_chunk();
             u8 v = (S.mdec_out_pos < S.mdec_out_len) ? W.mdec_out[S.mdec_out_pos++] : 0u;
             w |= (u32)v << (b * 8);
         }
-        if (S.mdec_out_pos >= S.mdec_out_len)
+        if (S.mdec_out_pos >= S.mdec_out_len && S.mdec_in_pos < S.mdec_in_cnt * 2u)
+            mdec_decode_chunk();
+        if (S.mdec_out_pos >= S.mdec_out_len) {
             S.mdec_stat |= (1u << 31);
+            S.mdec_stat &= ~(1u << 29);
+        }
         return w;
     }
     if (off == 0x824u) return S.mdec_stat;
@@ -2699,26 +2830,75 @@ static void io_write8(u32 off, u8 val)
     }
     if (off == 0x800u) { S.cd_index = val & 3u; return; }
     if (off == 0x801u) {
-        if (S.cd_index == 0u) cd_exec_cmd(val);
+        if (S.cd_index == 0u) {
+            if (S.cd_req_valid) {
+                u8 prev_cmd = S.cd_req_cmd;
+                S.cd_req_valid = 0u;
+                cd_exec_cmd(prev_cmd);
+            }
+            for (u32 i = 0; i < S.cd_param_n && i < 16u; i++)
+                S.cd_req_param[i] = S.cd_param[i];
+            S.cd_req_param_n = S.cd_param_n;
+            S.cd_param_n = 0u;
+            if ((S.cd_irq_flag & 0x07u) && (hle_ev_cb_cursor != 0u || (S.i_stat & 4u))) {
+                /* Defer INT3 until active guest ISR acknowledges current CD IRQ at $1F801803 (Sony libds DmCdIntr) */
+                S.cd_req_cmd = val;
+                S.cd_req_valid = 1u;
+                S.cd_req_delay = 256;
+            } else {
+                S.cd_irq_flag = 0u;
+                cd_exec_cmd(val);
+            }
+        }
         return;
     }
     if (off == 0x802u) {
         if (S.cd_index == 0u && S.cd_param_n < 16u) S.cd_param[S.cd_param_n++] = val;
-        else if (S.cd_index == 1u) S.cd_irq_en = val & 0x1Fu;
+        else if (S.cd_index == 1u) {
+            S.cd_irq_en = val & 0x1Fu;
+            if (S.cd_irq_flag & S.cd_irq_en)
+                raise_irq(1u << 2);
+        }
         return;
     }
     if (off == 0x803u) {
         if (S.cd_index == 1u) {
             S.cd_irq_flag &= (u8)~(val & 0x1Fu);
             if (val & 0x40u) S.cd_param_n = 0;
+            if (S.cd_req_valid && !(S.cd_irq_flag & 0x07u)) {
+                S.cd_req_delay = 0;
+                S.jit_stop |= 2u;
+            }
         }
         return;
     }
+    if (off == 0x070u || off == 0x071u) {
+        u16 m = (off & 1u) ? (u16)(0x00FFu | ((u16)val << 8)) : (u16)(0xFF00u | val);
+        S.i_stat &= m;
+        update_cop0_irq();
+        return;
+    }
+    if (off == 0x074u) { S.i_mask = (S.i_mask & 0x0700u) | val; update_cop0_irq(); return; }
+    if (off == 0x075u) { S.i_mask = (S.i_mask & 0x00FFu) | (((u16)val & 0x07u) << 8); update_cop0_irq(); return; }
+    if (off >= 0x080u && off < 0x0F0u) {
+        u32 sh = (off & 3u) * 8u;
+        u32 cur = io_read32(off & ~3u);
+        if ((off & 0x0Cu) == 8u && (off & 3u) != 3u) cur &= ~(1u << 24);
+        io_write32(off & ~3u, (cur & ~(0xFFu << sh)) | ((u32)val << sh));
+        return;
+    }
+    if (off >= 0x0F0u && off < 0x0F4u) {
+        u32 sh = (off & 3u) * 8u;
+        S.dpcr = (S.dpcr & ~(0xFFu << sh)) | ((u32)val << sh);
+        return;
+    }
+    if (off == 0x0F4u) { S.dicr = (S.dicr & ~0x0000003Fu) | (val & 0x3Fu); dicr_update_irq(); return; }
+    if (off == 0x0F5u) { S.dicr = (S.dicr & ~0x00008000u) | (((u32)val & 0x80u) << 8); dicr_update_irq(); return; }
+    if (off == 0x0F6u) { S.dicr = (S.dicr & ~0x00FF0000u) | ((u32)val << 16); dicr_update_irq(); return; }
+    if (off == 0x0F7u) { S.dicr &= ~(((u32)val & 0x7Fu) << 24); dicr_update_irq(); return; }
     if (off == 0x1041u) return; /* POST */
     W.io[off & 0xFFFu] = val;
 }
-
-static void io_write32(u32 off, u32 val);
 
 static void io_write16(u32 off, u16 val)
 {
@@ -2743,6 +2923,11 @@ static void io_write16(u32 off, u16 val)
     if (off == 0x04Eu) { S.sio_baud = val; return; }
     if (off == 0x070u) { S.i_stat &= val; update_cop0_irq(); return; }
     if (off == 0x074u) { S.i_mask = val & 0x7FFu; update_cop0_irq(); return; }
+    if (off >= 0x080u && off < 0x0F8u) {
+        io_write8(off, (u8)val);
+        io_write8(off + 1u, (u8)(val >> 8));
+        return;
+    }
     if (off >= 0x100u && off < 0x130u) {
         u32 t = (off - 0x100u) >> 4, r = off & 0x0Fu;
         if (r == 0u) S.rcnt_val[t] = val;
@@ -2816,7 +3001,7 @@ static void io_write32(u32 off, u32 val)
             S.mdec_in_cnt = 0;
             S.mdec_stat |= (1u << 29);
         } else {
-            if (S.mdec_in_cnt < 8192u)
+            if (S.mdec_in_cnt < 16384u)
                 W.mdec_in[S.mdec_in_cnt++] = val;
             if (--S.mdec_words_rem == 0u)
                 mdec_execute();
@@ -2826,7 +3011,7 @@ static void io_write32(u32 off, u32 val)
     if (off == 0x824u) {
         if (val & 0x80000000u) {
             S.mdec_stat = 0x80040000u;
-            S.mdec_words_rem = S.mdec_in_cnt = S.mdec_out_pos = S.mdec_out_len = 0;
+            S.mdec_words_rem = S.mdec_in_cnt = S.mdec_in_pos = S.mdec_out_pos = S.mdec_out_len = 0;
         }
         return;
     }
@@ -3559,12 +3744,26 @@ static void install_ram_vectors(void)
     put_insn(W.ram, 0x00A0u, 0x03E00008u); put_insn(W.ram, 0x00A4u, 0x00000000u);
     put_insn(W.ram, 0x00B0u, 0x03E00008u); put_insn(W.ram, 0x00B4u, 0x00000000u);
     put_insn(W.ram, 0x00C0u, 0x03E00008u); put_insn(W.ram, 0x00C4u, 0x00000000u);
+    /* Safe kernel scratch stub at $80000400 for PsyQ libmcrd InitCARD2 C0[6] patching */
+    for (u32 off = 0x0400u; off < 0x0480u; off += 8u) {
+        put_insn(W.ram, off + 0u, 0x03E00008u);
+        put_insn(W.ram, off + 4u, 0x00000000u);
+    }
+    /* Populate GetC0Table ($80000500) & GetB0Table ($80000600) function pointer tables */
+    for (u32 i = 0; i < 128u; i++) {
+        put_insn(W.ram, 0x0500u + i * 4u, 0xBFC01000u + i * 16u);
+        put_insn(W.ram, 0x0600u + i * 4u, 0xBFC01800u + i * 16u);
+    }
+    put_insn(W.ram, 0x0500u + 6u * 4u, 0xBFC00400u);
 }
 
 static void build_clean_bios(void)
 {
-    for (u32 i = 0; i < PSX_BIOS_SIZE; i += 4u)
-        put_insn(W.bios, i, 0x00000000u);
+    /* Fill unmapped BIOS ROM words with `jr $ra ; nop` so direct B0/C0 table-offset jumps return cleanly */
+    for (u32 i = 0; i < PSX_BIOS_SIZE; i += 8u) {
+        put_insn(W.bios, i + 0u, 0x03E00008u);
+        put_insn(W.bios, i + 4u, 0x00000000u);
+    }
 
     /* $BFC00000: J $BFC00100; NOP */
     put_insn(W.bios, 0x0000u, 0x0BF00040u);
@@ -3573,40 +3772,47 @@ static void build_clean_bios(void)
     put_insn(W.bios, 0x0100u, 0x1000FFFFu);
     put_insn(W.bios, 0x0104u, 0x00000000u);
 
-    /* $BFC00180: Exception / IRQ entry (31 insns = 0x7C bytes -> 0x0180..0x01FB) */
-    u32 p = 0x0180u;
-    put_insn(W.bios, p, 0x3C1A8000u); p += 4;       /* lui $k0, 0x8000 */
-    put_insn(W.bios, p, 0x375A0C00u); p += 4;       /* ori $k0, $k0, 0x0C00 */
-    for (u32 r = 1; r <= 31; r++) {
-        if (r == 26 || r == 27) continue;
-        put_insn(W.bios, p, 0xAF400000u | (r << 16) | (r * 4u)); p += 4; /* sw $r, r*4($k0) */
-    }
-    put_insn(W.bios, p, 0x00000000u); p += 4;       /* 0x01FC: nop -> falls into 0x0200 */
+    /* $BFC00180: Reentrant HLE exception / SYSCALL / IRQ entry trap */
+    put_insn(W.bios, 0x0180u, 0x00000000u);
+    put_insn(W.bios, 0x0184u, 0x00000000u);
 
-    /* 0xBFC00200: HLE exception dispatch hook point! Sets $v0 = callback or 0 */
+    /* $BFC00200: HLE IRQ callback dispatch loop ($v0 = next callback or 0) */
     put_insn(W.bios, 0x0200u, 0x00000000u);
-    p = 0x0204u;
+    u32 p = 0x0204u;
     put_insn(W.bios, p, 0x10400007u); p += 4;       /* 0x0204: beqz $v0, 0xBFC00224 (+7 from 0x0208) */
     put_insn(W.bios, p, 0x00000000u); p += 4;       /* 0x0208: nop */
     put_insn(W.bios, p, 0x3C1D8000u); p += 4;       /* 0x020C: lui $sp, 0x8000 */
-    put_insn(W.bios, p, 0x37BD0FE0u); p += 4;       /* 0x0210: ori $sp, $sp, 0x0FE0 (IRQ stack) */
+    put_insn(W.bios, p, 0x37BD0FE0u); p += 4;       /* 0x0210: ori $sp, $sp, 0x0FE0 (IRQ stack, >2 KB clear below) */
     put_insn(W.bios, p, 0x0040F809u); p += 4;       /* 0x0214: jalr $v0 */
     put_insn(W.bios, p, 0x00000000u); p += 4;       /* 0x0218: nop */
     put_insn(W.bios, p, 0x0BF00080u); p += 4;       /* 0x021C: j 0xBFC00200 */
     put_insn(W.bios, p, 0x00000000u); p += 4;       /* 0x0220: nop */
+    put_insn(W.bios, 0x0224u, 0x00000000u);         /* 0x0224: HLE ReturnFromException trap */
 
-    /* 0xBFC00224: Restore registers from 0x80000C00 and return via JR $k0 + RFE */
-    p = 0x0224u;
-    put_insn(W.bios, p, 0x3C1A8000u); p += 4;       /* lui $k0, 0x8000 */
-    put_insn(W.bios, p, 0x375A0C00u); p += 4;       /* ori $k0, $k0, 0x0C00 */
-    for (u32 r = 1; r <= 31; r++) {
-        if (r == 26 || r == 27) continue;
-        put_insn(W.bios, p, 0x8F400000u | (r << 16) | (r * 4u)); p += 4; /* lw $r, r*4($k0) */
+    /* 0xBFC00300: HLE A0(43h) Exec child-return trap */
+    put_insn(W.bios, 0x0300u, 0x00000000u);
+
+    /* 0xBFC00400: C0(06h) ExceptionHandler stub with `lui/addiu $k0, 0x80000400` at +0x70/+0x74 for InitCARD2 */
+    put_insn(W.bios, 0x0400u, 0x240A00C0u);
+    put_insn(W.bios, 0x0404u, 0x01400008u);
+    put_insn(W.bios, 0x0408u, 0x24090006u);
+    put_insn(W.bios, 0x040Cu, 0x00000000u);
+    put_insn(W.bios, 0x0470u, 0x3C1A8000u);
+    put_insn(W.bios, 0x0474u, 0x275A0400u);
+
+    /* 0xBFC01000..0xBFC017FF: Callable C0(00h..7Fh) ROM stubs; 0xBFC01800..0xBFC01FFF: B0(00h..7Fh) */
+    for (u32 i = 0; i < 128u; i++) {
+        u32 c0 = 0x1000u + i * 16u;
+        put_insn(W.bios, c0 + 0u,  0x240A00C0u);        /* addiu $t2, $0, 0x00C0 */
+        put_insn(W.bios, c0 + 4u,  0x01400008u);        /* jr    $t2 */
+        put_insn(W.bios, c0 + 8u,  0x24090000u | i);    /* addiu $t1, $0, i */
+        put_insn(W.bios, c0 + 12u, 0x00000000u);
+        u32 b0 = 0x1800u + i * 16u;
+        put_insn(W.bios, b0 + 0u,  0x240A00B0u);        /* addiu $t2, $0, 0x00B0 */
+        put_insn(W.bios, b0 + 4u,  0x01400008u);        /* jr    $t2 */
+        put_insn(W.bios, b0 + 8u,  0x24090000u | i);    /* addiu $t1, $0, i */
+        put_insn(W.bios, b0 + 12u, 0x00000000u);
     }
-    put_insn(W.bios, p, 0x8F5A0080u); p += 4;       /* lw $k0, 0x80($k0) (saved EPC) */
-    put_insn(W.bios, p, 0x00000000u); p += 4;       /* nop */
-    put_insn(W.bios, p, 0x03400008u); p += 4;       /* jr $k0 */
-    put_insn(W.bios, p, 0x42000010u); p += 4;       /* rfe */
 }
 
 static u32 event_class_for_irq(int bit)
@@ -3629,7 +3835,7 @@ static void hle_update_pad_buffers(void)
 {
     u16 btns = build_pad_buttons();
     if (S.pad_init_ptr)
-        bus_write32(S.pad_init_ptr, 0xFFFF0000u | btns);
+        bus_write32(S.pad_init_ptr, (u32)(u16)(~btns));
     if (!S.pad_auto)
         return;
     if (S.pad_buf1) {
@@ -3644,80 +3850,40 @@ static void hle_update_pad_buffers(void)
     }
 }
 
-static u8 hle_ev_cb_cursor;
 static u16 hle_exc_active;
 static u32 hle_rp_fn1[16], hle_rp_fn2[16];
 static u8 hle_rp_n, hle_rp_idx, hle_rp_stage;
 
+static void hle_return_from_exception(void)
+{
+    for (u32 r = 1; r <= 31; r++) {
+        if (r == 26) continue;
+        S.r[r] = S.exc_r[r];
+    }
+    S.hi = S.exc_hi;
+    S.lo = S.exc_lo;
+    u32 epc = S.exc_epc;
+    S.cop0[12] = (S.cop0[12] & ~0x0Fu) | ((S.cop0[12] >> 2) & 0x0Fu);
+    if (S.hook_entry_int != 0u && S.auto_clear_rcnt[3] && (hle_exc_active & 1u))
+        S.i_stat &= ~1u;
+    update_cop0_irq();
+    hle_ev_cb_cursor = 0u;
+    S.pc = epc;
+    S.next_pc = epc + 4u;
+}
+
 static void hle_bios_exception_step(void)
 {
-    u32 save_base = 0x0C00u;
-    u32 cause = S.cop0[13];
-    u32 exc = (cause >> 2) & 0x1Fu;
-
-    /* On first entry into exception (before callback loop), stash HI/LO/EPC */
-    if (hle_ev_cb_cursor == 0u) {
-        u32 epc = S.cop0[14];
-        if (cause & 0x80000000u) epc += 4u; /* Note: SYSCALL in delay slot is rare; for INT keep exact EPC */
-        if (exc == 0u) epc = S.cop0[14];
-        *(u32 *)(W.ram + save_base + 0x80u) = epc;
-        *(u32 *)(W.ram + save_base + 0x84u) = S.hi;
-        *(u32 *)(W.ram + save_base + 0x88u) = S.lo;
-
-        if (exc == 8u) { /* SYSCALL */
-            u32 a0 = *(const u32 *)(W.ram + save_base + 4u * 4u);
-            if (a0 == 1u) { /* EnterCriticalSection */
-                u32 prev = ((S.cop0[12] & 0x0404u) == 0x0404u) ? 1u : 0u;
-                S.cop0[12] &= ~0x0404u;
-                *(u32 *)(W.ram + save_base + 2u * 4u) = prev;
-            } else if (a0 == 2u) { /* ExitCriticalSection */
-                S.cop0[12] |= 0x0404u;
-            }
-            sync_jit_stop();
-            *(u32 *)(W.ram + save_base + 0x80u) = S.cop0[14] + 4u;
-            S.r[2] = 0u;
-            return;
-        }
-
-        if (exc != 0u) {
-            *(u32 *)(W.ram + save_base + 0x80u) = S.cop0[14] + 4u;
-            S.r[2] = 0u;
-            return;
-        }
-
-        /* Hardware Interrupt (exc == 0): snapshot active bits BEFORE SysIntRP runs so SysIntRP.fn1 sees live I_STAT! */
-        hle_exc_active = S.i_stat & S.i_mask;
-        if (hle_exc_active & 1u)
-            hle_update_pad_buffers();
-
-        /* Collect SysEnqIntRP[0..7] chain nodes (used by PsyQ libpad, libcd, libsnd!) */
-        hle_rp_n = 0u;
-        hle_rp_idx = 0u;
-        hle_rp_stage = 0u;
-        for (int pr = 0; pr < 8; pr++) {
-            u32 node = S.sys_int_rp[pr];
-            int guard = 0;
-            while (node && (node & 0x1FFFFFFFu) < PSX_RAM_SIZE && guard++ < 16 && hle_rp_n < 16u) {
-                u32 fn2 = bus_read32(node + 4u);
-                u32 fn1 = bus_read32(node + 8u);
-                if (fn1 || fn2) {
-                    hle_rp_fn1[hle_rp_n] = fn1;
-                    hle_rp_fn2[hle_rp_n] = fn2;
-                    hle_rp_n++;
-                }
-                node = bus_read32(node);
-            }
-        }
-        hle_ev_cb_cursor = 100u; /* Phase 1: SysEnqIntRP chain */
-    }
-
     /* Phase 1 (cursor == 100): walk SysEnqIntRP chain; if fn1() returns $v0 != 0, invoke fn2()! */
     if (hle_ev_cb_cursor == 100u) {
         if (hle_rp_stage == 1u) {
             hle_rp_stage = 0u;
             u32 fn2 = hle_rp_fn2[hle_rp_idx++];
             if (S.r[2] != 0u && fn2 != 0u) {
+                S.r[28] = S.exc_r[28];
                 S.r[2] = fn2;
+                S.pc = 0xBFC00204u;
+                S.next_pc = 0xBFC00208u;
                 return;
             }
         }
@@ -3725,12 +3891,18 @@ static void hle_bios_exception_step(void)
             u32 fn1 = hle_rp_fn1[hle_rp_idx];
             if (fn1 != 0u) {
                 hle_rp_stage = 1u;
+                S.r[28] = S.exc_r[28];
                 S.r[2] = fn1;
+                S.pc = 0xBFC00204u;
+                S.next_pc = 0xBFC00208u;
                 return;
             }
             u32 fn2 = hle_rp_fn2[hle_rp_idx++];
             if (fn2 != 0u) {
+                S.r[28] = S.exc_r[28];
                 S.r[2] = fn2;
+                S.pc = 0xBFC00204u;
+                S.next_pc = 0xBFC00208u;
                 return;
             }
         }
@@ -3772,7 +3944,10 @@ static void hle_bios_exception_step(void)
         if (S.events[idx].used && S.events[idx].enabled && S.events[idx].status == 2u &&
             S.events[idx].mode == 0x1000u && S.events[idx].cb != 0u) {
             S.events[idx].status = 1u;
+            S.r[28] = S.exc_r[28];
             S.r[2] = S.events[idx].cb;
+            S.pc = 0xBFC00204u;
+            S.next_pc = 0xBFC00208u;
             return;
         }
     }
@@ -3781,7 +3956,6 @@ static void hle_bios_exception_step(void)
     if (hle_ev_cb_cursor == 33u && S.hook_entry_int != 0u) {
         hle_ev_cb_cursor = 34u;
         if ((S.i_stat & S.i_mask) != 0u || (hle_exc_active & 1u)) {
-            /* Ensure VBlank bit is visible in I_STAT if HookEntryInt expects to dispatch VSyncCallback */
             if (hle_exc_active & 1u)
                 S.i_stat |= 1u;
             u32 jb = S.hook_entry_int;
@@ -3801,29 +3975,74 @@ static void hle_bios_exception_step(void)
         }
     }
 
-    /* Done! Restore HI/LO and let MIPS stub restore GPRs + RFE */
-    S.hi = *(const u32 *)(W.ram + save_base + 0x84u);
-    S.lo = *(const u32 *)(W.ram + save_base + 0x88u);
-    hle_ev_cb_cursor = 0u;
-    S.r[2] = 0u;
+    hle_return_from_exception();
 }
 
-static void hle_return_from_exception(void)
+static void hle_bios_exception_entry(void)
 {
-    u32 save_base = 0x0C00u;
-    for (u32 r = 1; r <= 31; r++) {
-        if (r == 26 || r == 27) continue;
-        S.r[r] = *(const u32 *)(W.ram + save_base + r * 4u);
+    u32 cause = S.cop0[13];
+    u32 exc = (cause >> 2) & 0x1Fu;
+
+    /* Reentrant SYSCALL handler: safe both in main thread and inside SysEnqIntRP/EvMdINTR IRQ callbacks! */
+    if (exc == 8u) {
+        u32 a0 = S.r[4];
+        if (a0 == 1u) { /* EnterCriticalSection */
+            u32 prev = ((S.cop0[12] & 0x0404u) == 0x0404u) ? 1u : 0u;
+            S.cop0[12] &= ~0x0404u;
+            S.r[2] = prev;
+        } else if (a0 == 2u) { /* ExitCriticalSection */
+            S.cop0[12] |= 0x0404u;
+        } else if (a0 >= 4u) { /* DeliverEvent */
+            u32 ev_cls = S.r[5], ev_spec = S.r[6];
+            for (int i = 0; i < 32; i++)
+                if (S.events[i].used && S.events[i].enabled && S.events[i].cls == ev_cls && S.events[i].spec == ev_spec)
+                    S.events[i].status = 2u;
+        }
+        S.cop0[12] = (S.cop0[12] & ~0x0Fu) | ((S.cop0[12] >> 2) & 0x0Fu);
+        update_cop0_irq();
+        S.pc = (cause & 0x80000000u) ? (S.cop0[14] + 8u) : (S.cop0[14] + 4u);
+        S.next_pc = S.pc + 4u;
+        return;
     }
-    S.hi = *(const u32 *)(W.ram + save_base + 0x84u);
-    S.lo = *(const u32 *)(W.ram + save_base + 0x88u);
-    u32 epc = *(const u32 *)(W.ram + save_base + 0x80u);
-    S.cop0[12] = (S.cop0[12] & ~0x0Fu) | ((S.cop0[12] >> 2) & 0x0Fu);
-    S.i_stat &= (u16)~hle_exc_active;
-    update_cop0_irq();
-    hle_ev_cb_cursor = 0u;
-    S.pc = epc;
-    S.next_pc = epc + 4u;
+
+    if (exc != 0u) {
+        S.cop0[12] = (S.cop0[12] & ~0x0Fu) | ((S.cop0[12] >> 2) & 0x0Fu);
+        update_cop0_irq();
+        S.pc = (cause & 0x80000000u) ? (S.cop0[14] + 8u) : (S.cop0[14] + 4u);
+        S.next_pc = S.pc + 4u;
+        return;
+    }
+
+    /* Hardware Interrupt (exc == 0): stash interrupted thread registers in S (never clobbers guest RAM!) */
+    for (u32 r = 1; r <= 31; r++)
+        S.exc_r[r] = S.r[r];
+    S.exc_hi = S.hi;
+    S.exc_lo = S.lo;
+    S.exc_epc = S.cop0[14];
+
+    hle_exc_active = S.i_stat & S.i_mask;
+    if (hle_exc_active & 1u)
+        hle_update_pad_buffers();
+
+    hle_rp_n = 0u;
+    hle_rp_idx = 0u;
+    hle_rp_stage = 0u;
+    for (int pr = 0; pr < 8; pr++) {
+        u32 node = S.sys_int_rp[pr];
+        int guard = 0;
+        while (node && (node & 0x1FFFFFFFu) < PSX_RAM_SIZE && guard++ < 16 && hle_rp_n < 16u) {
+            u32 fn2 = bus_read32(node + 4u);
+            u32 fn1 = bus_read32(node + 8u);
+            if (fn1 || fn2) {
+                hle_rp_fn1[hle_rp_n] = fn1;
+                hle_rp_fn2[hle_rp_n] = fn2;
+                hle_rp_n++;
+            }
+            node = bus_read32(node);
+        }
+    }
+    hle_ev_cb_cursor = 100u;
+    hle_bios_exception_step();
 }
 
 static u32 hle_rand_seed = 1u;
@@ -3906,7 +4125,8 @@ static int hle_bios_call(u32 table, u32 fn)
             if (a1 < a0) { for (u32 i = a2; i-- > 0;) bus_write8(a1 + i, bus_read8(a0 + i)); }
             else         { for (u32 i = 0; i < a2; i++) bus_write8(a1 + i, bus_read8(a0 + i)); }
             S.r[2] = a1; break;
-        case 0x2Du: /* bzero */
+        case 0x28u: /* bzero */
+        case 0x2Du:
             for (u32 i = 0; i < a1; i++) bus_write8(a0 + i, 0u);
             break;
         case 0x2Eu: { /* memcmp */
@@ -3949,6 +4169,58 @@ static int hle_bios_call(u32 table, u32 fn)
         case 0x3Fu: /* printf */
             S.r[2] = 0u;
             break;
+        case 0x43u: { /* Exec(struct EXEC *hdr, int argc, char **argv) */
+            u32 pc0    = bus_read32(a0 + 0x00u);
+            u32 gp0    = bus_read32(a0 + 0x04u);
+            u32 b_addr = bus_read32(a0 + 0x10u);
+            u32 b_size = bus_read32(a0 + 0x14u);
+            u32 s_addr = bus_read32(a0 + 0x18u);
+            u32 s_size = bus_read32(a0 + 0x1Cu);
+            if (b_addr && b_size && b_size < PSX_RAM_SIZE) {
+                for (u32 i = 0; i < b_size; i++)
+                    bus_write8(b_addr + i, 0u);
+            }
+            S.exec_saved.sp = S.r[29];
+            S.exec_saved.fp = S.r[30];
+            S.exec_saved.gp = S.r[28];
+            S.exec_saved.ra = S.r[31];
+            for (int i = 0; i < 8; i++) S.exec_saved.s[i] = S.r[16 + i];
+            S.exec_saved.hook_entry_int = S.hook_entry_int;
+            S.exec_saved.pad_init_ptr = S.pad_init_ptr;
+            S.exec_saved.pad_buf1 = S.pad_buf1;
+            S.exec_saved.pad_buf2 = S.pad_buf2;
+            S.exec_saved.pad_auto = S.pad_auto;
+            for (int i = 0; i < 4; i++) S.exec_saved.auto_clear_rcnt[i] = S.auto_clear_rcnt[i];
+            S.exec_saved.i_mask = S.i_mask;
+            for (int i = 0; i < 8; i++) S.exec_saved.sys_int_rp[i] = S.sys_int_rp[i];
+            for (int i = 0; i < 32; i++) S.exec_saved.events[i] = S.events[i];
+            S.exec_saved.heap_base = S.heap_base;
+            S.exec_saved.heap_size = S.heap_size;
+            S.exec_saved.heap_cur  = S.heap_cur;
+            for (u32 i = 0; i < 4096u; i++) W.exec_top_stack[i] = W.ram[0x1FF000u + i];
+            for (u32 i = 0; i < 1024u; i++) W.exec_low_tables[i] = W.ram[0x0500u + i];
+
+            S.hook_entry_int = 0u;
+            S.pad_auto = 0u;
+            S.pad_init_ptr = 0u;
+            S.pad_buf1 = S.pad_buf2 = 0u;
+            for (int i = 0; i < 4; i++) S.auto_clear_rcnt[i] = 1u;
+            for (int i = 0; i < 8; i++) S.sys_int_rp[i] = 0u;
+            for (int i = 0; i < 32; i++) S.events[i].used = S.events[i].enabled = S.events[i].status = 0u;
+            install_ram_vectors();
+            if (s_addr) {
+                S.r[29] = s_addr + s_size;
+                S.r[30] = S.r[29];
+            }
+            S.r[28] = gp0;
+            S.r[4]  = a1;
+            S.r[5]  = a2;
+            S.r[31] = 0xBFC00300u;
+            jit_reset_all();
+            S.pc = pc0;
+            S.next_pc = pc0 + 4u;
+            return 1;
+        }
         case 0x44u: /* FlushCache */
             jit_reset_all();
             break;
@@ -4142,11 +4414,11 @@ static int hle_bios_call(u32 table, u32 fn)
             S.i_mask |= 1u;
             update_cop0_irq();
             if (a1)
-                bus_write32(a1, 0xFFFF0000u | build_pad_buttons());
+                bus_write32(a1, (u32)(u16)(~build_pad_buttons()));
             S.r[2] = 2u;
             break;
         case 0x16u: { /* PAD_dr() */
-            u32 v = 0xFFFF0000u | build_pad_buttons();
+            u32 v = (u32)(u16)(~build_pad_buttons());
             if (S.pad_init_ptr)
                 bus_write32(S.pad_init_ptr, v);
             S.r[2] = v;
@@ -4297,14 +4569,44 @@ static int r3000_run_batch(int count)
                     cost++;
                     continue;
                 }
-                if (__builtin_expect(low29 == 0x1FC00200u, 0)) {
+                if (__builtin_expect(low29 == 0x1FC00300u, 0)) {
                     if (ld_reg) { S.r[ld_reg] = ld_val; ld_reg = 0u; }
-                    S.pc = pc; S.next_pc = next_pc; S.ld_reg = 0; S.pend_reg = 0; S.next_delay = next_delay;
-                    hle_bios_exception_step();
-                    if ((S.pc & 0x1FFFFFFFu) == 0x1FC00200u) {
-                        S.pc = 0xBFC00204u;
-                        S.next_pc = 0xBFC00208u;
-                    }
+                    S.r[29] = S.exec_saved.sp;
+                    S.r[30] = S.exec_saved.fp;
+                    S.r[28] = S.exec_saved.gp;
+                    S.r[31] = S.exec_saved.ra;
+                    for (int i = 0; i < 8; i++) S.r[16 + i] = S.exec_saved.s[i];
+                    S.hook_entry_int = S.exec_saved.hook_entry_int;
+                    S.pad_init_ptr = S.exec_saved.pad_init_ptr;
+                    S.pad_buf1 = S.exec_saved.pad_buf1;
+                    S.pad_buf2 = S.exec_saved.pad_buf2;
+                    S.pad_auto = S.exec_saved.pad_auto;
+                    for (int i = 0; i < 4; i++) S.auto_clear_rcnt[i] = S.exec_saved.auto_clear_rcnt[i];
+                    S.i_mask = S.exec_saved.i_mask;
+                    for (int i = 0; i < 8; i++) S.sys_int_rp[i] = S.exec_saved.sys_int_rp[i];
+                    for (int i = 0; i < 32; i++) S.events[i] = S.exec_saved.events[i];
+                    S.heap_base = S.exec_saved.heap_base;
+                    S.heap_size = S.exec_saved.heap_size;
+                    S.heap_cur  = S.exec_saved.heap_cur;
+                    for (u32 i = 0; i < 4096u; i++) W.ram[0x1FF000u + i] = W.exec_top_stack[i];
+                    for (u32 i = 0; i < 1024u; i++) W.ram[0x0500u + i] = W.exec_low_tables[i];
+                    hle_ev_cb_cursor = 0u;
+                    update_cop0_irq();
+                    jit_reset_all();
+                    pc = S.pc = S.exec_saved.ra;
+                    next_pc = S.next_pc = pc + 4u;
+                    next_delay = S.next_delay = 0;
+                    isc = S.cop0[12] & 0x10000u;
+                    irq_pend = (S.cop0[12] & 1u) && (S.cop0[12] & S.cop0[13] & 0xFF00u);
+                    cost++;
+                    continue;
+                }
+                if (__builtin_expect(low29 == 0x1FC00180u || low29 == 0x1FC00200u || low29 == 0x1FC00224u, 0)) {
+                    if (ld_reg) { S.r[ld_reg] = ld_val; ld_reg = 0u; }
+                    S.pc = pc; S.next_pc = next_pc; S.cur_pc = pc; S.ld_reg = 0; S.pend_reg = 0; S.next_delay = next_delay;
+                    if (low29 == 0x1FC00180u)      hle_bios_exception_entry();
+                    else if (low29 == 0x1FC00200u) hle_bios_exception_step();
+                    else                           hle_return_from_exception();
                     pc = S.pc; next_pc = S.next_pc; next_delay = S.next_delay;
                     isc = S.cop0[12] & 0x10000u;
                     irq_pend = (S.cop0[12] & 1u) && (S.cop0[12] & S.cop0[13] & 0xFF00u);
@@ -4703,6 +5005,7 @@ extern int  psx_jit_enter(int budget, void *s_ptr, void *ram_ptr, void *entry_pt
 extern void psx_jit_exit(void);
 extern void psx_jit_link_ram(void);
 extern void psx_jit_nclip(void);
+extern void psx_jit_call_hlp(void);
 extern void psx_jit_lb(void);
 extern void psx_jit_lbu(void);
 extern void psx_jit_lh(void);
@@ -4782,6 +5085,7 @@ __asm__(
     ".globl psx_jit_exit\n"
     ".globl psx_jit_link_ram\n"
     ".globl psx_jit_nclip\n"
+    ".globl psx_jit_call_hlp\n"
     ".globl psx_jit_lb\n"
     ".globl psx_jit_lbu\n"
     ".globl psx_jit_lh\n"
@@ -4812,7 +5116,7 @@ __asm__(
     "    addu  $s1, $a2, $0\n"
     "    addu  $s2, $a3, $0\n"
     "    lw    $s3, 0x214($s0)\n"
-    "    lui   $s5, 0x7fe0\n"
+    "    lui   $s5, 0x7f80\n"
     "    lui   $s7, %hi(psx_jit_dispatch_ram)\n"
     "    addiu $s7, $s7, %lo(psx_jit_dispatch_ram)\n"
     "    lui   $fp, %hi(psx_jit_dispatch)\n"
@@ -5442,8 +5746,17 @@ static int jit_is_branch(u32 op)
     return 0;
 }
 
+static inline void j_emit_call_hlp(u32 **pp, void *fn)
+{
+    u32 addr = (u32)(__UINTPTR_TYPE__)fn;
+    *(*pp)++ = J_I(0x0Fu, 0u, 8u, addr >> 16);
+    *(*pp)++ = J_J(0x03u, (void *)psx_jit_call_hlp);
+    *(*pp)++ = J_I(0x0Du, 8u, 8u, addr);
+}
+
 static void jit_emit_gte_read_to_hreg(u32 **pp, struct jit_rc *rc, u32 hreg, int is_ctrl, u32 rd)
 {
+    (void)rc;
     rd &= 31u;
     if (is_ctrl) {
         u32 l_op = (rd == 4u || rd == 12u || rd == 20u || rd == 26u || rd == 27u || rd == 29u || rd == 30u) ? 0x21u : 0x23u;
@@ -5451,10 +5764,8 @@ static void jit_emit_gte_read_to_hreg(u32 **pp, struct jit_rc *rc, u32 hreg, int
         return;
     }
     if (rd == 28u || rd == 29u) {
-        rc_flush_all(pp, rc);
         j_emit_li32(pp, 4u, rd);
-        *(*pp)++ = J_J(0x03u, (void *)gte_read_data);
-        *(*pp)++ = 0u;
+        j_emit_call_hlp(pp, (void *)gte_read_data);
         if (hreg != 2u)
             *(*pp)++ = J_R(0, 2u, 0u, hreg, 0u, 0x21u);
         return;
@@ -5536,9 +5847,7 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
         case 0x1Au: case 0x1Bu:
             rc_load_into_hreg(pp, rc, 4u, rs);
             rc_load_into_hreg(pp, rc, 5u, rt);
-            rc_flush_all(pp, rc);
-            *(*pp)++ = J_J(0x03u, (fn == 0x1Au) ? (void *)jit_hlp_div : (void *)jit_hlp_divu);
-            *(*pp)++ = 0u;
+            j_emit_call_hlp(pp, (fn == 0x1Au) ? (void *)jit_hlp_div : (void *)jit_hlp_divu);
             return;
         default: { /* ADD/ADDU, SUB/SUBU, AND, OR, XOR, NOR, SLT, SLTU */
             if (!rd) return;
@@ -5576,46 +5885,24 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
                 *extra_cost += 2;
                 return;
             }
-            rc_flush_all(pp, rc);
             if (gop == 0x2Du) {
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_avsz3);
-                *(*pp)++ = 0u;
+                j_emit_call_hlp(pp, (void *)gte_op_avsz3);
             } else if (gop == 0x2Eu) {
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_avsz4);
-                *(*pp)++ = 0u;
-            } else if (gop == 0x01u) {
-                j_emit_li32(pp, 4u, op);
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_rtps);
-                *(*pp)++ = 0u;
-            } else if (gop == 0x30u) {
-                j_emit_li32(pp, 4u, op);
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_rtpt);
-                *(*pp)++ = 0u;
-            } else if (gop == 0x12u) {
-                j_emit_li32(pp, 4u, op);
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_mvmva);
-                *(*pp)++ = 0u;
-            } else if (gop == 0x3Du) {
-                j_emit_li32(pp, 4u, op);
-                *(*pp)++ = J_J(0x03u, (void *)gte_op_gpf);
-                *(*pp)++ = 0u;
+                j_emit_call_hlp(pp, (void *)gte_op_avsz4);
             } else {
+                void *gfn = (gop == 0x01u) ? (void *)gte_op_rtps
+                          : (gop == 0x30u) ? (void *)gte_op_rtpt
+                          : (gop == 0x12u) ? (void *)gte_op_mvmva
+                          : (gop == 0x3Du) ? (void *)gte_op_gpf
+                          : (void *)gte_exec;
                 j_emit_li32(pp, 4u, op);
-                *(*pp)++ = J_J(0x03u, (void *)gte_exec);
-                *(*pp)++ = 0u;
+                j_emit_call_hlp(pp, gfn);
             }
             *extra_cost += (gop == 0x30u) ? 6 : (gop == 0x16u || gop == 0x3Fu || gop == 0x20u) ? 10 : 2;
-        } else if (rs == 0x00u || rs == 0x02u) { /* MFC2 / CFC2 (1 inline load!) */
+        } else if (rs == 0x00u || rs == 0x02u) { /* MFC2 / CFC2 */
             if (rt) {
-                if (rs == 0x00u && (rd == 28u || rd == 29u)) {
-                    jit_emit_gte_read_to_hreg(pp, rc, 2u, 0, rd);
-                    j_emit_store_gpr(pp, 2u, rt);
-                    rc->greg[0] = (u8)rt; rc->dirty[0] = 0u;
-                    *(*pp)++ = J_R(0, 2u, 0u, rc_hreg[0], 0u, 0x21u);
-                } else {
-                    u32 rth = rc_write(pp, rc, rt, 0xFFu, 0xFFu);
-                    jit_emit_gte_read_to_hreg(pp, rc, rth, rs == 0x02u, rd);
-                }
+                u32 rth = rc_write(pp, rc, rt, 0xFFu, 0xFFu);
+                jit_emit_gte_read_to_hreg(pp, rc, rth, rs == 0x02u, rd);
             }
         } else if (rs == 0x04u) { /* MTC2 */
             if (rd == 29u || rd == 31u) return;
@@ -5624,10 +5911,8 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
                 *(*pp)++ = J_I(0x2Bu, 16u, rth, 0x090u + rd * 4u);
             } else {
                 rc_load_into_hreg(pp, rc, 5u, rt);
-                rc_flush_all(pp, rc);
                 j_emit_li32(pp, 4u, rd);
-                *(*pp)++ = J_J(0x03u, (void *)gte_write_data);
-                *(*pp)++ = 0u;
+                j_emit_call_hlp(pp, (void *)gte_write_data);
             }
         } else if (rs == 0x06u) { /* CTC2 */
             if (!(rd < 21u && (rd & 7u) <= 4u) && rd != 31u) {
@@ -5635,10 +5920,8 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
                 *(*pp)++ = J_I(0x2Bu, 16u, rth, 0x110u + rd * 4u);
             } else {
                 rc_load_into_hreg(pp, rc, 5u, rt);
-                rc_flush_all(pp, rc);
                 j_emit_li32(pp, 4u, rd);
-                *(*pp)++ = J_J(0x03u, (void *)gte_write_ctrl);
-                *(*pp)++ = 0u;
+                j_emit_call_hlp(pp, (void *)gte_write_ctrl);
             }
         }
         return;
@@ -5652,11 +5935,9 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
             *(*pp)++ = J_I(0x2Bu, 16u, 2u, 0x090u + rt * 4u);
         } else {
             rc_load_into_hreg(pp, rc, 4u, rs);
-            rc_flush_all(pp, rc);
             if (imm) *(*pp)++ = J_I(0x09u, 4u, 4u, imm);
             j_emit_li32(pp, 5u, rt);
-            *(*pp)++ = J_J(0x03u, (void *)jit_hlp_lwc2);
-            *(*pp)++ = 0u;
+            j_emit_call_hlp(pp, (void *)jit_hlp_lwc2);
         }
         return;
     }
@@ -5669,11 +5950,9 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
             *(*pp)++ = J_I(0x09u, rsh, 4u, imm);
         } else {
             rc_load_into_hreg(pp, rc, 4u, rs);
-            rc_flush_all(pp, rc);
             if (imm) *(*pp)++ = J_I(0x09u, 4u, 4u, imm);
             j_emit_li32(pp, 5u, rt);
-            *(*pp)++ = J_J(0x03u, (void *)jit_hlp_swc2);
-            *(*pp)++ = 0u;
+            j_emit_call_hlp(pp, (void *)jit_hlp_swc2);
         }
         return;
     }
@@ -5739,10 +6018,16 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
         jit_reset_all();
 
     u32 start_off = start_pc & 0x1FFFFCu;
-    /* Leave Namco/PsyQ VBlank PRNG-churn wait loop uncompiled so Pattern 7 fast-forwards immediately */
+    /* Leave Namco/PsyQ VBlank wait loops uncompiled so Pattern 7 / Pattern 8 fast-forwards immediately */
     if (start_off + 68u <= PSX_RAM_SIZE) {
         const u32 *rp0 = (const u32 *)(W.ram + start_off);
         if ((rp0[0] >> 26) == 0x03u && rp0[1] == 0u && (rp0[15] & 0xFC1FFFFFu) == 0x1000FFF0u) {
+            W.jit_entry[start_off >> 2] = 1u;
+            return 1u;
+        }
+        if (start_off + 96u <= PSX_RAM_SIZE &&
+            rp0[0] == 0x8FA20010u && rp0[2] == 0x2442FFFFu && rp0[3] == 0xAFA20010u &&
+            rp0[6] == 0x1443000Bu && rp0[22] == 0x1440FFE9u) {
             W.jit_entry[start_off >> 2] = 1u;
             return 1u;
         }
@@ -5897,18 +6182,17 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
 
                 int both_ram = ((fall_pc - 0x80001000u) < 0x001FF000u && !(fall_pc & 3u) &&
                                 (rel_pc  - 0x80001000u) < 0x001FF000u && !(rel_pc  & 3u));
-                u32 rel_code = both_ram
-                    ? ((rel_pc == start_pc) ? (u32)(__UINTPTR_TYPE__)block_start : W.jit_entry[(rel_pc & 0x1FFFFCu) >> 2])
-                    : 0u;
 
-                if (both_ram && rel_code >= 2u) {
+                if (both_ram) {
                     S.jit_linked = 1u;
-                    if (opc == 0x04u || opc == 0x05u) *p++ = J_I(opc, 8u, 9u, 3);
-                    else if (opc == 0x01u)            *p++ = J_I(0x01u, 8u, rt & 1u, 3);
-                    else                              *p++ = J_I(opc, 8u, 0u, 3);
-                    *p++ = J_R(0, 0u, 0u, 22u, 0u, 0x21u);        /* [delay] $s6 = 0 (taken) */
-                    *p++ = J_I(0x0Fu, 0u, 22u, fall_pc >> 16);    /* not taken: $s6 = fall_pc */
-                    *p++ = J_I(0x0Du, 22u, 22u, fall_pc);
+                    u32 fall_code = (fall_pc == start_pc) ? (u32)(__UINTPTR_TYPE__)block_start : W.jit_entry[(fall_pc & 0x1FFFFCu) >> 2];
+                    u32 rel_code  = (rel_pc  == start_pc) ? (u32)(__UINTPTR_TYPE__)block_start : W.jit_entry[(rel_pc  & 0x1FFFFCu) >> 2];
+
+                    if (opc == 0x04u || opc == 0x05u) *p++ = J_I(opc, 8u, 9u, 2);
+                    else if (opc == 0x01u)            *p++ = J_I(0x01u, 8u, rt & 1u, 2);
+                    else                              *p++ = J_I(opc, 8u, 0u, 2);
+                    *p++ = J_I(0x0Du, 0u, 22u, 1u);                /* [delay] $s6 = 1 (taken) */
+                    *p++ = J_R(0, 0u, 0u, 22u, 0u, 0x21u);         /* not taken: $s6 = 0 */
 
                     int extra = 0;
                     jit_emit_nonbranch(&p, &rc, delay_op, &extra);
@@ -5917,20 +6201,29 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
                     last_off = cur_off + 4u;
                     k += 2u;
 
-                    *p++ = J_I(0x09u, 20u, 20u, -cost);           /* W0: addiu $s4, $s4, -cost */
-                    *p++ = J_I(0x05u, 22u, 0u, 10);               /* W1: bne   $s6, $0, W12 (not_taken) */
-                    *p++ = J_I(0x23u, 16u, 8u, 0x210);            /* W2: [delay] lw $t0, 0x210($s0) */
-                    *p++ = J_I(0x06u, 20u, 0u, 5);                /* W3: blez  $s4, W9 (bail_taken) */
-                    *p++ = 0u;                                    /* W4: nop */
-                    *p++ = J_I(0x05u, 8u, 0u, 3);                 /* W5: bne   $t0, $0, W9 (bail_taken) */
-                    *p++ = 0u;                                    /* W6: nop */
-                    *p++ = J_J(0x02u, rel_code);                  /* W7: j     rel_code */
-                    *p++ = 0u;                                    /* W8: nop */
-                    *p++ = J_I(0x0Fu, 0u, 4u, rel_pc >> 16);      /* W9: lui   $a0, hi(rel_pc) */
-                    *p++ = J_J(0x02u, (void *)psx_jit_exit);      /* W10: j    psx_jit_exit */
-                    *p++ = J_I(0x0Du, 4u, 4u, rel_pc);            /* W11: ori  $a0, $a0, lo(rel_pc) */
-                    *p++ = J_R(0, 23u, 0u, 0u, 0u, 0x08u);        /* W12: jr   $s7 (psx_jit_dispatch_ram) */
-                    *p++ = J_R(0, 22u, 0u, 4u, 0u, 0x21u);        /* W13: move $a0, $s6 */
+                    *p++ = J_I(0x09u, 20u, 20u, -cost);            /* [ 0] addiu $s4, $s4, -cost */
+                    *p++ = J_I(0x23u, 16u, 8u, 0x210);             /* [ 1] lw    $t0, 0x210($s0) */
+                    *p++ = J_I(0x05u, 22u, 0u, 7);                 /* [ 2] bne   $s6, $0, [10] (taken_arm) */
+                    *p++ = J_I(0x0Fu, 0u, 4u, fall_pc >> 16);      /* [ 3] [delay] lui $a0, hi(fall_pc) */
+                    *p++ = J_I(0x06u, 20u, 0u, 12);                /* [ 4] blez  $s4, [17] (bail_exit) */
+                    *p++ = J_I(0x0Du, 4u, 4u, fall_pc);            /* [ 5] [delay] ori $a0, $a0, lo(fall_pc) */
+                    *p++ = J_I(0x05u, 8u, 0u, 10);                 /* [ 6] bne   $t0, $0, [17] (bail_exit) */
+                    *p++ = 0u;                                     /* [ 7] nop */
+                    *p++ = (fall_code >= 2u) ? J_J(0x02u, fall_code)
+                         : (fall_code == 1u) ? J_J(0x02u, (void *)psx_jit_exit)
+                         : J_J(0x03u, (void *)psx_jit_link_ram);   /* [ 8] j fall_code / jal psx_jit_link_ram */
+                    *p++ = 0u;                                     /* [ 9] nop */
+                    *p++ = J_I(0x0Fu, 0u, 4u, rel_pc >> 16);       /* [10] lui   $a0, hi(rel_pc) */
+                    *p++ = J_I(0x06u, 20u, 0u, 5);                 /* [11] blez  $s4, [17] (bail_exit) */
+                    *p++ = J_I(0x0Du, 4u, 4u, rel_pc);             /* [12] [delay] ori $a0, $a0, lo(rel_pc) */
+                    *p++ = J_I(0x05u, 8u, 0u, 3);                  /* [13] bne   $t0, $0, [17] (bail_exit) */
+                    *p++ = 0u;                                     /* [14] nop */
+                    *p++ = (rel_code >= 2u) ? J_J(0x02u, rel_code)
+                         : (rel_code == 1u) ? J_J(0x02u, (void *)psx_jit_exit)
+                         : J_J(0x03u, (void *)psx_jit_link_ram);   /* [15] j rel_code / jal psx_jit_link_ram */
+                    *p++ = 0u;                                     /* [16] nop */
+                    *p++ = J_J(0x02u, (void *)psx_jit_exit);       /* [17] j     psx_jit_exit */
+                    *p++ = 0u;                                     /* [18] nop */
                 } else {
                     j_emit_li32(&p, 10u, fall_pc);
                     j_emit_li32(&p, 11u, rel_pc);
@@ -6450,7 +6743,7 @@ static inline void psx_advance_periph(int units, int in_vbl)
                 raise_irq(1u << 7); /* IRQ7 SIO0 (/ACK DSR, RX, or TX IRQ) */
         }
     }
-    if (S.cd_pend_cmd || (S.cd_stat & 0x20u))
+    if (S.cd_req_valid || S.cd_pend_cmd || (S.cd_stat & 0x20u))
         cd_step(units * 4);
     rcnt_step(units * 2, 0, in_vbl);
 }
@@ -6624,6 +6917,29 @@ void psx_frame(u16 pad, u16 *picture)
                         break;
                     }
                     continue;
+                }
+                /* 8. PsyQ 4.6 14-insn stack-timeout v_wait (`lw v0,16(sp); nop; addiu v0,-1; sw v0,16(sp); ...; bnez v0,-23; nop`) */
+                if ((p & 0x1FFFFCu) + 96u <= PSX_RAM_SIZE &&
+                    op0 == 0x8FA20010u && rp[2] == 0x2442FFFFu && rp[3] == 0xAFA20010u &&
+                    rp[6] == 0x1443000Bu && rp[22] == 0x1440FFE9u && insn_per_line - ran >= 16) {
+                    u32 tmo = bus_read32(S.r[29] + 16u);
+                    if (tmo > 256u && S.r[3] == 0xFFFFFFFFu) {
+                        u32 before_pc = S.pc;
+                        int d14 = r3000_run_batch(14);
+                        psx_advance_periph(d14, in_vbl);
+                        ran += d14;
+                        if (S.pc == before_pc && ran < insn_per_line) {
+                            int rem = insn_per_line - ran;
+                            u32 rem_it = (u32)(rem / 14);
+                            tmo = bus_read32(S.r[29] + 16u);
+                            if (rem_it > 0u && tmo > rem_it + 16u)
+                                bus_write32(S.r[29] + 16u, tmo - rem_it);
+                            psx_advance_periph(rem, in_vbl);
+                            ran = insn_per_line;
+                            break;
+                        }
+                        continue;
+                    }
                 }
             }
 

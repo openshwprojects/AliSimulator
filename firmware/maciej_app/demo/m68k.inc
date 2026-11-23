@@ -38,7 +38,7 @@
 #define M68K_BRANCH(at)
 #endif
 
-static struct m68k {
+struct m68k {
     u32 r[16];                          /* D0..D7, A0..A7 (A7: the stack pointer of the mode it is in) */
     u32 pc, op;
     u32 other_sp;                       /* the other mode's stack pointer (USP in supervisor mode, SSP in user) */
@@ -53,9 +53,13 @@ static struct m68k {
 #ifdef M68K_BUS_ERROR
     u32 bus_err, bus_addr, bus_write;
 #endif
-} m;
-
+};
+#ifdef M68K_EXTERNAL_STATE
+M68K_EXTERNAL_STATE
+#else
+static struct m68k m;
 static u8 *rmap[256], *wmap[256];       /* each 64 KB page's memory (0: the chips, through io_read / io_write) */
+#endif
 static u32 io_read(u32 a, int size);
 static void io_write(u32 a, u32 v, int size);
 static void cpu_reset_line(void);       /* RESET: the chips back to their power-on state */
@@ -1442,7 +1446,10 @@ static int ea_ok(u32 op, u32 allowed)
 enum { HANDLERS(ENUM) H_COUNT };
 #define PTR(name) op_##name,
 static void (*const handler[H_COUNT])(void) = {HANDLERS(PTR)};
-static u8 optab[65536];
+#ifndef M68K_EXTERNAL_STATE
+extern u8 g_m68k_shared_optab[65536];
+#define optab g_m68k_shared_optab
+#endif
 
 static int decode(u32 op)
 {

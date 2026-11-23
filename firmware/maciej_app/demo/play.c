@@ -59,6 +59,20 @@
 #include "apple2.h"
 #include "coco.h"
 #include "cvm5.h"
+#include "z80con.h"
+#include "arcadia.h"
+#include "scv.h"
+#include "vb.h"
+#include "bbc.h"
+#include "ti99.h"
+#include "oric.h"
+#include "ted81.h"
+#include "jp8bit.h"
+#include "s32x.h"
+#include "cd32.h"
+#include "arcade.h"
+#include "segacd.h"
+#include "cdrom.h"
 #include "snd.h"
 #include "zip.h"
 #include "image.h"
@@ -334,6 +348,14 @@ static u32 crc32(const u8 *p, u32 n)
 }
 
 static struct machine psx_machine;
+static const struct machine astro_machine;
+static const struct machine arcadia_machine;
+static const struct machine vc4000_machine;
+static const struct machine studio2_machine;
+static const struct machine scv_machine;
+static const struct machine vb_machine;
+static const struct machine pcecd_machine;
+static struct machine segacd_machine;
 
 /* Direct zero-copy PS1 VRAM -> KSEG1(FB_PHYS) scanout blit with dirty-line & 480i even/odd row reuse */
 static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
@@ -647,6 +669,19 @@ static int buttons(int start)
                 psx_machine.frame_us = to_ntsc ? PSX_FRAME_US : PSX_FRAME_US_PAL;
             }
             break;
+        case 'm':
+            if (m == &vb_machine)
+                vb_set_mode((vb_get_mode() + 1) & 3);
+            break;
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+            if (m == &astro_machine)
+                z80con_typed((char)c);
+            else if (m == &arcadia_machine || m == &vc4000_machine || m == &studio2_machine)
+                arc_typed((char)c);
+            else if (m == &scv_machine)
+                scv_typed((char)c);
+            break;
         case '\r': case '\n': tap(PAD_START, TAP_FRAMES); break;
         case '\t': case ' ': tap(PAD_SELECT, TAP_FRAMES); break;
         }
@@ -813,6 +848,9 @@ static int unpack(const char *path, u8 *image, u32 got, char *as, int max)
 static u32 psx_open_fsize;
 static const struct machine cps_machine;
 static const struct machine s16_machine;
+static const struct machine ti99_machine;
+static const struct machine cd32_machine;
+static const struct machine arcade_machine;
 
 /* 'nes' / 'gb' [-f frames] [-k script] <file>: frames 0 = until the player ends it.  0, -1 it could not
    start */
@@ -822,7 +860,8 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     u8 *image = (u8 *)KSEG0(MEDIA_PHYS);
     u32 size = 0;
     tv_opening(path, 0);                        /* (on the TV at once: reading a game takes a moment) */
-    u32 head_lim = (m == &psx_machine) ? 4096u : MEDIA_MAX;
+    int is_cd_only = (m == &pcecd_machine || m == &segacd_machine || m == &cd32_machine);
+    u32 head_lim = (m == &psx_machine) ? 4096u : (is_cd_only ? 16384u : MEDIA_MAX);
     int got = *path ? disk_read_head(path, image, head_lim, &size) : 0;      /* ("": no file -- BASIC) */
     if (m == &psx_machine) {
         psx_open_fsize = size;
@@ -831,12 +870,15 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
             got = disk_read_head(path, image, MEDIA_MAX, &size);
     }
     const char *why = 0;
-    if (got >= 0 && size > MEDIA_MAX && m != &psx_machine && !(m == &cps_machine && size <= MEDIA_MAX + 0x0097FE00u)) {
+    if (got >= 0 && size > MEDIA_MAX && m != &psx_machine && !is_cd_only &&
+        !(m == &cps_machine && size <= MEDIA_MAX + 0x0097FE00u)) {
         uprintf("%s: %u bytes -- more than a cartridge file can be here (%u MB)\n", path, size, MEDIA_MAX >> 20);
         got = -1;
     }
     char as[160];                               /* (a game in an archive: its own name, beside the archive) */
-    if (got > 0 && size <= MEDIA_MAX && !((m == &cps_machine || m == &s16_machine) && zip_is(image, (u32)got)))
+    if (got > 0 && size <= MEDIA_MAX && !(is_cd_only && size > 16384u) &&
+        !((m == &cps_machine || m == &s16_machine || m == &arcade_machine || m == &ti99_machine) &&
+          zip_is(image, (u32)got)))
         got = unpack(path, image, (u32)got, as, sizeof(as));
     else
         as[0] = 0;
@@ -889,7 +931,6 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
             "Ctrl-C or Esc ends");
     u32 cur_frame_us = m->frame_us;
     u32 frame_ticks = ticks_per_ms() * (cur_frame_us / 1000u) + ticks_per_ms() * (cur_frame_us % 1000u) / 1000u;
-    u64 next = now_ticks();
     u32 n = 0, late = 0, emu = 0, draw = 0, per = ticks_per_ms() / 1000u;   /* (emu, draw: microseconds) */
     u32 slowest = 0, slowest_at = 0, slowest_draw = 0, over = 0;     /* (the longest frame's run and draw
                                                                        together; frames longer than their time) */
@@ -905,6 +946,7 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     int sound = !frames && m->audio && snd_init(0) == 0;
     if (sound)
         m->audio_rate(snd_rate());
+    u64 next = now_ticks();
     u64 started_ms = now_ms();
     for (;; n++) {
         if (frames && n == frames)
@@ -913,7 +955,7 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
         if (held < 0)
             break;
         pad = by_script ? scripted(&script, n, pad) : (u16)held;
-        int do_skip = (psx_live && n > 0 && !first && psx_skipped < 3 && now_ticks() > next);
+        int do_skip = (psx_live && n > 30 && !first && psx_skipped < 2 && now_ticks() > next);
         if (psx_live)
             psx_set_skip_render(do_skip ? 2 : 1);
         psx_skipped = do_skip ? (psx_skipped + 1) : 0;
@@ -1659,13 +1701,15 @@ static const char *fds_open(u8 *image, u32 size, const char *path)
 
 static void fds_one(u16 pad, void *pic_out)
 {
+    if (kbd_held(0x3F))                         /* F6 (or Q / Tab-Select when mapped) flips FDS disk side */
+        pad |= FDS_PAD_FLIP;
     fds_frame(pad, (u8 *)pic_out);
 }
 
 static const struct machine fds_machine = {
     NES_W, NES_H, 3, 3, 16639, fds_open, nes_info, fds_one, nes_save_ram, nes_save_changed,
     nes_jammed, nes_rgb, 64, "the 6502", 0, 0,
-    "arrows or W A S D, X = A, Z = B, Enter = Start, Tab = Select, Q = flip disk side; Ctrl-C or Esc ends",
+    "arrows or W A S D, X = A, Z = B, Enter = Start, Tab = Select, Q / F6 = flip disk side; Ctrl-C or Esc ends",
     0, nes_audio_rate, nes_audio
 };
 
@@ -1922,6 +1966,8 @@ static int psx_stream_read_cached(u64 byte_pos, u8 *dst, u32 len)
     return 0;
 }
 
+static u32 psx_cue_total;
+
 static int psx_disk_sector(u32 lba, u8 *buf2352)
 {
     if (!psx_stream_active || !psx_sec_size)
@@ -1967,6 +2013,14 @@ static int psx_disk_sector(u32 lba, u8 *buf2352)
         byte_pos = 512ULL + (u64)(psx_extents[hit].file_sec + rel) * (u64)psx_sec_size;
     } else {
         byte_pos = (u64)(lba + psx_base_lba) * (u64)psx_sec_size;
+        if (byte_pos + psx_sec_size > psx_stream_fsize) {
+            if (lba < psx_cue_total) {
+                for (u32 i = 0; i < psx_sec_size; i++)
+                    buf2352[i] = 0;
+                return (int)psx_sec_size;
+            }
+            return -1;
+        }
     }
     if (psx_stream_read_cached(byte_pos, buf2352, psx_sec_size) < 0)
         return -1;
@@ -1978,6 +2032,7 @@ static int psx_stream_disc(const char *track_path, u32 hint_sec_size, u32 base_l
     u64 fsize = 0;
     psx_n_extents = 0;
     psx_sparse_total = 0;
+    psx_cue_total = 0;
     psx_cache_reset();
     if (disk_stream_open(track_path, &fsize) < 0)
         return 0;
@@ -2110,8 +2165,12 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
     if (is_cue) {
         char track_rel[128];
         track_rel[0] = 0;
-        u32 hint_ssz = 0, base_lba = 0;
+        u32 hint_ssz = 0, base_lba = 0, extra_secs = 0;
         int in_track1 = 0;
+        int dir_len = 0;
+        for (int i = 0; path[i]; i++)
+            if (path[i] == '/' || path[i] == '\\' || path[i] == ':')
+                dir_len = i + 1;
         for (u32 i = 0; i < size;) {
             while (i < size && (image[i] == ' ' || image[i] == '\t' || image[i] == '\r' || image[i] == '\n'))
                 i++;
@@ -2119,20 +2178,33 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
             while (line_end < size && image[line_end] != '\r' && image[line_end] != '\n')
                 line_end++;
             u32 rem = line_end - i;
-            if (!track_rel[0] && psx_ci_word(image + i, rem, "FILE")) {
+            if (psx_ci_word(image + i, rem, "FILE")) {
+                char f_rel[128];
                 u32 p = i + 4u;
                 while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
                     p++;
                 int tlen = 0;
                 if (p < line_end && image[p] == '"') {
                     p++;
-                    while (p < line_end && image[p] != '"' && tlen < (int)sizeof(track_rel) - 1)
-                        track_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
+                    while (p < line_end && image[p] != '"' && tlen < (int)sizeof(f_rel) - 1)
+                        f_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
                 } else {
-                    while (p < line_end && image[p] != ' ' && image[p] != '\t' && tlen < (int)sizeof(track_rel) - 1)
-                        track_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
+                    while (p < line_end && image[p] != ' ' && image[p] != '\t' && tlen < (int)sizeof(f_rel) - 1)
+                        f_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
                 }
-                track_rel[tlen] = 0;
+                f_rel[tlen] = 0;
+                if (!track_rel[0]) {
+                    for (int c = 0; c <= tlen; c++) track_rel[c] = f_rel[c];
+                } else if (f_rel[0]) {
+                    char cand2[200];
+                    zx_join(cand2, sizeof(cand2), path, dir_len, f_rel);
+                    u64 sz2 = 0;
+                    if (disk_stream_open(cand2, &sz2) == 0) {
+                        disk_stream_close();
+                        u32 b2 = sz2 > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)sz2;
+                        extra_secs += 150u + (b2 / 2352u);
+                    }
+                }
             } else if (psx_ci_word(image + i, rem, "TRACK")) {
                 u32 p = i + 5u;
                 while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
@@ -2141,11 +2213,13 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
                 while (p < line_end && image[p] >= '0' && image[p] <= '9')
                     trk = trk * 10 + (image[p++] - '0');
                 in_track1 = (trk == 1);
-                for (u32 q = p; q + 4u <= line_end; q++) {
-                    if (image[q] == '2' && image[q + 1] == '0' && image[q + 2] == '4' && image[q + 3] == '8')
-                        hint_ssz = 2048u;
-                    else if (image[q] == '2' && image[q + 1] == '3' && image[q + 2] == '5' && image[q + 3] == '2')
-                        hint_ssz = 2352u;
+                if (trk == 1) {
+                    for (u32 q = p; q + 4u <= line_end; q++) {
+                        if (image[q] == '2' && image[q + 1] == '0' && image[q + 2] == '4' && image[q + 3] == '8')
+                            hint_ssz = 2048u;
+                        else if (image[q] == '2' && image[q + 1] == '3' && image[q + 2] == '5' && image[q + 3] == '2')
+                            hint_ssz = 2352u;
+                    }
                 }
             } else if (in_track1 && psx_ci_word(image + i, rem, "INDEX")) {
                 u32 p = i + 5u;
@@ -2167,10 +2241,6 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
         }
         if (!track_rel[0])
             return "no FILE entry in .cue sheet";
-        int dir_len = 0;
-        for (int i = 0; path[i]; i++)
-            if (path[i] == '/' || path[i] == '\\' || path[i] == ':')
-                dir_len = i + 1;
         char cand[200];
         zx_join(cand, sizeof(cand), path, dir_len, track_rel);
         if (!disk_exists(cand)) {
@@ -2184,6 +2254,10 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
             return "the track file named in the .cue was not found beside it";
         if (!psx_stream_disc(cand, hint_ssz, base_lba))
             return "the track file in the .cue is not a valid ISO9660 PlayStation CD-ROM";
+        u32 bytes32 = psx_stream_fsize > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)psx_stream_fsize;
+        u32 t1_secs = ((psx_sec_size == 2048u) ? (u32)(psx_stream_fsize >> 11) : (bytes32 / 2352u)) - base_lba;
+        psx_cue_total = t1_secs + extra_secs;
+        psx_set_disc(psx_disk_sector, psx_cue_total, psx_sec_size);
         const char *why = psx_load(0, 0, path);
         psx_machine.frame_us = psx_pal() ? PSX_FRAME_US_PAL : PSX_FRAME_US;
         return why;
@@ -2811,4 +2885,1071 @@ int cv_play(const char *path, u32 frames, const char *script)
 int m5_play(const char *path, u32 frames, const char *script)
 {
     return play(&m5_machine, path, frames, script);
+}
+
+/* ============================================================================
+ * Category 1 Famous Consoles & Multi-Track CD-ROM Add-Ons
+ * ============================================================================ */
+
+/* Casio PV-1000 (.pv, .bin, .rom): 256 x 192 three times as large (768 x 576) at 59.92 Hz,
+   with 3.58 MHz Z80, NEC D65010G031 VDP and 3-channel square/XOR 48 kHz PSG */
+static const char *pv1000_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return pv1000_load(image, size);
+}
+
+static void pv1000_one(u16 pad, void *pic_out)
+{
+    z80con_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine pv1000_machine = {
+    PV1000_W, PV1000_H, 3, 3, Z80CON_FRAME_US, pv1000_open, z80con_info, pv1000_one, 0, 0,
+    z80con_jammed, 0, 0, "the Z80", 0, 0,
+    "arrows or W A S D, X = button 1, Z = button 2, Enter = Start, Tab = Select; Ctrl-C or Esc ends",
+    0, z80con_audio_rate, z80con_audio
+};
+
+int pv1000_play(const char *path, u32 frames, const char *script)
+{
+    return play(&pv1000_machine, path, frames, script);
+}
+
+/* Bally Astrocade (.ast, .bin, .rom; "": built-in Star Blaster): 320 x 204 three times as large
+   (960 x 612) at 59.92 Hz, with 1.79 MHz Z80, Data Chip Magic-RAM blitter + split palette,
+   3-voice + vibrato + LFSR noise 48 kHz synth, and built-in BIOS (or astro.bin in astro/) */
+static const char *astro_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "astro", "astro.bin", bios, 0x2000u, 0x2000u);
+    return astro_load(gb == 0x2000u ? bios : 0, gb, size ? image : 0, size);
+}
+
+static void astro_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    z80con_keyboard(hid, n);
+    z80con_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine astro_machine = {
+    ASTRO_W, ASTRO_H, 3, 3, Z80CON_FRAME_US, astro_open, z80con_info, astro_one, 0, 0,
+    z80con_jammed, 0, 0, "the Z80", 0, 0,
+    "arrows or W A S D, X = Trigger, Z/C = Knob CCW/CW, 0..9 and Enter on USB keyboard / UART = 24-key pad; "
+    "Ctrl-C or Esc ends",
+    0, z80con_audio_rate, z80con_audio
+};
+
+int astro_play(const char *path, u32 frames, const char *script)
+{
+    return play(&astro_machine, path, frames, script);
+}
+
+/* Emerson Arcadia 2001 (.a2k, .bin), Interton VC 4000 (.vc4, .bin) & RCA Studio II (.st2, .bin; "": built-in) */
+static const char *arcadia_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return arcadia_load(image, size);
+}
+
+static const char *vc4000_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return vc4000_load(image, size);
+}
+
+static const char *studio2_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "studio2", "studio2.bin", bios, 0x0800u, 0x0800u);
+    return studio2_load(gb == 0x0800u ? bios : 0, gb, size ? image : 0, size);
+}
+
+static void arc_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    arc_keyboard(hid, n);
+    arc_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine arcadia_machine = {
+    ARCADIA_W, ARCADIA_H, 4, 3, ARCADIA_FRAME_US, arcadia_open, arc_info, arc_one, 0, 0,
+    arc_jammed, 0, 0, "the Signetics 2650", 0, 0,
+    "arrows or W A S D, X/Z = fire, Enter = Start (A), Tab = Option (B), 0..9 on USB keyboard / UART = keypad; "
+    "Ctrl-C or Esc ends",
+    0, arc_audio_rate, arc_audio
+};
+
+static const struct machine vc4000_machine = {
+    VC4000_W, VC4000_H, 4, 3, VC4000_FRAME_US, vc4000_open, arc_info, arc_one, 0, 0,
+    arc_jammed, 0, 0, "the Signetics 2650", 0, 0,
+    "arrows or W A S D, X/Z = fire, Enter = Start, Tab = Select, 0..9 on USB keyboard / UART = 12-key pad; "
+    "Ctrl-C or Esc ends",
+    0, arc_audio_rate, arc_audio
+};
+
+static const struct machine studio2_machine = {
+    STUDIO2_W, STUDIO2_H, 4, 5, STUDIO2_FRAME_US, studio2_open, arc_info, arc_one, 0, 0,
+    arc_jammed, 0, 0, "the COSMAC CDP1802", 0, 0,
+    "arrows or W A S D (2/4/6/8), X/Z = 5 (fire), Enter = 0, 0..9 on USB keyboard / UART = 10-key pad; "
+    "Ctrl-C or Esc ends",
+    0, arc_audio_rate, arc_audio
+};
+
+int arcadia_play(const char *path, u32 frames, const char *script)
+{
+    return play(&arcadia_machine, path, frames, script);
+}
+
+int vc4000_play(const char *path, u32 frames, const char *script)
+{
+    return play(&vc4000_machine, path, frames, script);
+}
+
+int studio2_play(const char *path, u32 frames, const char *script)
+{
+    return play(&studio2_machine, path, frames, script);
+}
+
+/* Epoch Super Cassette Vision (.scv, .bin, .cart): 192 x 222 four times wide and three times high
+   (768 x 666) at 59.92 Hz, with 4 MHz NEC uPD7801G, Epoch TV-1 VDP, uPD1771C 48 kHz sound, .sav SRAM,
+   and built-in BIOS + font (or optional upd7801g.s01 in scv/) */
+static const char *scv_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "scv", "upd7801g.s01", bios, 0x1000u, 0x1000u);
+    if (!gb)
+        gb = rom_find(path, "scv", "scv_bios.bin", bios, 0x1000u, 0x1000u);
+    return scv_load(gb == 0x1000u ? bios : 0, gb, image, size);
+}
+
+static void scv_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    scv_keyboard(hid, n);
+    scv_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine scv_machine = {
+    SCV_W, SCV_H, 4, 3, SCV_FRAME_US, scv_open, scv_info, scv_one, scv_save_ram, scv_save_changed,
+    scv_jammed, 0, 0, "the uPD7801G", 0, 0,
+    "arrows or W A S D, X = trigger 1, Z = trigger 2, Enter = En, Tab = Cl, P = Pause, 0..9 on USB keyboard / UART; "
+    "Ctrl-C or Esc ends",
+    0, scv_audio_rate, scv_audio
+};
+
+int scv_play(const char *path, u32 frames, const char *script)
+{
+    return play(&scv_machine, path, frames, script);
+}
+
+/* Nintendo Virtual Boy (.vb, .vboy): 384 x 224 three times as large (1152 x 672) at 50.27 Hz,
+   with 20 MHz NEC V810 RISC CPU, VIP dual-eye 3D Worlds/OBJ display (4 live modes: Red/Black,
+   Red/Cyan 3D Anaglyph, White, Amber), 6-channel VSU 48 kHz sound, and 64 KB SRAM (.sav) */
+static int vb_init_mode;
+
+void vb_play_mode(int mode)
+{
+    vb_init_mode = mode & 3;
+}
+
+static const char *vb_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    const char *why = vb_load(image, size);
+    if (!why)
+        vb_set_mode(vb_init_mode);
+    return why;
+}
+
+static void vb_one(u16 pad, void *pic_out)
+{
+    u8 hid[16];
+    int n = kbd_held_all(hid, 16);
+    vb_frame(pad, hid, n, (u16 *)pic_out);
+}
+
+static const struct machine vb_machine = {
+    VB_W, VB_H, 3, 3, VB_FRAME_US, vb_open, vb_info, vb_one, vb_save_ram, vb_save_changed,
+    vb_jammed, 0, 0, "the V810", 0, 0,
+    "arrows or W A S D (left D-pad), I/J/K/L or T/F/G/H (right D-pad), X = A, Z = B, Q/C = L, E = R, "
+    "Enter = Start, Tab = Select, V/F2/M = cycle Red / 3D Anaglyph / White / Amber; Ctrl-C or Esc ends",
+    0, vb_audio_rate, vb_audio
+};
+
+int vb_play(const char *path, u32 frames, const char *script)
+{
+    return play(&vb_machine, path, frames, script);
+}
+
+/* NEC SuperGrafx (.sgx): Dual HuC6270 VDCs (128 KB VRAM) + HuC6202 VPC + 32 KB WRAM + 6-ch PSG */
+static const char *sgx_open(u8 *image, u32 size, const char *path)
+{
+    (void)path;
+    return sgx_load(image, size);
+}
+
+static const struct machine sgx_machine = {
+    PCE_W_DEF, PCE_H_DEF, 3, 3, PCE_FRAME_US, sgx_open, pce_info, pce_one, pce_save_ram, pce_save_changed,
+    pce_jammed, 0, 0, "the HuC6280", 0, 0,
+    "arrows or W A S D, X = I, Z = II, Enter = Run, Tab = Select (C/V/Q/E = III..VI); Ctrl-C or Esc ends",
+    pce_size, pce_audio_rate, pce_audio
+};
+
+int sgx_play(const char *path, u32 frames, const char *script)
+{
+    return play(&sgx_machine, path, frames, script);
+}
+
+/* Shared Multi-Track / Multi-File CD-ROM Streamer (.cue/.bin & .iso) for PCE-CD and Sega CD,
+   using IMAGE_WORK_PHYS + 1 MB for 0 B static .bss metadata and MEDIA_PHYS's 8 MB 512-slot LRU cache */
+#define CD_MAX_FILES 100
+struct cd_file_info {
+    char path[200];
+    u64  fsize;
+    u32  data_off;
+};
+
+struct cd_disc_ws {
+    struct cd_file_info files[CD_MAX_FILES];
+    u32 n_files;
+    u8  trk_file[CDROM_MAX_TRACKS + 1];
+    u64 trk_byte_off[CDROM_MAX_TRACKS + 1];
+    struct cdrom_toc toc;
+    int active_file;
+    u32 stream_gen;
+    int stream_open;
+    u8  cue_copy[16384];
+};
+
+#define CD_WS ((struct cd_disc_ws *)KSEG0(IMAGE_WORK_PHYS + 0x00100000u))
+
+static void cdrom_close_disc(void)
+{
+    if (CD_WS->stream_open) {
+        disk_stream_close();
+        CD_WS->stream_open = 0;
+    }
+    CD_WS->active_file = -1;
+}
+
+static int cd_ensure_file(u32 fidx)
+{
+    struct cd_disc_ws *ws = CD_WS;
+    if (fidx >= ws->n_files)
+        return -1;
+    if (!ws->stream_open || ws->active_file != (int)fidx || disk_stream_opens() != ws->stream_gen) {
+        if (ws->stream_open) {
+            disk_stream_close();
+            ws->stream_open = 0;
+        }
+        u64 sz = 0;
+        if (disk_stream_open(ws->files[fidx].path, &sz) < 0)
+            return -1;
+        ws->files[fidx].fsize = sz;
+        ws->active_file = (int)fidx;
+        ws->stream_gen = disk_stream_opens();
+        ws->stream_open = 1;
+    }
+    return 0;
+}
+
+static const u8 *cd_cache_get_chunk(u32 fidx, u32 chunk_id, u32 *avail_out)
+{
+    struct cd_disc_ws *ws = CD_WS;
+    u8 *base = (u8 *)KSEG0(MEDIA_PHYS);
+    u32 tag = (fidx << 20) | (chunk_id & 0xFFFFFu);
+    u32 set_base = ((chunk_id ^ (fidx * 17u)) & (PSX_CACHE_SETS - 1u)) * PSX_CACHE_WAYS;
+    for (u32 w = 0; w < PSX_CACHE_WAYS; w++) {
+        u32 i = set_base + w;
+        if (psx_cache_tag[i] == tag) {
+            psx_cache_lru[i] = ++psx_cache_clock;
+            *avail_out = psx_cache_len[i];
+            return base + i * PSX_CACHE_BYTES;
+        }
+    }
+    if (cd_ensure_file(fidx) < 0)
+        return 0;
+    u64 fsize = ws->files[fidx].fsize;
+    u64 file_off = (u64)chunk_id << PSX_CACHE_SHIFT;
+    if (file_off >= fsize)
+        return 0;
+    u64 rem64 = fsize - file_off;
+    u32 want = (rem64 >= PSX_CACHE_BYTES) ? PSX_CACHE_BYTES : (u32)rem64;
+    u32 ask_total = (want + 511u) & ~511u;
+
+    u32 victim = set_base, best_lru = 0xFFFFFFFFu;
+    for (u32 w = 0; w < PSX_CACHE_WAYS; w++) {
+        u32 i = set_base + w;
+        if (psx_cache_tag[i] == 0xFFFFFFFFu) {
+            victim = i;
+            break;
+        }
+        if (psx_cache_lru[i] < best_lru) {
+            best_lru = psx_cache_lru[i];
+            victim = i;
+        }
+    }
+
+    u8 *slot = base + victim * PSX_CACHE_BYTES;
+    if (disk_stream_seek(file_off) != file_off)
+        return 0;
+    u32 got = 0u;
+    while (got < ask_total) {
+        u32 step = ask_total - got;
+        if (step > 4096u)
+            step = 4096u;
+        int r = disk_stream_read(slot + got, step);
+        if (r <= 0)
+            break;
+        got += (u32)r;
+    }
+    (void)now_ms();
+    if (got < want)
+        return 0;
+    psx_cache_tag[victim] = tag;
+    psx_cache_len[victim] = want;
+    psx_cache_lru[victim] = ++psx_cache_clock;
+    *avail_out = want;
+    return slot;
+}
+
+static int cd_stream_read_cached(u32 fidx, u64 byte_pos, u8 *dst, u32 len)
+{
+    u32 done = 0u;
+    while (done < len) {
+        u64 cur = byte_pos + done;
+        u32 chunk_id = (u32)(cur >> PSX_CACHE_SHIFT);
+        u32 off = (u32)(cur & (PSX_CACHE_BYTES - 1u));
+        u32 avail = 0u;
+        const u8 *chunk = cd_cache_get_chunk(fidx, chunk_id, &avail);
+        if (!chunk || off >= avail)
+            return -1;
+        u32 take = avail - off;
+        if (take > len - done)
+            take = len - done;
+        for (u32 i = 0; i < take; i++)
+            dst[done + i] = chunk[off + i];
+        done += take;
+    }
+    return 0;
+}
+
+static int cd_find_track(const struct cd_disc_ws *ws, u32 lba)
+{
+    for (int t = ws->toc.first_track; t <= ws->toc.last_track; t++) {
+        u32 tlba = ws->toc.tracks[t].lba;
+        u32 tlen = ws->toc.tracks[t].length;
+        if (lba >= tlba && lba - tlba < tlen)
+            return t;
+    }
+    return -1;
+}
+
+static int cd_cb_read_2048(u32 lba, u8 *dst2048)
+{
+    struct cd_disc_ws *ws = CD_WS;
+    if (lba >= ws->toc.total_lba)
+        return -1;
+    int t = cd_find_track(ws, lba);
+    if (t < 0) {
+        for (u32 i = 0; i < 2048u; i++)
+            dst2048[i] = 0;
+        return 0;
+    }
+    u32 ssz = ws->toc.tracks[t].sec_size;
+    u64 pos = ws->trk_byte_off[t] + (u64)(lba - ws->toc.tracks[t].lba) * (u64)ssz;
+    u32 fidx = ws->trk_file[t];
+    if (ssz == 2048u)
+        return cd_stream_read_cached(fidx, pos, dst2048, 2048u);
+    u8 hdr[24];
+    if (cd_stream_read_cached(fidx, pos, hdr, 24u) < 0)
+        return -1;
+    u32 pay_off = (hdr[0] == 0x00u && hdr[1] == 0xFFu && hdr[11] == 0x00u && hdr[15] == 2u) ? 24u : 16u;
+    return cd_stream_read_cached(fidx, pos + pay_off, dst2048, 2048u);
+}
+
+static int cd_cb_read_2352(u32 lba, u8 *dst2352)
+{
+    struct cd_disc_ws *ws = CD_WS;
+    if (lba >= ws->toc.total_lba)
+        return -1;
+    int t = cd_find_track(ws, lba);
+    if (t < 0) {
+        for (u32 i = 0; i < 2352u; i++)
+            dst2352[i] = 0;
+        return 0;
+    }
+    u32 ssz = ws->toc.tracks[t].sec_size;
+    u64 pos = ws->trk_byte_off[t] + (u64)(lba - ws->toc.tracks[t].lba) * (u64)ssz;
+    u32 fidx = ws->trk_file[t];
+    if (ssz == 2352u)
+        return cd_stream_read_cached(fidx, pos, dst2352, 2352u);
+    for (u32 i = 0; i < 2352u; i++)
+        dst2352[i] = 0;
+    if (ws->toc.tracks[t].is_audio)
+        return 0;
+    for (int i = 1; i <= 10; i++)
+        dst2352[i] = 0xFFu;
+    u32 msf = lba + 150u;
+    dst2352[12] = psx_bcd(msf / (60u * 75u));
+    dst2352[13] = psx_bcd((msf / 75u) % 60u);
+    dst2352[14] = psx_bcd(msf % 75u);
+    dst2352[15] = 1u;
+    return cd_stream_read_cached(fidx, pos, dst2352 + 16u, 2048u);
+}
+
+static int cd_ends_ci(const char *s, const char *ext)
+{
+    int sl = 0, el = 0;
+    while (s[sl]) sl++;
+    while (ext[el]) el++;
+    if (sl < el)
+        return 0;
+    for (int i = 0; i < el; i++)
+        if ((s[sl - el + i] | 32) != (ext[i] | 32))
+            return 0;
+    return 1;
+}
+
+static int cd_line_has_ci(const u8 *p, u32 len, const char *word)
+{
+    u32 wl = 0;
+    while (word[wl]) wl++;
+    for (u32 i = 0; i + wl <= len; i++) {
+        u32 k = 0;
+        while (k < wl && ((p[i + k] | 32) == (word[k] | 32)))
+            k++;
+        if (k == wl)
+            return 1;
+    }
+    return 0;
+}
+
+static const struct cdrom_toc *cdrom_open_disc(const char *path, const u8 *head, u32 head_len, const char **err_out)
+{
+    struct cd_disc_ws *ws = CD_WS;
+    cdrom_close_disc();
+    for (u32 i = 0; i < sizeof(*ws) - sizeof(ws->cue_copy); i++)
+        ((u8 *)ws)[i] = 0;
+    ws->active_file = -1;
+    psx_cache_reset();
+
+    if (!path || !*path) {
+        *err_out = "a .cue or .iso disc image is required";
+        return 0;
+    }
+
+    if (cd_ends_ci(path, ".cue")) {
+        if (head_len > sizeof(ws->cue_copy))
+            head_len = sizeof(ws->cue_copy);
+        for (u32 i = 0; i < head_len; i++)
+            ws->cue_copy[i] = head[i];
+        const u8 *cue = ws->cue_copy;
+
+        int dir_len = 0;
+        for (int i = 0; path[i]; i++)
+            if (path[i] == '/' || path[i] == '\\' || path[i] == ':')
+                dir_len = i + 1;
+
+        int cur_file = -1, cur_trk = 0, prev_trk = 0, cur_file_tracks = 0;
+        u32 file_base_lba = 0, pending_pregap = 0;
+
+        for (u32 i = 0; i < head_len;) {
+            while (i < head_len && (cue[i] == ' ' || cue[i] == '\t' || cue[i] == '\r' || cue[i] == '\n'))
+                i++;
+            u32 line_end = i;
+            while (line_end < head_len && cue[line_end] != '\r' && cue[line_end] != '\n')
+                line_end++;
+            u32 rem = line_end - i;
+
+            if (psx_ci_word(cue + i, rem, "FILE")) {
+                if (cur_file >= 0 && prev_trk >= 1 && ws->toc.tracks[prev_trk].length == 0) {
+                    u64 fsz = ws->files[cur_file].fsize;
+                    u64 boff = ws->trk_byte_off[prev_trk];
+                    u64 left = (fsz > boff) ? (fsz - boff) : 0;
+                    u32 left32 = left > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)left;
+                    u32 ssz = ws->toc.tracks[prev_trk].sec_size;
+                    u32 secs = (ssz == 2048u) ? (left32 >> 11) : (left32 / 2352u);
+                    ws->toc.tracks[prev_trk].length = secs;
+                    file_base_lba = ws->toc.tracks[prev_trk].lba + secs;
+                }
+                char track_rel[160];
+                u32 p = i + 4u;
+                while (p < line_end && (cue[p] == ' ' || cue[p] == '\t'))
+                    p++;
+                int tlen = 0;
+                if (p < line_end && cue[p] == '"') {
+                    p++;
+                    while (p < line_end && cue[p] != '"' && tlen < (int)sizeof(track_rel) - 1)
+                        track_rel[tlen++] = cue[p] == '\\' ? '/' : (char)cue[p], p++;
+                } else {
+                    while (p < line_end && cue[p] != ' ' && cue[p] != '\t' && tlen < (int)sizeof(track_rel) - 1)
+                        track_rel[tlen++] = cue[p] == '\\' ? '/' : (char)cue[p], p++;
+                }
+                track_rel[tlen] = 0;
+                if (!tlen || ws->n_files >= CD_MAX_FILES) {
+                    *err_out = "invalid FILE entry in .cue sheet";
+                    return 0;
+                }
+                char cand[200];
+                zx_join(cand, sizeof(cand), path, dir_len, track_rel);
+                if (!disk_exists(cand)) {
+                    const char *base = track_rel;
+                    for (const char *q = track_rel; *q; q++)
+                        if (*q == '/' || *q == ':')
+                            base = q + 1;
+                    zx_join(cand, sizeof(cand), path, dir_len, base);
+                }
+                struct disk_entry de;
+                if (!disk_exists(cand) || disk_stat(cand, &de) < 0 || de.kind != DISK_FILE) {
+                    *err_out = "a track file named in the .cue was not found beside it";
+                    return 0;
+                }
+                cur_file = (int)ws->n_files++;
+                int ck = 0;
+                while (cand[ck] && ck < (int)sizeof(ws->files[cur_file].path) - 1) {
+                    ws->files[cur_file].path[ck] = cand[ck];
+                    ck++;
+                }
+                ws->files[cur_file].path[ck] = 0;
+                ws->files[cur_file].fsize = ((u64)de.size_hi << 32) | (u64)de.size;
+                ws->files[cur_file].data_off = cd_ends_ci(cand, ".wav") ? 44u : 0u;
+                cur_file_tracks = 0;
+                prev_trk = 0;
+            } else if (psx_ci_word(cue + i, rem, "TRACK")) {
+                u32 p = i + 5u;
+                while (p < line_end && (cue[p] == ' ' || cue[p] == '\t'))
+                    p++;
+                int trk = 0;
+                while (p < line_end && cue[p] >= '0' && cue[p] <= '9')
+                    trk = trk * 10 + (cue[p++] - '0');
+                if (trk >= 1 && trk <= 99 && cur_file >= 0) {
+                    cur_trk = trk;
+                    if (!ws->toc.first_track || trk < ws->toc.first_track)
+                        ws->toc.first_track = (u8)trk;
+                    if (trk > ws->toc.last_track)
+                        ws->toc.last_track = (u8)trk;
+                    int is_aud = cd_line_has_ci(cue + p, line_end - p, "AUDIO");
+                    u16 ssz = 2352u;
+                    if (!is_aud) {
+                        if (cd_line_has_ci(cue + p, line_end - p, "2048"))
+                            ssz = 2048u;
+                        else if (!cd_line_has_ci(cue + p, line_end - p, "2352") &&
+                                 cd_ends_ci(ws->files[cur_file].path, ".iso"))
+                            ssz = 2048u;
+                    }
+                    ws->trk_file[cur_trk] = (u8)cur_file;
+                    ws->toc.tracks[cur_trk].sec_size = ssz;
+                    ws->toc.tracks[cur_trk].is_audio = (u8)is_aud;
+                    ws->toc.tracks[cur_trk].control  = is_aud ? 0x00u : 0x04u;
+                    pending_pregap = 0;
+                }
+            } else if (psx_ci_word(cue + i, rem, "PREGAP")) {
+                u32 p = i + 6u;
+                while (p < line_end && (cue[p] == ' ' || cue[p] == '\t'))
+                    p++;
+                if (p + 8u <= line_end && cue[p + 2] == ':' && cue[p + 5] == ':') {
+                    u32 mm = (u32)(cue[p] - '0') * 10u + (u32)(cue[p + 1] - '0');
+                    u32 ss = (u32)(cue[p + 3] - '0') * 10u + (u32)(cue[p + 4] - '0');
+                    u32 ff = (u32)(cue[p + 6] - '0') * 10u + (u32)(cue[p + 7] - '0');
+                    pending_pregap += (mm * 60u + ss) * 75u + ff;
+                }
+            } else if (psx_ci_word(cue + i, rem, "INDEX")) {
+                u32 p = i + 5u;
+                while (p < line_end && (cue[p] == ' ' || cue[p] == '\t'))
+                    p++;
+                int idx = 0;
+                while (p < line_end && cue[p] >= '0' && cue[p] <= '9')
+                    idx = idx * 10 + (cue[p++] - '0');
+                while (p < line_end && (cue[p] == ' ' || cue[p] == '\t'))
+                    p++;
+                if (idx == 1 && cur_trk >= 1 && cur_file >= 0 &&
+                    p + 8u <= line_end && cue[p + 2] == ':' && cue[p + 5] == ':') {
+                    u32 mm = (u32)(cue[p] - '0') * 10u + (u32)(cue[p + 1] - '0');
+                    u32 ss = (u32)(cue[p + 3] - '0') * 10u + (u32)(cue[p + 4] - '0');
+                    u32 ff = (u32)(cue[p + 6] - '0') * 10u + (u32)(cue[p + 7] - '0');
+                    u32 frames_in_file = (mm * 60u + ss) * 75u + ff;
+                    u32 ssz = ws->toc.tracks[cur_trk].sec_size;
+                    u64 boff = (u64)ws->files[cur_file].data_off + (u64)frames_in_file * (u64)ssz;
+                    if (cur_file_tracks > 0 && prev_trk >= 1) {
+                        u64 span = (boff > ws->trk_byte_off[prev_trk]) ? (boff - ws->trk_byte_off[prev_trk]) : 0;
+                        u32 span32 = span > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)span;
+                        u32 pssz = ws->toc.tracks[prev_trk].sec_size;
+                        u32 psecs = (pssz == 2048u) ? (span32 >> 11) : (span32 / 2352u);
+                        ws->toc.tracks[prev_trk].length = psecs;
+                        ws->toc.tracks[cur_trk].lba = ws->toc.tracks[prev_trk].lba + psecs + pending_pregap;
+                    } else {
+                        ws->toc.tracks[cur_trk].lba = file_base_lba + pending_pregap + frames_in_file;
+                    }
+                    ws->trk_byte_off[cur_trk] = boff;
+                    prev_trk = cur_trk;
+                    cur_file_tracks++;
+                    pending_pregap = 0;
+                }
+            }
+            i = line_end + 1u;
+        }
+
+        if (cur_file >= 0 && prev_trk >= 1 && ws->toc.tracks[prev_trk].length == 0) {
+            u64 fsz = ws->files[cur_file].fsize;
+            u64 boff = ws->trk_byte_off[prev_trk];
+            u64 left = (fsz > boff) ? (fsz - boff) : 0;
+            u32 left32 = left > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)left;
+            u32 ssz = ws->toc.tracks[prev_trk].sec_size;
+            u32 secs = (ssz == 2048u) ? (left32 >> 11) : (left32 / 2352u);
+            ws->toc.tracks[prev_trk].length = secs;
+        }
+        if (!ws->toc.last_track) {
+            *err_out = "no valid TRACK entries in .cue sheet";
+            return 0;
+        }
+        int lt = ws->toc.last_track;
+        ws->toc.total_lba = ws->toc.tracks[lt].lba + ws->toc.tracks[lt].length;
+        ws->toc.tracks[CDROM_MAX_TRACKS].lba = ws->toc.total_lba;
+    } else {
+        struct disk_entry de;
+        if (!disk_exists(path) || disk_stat(path, &de) < 0 || de.kind != DISK_FILE) {
+            *err_out = "disc image not found";
+            return 0;
+        }
+        u64 fsz = ((u64)de.size_hi << 32) | (u64)de.size;
+        if (fsz < 16u * 2048u) {
+            *err_out = "disc image is too small";
+            return 0;
+        }
+        int ck = 0;
+        while (path[ck] && ck < (int)sizeof(ws->files[0].path) - 1) {
+            ws->files[0].path[ck] = path[ck];
+            ck++;
+        }
+        ws->files[0].path[ck] = 0;
+        ws->files[0].fsize = fsz;
+        ws->files[0].data_off = 0;
+        ws->n_files = 1;
+
+        u8 sync[16];
+        u16 ssz = 2048u;
+        if (cd_stream_read_cached(0, 0, sync, 16u) == 0 &&
+            sync[0] == 0x00u && sync[1] == 0xFFu && sync[10] == 0xFFu && sync[11] == 0x00u &&
+            (sync[15] == 1u || sync[15] == 2u))
+            ssz = 2352u;
+        u32 fsz32 = fsz > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)fsz;
+        u32 secs = (ssz == 2048u) ? (u32)(fsz >> 11) : (fsz32 / 2352u);
+        ws->toc.first_track = 1;
+        ws->toc.last_track  = 1;
+        ws->toc.total_lba   = secs;
+        ws->trk_file[1]     = 0;
+        ws->trk_byte_off[1] = 0;
+        ws->toc.tracks[1].lba      = 0;
+        ws->toc.tracks[1].length   = secs;
+        ws->toc.tracks[1].sec_size = ssz;
+        ws->toc.tracks[1].is_audio = 0;
+        ws->toc.tracks[1].control  = 0x04u;
+        ws->toc.tracks[CDROM_MAX_TRACKS].lba = secs;
+    }
+
+    ws->toc.read_2048 = cd_cb_read_2048;
+    ws->toc.read_2352 = cd_cb_read_2352;
+    *err_out = 0;
+    return &ws->toc;
+}
+
+/* PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card (.cue, .iso): streamed CD-ROM, OKI MSM5205 ADPCM +
+   Redbook CD-DA @ 48 kHz, 256 KB Super System Card 3.0 + 2 MB Arcade Card RAM, 2 KB BRAM (.sav),
+   and built-in System Card 3.0 BIOS (or optional syscard3.pce in pcecd/ or pce/) */
+static const char *pcecd_open(u8 *image, u32 size, const char *path)
+{
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "pcecd", "syscard3.pce", bios, 0x40000u, 0x40200u);
+    if (!gb)
+        gb = rom_find(path, "pce", "syscard3.pce", bios, 0x40000u, 0x40200u);
+    const char *why = pcecd_load(gb ? bios : 0, gb, toc);
+    if (why)
+        cdrom_close_disc();
+    return why;
+}
+
+static const struct machine pcecd_machine = {
+    PCE_W_DEF, PCE_H_DEF, 3, 3, PCE_FRAME_US, pcecd_open, pce_info, pce_one, pce_save_ram, pce_save_changed,
+    pce_jammed, 0, 0, "the HuC6280", 0, 0,
+    "arrows or W A S D, X = I, Z = II, Enter = Run, Tab = Select (C/V/Q/E = III..VI); Ctrl-C or Esc ends",
+    pce_size, pce_audio_rate, pce_audio
+};
+
+int pcecd_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&pcecd_machine, path, frames, script);
+    cdrom_close_disc();
+    return r;
+}
+
+/* Sega CD / Mega-CD (.cue, .iso): 7.67 MHz Main-68000 + 12.5 MHz Sub-68000 + Z80, 512 KB PRG-RAM,
+   256 KB Word-RAM (2M & 1M/1M), Word-RAM Stamp ASIC (scaling/rotation), LC89510 CDC + CDD,
+   YM2612 + PSG + Ricoh RF5C164 8-ch PCM + Redbook CD-DA @ 48 kHz, 8 KB BRAM (.sav), and built-in
+   Mega-CD BIOS (or optional bios_CD_{U,E,J}.bin in segacd/) */
+static int segacd_region;
+
+void segacd_play_region(int region)
+{
+    segacd_region = region;
+}
+
+static const char *segacd_open(u8 *image, u32 size, const char *path)
+{
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    static const char *const bnames[] = {
+        "bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin",
+        "us_scd1_9210.bin", "eu_mcd1_9210.bin", "jp_mcd1_9112.bin"
+    };
+    u32 gb = 0;
+    if (segacd_region == 'E')
+        gb = rom_find(path, "segacd", "bios_CD_E.bin", bios, 0x20000u, 0x20000u);
+    else if (segacd_region == 'J')
+        gb = rom_find(path, "segacd", "bios_CD_J.bin", bios, 0x20000u, 0x20000u);
+    for (unsigned i = 0; i < sizeof(bnames) / sizeof(bnames[0]) && !gb; i++)
+        gb = rom_find(path, "segacd", bnames[i], bios, 0x20000u, 0x20000u);
+    const char *why = segacd_load(gb == 0x20000u ? bios : 0, gb, toc, segacd_region);
+    if (why) {
+        cdrom_close_disc();
+        return why;
+    }
+    segacd_machine.frame_us = md_pal() ? MD_FRAME_US_PAL : MD_FRAME_US;
+    return 0;
+}
+
+static struct machine segacd_machine = {
+    MD_W_MAX, 224, 3, 3, MD_FRAME_US, segacd_open, md_info, md_one, segacd_save_ram, segacd_save_changed,
+    md_jammed, 0, 0, "the dual 68000s", 0, 0,
+    "arrows or W A S D, Z = A, X = B, Tab / Space = C, Enter = Start; Ctrl-C or Esc ends",
+    md_size, md_audio_rate, md_audio
+};
+
+int segacd_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&segacd_machine, path, frames, script);
+    cdrom_close_disc();
+    segacd_region = 0;
+    return r;
+}
+
+/* ============================================================================
+ * Classic Home Computers ('bbc', 'ti99', 'oric', 'plus4', 'zx81', 'pc88', 'mz700', 'x1'),
+ * 32-Bit Heavyweights ('s32x', 'cd32'), and Arcade Boards ('cps2', 'arcade')
+ * ============================================================================ */
+
+/* 1. BBC Micro Model B & Acorn Electron (.ssd, .dsd, .uef; "": Mode 7 BASIC) */
+static const char *bbc_open(u8 *image, u32 size, const char *path)
+{
+    u8 *os_rom  = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *bas_rom = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x8000u);
+    u32 os_sz  = rom_find(path, "bbc", "os12.rom",   os_rom,  0x4000u, 0x4000u);
+    u32 bas_sz = rom_find(path, "bbc", "basic2.rom", bas_rom, 0x4000u, 0x4000u);
+    return bbc_load(size ? image : 0, size, path,
+                    os_sz == 0x4000u ? os_rom : 0, os_sz,
+                    bas_sz == 0x4000u ? bas_rom : 0, bas_sz);
+}
+
+static void bbc_one(u16 pad, void *pic_out)
+{
+    bbc_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine bbc_machine = {
+    BBC_W, BBC_H, 3, 2, BBC_FRAME_US, bbc_open, bbc_info, bbc_one, 0, 0,
+    bbc_jammed, 0, 0, "the 2 MHz 6502", bbc_keyboard, bbc_typed,
+    "the USB keyboard is the BBC Micro / Electron's, its arrows + Space/Return also mapped; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, bbc_audio_rate, bbc_audio
+};
+
+int bbc_play(const char *path, u32 frames, const char *script)
+{
+    return play(&bbc_machine, path, frames, script);
+}
+
+/* 2. Texas Instruments TI-99/4A (.rpk, .bin, .zip; "": TI BASIC) */
+static const char *ti99_open(u8 *image, u32 size, const char *path)
+{
+    return ti99_load(size ? image : 0, size, path);
+}
+
+static void ti99_one(u16 pad, void *pic_out)
+{
+    ti99_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine ti99_machine = {
+    TI99_W, TI99_H, 3, 3, TI99_FRAME_US, ti99_open, ti99_info, ti99_one, 0, 0,
+    ti99_jammed, 0, 0, "the 16-bit TMS9900", ti99_keyboard, ti99_typed,
+    "the USB keyboard is the TI-99/4A's, its arrows + fire (Q/Tab/Space/remote OK) also Joystick 1; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, ti99_audio_rate, ti99_audio
+};
+
+int ti99_play(const char *path, u32 frames, const char *script)
+{
+    return play(&ti99_machine, path, frames, script);
+}
+
+/* 3. Tangerine Oric-1 / Oric Atmos 48K (.tap, .dsk; "": Atmos BASIC) */
+static const char *oric_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "oric", "basic11b.rom", bios, 0x4000u, 0x4000u);
+    if (!gb)
+        gb = rom_find(path, "oric", "oric.rom", bios, 0x4000u, 0x4000u);
+    return oric_load(size ? image : 0, size, path, gb == 0x4000u ? bios : 0, gb);
+}
+
+static void oric_one(u16 pad, void *pic_out)
+{
+    oric_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine oric_machine = {
+    ORIC_W, ORIC_H, 4, 3, ORIC_FRAME_US, oric_open, oric_info, oric_one, 0, 0,
+    oric_jammed, 0, 0, "the 6502", oric_keyboard, oric_typed,
+    "the USB keyboard is the Oric Atmos's, its arrows + Space/Return also mapped; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, oric_audio_rate, oric_audio
+};
+
+int oric_play(const char *path, u32 frames, const char *script)
+{
+    return play(&oric_machine, path, frames, script);
+}
+
+/* 4a. Commodore Plus/4 & C16 (.prg, .tap, .t64; "": BASIC V3.5) */
+static const char *plus4_open(u8 *image, u32 size, const char *path)
+{
+    return plus4_load(size ? image : 0, size, path);
+}
+
+static void ted81_one(u16 pad, void *pic_out)
+{
+    ted81_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine plus4_machine = {
+    PLUS4_W, PLUS4_H, 3, 3, PLUS4_FRAME_US, plus4_open, ted81_info, ted81_one, 0, 0,
+    ted81_jammed, 0, 0, "the MOS 7501/8501", ted81_keyboard, ted81_typed,
+    "the USB keyboard is the Plus/4's, its arrows + fire also TED Joystick 1 & 2; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, ted81_audio_rate, ted81_audio
+};
+
+int plus4_play(const char *path, u32 frames, const char *script)
+{
+    return play(&plus4_machine, path, frames, script);
+}
+
+/* 4b. Sinclair ZX81 16K (.p, .81; "": Sinclair 16K BASIC) */
+static const char *zx81_open(u8 *image, u32 size, const char *path)
+{
+    return zx81_load(size ? image : 0, size, path);
+}
+
+static const struct machine zx81_machine = {
+    ZX81_W, ZX81_H, 3, 3, ZX81_FRAME_US, zx81_open, ted81_info, ted81_one, 0, 0,
+    ted81_jammed, 0, 0, "the Z80", ted81_keyboard, ted81_typed,
+    "the USB keyboard is the ZX81's, its arrows + 0/Z/Space also Cursor Joystick; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, ted81_audio_rate, ted81_audio
+};
+
+int zx81_play(const char *path, u32 frames, const char *script)
+{
+    return play(&zx81_machine, path, frames, script);
+}
+
+/* 5a. NEC PC-8801mkIISR (.d88, .n88; "": N88-BASIC) */
+static const char *pc88_open(u8 *image, u32 size, const char *path)
+{
+    return pc88_load(size ? image : 0, size, path);
+}
+
+static void jp8bit_one(u16 pad, void *pic_out)
+{
+    jp8bit_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine pc88_machine = {
+    PC88_W, PC88_H, 2, 3, PC88_FRAME_US, pc88_open, jp8bit_info, jp8bit_one, 0, 0,
+    jp8bit_jammed, 0, 0, "the 4 MHz Z80", jp8bit_keyboard, jp8bit_typed,
+    "the USB keyboard is the PC-8801's, its arrows + Z/X/Space also numpad & OPN Atari Joystick; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, jp8bit_audio_rate, jp8bit_audio
+};
+
+int pc88_play(const char *path, u32 frames, const char *script)
+{
+    return play(&pc88_machine, path, frames, script);
+}
+
+/* 5b. Sharp MZ-700 (.mzt, .mzf; "": 1Z-009A Monitor) */
+static const char *mz700_open(u8 *image, u32 size, const char *path)
+{
+    return mz700_load(size ? image : 0, size, path);
+}
+
+static const struct machine mz700_machine = {
+    MZ700_W, MZ700_H, 3, 3, MZ700_FRAME_US, mz700_open, jp8bit_info, jp8bit_one, 0, 0,
+    jp8bit_jammed, 0, 0, "the Z80", jp8bit_keyboard, jp8bit_typed,
+    "the USB keyboard is the Sharp MZ-700's, its arrows + Space/CR also mapped; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, jp8bit_audio_rate, jp8bit_audio
+};
+
+int mz700_play(const char *path, u32 frames, const char *script)
+{
+    return play(&mz700_machine, path, frames, script);
+}
+
+/* 5c. Sharp X1 (.d88, .2d, .tap; "": IPL/BASIC) */
+static const char *x1_open(u8 *image, u32 size, const char *path)
+{
+    return x1_load(size ? image : 0, size, path);
+}
+
+static const struct machine x1_machine = {
+    X1_W, X1_H, 3, 3, X1_FRAME_US, x1_open, jp8bit_info, jp8bit_one, 0, 0,
+    jp8bit_jammed, 0, 0, "the 4 MHz Z80", jp8bit_keyboard, jp8bit_typed,
+    "the USB keyboard is the Sharp X1's, its arrows + Z/X/Space also PSG Joystick & numpad; "
+    "what is typed on this console is typed on it; Esc ends",
+    0, jp8bit_audio_rate, jp8bit_audio
+};
+
+int x1_play(const char *path, u32 frames, const char *script)
+{
+    return play(&x1_machine, path, frames, script);
+}
+
+/* 7. Sega 32X (.32x, .bin): Dual 23 MHz Hitachi SH-2 RISC + SuperVDP + Stereo PWM */
+static int s32x_region;
+static struct machine s32x_machine;
+
+void s32x_play_region(int region)
+{
+    s32x_region = region;
+}
+
+static const char *s32x_open(u8 *image, u32 size, const char *path)
+{
+    u8 *bg = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *bm = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x4000u);
+    u8 *bs = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x8000u);
+    u32 g_sz = rom_find(path, "s32x", "32x_g_bios.bin", bg, 256u, 256u);
+    u32 m_sz = rom_find(path, "s32x", "32x_m_bios.bin", bm, 2048u, 2048u);
+    u32 s_sz = rom_find(path, "s32x", "32x_s_bios.bin", bs, 1024u, 1024u);
+    const char *why = s32x_load(image, size,
+                                g_sz == 256u  ? bg : 0, g_sz,
+                                m_sz == 2048u ? bm : 0, m_sz,
+                                s_sz == 1024u ? bs : 0, s_sz,
+                                s32x_region);
+    if (!why)
+        s32x_machine.frame_us = md_pal() ? MD_FRAME_US_PAL : MD_FRAME_US;
+    return why;
+}
+
+static struct machine s32x_machine = {
+    MD_W_MAX, 224, 3, 3, MD_FRAME_US, s32x_open, md_info, md_one, md_save_ram, md_save_changed,
+    md_jammed, 0, 0, "the 68000 + dual SH-2s", 0, 0,
+    "arrows or W A S D, Z = A, X = B, Tab / Space = C, C/V/Q/E = X/Y/Z/Mode, Enter = Start; Ctrl-C or Esc ends",
+    md_size, md_audio_rate, md_audio
+};
+
+int s32x_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&s32x_machine, path, frames, script);
+    s32x_region = 0;
+    return r;
+}
+
+/* 8. Commodore Amiga CD32 (.cue, .iso): 14.18 MHz 68EC020-compat + 2 MB AGA + Akiko C2P + Paula + CD-DA */
+static const char *cd32_open(u8 *image, u32 size, const char *path)
+{
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *kick = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *ext  = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x80000u);
+    u32 gk = rom_find(path, "cd32", "cd32_kick31.rom", kick, 0x80000u, 0x80000u);
+    if (!gk)
+        gk = rom_find(path, "cd32", "kick40060.cd32", kick, 0x80000u, 0x80000u);
+    u32 ge = rom_find(path, "cd32", "cd32_ext.rom", ext, 0x80000u, 0x80000u);
+    if (!ge)
+        ge = rom_find(path, "cd32", "ext40060.cd32", ext, 0x80000u, 0x80000u);
+    const char *why = cd32_load(gk == 0x80000u ? kick : 0, gk,
+                                ge == 0x80000u ? ext  : 0, ge, toc);
+    if (why)
+        cdrom_close_disc();
+    return why;
+}
+
+static void cd32_one(u16 pad, void *pic_out)
+{
+    cd32_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine cd32_machine = {
+    CD32_W, CD32_H, 3, 2, CD32_FRAME_US, cd32_open, cd32_info, cd32_one, cd32_save_ram, cd32_save_changed,
+    cd32_jammed, 0, 0, "the 14 MHz 68EC020 + AGA + Akiko", 0, 0,
+    "arrows or W A S D, Z = Red, X = Blue, C = Yellow, Tab = Green, Q/E = Rev/Fwd, Enter = Play; Ctrl-C or Esc ends",
+    0, cd32_audio_rate, cd32_audio
+};
+
+int cd32_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&cd32_machine, path, frames, script);
+    cdrom_close_disc();
+    return r;
+}
+
+/* 9. Capcom CPS-2 QSound Arcade ('cps2': .zip, .cps2) */
+int cps2_play(const char *path, u32 frames, const char *script)
+{
+    return cps_play(path, frames, script);
+}
+
+/* 10. Golden-Age Z80 Classic Arcade Pack ('arcade': Pac-Man, Galaxian, Frogger, Donkey Kong .zip; "": built-in) */
+static const char *arcade_open(u8 *image, u32 size, const char *path)
+{
+    return arcade_load(size ? image : 0, size, path);
+}
+
+static void arcade_one(u16 pad, void *pic_out)
+{
+    arcade_frame(pad, (u16 *)pic_out);
+}
+
+static void arcade_size(int *w, int *h)
+{
+    *w = arcade_width();
+    *h = arcade_height();
+}
+
+static const struct machine arcade_machine = {
+    ARCADE_W, ARCADE_H_MAX, 3, 2, ARCADE_FRAME_US, arcade_open, arcade_info, arcade_one, 0, 0,
+    arcade_jammed, 0, 0, "the arcade Z80", 0, 0,
+    "arrows or W A S D, X/Z = Jump/Fire, Tab/Space = Insert Coin, Enter = 1P Start; Ctrl-C or Esc ends",
+    arcade_size, arcade_audio_rate, arcade_audio
+};
+
+int arcade_play(const char *path, u32 frames, const char *script)
+{
+    return play(&arcade_machine, path, frames, script);
 }

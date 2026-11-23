@@ -764,6 +764,164 @@ static int in_sys_dir(const char *s, const char *seg)
     return path_has_seg(disk_cwd(), seg) || path_has_seg(s, seg);
 }
 
+static int buf_has_str(const u8 *b, int n, const char *pat)
+{
+    int pl = 0;
+    while (pat[pl])
+        pl++;
+    for (int i = 0; i + pl <= n; i++) {
+        int k = 0;
+        while (k < pl && b[i + k] == (u8)pat[k])
+            k++;
+        if (k == pl)
+            return 1;
+    }
+    return 0;
+}
+
+static int buf_has_ci(const u8 *b, int n, const char *pat)
+{
+    int pl = 0;
+    while (pat[pl])
+        pl++;
+    for (int i = 0; i + pl <= n; i++) {
+        int k = 0;
+        while (k < pl && (b[i + k] | 32) == (pat[k] | 32))
+            k++;
+        if (k == pl)
+            return 1;
+    }
+    return 0;
+}
+
+static player_fn cd_player_for(const char *s, int is_cue, int on_disk)
+{
+    if (in_sys_dir(s, "segacd") || in_sys_dir(s, "megacd"))
+        return segacd_play;
+    if (in_sys_dir(s, "pcecd") || in_sys_dir(s, "tgcd"))
+        return pcecd_play;
+    if (in_sys_dir(s, "cd32"))
+        return cd32_play;
+    if (in_sys_dir(s, "psx"))
+        return psx_play;
+    if (!on_disk)
+        return psx_play;
+
+    u8 *probe = (u8 *)KSEG0(MEDIA_PHYS);
+    u32 size = 0;
+    if (is_cue) {
+        int got = disk_read_head(s, probe, 8192u, &size);
+        if (got > 0) {
+            char cur_rel[128], data_rel[128];
+            cur_rel[0] = data_rel[0] = 0;
+            u32 data_frames = 0, data_ssz = 2352u;
+            int in_data_trk = 0, found_data = 0;
+            for (int i = 0; i < got && !found_data;) {
+                while (i < got && (probe[i] == ' ' || probe[i] == '\t' || probe[i] == '\r' || probe[i] == '\n'))
+                    i++;
+                int le = i;
+                while (le < got && probe[le] != '\r' && probe[le] != '\n')
+                    le++;
+                int rem = le - i;
+                if (rem > 5 && (probe[i] | 32) == 'f' && (probe[i + 1] | 32) == 'i' &&
+                    (probe[i + 2] | 32) == 'l' && (probe[i + 3] | 32) == 'e' &&
+                    (probe[i + 4] == ' ' || probe[i + 4] == '\t')) {
+                    int p = i + 5, k = 0;
+                    while (p < le && (probe[p] == ' ' || probe[p] == '\t')) p++;
+                    if (p < le && probe[p] == '"') {
+                        p++;
+                        while (p < le && probe[p] != '"' && k < (int)sizeof(cur_rel) - 1)
+                            cur_rel[k++] = probe[p] == '\\' ? '/' : (char)probe[p], p++;
+                    } else {
+                        while (p < le && probe[p] > ' ' && k < (int)sizeof(cur_rel) - 1)
+                            cur_rel[k++] = probe[p] == '\\' ? '/' : (char)probe[p], p++;
+                    }
+                    cur_rel[k] = 0;
+                    in_data_trk = 0;
+                } else if (rem > 6 && (probe[i] | 32) == 't' && (probe[i + 1] | 32) == 'r' &&
+                           (probe[i + 2] | 32) == 'a' && (probe[i + 3] | 32) == 'c' && (probe[i + 4] | 32) == 'k') {
+                    in_data_trk = !buf_has_ci(probe + i, rem, "audio");
+                    if (in_data_trk)
+                        data_ssz = buf_has_ci(probe + i, rem, "2048") ? 2048u : 2352u;
+                } else if (in_data_trk && rem > 6 && (probe[i] | 32) == 'i' && (probe[i + 1] | 32) == 'n' &&
+                           (probe[i + 2] | 32) == 'd' && (probe[i + 3] | 32) == 'e' && (probe[i + 4] | 32) == 'x') {
+                    int p = i + 5, idx = 0;
+                    while (p < le && (probe[p] == ' ' || probe[p] == '\t')) p++;
+                    while (p < le && probe[p] >= '0' && probe[p] <= '9') idx = idx * 10 + (probe[p++] - '0');
+                    while (p < le && (probe[p] == ' ' || probe[p] == '\t')) p++;
+                    if (idx == 1 && p + 8 <= le && probe[p + 2] == ':' && probe[p + 5] == ':') {
+                        u32 mm = (u32)(probe[p] - '0') * 10u + (u32)(probe[p + 1] - '0');
+                        u32 ss = (u32)(probe[p + 3] - '0') * 10u + (u32)(probe[p + 4] - '0');
+                        u32 ff = (u32)(probe[p + 6] - '0') * 10u + (u32)(probe[p + 7] - '0');
+                        data_frames = (mm * 60u + ss) * 75u + ff;
+                        int k = 0;
+                        while (cur_rel[k] && k < (int)sizeof(data_rel) - 1) data_rel[k] = cur_rel[k], k++;
+                        data_rel[k] = 0;
+                        found_data = 1;
+                    }
+                }
+                i = le + 1;
+            }
+            if (data_rel[0]) {
+                char bin_path[200];
+                int dlen = 0, k = 0;
+                for (int i = 0; s[i]; i++)
+                    if (s[i] == '/' || s[i] == '\\' || s[i] == ':')
+                        dlen = i + 1;
+                for (int i = 0; i < dlen && k < (int)sizeof(bin_path) - 1; i++)
+                    bin_path[k++] = s[i];
+                for (int i = 0; data_rel[i] && k < (int)sizeof(bin_path) - 1; i++)
+                    bin_path[k++] = data_rel[i];
+                bin_path[k] = 0;
+                u64 fsz = 0;
+                if (disk_stream_open(bin_path, &fsz) == 0) {
+                    u64 seek_to = ((u64)data_frames * (u64)data_ssz) & ~511ULL;
+                    int bgot = 0;
+                    if (disk_stream_seek(seek_to) == seek_to) {
+                        int r1 = disk_stream_read(probe + 8192u, 4096u);
+                        if (r1 > 0) {
+                            bgot += r1;
+                            int r2 = disk_stream_read(probe + 8192u + r1, 4096u);
+                            if (r2 > 0)
+                                bgot += r2;
+                        }
+                    }
+                    disk_stream_close();
+                    if (bgot > 0) {
+                        if (buf_has_str(probe + 8192u, bgot, "SEGADISCSYSTEM") ||
+                            buf_has_str(probe + 8192u, bgot, "SEGA DISCSYSTEM"))
+                            return segacd_play;
+                        if (buf_has_str(probe + 8192u, bgot, "PC Engine CD-ROM SYSTEM"))
+                            return pcecd_play;
+                    }
+                    /* Also probe ISO-9660 PVD at LBA 16 for Amiga CDTV / CD32 System Identifier */
+                    u64 pvd_seek = ((u64)(data_frames + 16u) * (u64)data_ssz) & ~511ULL;
+                    if (disk_stream_open(bin_path, &fsz) == 0) {
+                        int pgot = (disk_stream_seek(pvd_seek) == pvd_seek) ? disk_stream_read(probe + 8192u, 4096u) : 0;
+                        disk_stream_close();
+                        if (pgot > 0 && (buf_has_str(probe + 8192u, pgot, "CD001\x01\x00" "CDTV") ||
+                                         buf_has_str(probe + 8192u, pgot, "CD001\x01\x00" "CD32")))
+                            return cd32_play;
+                    }
+                }
+            }
+        }
+        return psx_play;
+    }
+
+    int got = disk_read_head(s, probe, 40960u, &size);
+    if (got > 0) {
+        if (buf_has_str(probe, got < 8192 ? got : 8192, "SEGADISCSYSTEM") ||
+            buf_has_str(probe, got < 8192 ? got : 8192, "SEGA DISCSYSTEM"))
+            return segacd_play;
+        if (buf_has_str(probe, got < 8192 ? got : 8192, "PC Engine CD-ROM SYSTEM"))
+            return pcecd_play;
+        if (buf_has_str(probe, got, "CD001\x01\x00" "CDTV") || buf_has_str(probe, got, "CD001\x01\x00" "CD32"))
+            return cd32_play;
+    }
+    return psx_play;
+}
+
 static player_fn player_for(const char *s, int on_disk);
 
 /* the name of the game in a .zip / .gz / .adz: a .gz's own (kept in its header), else its file's name without
@@ -828,6 +986,12 @@ static player_fn player_for(const char *s, int on_disk)
     if (n - dot == 5 && (s[dot + 1] | 32) == 'd' && (s[dot + 2] | 32) == 'u' && (s[dot + 3] | 32) == 'c' &&
         (s[dot + 4] | 32) == 'k')
         return megaduck_play;
+    if (n - dot == 5 && (s[dot + 1] | 32) == 'v' && (s[dot + 2] | 32) == 'b' && (s[dot + 3] | 32) == 'o' &&
+        (s[dot + 4] | 32) == 'y')
+        return vb_play;
+    if (n - dot == 5 && (s[dot + 1] | 32) == 'c' && (s[dot + 2] | 32) == 'a' && (s[dot + 3] | 32) == 'r' &&
+        (s[dot + 4] | 32) == 't')
+        return scv_play;
     if (n - dot > 4)
         return 0;
     char e[4] = {0, 0, 0, 0};
@@ -846,6 +1010,12 @@ static player_fn player_for(const char *s, int on_disk)
         if (pf)
             return pf;
         if (zip) {
+            if (in_sys_dir(s, "ti99"))
+                return ti99_play;
+            if (in_sys_dir(s, "arcade"))
+                return arcade_play;
+            if (in_sys_dir(s, "cps2"))
+                return cps2_play;
             u32 size = 0;
             u8 *all = (u8 *)KSEG0(MEDIA_PHYS);
             int got = disk_read_head(s, all, MEDIA_MAX, &size);
@@ -855,6 +1025,36 @@ static player_fn player_for(const char *s, int on_disk)
                 return s16_play;
         }
         return 0;
+    }
+    if (((e[0] == 's' && e[1] == 's' && e[2] == 'd') ||
+         (e[0] == 'd' && e[1] == 's' && e[2] == 'd') ||
+         (e[0] == 'u' && e[1] == 'e' && e[2] == 'f')) && !e[3])
+        return bbc_play;
+    if (e[0] == 'r' && e[1] == 'p' && e[2] == 'k' && !e[3])
+        return ti99_play;
+    if (e[0] == '3' && e[1] == '2' && e[2] == 'x' && !e[3])
+        return s32x_play;
+    if (e[0] == 'm' && e[1] == 'z' && (e[2] == 't' || e[2] == 'f') && !e[3])
+        return mz700_play;
+    if ((e[0] == 'p' && !e[1]) || (e[0] == '8' && e[1] == '1' && !e[2]))
+        return zx81_play;
+    if (e[0] == '2' && e[1] == 'd' && !e[2])
+        return x1_play;
+    if (e[0] == 'n' && e[1] == '8' && e[2] == '8' && !e[3])
+        return pc88_play;
+    if (e[0] == 'd' && e[1] == '8' && e[2] == '8' && !e[3]) {
+        if (in_sys_dir(s, "x1"))
+            return x1_play;
+        if (in_sys_dir(s, "pc88"))
+            return pc88_play;
+        if (on_disk) {
+            u32 size = 0;
+            u8 *pbuf = (u8 *)KSEG0(MEDIA_PHYS);
+            int got = disk_read_head(s, pbuf, 1024u, &size);
+            if (got >= 0x2DF && pbuf[0x2C0] == 0x01 && pbuf[0x2CE] == 'S' && pbuf[0x2CF] == 'y')
+                return x1_play;
+        }
+        return pc88_play;
     }
     if (e[0] == 'c' && e[1] == 'p' && e[2] == 's' && !e[3])
         return cps_play;
@@ -883,8 +1083,22 @@ static player_fn player_for(const char *s, int on_disk)
         }
         return zx_play;
     }
+    if (e[0] == 't' && e[1] == 'a' && e[2] == 'p' && !e[3]) {
+        if (in_sys_dir(s, "oric"))  return oric_play;
+        if (in_sys_dir(s, "plus4")) return plus4_play;
+        if (in_sys_dir(s, "x1"))    return x1_play;
+        if (on_disk) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 4 && head[0] == 0x16 && head[1] == 0x16 && head[2] == 0x16)
+                return oric_play;
+            if (got >= 12 && head[0] == 'C' && head[1] == '1' && head[2] == '6' && head[3] == '-')
+                return plus4_play;
+        }
+        return zx_play;
+    }
     if ((e[0] == 'z' && e[1] == '8' && e[2] == '0') ||
-        (e[0] == 't' && e[1] == 'a' && e[2] == 'p') || (e[0] == 't' && e[1] == 'z' && e[2] == 'x') ||
+        (e[0] == 't' && e[1] == 'z' && e[2] == 'x') ||
         (e[0] == 't' && e[1] == 'r' && e[2] == 'd') || (e[0] == 's' && e[1] == 'c' && e[2] == 'l'))
         return e[3] ? 0 : zx_play;
     if ((e[0] == 's' && e[1] == 't' && !e[2]) ||
@@ -893,6 +1107,8 @@ static player_fn player_for(const char *s, int on_disk)
           (e[0] == 't' && e[1] == 'o' && e[2] == 's')) && !e[3]))
         return st_play;
     if (e[0] == 'p' && e[1] == 'r' && e[2] == 'g' && !e[3]) {
+        if (in_sys_dir(s, "plus4"))
+            return plus4_play;
         if (on_disk) {
             u32 size = 0;
             int got = disk_read_head(s, head, HEAD_BYTES, &size);
@@ -929,6 +1145,8 @@ static player_fn player_for(const char *s, int on_disk)
         (e[0] == 'd' && e[1] == '6' && e[2] == '4') || (e[0] == 'p' && e[1] == '0' && e[2] == '0')) {
         if (e[3])
             return 0;
+        if (e[0] == 't' && in_sys_dir(s, "plus4"))
+            return plus4_play;
         const char *cwd = disk_cwd();
         for (const char *q = cwd; *q; q++)
             if ((q[0] | 32) == 'v' && (q[1] | 32) == 'i' && (q[2] | 32) == 'c' && q[3] == '2' && q[4] == '0')
@@ -976,9 +1194,10 @@ static player_fn player_for(const char *s, int on_disk)
         }
         return a8_play;
     }
-    if (((e[0] == 'c' && e[1] == 'u' && e[2] == 'e') || (e[0] == 'i' && e[1] == 's' && e[2] == 'o') ||
-         (e[0] == 'p' && e[1] == 's' && e[2] == 'x')) && !e[3])
+    if (e[0] == 'p' && e[1] == 's' && e[2] == 'x' && !e[3])
         return psx_play;
+    if (((e[0] == 'c' && e[1] == 'u' && e[2] == 'e') || (e[0] == 'i' && e[1] == 's' && e[2] == 'o')) && !e[3])
+        return cd_player_for(s, e[0] == 'c', on_disk);
     if (((e[0] == 'm' && e[1] == 'd' && !e[2]) || (e[0] == 'g' && e[1] == 'e' && e[2] == 'n') ||
          (e[0] == 's' && e[1] == 'm' && e[2] == 'd')) && !e[3])
         return md_play;
@@ -986,6 +1205,22 @@ static player_fn player_for(const char *s, int on_disk)
         return megaduck_play;
     if (e[0] == 's' && e[1] == 'v' && !e[2])
         return sv_play;
+    if (e[0] == 'p' && e[1] == 'v' && !e[2])
+        return pv1000_play;
+    if (e[0] == 'a' && e[1] == 's' && e[2] == 't' && !e[3])
+        return astro_play;
+    if (e[0] == 'a' && e[1] == '2' && e[2] == 'k' && !e[3])
+        return arcadia_play;
+    if (e[0] == 'v' && e[1] == 'c' && e[2] == '4' && !e[3])
+        return vc4000_play;
+    if (e[0] == 's' && e[1] == 't' && e[2] == '2' && !e[3])
+        return studio2_play;
+    if (e[0] == 's' && e[1] == 'c' && e[2] == 'v' && !e[3])
+        return scv_play;
+    if (e[0] == 'v' && e[1] == 'b' && !e[2])
+        return vb_play;
+    if (e[0] == 's' && e[1] == 'g' && e[2] == 'x' && !e[3])
+        return sgx_play;
     if (((e[0] == 'c' && e[1] == 'h' && e[2] == '8') ||
          (e[0] == 's' && e[1] == 'c' && (e[2] == '8' || e[2] == 'h')) ||
          (e[0] == 'x' && e[1] == 'o' && e[2] == '8')) && !e[3])
@@ -1021,9 +1256,14 @@ static player_fn player_for(const char *s, int on_disk)
     if (e[0] == 'm' && e[1] == '5' && !e[2])
         return m5_play;
     if (e[0] == 'd' && e[1] == 's' && e[2] == 'k' && !e[3]) {
+        if (in_sys_dir(s, "oric"))
+            return oric_play;
         if (on_disk) {
             u32 size = 0;
             int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 8 && ((head[0] == 'M' && head[1] == 'F' && head[2] == 'M' && head[3] == '_') ||
+                             (head[0] == 'O' && head[1] == 'R' && head[2] == 'I' && head[3] == 'C')))
+                return oric_play;
             if (got >= 8 && ((head[0] == 'M' && head[1] == 'V' && head[2] == ' ' && head[3] == '-' &&
                               head[4] == ' ' && head[5] == 'C' && head[6] == 'P' && head[7] == 'C') ||
                              (head[0] == 'E' && head[1] == 'X' && head[2] == 'T' && head[3] == 'E' &&
@@ -1100,8 +1340,11 @@ static player_fn player_for(const char *s, int on_disk)
                     (q[4] | 32) == 'i' && q[5] == '8')
                     return a8_play;
             }
+            if (in_sys_dir(s, "bbc"))    return bbc_play;
             if (in_sys_dir(s, "cv"))     return cv_play;
             if (in_sys_dir(s, "m5"))     return m5_play;
+            if (in_sys_dir(s, "pv1000")) return pv1000_play;
+            if (in_sys_dir(s, "astro"))  return astro_play;
             if (in_sys_dir(s, "dragon")) return dragon_play;
             if (in_sys_dir(s, "coco"))   return coco_play;
         }
@@ -1110,16 +1353,36 @@ static player_fn player_for(const char *s, int on_disk)
     if (on_disk && e[0] == 'b' && e[1] == 'i' && e[2] == 'n' && !e[3]) {
         u32 size = 0;
         int got = disk_read_head(s, head, HEAD_BYTES, &size);
+        if (got >= 0x108 && head[0x100] == 'S' && head[0x101] == 'E' && head[0x102] == 'G' &&
+            head[0x103] == 'A' && head[0x105] == '3' && head[0x106] == '2' && head[0x107] == 'X')
+            return s32x_play;
+        if (in_sys_dir(s, "s32x"))    return s32x_play;
+        if (in_sys_dir(s, "ti99"))    return ti99_play;
         if (got > 0 && md_cartridge(head, (u32)got, size))
             return md_play;
         if (got >= 16 && size >= 18u * 2352u && head[0] == 0x00 && head[1] == 0xFF && head[2] == 0xFF &&
             head[3] == 0xFF && head[10] == 0xFF && head[11] == 0x00 && (head[15] == 1 || head[15] == 2))
-            return psx_play;
-        if (in_sys_dir(s, "apple2")) return apple2_play;
-        if (in_sys_dir(s, "dragon")) return dragon_play;
-        if (in_sys_dir(s, "coco"))   return coco_play;
-        if (in_sys_dir(s, "cv"))     return cv_play;
-        if (in_sys_dir(s, "m5"))     return m5_play;
+            return cd_player_for(s, 0, 1);
+        if (in_sys_dir(s, "apple2"))  return apple2_play;
+        if (in_sys_dir(s, "dragon"))  return dragon_play;
+        if (in_sys_dir(s, "coco"))    return coco_play;
+        if (in_sys_dir(s, "cv"))      return cv_play;
+        if (in_sys_dir(s, "m5"))      return m5_play;
+        if (in_sys_dir(s, "pv1000"))  return pv1000_play;
+        if (in_sys_dir(s, "arcadia")) return arcadia_play;
+        if (in_sys_dir(s, "vc4000"))  return vc4000_play;
+        const char *bn = s;
+        for (const char *q = s; *q; q++)
+            if (*q == '/' || *q == '\\' || *q == ':')
+                bn = q + 1;
+        if (in_sys_dir(s, "astro") && !((bn[0] | 32) == 'a' && (bn[1] | 32) == 's' && (bn[2] | 32) == 't' &&
+            (bn[3] | 32) == 'r' && (bn[4] | 32) == 'o' && bn[5] == '.'))
+            return astro_play;
+        if (in_sys_dir(s, "studio2") && !((bn[0] | 32) == 's' && (bn[1] | 32) == 't' && (bn[2] | 32) == 'u' &&
+            (bn[3] | 32) == 'd' && (bn[4] | 32) == 'i' && (bn[5] | 32) == 'o' && bn[6] == '2' && bn[7] == '.'))
+            return studio2_play;
+        if (in_sys_dir(s, "scv") && !((bn[0] | 32) == 's' && (bn[1] | 32) == 'c' && (bn[2] | 32) == 'v' && bn[3] == '_'))
+            return scv_play;
         const char *cwd = disk_cwd();
         for (const char *q = cwd; *q; q++)
             if ((q[0] | 32) == 'm' && (q[1] | 32) == 'e' && (q[2] | 32) == 'g' && (q[3] | 32) == 'a' &&

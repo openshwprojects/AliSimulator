@@ -68,6 +68,8 @@
 #include "md.h"
 #include "z80.h"
 
+u8 g_m68k_shared_optab[65536];
+
 typedef signed char s8;
 
 #define INLINE static inline __attribute__((always_inline))
@@ -100,6 +102,7 @@ static u8 sram_kind;                    /* 0 none, 1 odd bytes, 2 even bytes, 3 
 static u8 sram_on, sram_dirty, sram_battery;
 static u8 protection;                   /* an unlicensed cartridge's: 1 Super Mario World (Taiwan) */
 static u8 pal, overseas;
+static const struct md_addon *addon;
 static u32 lines = 262;
 static u32 cycles_hi;                   /* 68000 cycles of the frames before this one */
 static char info[96];
@@ -217,7 +220,8 @@ static void idle_branch(u32 at)
     } else {
         return;
     }
-    if (t + len != at || (a & 0xFFFFFF) < 0xE00000)
+    u32 a24 = a & 0xFFFFFF;
+    if (t + len != at || (a24 < 0xE00000 && !(addon && ((a24 & 0xFFFFC0) == 0xA12000 || (a24 & 0xFFFFC0) == 0xA15100))))
         return;
     if (m.clock < run_until)
         m.clock = run_until;
@@ -331,7 +335,7 @@ static u16 status_read(void)
 static u16 bus_word(u32 a)              /* the 68000's bus as DMA reads it (ROM and RAM) */
 {
     const u8 *p = rmap[(a >> 16) & 0xFF];
-    return p ? *(const u16 *)(p + (a & 0xFFFE)) : 0;
+    return p ? *(const u16 *)(p + (a & 0xFFFE)) : (addon ? (u16)addon->io_read(a & 0xFFFFFE, 2, m.clock) : 0);
 }
 
 static void data_store(u16 v)
@@ -514,6 +518,8 @@ static u8 bus_byte(u32 a)               /* the 68000's bus as the Z80's window r
     const u8 *p = rmap[a >> 16];
     if (p)
         return p[(a & 0xFFFF) ^ 1];
+    if (addon && a < 0x800000)
+        return (u8)addon->io_read(a, 1, m.clock);
     return 0xFF;
 }
 
@@ -662,7 +668,7 @@ static u32 io_read(u32 a, int size)
         if (o < 0x20) {
             u32 r = (o >> 1) & 15;
             if (r == 0)
-                v = (overseas ? 0x80 : 0) | (pal ? 0x40 : 0) | 0x20;
+                v = (overseas ? 0x80 : 0) | (pal ? 0x40 : 0) | (addon ? 0 : 0x20);
             else if (r <= 3)
                 v = pad_read((int)r - 1);
             else if (r <= 6)
@@ -675,10 +681,14 @@ static u32 io_read(u32 a, int size)
             v = (m.op & 0xFEFE) | (z_busreq ? 0 : 0x0101);
             return size == 1 ? ((a & 1) ? v & 0xFF : v >> 8) : v;
         }
+        if (addon && o >= 0x2000)
+            return addon->io_read(a, size, m.clock);
         if (protection == 1 && o == 0x3000)    /* (its protection register) */
             return 0x1C;
         return size == 1 ? 0xFF : 0xFFFF;
     }
+    if (addon && page < 0xA0)
+        return addon->io_read(a, size, m.clock);
     if (sram_kind && sram_on && a >= (sram_lo & ~1u) && a <= (sram_hi | 1u)) {
         u32 v;
         if (sram_kind == 3)
@@ -750,6 +760,8 @@ static void io_write(u32 a, u32 v, int size)
         } else if ((o & 0xFF00) == 0x1200) {
             z_catch_up(m.clock);
             z_set_reset(!bit);
+        } else if (addon && o >= 0x2000) {
+            addon->io_write(a, v, size, m.clock);
         } else if (o == 0x30F1 || (o == 0x30F0 && size == 2)) {
             if (rom_size > 0x200000 && sram_kind) {
                 sram_on = (u8)(v & 1);
@@ -759,6 +771,10 @@ static void io_write(u32 a, u32 v, int size)
             banks[(o - 0x30F1) >> 1] = (u8)v;
             map_memory();
         }
+        return;
+    }
+    if (addon && page < 0xA0) {
+        addon->io_write(a, v, size, m.clock);
         return;
     }
     if (sram_kind && sram_on && a >= (sram_lo & ~1u) && a <= (sram_hi | 1u)) {
@@ -784,6 +800,12 @@ static void map_memory(void)
 {
     for (int i = 0; i < 256; i++)
         rmap[i] = wmap[i] = 0;
+    if (addon) {
+        addon->map(rmap, wmap);
+        for (int i = 0xE0; i < 0x100; i++)
+            rmap[i] = wmap[i] = (u8 *)ram;
+        return;
+    }
     for (u32 i = 0; i < 0x40; i++) {
         u32 p = big ? (u32)banks[i >> 3] * 8 + (i & 7) : i;
         if (p >= rom_pages) {           /* (a ROM of 2^n pages seen again; beyond the rest: nothing) */
@@ -1031,6 +1053,8 @@ static void draw_line(int y)
     if (!(reg[1] & 0x40)) {             /* the picture switched off: the background colour */
         for (int x = 0; x < out_w; x++)
             out[x] = back;
+        if (addon && addon->draw_line)
+            addon->draw_line(y, out, width, back);
         return;
     }
     int im2 = (reg[12] & 0x06) == 0x06, sh = (reg[12] & 0x08) != 0;
@@ -1126,6 +1150,8 @@ static void draw_line(int y)
     if (reg[0] & 0x20)                  /* the left column blanked */
         for (int x = 0; x < 8; x++)
             out[x] = back;
+    if (addon && addon->draw_line)
+        addon->draw_line(y, out, width, back);
     for (int x = width; x < out_w; x++)
         out[x] = back;
 }
@@ -1143,6 +1169,8 @@ static void run_line(u32 l, s32 to)
 {
     run_until = to;
     cpu_run(to);
+    if (addon)
+        addon->run_line(m.clock);
     z_catch_up(to);
     (void)l;
 }
@@ -1161,6 +1189,8 @@ void md_frame(u16 pad, u16 *picture)
             in_vblank = 0;
             odd_frame = (reg[12] & 2) ? odd_frame ^ 1 : 0;
         }
+        if (addon && addon->scanline)
+            addon->scanline((int)line, h);
         if ((int)line <= h) {
             if (--hcounter < 0) {
                 hcounter = reg[10];
@@ -1180,6 +1210,8 @@ void md_frame(u16 pad, u16 *picture)
             z.irq = 1;
             run_until = line_end(line);
             cpu_run(run_until);
+            if (addon)
+                addon->run_line(m.clock);
             z_catch_up_z((line_start + VINT_DELAY) * 7 / 15 + Z80_INT_LENGTH);
             z.irq = 0;
         }
@@ -1187,6 +1219,8 @@ void md_frame(u16 pad, u16 *picture)
         ym_run(line * LINE_MCLK + LINE_MCLK);
     }
     s32 frame = line_end(lines - 1);
+    if (addon)
+        addon->end_frame(frame);
     m.clock -= frame;
     z.cycles -= (s32)(lines * Z80_LINE);
     dma_busy_until = dma_busy_until > frame ? dma_busy_until - frame : 0;
@@ -1908,6 +1942,8 @@ int md_audio(s16 *out, int max)
     int n = 0;
     while (n < max && snd.tail != snd.head)
         out[n++] = snd.ring[snd.tail++ & (RING - 1)];
+    if (addon && n > 0)
+        addon->mix_audio(out, n, snd.rate);
     return n;
 }
 
@@ -1968,6 +2004,8 @@ void md_reset(void)
     for (int i = 0; i < 8; i++)
         banks[i] = (u8)i;
     sram_on = sram_kind != 0 && rom_size <= 0x200000;
+    if (addon)
+        addon->reset(ram);
     map_memory();
     z80_init(&z);
     z.read = z_read;
@@ -2015,7 +2053,7 @@ int md_cartridge(const u8 *head, u32 n, u32 size)
     return 0;
 }
 
-const char *md_load(u8 *image, u32 size, int region)
+static void md_once(void)
 {
     static int ready;
     if (!ready) {
@@ -2024,6 +2062,35 @@ const char *md_load(u8 *image, u32 size, int region)
             nib_swap[i] = (u8)((i >> 4) | (i & 15) << 4);
         ready = 1;
     }
+}
+
+void md_remap(void)
+{
+    map_memory();
+}
+
+void md_attach_addon(const struct md_addon *ext, int pal_mode, int overseas_mode, const char *title)
+{
+    md_once();
+    addon = ext;
+    rom = 0;
+    rom_size = rom_pages = 0;
+    big = 0;
+    sram_kind = sram_on = sram_battery = sram_dirty = 0;
+    protection = 0;
+    pal = (u8)(pal_mode != 0);
+    overseas = (u8)(overseas_mode != 0);
+    lines = pal ? 313 : 262;
+    if (snd.rate)
+        snd.step = (pal ? 53203424u : 53693175u) / YM_SAMPLE;
+    put(info, title ? title : "Sega CD");
+    md_reset();
+}
+
+const char *md_load(u8 *image, u32 size, int region)
+{
+    md_once();
+    addon = 0;
     int kind = md_cartridge(image, size, size);
     u32 skip = kind == 2 || kind == 3 ? 512 : 0;
     if (kind == 3 || kind == 4) {       /* interleaved: 16 KB blocks, the odd bytes' 8 KB, then the even ones' */

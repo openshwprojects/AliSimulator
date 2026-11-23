@@ -549,6 +549,31 @@ int coco_play(const char *path, u32 frames, const char *script);    /* 'coco': a
 int dragon_play(const char *path, u32 frames, const char *script);  /* 'dragon': a Dragon 32/64 PAL Pak, binary or tape (.ccc, .rom, .bin, .cas; "": BASIC) */
 int cv_play(const char *path, u32 frames, const char *script);      /* 'cv': a VTech CreatiVision / Dick Smith Wizzard cartridge (.cv, .rom, .bin) */
 int m5_play(const char *path, u32 frames, const char *script);      /* 'm5': a Sord M5 / CGL M5 cartridge (.m5, .rom, .bin) */
+int pv1000_play(const char *path, u32 frames, const char *script);  /* 'pv1000': a Casio PV-1000 cartridge (.pv, .bin, .rom) */
+int astro_play(const char *path, u32 frames, const char *script);   /* 'astro': a Bally Astrocade cartridge (.ast, .bin, .rom; "": built-in) */
+int arcadia_play(const char *path, u32 frames, const char *script); /* 'arcadia': an Emerson Arcadia 2001 cartridge (.a2k, .bin) */
+int vc4000_play(const char *path, u32 frames, const char *script);  /* 'vc4000': an Interton VC 4000 cartridge (.vc4, .bin) */
+int studio2_play(const char *path, u32 frames, const char *script); /* 'studio2': an RCA Studio II cartridge (.st2, .bin; "": built-in) */
+int scv_play(const char *path, u32 frames, const char *script);     /* 'scv': an Epoch Super Cassette Vision cartridge (.scv, .bin, .cart) */
+int vb_play(const char *path, u32 frames, const char *script);      /* 'vb': a Nintendo Virtual Boy cartridge (.vb, .vboy) */
+void vb_play_mode(int mode);                                        /* 0 Red/Black, 1 Red/Cyan 3D, 2 White, 3 Amber */
+int sgx_play(const char *path, u32 frames, const char *script);     /* 'sgx': an NEC SuperGrafx HuCard (.sgx) */
+int pcecd_play(const char *path, u32 frames, const char *script);   /* 'pcecd': a PC Engine CD / TurboGrafx-CD / Arcade Card disc (.cue, .iso) */
+int segacd_play(const char *path, u32 frames, const char *script);  /* 'segacd': a Sega CD / Mega-CD disc (.cue, .iso) */
+void segacd_play_region(int region);                                /* 'J', 'U', 'E', 0 auto */
+int bbc_play(const char *path, u32 frames, const char *script);     /* 'bbc': a BBC Micro Model B / Acorn Electron disk or tape (.ssd, .dsd, .uef; "": BASIC) */
+int ti99_play(const char *path, u32 frames, const char *script);    /* 'ti99': a TI-99/4A cartridge (.rpk, .bin, .zip; "": TI BASIC) */
+int oric_play(const char *path, u32 frames, const char *script);    /* 'oric': an Oric-1 / Oric Atmos tape or disk (.tap, .dsk; "": BASIC) */
+int plus4_play(const char *path, u32 frames, const char *script);   /* 'plus4': a Commodore Plus/4 or C16 program or tape (.prg, .tap, .t64; "": BASIC) */
+int zx81_play(const char *path, u32 frames, const char *script);    /* 'zx81': a Sinclair ZX81 program (.p, .81; "": 16K BASIC) */
+int pc88_play(const char *path, u32 frames, const char *script);    /* 'pc88': an NEC PC-8801mkIISR disk (.d88, .n88; "": N88-BASIC) */
+int mz700_play(const char *path, u32 frames, const char *script);   /* 'mz700': a Sharp MZ-700 tape (.mzt, .mzf; "": 1Z-009A Monitor) */
+int x1_play(const char *path, u32 frames, const char *script);      /* 'x1': a Sharp X1 disk or tape (.d88, .2d, .tap; "": IPL/BASIC) */
+int s32x_play(const char *path, u32 frames, const char *script);    /* 's32x': a Sega 32X cartridge (.32x, .bin) */
+void s32x_play_region(int region);                                  /* 'J', 'U', 'E', 0 auto */
+int cd32_play(const char *path, u32 frames, const char *script);    /* 'cd32': a Commodore Amiga CD32 disc (.cue, .iso) */
+int cps2_play(const char *path, u32 frames, const char *script);    /* 'cps2': a Capcom CPS-2 QSound arcade game (.zip, .cps2) */
+int arcade_play(const char *path, u32 frames, const char *script);  /* 'arcade': a Golden-Age Z80 arcade game (.zip; "": built-in) */
 
 /* view.c: the picture viewer (image.c decodes JPEG, PNG, GIF, BMP) */
 #define IMAGE_WORK_PHYS  0x06900000u      /* the picture as shown, and the decoder's memory (a progressive JPEG's */

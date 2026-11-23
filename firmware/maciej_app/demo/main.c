@@ -534,6 +534,28 @@ static void cmd_coco(int argc, char **argv);
 static void cmd_dragon(int argc, char **argv);
 static void cmd_cv(int argc, char **argv);
 static void cmd_m5(int argc, char **argv);
+static void cmd_pv1000(int argc, char **argv);
+static void cmd_astro(int argc, char **argv);
+static void cmd_arcadia(int argc, char **argv);
+static void cmd_vc4000(int argc, char **argv);
+static void cmd_studio2(int argc, char **argv);
+static void cmd_scv(int argc, char **argv);
+static void cmd_vb(int argc, char **argv);
+static void cmd_sgx(int argc, char **argv);
+static void cmd_pcecd(int argc, char **argv);
+static void cmd_segacd(int argc, char **argv);
+static void cmd_bbc(int argc, char **argv);
+static void cmd_ti99(int argc, char **argv);
+static void cmd_oric(int argc, char **argv);
+static void cmd_plus4(int argc, char **argv);
+static void cmd_zx81(int argc, char **argv);
+static void cmd_pc88(int argc, char **argv);
+static void cmd_mz700(int argc, char **argv);
+static void cmd_x1(int argc, char **argv);
+static void cmd_s32x(int argc, char **argv);
+static void cmd_cd32(int argc, char **argv);
+static void cmd_cps2(int argc, char **argv);
+static void cmd_arcade(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_rf(int argc, char **argv);
 static void cmd_history(int argc, char **argv);
@@ -636,7 +658,7 @@ static const struct command commands[] = {
     {"explorer", "[n:][path]", "a file explorer on the TV, in the current directory (cd follows it, it follows cd; "
      "with a path: cd there first): USB keyboard Up/Down/PgUp/PgDn/Home/End, Enter opens (a picture: the viewer, "
      "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .trd, .scl, .a26, .prg, .t64, .d64, .crt, "
-     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .pce, .col, .mx1, .mx2, .dsk, .do, .po, .nib, .ccc, .cas, .cv, .m5, .cpr, .a0, .20, .60, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
+     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .32x, .pce, .sgx, .col, .mx1, .mx2, .dsk, .do, .po, .nib, .ccc, .cas, .cv, .m5, .pv, .ast, .a2k, .vc4, .st2, .scv, .vb, .vboy, .ssd, .dsd, .uef, .rpk, .p, .81, .d88, .2d, .mzt, .mzf, .cpr, .a0, .20, .60, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
      "Backspace goes up, "
      "'/' or Tab types a path, Esc: the console again; the mouse clicks, double-clicks, scrolls; on FAT: F2 "
      "renames, F7 makes a directory, Delete / F8 deletes (y), F5 / F6 mark a file to copy / move and Insert "
@@ -657,7 +679,8 @@ static const struct command commands[] = {
      cmd_cd},
     {"pwd", "", "the current directory", cmd_pwd},
     {"cat", "[n:]path", "a text file on a USB disk (Ctrl-C stops it)", cmd_cat},
-    {"nes", "[-f frames] [-k script] <file>", "play a NES cartridge file (.nes) on the TV: arrows or W A S D, "
+    {"nes", "[-f frames] [-k script] <file>", "play a NES / Famicom cartridge file (.nes: NROM..MMC5 plus Konami VRC6, "
+     "VRC7 FM, Namco 163 wavetable & Sunsoft 5B expansion audio) on the TV: arrows or W A S D, "
      "X = A, Z = B, Enter = Start, Tab = Select; Ctrl-C or Esc ends (-f: that many frames as fast as they go, "
      "then the picture's CRC-32; -k: a test's buttons, frame:hex,...).  Every player also takes its game in a "
      ".zip (the largest file in it that is no text or picture) or a .gz", cmd_nes},
@@ -738,7 +761,7 @@ static const struct command commands[] = {
      cmd_vectrex},
     {"fds", "[-f frames] [-k script] <file>", "play a Famicom Disk System disk image (.fds: 1-8 sides) on the TV with "
      "its RP2C33 wavetable + FM sound (disksys.rom in fds/ if present, else built-in BIOS): arrows or W A S D, X = A, "
-     "Z = B, Enter = Start, Tab = Select, Q = flip disk side; disk writes kept in a .sav file; the options of nes",
+     "Z = B, Enter = Start, Tab = Select, Q / F6 = flip disk side; disk writes kept in a .sav file; the options of nes",
      cmd_fds},
     {"ngp", "[-f frames] [-k script] <file>", "play a Neo Geo Pocket or Neo Geo Pocket Color cartridge (.ngp, .ngc) on "
      "the TV with its Z80 + T6W28 + DAC sound (ngp_bios.rom in ngp/ if present, else built-in BIOS): arrows or W A S D, "
@@ -817,6 +840,77 @@ static const struct command commands[] = {
     {"m5", "[-f frames] [-k script] <file>", "play a Sord M5 / CGL M5 cartridge (.m5, .rom, .bin: 4K..20K) on the TV "
      "(256 x 192 three times as large, 60 Hz NTSC; 3.58 MHz Z80 + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, SN76489AN 48 kHz "
      "sound, built-in Monitor BIOS or m5.rom in m5/): USB keyboard or joystick; Esc ends", cmd_m5},
+    {"pv1000", "[-f frames] [-k script] <file>", "play a Casio PV-1000 cartridge (.pv, .bin, .rom: 8K..32K) on the TV "
+     "(256 x 192 three times as large, 59.92 Hz; 3.58 MHz Z80, NEC D65010G031 VDP, 3-channel square/XOR 48 kHz PSG): "
+     "the keys and the options of nes", cmd_pv1000},
+    {"astro", "[-f frames] [-k script] [file]", "play a Bally Astrocade cartridge (.ast, .bin, .rom) or no file for "
+     "built-in Star Blaster on the TV (320 x 204 three times as large, 59.92 Hz; 1.79 MHz Z80, Data Chip Magic-RAM "
+     "blitter + 256-colour split palette, 3-voice + vibrato + LFSR 48 kHz synth, built-in BIOS or astro.bin in astro/): "
+     "X = Trigger, Z/C = Knob, 0..9 = keypad", cmd_astro},
+    {"arcadia", "[-f frames] [-k script] <file>", "play an Emerson Arcadia 2001 cartridge (.a2k, .bin) on the TV (160 x "
+     "208, 640 x 624, 59.92 Hz; Signetics 2650 CPU + 2637 UVI video & 48 kHz tone/noise sound): arrows/WASD, X/Z = fire, "
+     "Enter = Start, Tab = Option, 0..9 = keypad", cmd_arcadia},
+    {"vc4000", "[-f frames] [-k script] <file>", "play an Interton VC 4000 cartridge (.vc4, .bin) on the TV (192 x 224, "
+     "768 x 672, 50 Hz PAL; Signetics 2650 CPU + 2636 PVI programmable grid/objects/score LEDs & 48 kHz tone sound): "
+     "arrows/WASD, X/Z = fire, Enter = Start, Tab = Select, 0..9 = keypad", cmd_vc4000},
+    {"studio2", "[-f frames] [-k script] [file]", "play an RCA Studio II cartridge (.st2, .bin) or no file for built-in "
+     "COSMAC Interceptor on the TV (256 x 128, 1024 x 640, 60 Hz; COSMAC CDP1802 + CDP1861 Pixie DMA + CA555 48 kHz "
+     "tone, built-in BIOS or studio2.bin in studio2/): arrows/WASD, X/Z = fire (5), 0..9 = keypad", cmd_studio2},
+    {"scv", "[-f frames] [-k script] <file>", "play an Epoch Super Cassette Vision cartridge (.scv, .bin, .cart: 8K..128K) "
+     "on the TV (192 x 222, 768 x 666, 59.92 Hz; 4 MHz NEC uPD7801G, Epoch TV-1 VDP, uPD1771C 48 kHz sound, .sav SRAM, "
+     "built-in BIOS + font or upd7801g.s01 in scv/): X/Z = triggers, Enter = En, Tab = Cl, P = Pause, 0..9 = keypad",
+     cmd_scv},
+    {"vb", "[-m 0|1|2|3] [-f frames] [-k script] <file>", "play a Nintendo Virtual Boy cartridge (.vb, .vboy) on the TV "
+     "(384 x 224 three times as large: 1152 x 672, 50.27 Hz; 20 MHz 32-bit NEC V810 RISC, VIP 32 Worlds/OBJ dual-eye "
+     "display, 6-ch VSU 48 kHz sound, 64 KB .sav SRAM; -m 0 Red/Black, 1 Red/Cyan 3D Anaglyph, 2 White, 3 Amber, V/F2/M "
+     "cycles live): WASD/arrows + IJKL/TFGH, X = A, Z = B, Q/E = L/R", cmd_vb},
+    {"sgx", "[-f frames] [-k script] <file>", "play an NEC SuperGrafx HuCard (.sgx) on the TV (256/320/512 x 240; "
+     "HuC6280, dual HuC6270 VDCs with 128 KB VRAM + HuC6202 VPC priority/window mixer, 32 KB WRAM, 6-ch 48 kHz PSG, "
+     "2 KB .sav BRAM): the keys and the options of pce", cmd_sgx},
+    {"pcecd", "[-f frames] [-k script] <file>", "play a PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card disc (.cue, .iso) "
+     "on the TV (streamed CD-ROM + Redbook CD-DA + OKI MSM5205 ADPCM + 6-ch PSG @ 48 kHz, 256 KB Super System Card 3.0 + "
+     "2 MB Arcade Card RAM, 2 KB .sav BRAM; built-in System Card 3.0 BIOS or syscard3.pce in pcecd/)", cmd_pcecd},
+    {"segacd", "[-r j|u|e] [-f frames] [-k script] <file>", "play a Sega CD / Mega-CD disc (.cue, .iso) on the TV "
+     "(7.67 MHz Main-68000 + 12.5 MHz Sub-68000 + Z80, 512 KB PRG-RAM, 256 KB Word-RAM, Stamp ASIC scaling/rotation, "
+     "LC89510 CDC + CDD, YM2612 + PSG + Ricoh RF5C164 8-ch PCM + Redbook CD-DA @ 48 kHz, 8 KB .sav BRAM; built-in "
+     "CDBIOS or bios_CD_{U,E,J}.bin in segacd/)", cmd_segacd},
+    {"bbc", "[-f frames] [-k script] [file]", "a BBC Micro Model B / Acorn Electron on the TV: a disk (.ssd, .dsd) or "
+     "tape (.uef, *_el.uef for Electron), or no file for Teletext Mode 7 BASIC (2 MHz 6502, 6845 CRTC + Video ULA "
+     "Modes 0-6 + SAA5050 Teletext Mode 7 + Electron ULA, dual 6522 VIAs, SN76489 48 kHz sound; built-in OS/BASIC or "
+     "os12.rom + basic2.rom in bbc/)", cmd_bbc},
+    {"ti99", "[-f frames] [-k script] [file]", "a Texas Instruments TI-99/4A on the TV: a cartridge (.rpk, .bin, .zip "
+     "with c/d/g or 378/379i banked ROMs), or no file for TI BASIC (3 MHz 16-bit TMS9900 CPU, GROM + CRU, 32 KB "
+     "Expansion RAM, TMS9918A VDP, TMS9919 48 kHz sound)", cmd_ti99},
+    {"oric", "[-f frames] [-k script] [file]", "a Tangerine Oric-1 / Oric Atmos 48K on the TV: a tape (.tap) or disk "
+     "(.dsk), or no file for Atmos BASIC (1 MHz 6502, HCS10017 240 x 224 serial-attribute ULA Text & Hires, 6522 VIA, "
+     "AY-3-8912 48 kHz sound; built-in Atmos ROM or basic11b.rom in oric/)", cmd_oric},
+    {"plus4", "[-f frames] [-k script] [file]", "a Commodore Plus/4 or C16 on the TV: a program (.prg, .t64) or raw "
+     "tape (.tap), or no file for BASIC V3.5 (1.77 MHz MOS 7501/8501, 64 KB RAM, MOS 7360/8360 TED 121-colour video & "
+     "2-voice 48 kHz sound)", cmd_plus4},
+    {"zx81", "[-f frames] [-k script] [file]", "a Sinclair ZX81 16K on the TV: a snapshot/tape (.p, .81), or no file "
+     "for Sinclair 16K BASIC (3.25 MHz Z80, ULA live D_FILE 256 x 192 display, 50 Hz FRAMES VSync, 48 kHz pulse sound)",
+     cmd_zx81},
+    {"pc88", "[-f frames] [-k script] [file]", "an NEC PC-8801mkIISR on the TV: a floppy disk (.d88, .n88), or no file "
+     "for N88-BASIC (4 MHz Z80, 64 KB RAM + 48 KB 3-plane 640 x 200 GVRAM + Text VRAM, Sub-CPU disk HLE, Yamaha YM2203 "
+     "OPN FM/SSG + beeper @ 48 kHz)", cmd_pc88},
+    {"mz700", "[-f frames] [-k script] [file]", "a Sharp MZ-700 on the TV: a tape (.mzt, .mzf), or no file for 1Z-009A "
+     "Monitor (3.58 MHz Z80, 64 KB banked RAM, 320 x 200 GRB CGROM display, Intel 8253 PIT 48 kHz sound)", cmd_mz700},
+    {"x1", "[-f frames] [-k script] [file]", "a Sharp X1 on the TV: a disk or tape (.d88, .2d, .tap), or no file for "
+     "X1 IPL/BASIC (4 MHz Z80, 16-bit I/O 48 KB GVRAM + 256-char colour PCG, 2 MHz AY-3-8910 @ 48 kHz)", cmd_x1},
+    {"s32x", "[-r j|u|e] [-f frames] [-k script] <file>", "play a Sega 32X cartridge (.32x, .bin) on the TV (7.67 MHz "
+     "68000 + dual 23 MHz 32-bit Hitachi SH-2 RISC CPUs + Z80, 256 KB SDRAM, SuperVDP 256-colour/RLE/15-bit Direct "
+     "framebuffers, stereo 12-bit PWM + YM2612 + PSG @ 48 kHz, .sav SRAM; built-in MARS BIOS or 32x_{g,m,s}_bios.bin)",
+     cmd_s32x},
+    {"cd32", "[-f frames] [-k script] <file>", "play a Commodore Amiga CD32 disc (.cue, .iso) on the TV (14.18 MHz "
+     "68EC020-compatible CPU, 2 MB Chip RAM, AGA 8-bitplane 256-colour / HAM8 + 2 MB Blitter + Copper, Akiko $C0CACAFE "
+     "hardware Chunky-to-Planar + CD DMA + 7-button pad, 4-ch Paula + Redbook CD-DA @ 48 kHz, 1 KB .sav NVRAM)",
+     cmd_cd32},
+    {"cps2", "[-f frames] [-k script] <file>", "play a Capcom CPS-2 QSound arcade game (.zip with .key or .03x XOR "
+     "tables, or .cps2) on the TV (384 x 224, 1152 x 672, 59.63 Hz; 16 MHz 68000 + Z80, Z-priority multi-slice "
+     "tilemaps/sprites, 16-channel DL-1425 QSound DSP @ 48 kHz, 128-byte 93C46 .sav EEPROM)", cmd_cps2},
+    {"arcade", "[-f frames] [-k script] [file]", "play a Golden-Age Z80 arcade .zip romset (Namco Pac-Man / Ms. Pac-Man "
+     "WSG, Namco Galaxian starfield, Konami Frogger / Scramble dual-Z80 + AY-3-8910, Nintendo Donkey Kong DMA + DAC) "
+     "or no file for built-in Maze Chomp on the TV (224 x 288 / 256, 60.6 Hz, 48 kHz sound)", cmd_arcade},
     {"rf", "<init|tune|status|scan|services|ts|spectrum|live|...>", "the aerial input (DVB-T): init the MxL603 tuner and the "
      "chip's demodulator, tune <MHz|channel> [6|7|8], status (lock, level, quality), scan [vhf|all|<from> <to>], "
      "services (the multiplex's channel names), ts <s> [file] [-p pids] (the stream's PIDs, or recorded to a .ts "
@@ -1695,11 +1789,11 @@ static void cmd_amiga(int argc, char **argv)
 static void cmd_megadrive(int argc, char **argv)
 {
     int region = 0;
-    /* (-r j|u|e: the console -- anywhere among the options, each of which has a value; taken out of the
-       words for cmd_game) */
-    for (int i = 1; i + 1 < argc && argv[i][0] == '-'; i += 2) {
-        if (!str_eq(argv[i], "-r"))
-            continue;
+    /* (-r j|u|e: the console -- anywhere among the options; taken out of the words for cmd_game) */
+    for (int i = 1; i < argc && argv[i][0] == '-'; ) {
+        if (str_eq(argv[i], "-s")) { i++; continue; }
+        if (i + 1 >= argc) break;
+        if (!str_eq(argv[i], "-r")) { i += 2; continue; }
         char c = (char)(argv[i + 1][0] & ~32);
         if (c != 'J' && c != 'U' && c != 'E') {
             uprintf("-r: j (Japan, NTSC), u (America, NTSC) or e (Europe, PAL)\n");
@@ -1813,9 +1907,10 @@ static void cmd_intv(int argc, char **argv)
 static void cmd_psx(int argc, char **argv)
 {
     int region = 0;
-    for (int i = 1; i + 1 < argc && argv[i][0] == '-'; i += 2) {
-        if (!str_eq(argv[i], "-r"))
-            continue;
+    for (int i = 1; i < argc && argv[i][0] == '-'; ) {
+        if (str_eq(argv[i], "-s")) { i++; continue; }
+        if (i + 1 >= argc) break;
+        if (!str_eq(argv[i], "-r")) { i += 2; continue; }
         char c = (char)(argv[i + 1][0] & ~32);
         if (c != 'J' && c != 'U' && c != 'E') {
             uprintf("-r: j (Japan, NTSC 60 Hz), u (America, NTSC 60 Hz) or e (Europe, PAL 50 Hz)\n");
@@ -1975,6 +2070,95 @@ static void cmd_coco(int argc, char **argv)   { cmd_opt_basic(argc, argv, coco_p
 static void cmd_dragon(int argc, char **argv) { cmd_opt_basic(argc, argv, dragon_play); }
 static void cmd_cv(int argc, char **argv)     { cmd_game(argc, argv, cv_play); }
 static void cmd_m5(int argc, char **argv)     { cmd_game(argc, argv, m5_play); }
+static void cmd_pv1000(int argc, char **argv)  { cmd_game(argc, argv, pv1000_play); }
+static void cmd_astro(int argc, char **argv)   { cmd_opt_basic(argc, argv, astro_play); }
+static void cmd_arcadia(int argc, char **argv) { cmd_game(argc, argv, arcadia_play); }
+static void cmd_vc4000(int argc, char **argv)  { cmd_game(argc, argv, vc4000_play); }
+static void cmd_studio2(int argc, char **argv) { cmd_opt_basic(argc, argv, studio2_play); }
+static void cmd_scv(int argc, char **argv)     { cmd_game(argc, argv, scv_play); }
+static void cmd_sgx(int argc, char **argv)     { cmd_game(argc, argv, sgx_play); }
+static void cmd_pcecd(int argc, char **argv)   { cmd_game(argc, argv, pcecd_play); }
+
+static void cmd_vb(int argc, char **argv)
+{
+    int mode = 0;
+    for (int i = 1; i < argc && argv[i][0] == '-'; ) {
+        if (str_eq(argv[i], "-s")) { i++; continue; }
+        if (i + 1 >= argc) break;
+        if (!str_eq(argv[i], "-m")) { i += 2; continue; }
+        u32 v = 0;
+        if (!parse_u32(argv[i + 1], &v) || v > 3) {
+            uprintf("-m: 0 (Red/Black), 1 (Red/Cyan 3D Anaglyph), 2 (White) or 3 (Amber)\n");
+            return;
+        }
+        mode = (int)v;
+        for (int k = i; k + 2 < argc; k++)
+            argv[k] = argv[k + 2];
+        argc -= 2;
+        break;
+    }
+    vb_play_mode(mode);
+    cmd_game(argc, argv, vb_play);
+    vb_play_mode(0);
+}
+
+static void cmd_segacd(int argc, char **argv)
+{
+    int region = 0;
+    for (int i = 1; i < argc && argv[i][0] == '-'; ) {
+        if (str_eq(argv[i], "-s")) { i++; continue; }
+        if (i + 1 >= argc) break;
+        if (!str_eq(argv[i], "-r")) { i += 2; continue; }
+        char c = (char)(argv[i + 1][0] & ~32);
+        if (c != 'J' && c != 'U' && c != 'E') {
+            uprintf("-r: j (Japan, NTSC), u (America, NTSC) or e (Europe, PAL)\n");
+            return;
+        }
+        region = c;
+        for (int k = i; k + 2 < argc; k++)
+            argv[k] = argv[k + 2];
+        argc -= 2;
+        break;
+    }
+    segacd_play_region(region);
+    cmd_game(argc, argv, segacd_play);
+    segacd_play_region(0);
+}
+
+static void cmd_bbc(int argc, char **argv)    { cmd_opt_basic(argc, argv, bbc_play); }
+static void cmd_ti99(int argc, char **argv)   { cmd_opt_basic(argc, argv, ti99_play); }
+static void cmd_oric(int argc, char **argv)   { cmd_opt_basic(argc, argv, oric_play); }
+static void cmd_plus4(int argc, char **argv)  { cmd_opt_basic(argc, argv, plus4_play); }
+static void cmd_zx81(int argc, char **argv)   { cmd_opt_basic(argc, argv, zx81_play); }
+static void cmd_pc88(int argc, char **argv)   { cmd_opt_basic(argc, argv, pc88_play); }
+static void cmd_mz700(int argc, char **argv)  { cmd_opt_basic(argc, argv, mz700_play); }
+static void cmd_x1(int argc, char **argv)     { cmd_opt_basic(argc, argv, x1_play); }
+static void cmd_cd32(int argc, char **argv)   { cmd_game(argc, argv, cd32_play); }
+static void cmd_cps2(int argc, char **argv)   { cmd_game(argc, argv, cps2_play); }
+static void cmd_arcade(int argc, char **argv) { cmd_opt_basic(argc, argv, arcade_play); }
+
+static void cmd_s32x(int argc, char **argv)
+{
+    int region = 0;
+    for (int i = 1; i < argc && argv[i][0] == '-'; ) {
+        if (str_eq(argv[i], "-s")) { i++; continue; }
+        if (i + 1 >= argc) break;
+        if (!str_eq(argv[i], "-r")) { i += 2; continue; }
+        char c = (char)(argv[i + 1][0] & ~32);
+        if (c != 'J' && c != 'U' && c != 'E') {
+            uprintf("-r: j (Japan, NTSC), u (America, NTSC) or e (Europe, PAL)\n");
+            return;
+        }
+        region = c;
+        for (int k = i; k + 2 < argc; k++)
+            argv[k] = argv[k + 2];
+        argc -= 2;
+        break;
+    }
+    s32x_play_region(region);
+    cmd_game(argc, argv, s32x_play);
+    s32x_play_region(0);
+}
 
 static void cmd_rf(int argc, char **argv)
 {

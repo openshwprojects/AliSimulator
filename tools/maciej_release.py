@@ -235,6 +235,63 @@ COMMANDS = {
         "m5": "[-f frames] [-k script] <file.m5|file.rom|file.bin>: a Sord M5 / CGL M5 cartridge (4K..20K) on the TV "
               "(256 x 192 three times as large, 60 Hz NTSC; 3.58 MHz Z80 + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, "
               "SN76489AN 48 kHz sound, built-in Monitor BIOS or m5.rom in m5/)",
+        "pv1000": "[-f frames] [-k script] <file.pv|file.bin|file.rom>: a Casio PV-1000 cartridge (8K..32K) on the TV "
+                  "(256 x 192 three times as large, 59.92 Hz; 3.58 MHz Z80, NEC D65010G031 VDP, 3-ch square/XOR 48 kHz PSG)",
+        "astro": "[-f frames] [-k script] [file.ast|file.bin|file.rom]: a Bally Astrocade cartridge (or no file for "
+                 "built-in Star Blaster) on the TV (320 x 204 three times as large, 59.92 Hz; 1.79 MHz Z80, Data Chip "
+                 "Magic-RAM blitter + split palette, 3-voice + vibrato + LFSR 48 kHz synth, built-in BIOS or astro.bin)",
+        "arcadia": "[-f frames] [-k script] <file.a2k|file.bin>: an Emerson Arcadia 2001 cartridge on the TV (160 x 208, "
+                   "640 x 624, 59.92 Hz; Signetics 2650 CPU + 2637 UVI video & 48 kHz tone/noise sound, 12-key pad)",
+        "vc4000": "[-f frames] [-k script] <file.vc4|file.bin>: an Interton VC 4000 cartridge on the TV (192 x 224, "
+                  "768 x 672, 50 Hz PAL; Signetics 2650 CPU + 2636 PVI programmable grid/objects/score LEDs & 48 kHz sound)",
+        "studio2": "[-f frames] [-k script] [file.st2|file.bin]: an RCA Studio II cartridge (or no file for built-in "
+                   "COSMAC Interceptor) on the TV (256 x 128, 1024 x 640, 60 Hz; COSMAC CDP1802 + CDP1861 Pixie DMA + "
+                   "CA555 48 kHz tone, built-in BIOS or studio2.bin in studio2/)",
+        "scv": "[-f frames] [-k script] <file.scv|file.bin|file.cart>: an Epoch Super Cassette Vision cartridge (8K..128K) "
+               "on the TV (192 x 222, 768 x 666, 59.92 Hz; 4 MHz NEC uPD7801G, Epoch TV-1 VDP, uPD1771C 48 kHz sound, "
+               ".sav SRAM, built-in BIOS + font or upd7801g.s01 in scv/)",
+        "vb": "[-m 0|1|2|3] [-f frames] [-k script] <file.vb|file.vboy>: a Nintendo Virtual Boy cartridge on the TV "
+              "(384 x 224 three times as large: 1152 x 672, 50.27 Hz; 20 MHz NEC V810 RISC, VIP 32 Worlds/OBJ dual-eye "
+              "display with live Red/Black, Red/Cyan 3D Anaglyph, White & Amber modes, 6-ch VSU 48 kHz sound, 64 KB .sav)",
+        "sgx": "[-f frames] [-k script] <file.sgx>: an NEC SuperGrafx HuCard on the TV (256/320/512 x 240; HuC6280, "
+               "dual HuC6270 VDCs with 128 KB VRAM + HuC6202 VPC priority/window mixer, 32 KB WRAM, 6-ch 48 kHz PSG, .sav)",
+        "pcecd": "[-f frames] [-k script] <file.cue|file.iso>: a PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card disc on "
+                 "the TV (streamed CD-ROM + Redbook CD-DA + OKI MSM5205 ADPCM + 6-ch PSG @ 48 kHz, 256 KB System Card 3.0 "
+                 "+ 2 MB Arcade Card RAM, 2 KB .sav BRAM, built-in System Card 3.0 BIOS or syscard3.pce in pcecd/)",
+        "segacd": "[-r j|u|e] [-f frames] [-k script] <file.cue|file.iso>: a Sega CD / Mega-CD disc on the TV (7.67 MHz "
+                  "Main-68000 + 12.5 MHz Sub-68000 + Z80, 512 KB PRG-RAM, 256 KB Word-RAM, Stamp ASIC scaling/rotation, "
+                  "LC89510 CDC + CDD, YM2612 + PSG + Ricoh RF5C164 8-ch PCM + Redbook CD-DA @ 48 kHz, 8 KB .sav BRAM, "
+                  "built-in CDBIOS or bios_CD_{U,E,J}.bin in segacd/)",
+        "bbc": "[-f frames] [-k script] [file.ssd|file.dsd|file.uef]: a BBC Micro Model B / Acorn Electron on the TV "
+               "(2 MHz 6502, MC6845 CRTC + Video ULA Modes 0-6 + SAA5050 Teletext Mode 7 + Electron ULA, dual 6522 VIAs, "
+               "SN76489 48 kHz sound; built-in OS/BASIC or os12.rom + basic2.rom in bbc/; no file: Mode 7 BASIC)",
+        "ti99": "[-f frames] [-k script] [file.rpk|file.bin|file.zip]: a Texas Instruments TI-99/4A on the TV (3 MHz "
+                "16-bit TMS9900 CPU, GROM + CRU, 32 KB Expansion RAM, 378/379i banking, TMS9918A VDP, TMS9919 48 kHz "
+                "sound; no file: TI BASIC)",
+        "oric": "[-f frames] [-k script] [file.tap|file.dsk]: a Tangerine Oric-1 / Oric Atmos 48K on the TV (1 MHz 6502, "
+                "HCS10017 240 x 224 serial-attribute ULA Text & Hires, 6522 VIA, AY-3-8912 48 kHz sound; no file: BASIC)",
+        "plus4": "[-f frames] [-k script] [file.prg|file.tap|file.t64]: a Commodore Plus/4 or C16 on the TV (1.77 MHz "
+                 "MOS 7501/8501, 64 KB RAM, MOS 7360/8360 TED 121-colour video & 2-voice 48 kHz sound; no file: BASIC)",
+        "zx81": "[-f frames] [-k script] [file.p|file.81]: a Sinclair ZX81 16K on the TV (3.25 MHz Z80, ULA live D_FILE "
+                "256 x 192 display, 50 Hz FRAMES VSync, 48 kHz pulse sound; no file: Sinclair 16K BASIC)",
+        "pc88": "[-f frames] [-k script] [file.d88|file.n88]: an NEC PC-8801mkIISR on the TV (4 MHz Z80, 64 KB RAM + "
+                "48 KB 640 x 200 3-plane GVRAM + Text VRAM, Sub-CPU disk HLE, YM2203 OPN FM/SSG + beeper @ 48 kHz)",
+        "mz700": "[-f frames] [-k script] [file.mzt|file.mzf]: a Sharp MZ-700 on the TV (3.58 MHz Z80, 64 KB banked RAM, "
+                 "320 x 200 GRB CGROM display, Intel 8253 PIT 48 kHz sound; no file: 1Z-009A Monitor)",
+        "x1": "[-f frames] [-k script] [file.d88|file.2d|file.tap]: a Sharp X1 on the TV (4 MHz Z80, 16-bit I/O 48 KB "
+              "GVRAM + 256-char colour PCG, 2 MHz AY-3-8910 @ 48 kHz; no file: X1 IPL/BASIC)",
+        "s32x": "[-r j|u|e] [-f frames] [-k script] <file.32x|file.bin>: a Sega 32X cartridge on the TV (7.67 MHz 68000 "
+                "+ dual 23 MHz 32-bit Hitachi SH-2 RISC CPUs + Z80, 256 KB SDRAM, SuperVDP 256-colour/RLE/15-bit Direct "
+                "framebuffers, stereo 12-bit PWM + YM2612 + PSG @ 48 kHz, .sav SRAM)",
+        "cd32": "[-f frames] [-k script] <file.cue|file.iso>: a Commodore Amiga CD32 disc on the TV (14.18 MHz 68EC020 "
+                "+ 2 MB Chip RAM, AGA 8-bitplane 256-colour / HAM8 + 2 MB Blitter + Copper, Akiko $C0CACAFE hardware "
+                "Chunky-to-Planar + CD DMA + 7-button pad, 4-ch Paula + Redbook CD-DA @ 48 kHz, 1 KB .sav NVRAM)",
+        "cps2": "[-f frames] [-k script] <file.zip|file.cps2>: a Capcom CPS-2 QSound arcade game on the TV (16 MHz "
+                "68000 + Z80, .key Feistel & .03x XOR decryption, Z-priority tilemaps/sprites, 16-ch QSound DSP @ 48 kHz, "
+                "93C46 .sav EEPROM)",
+        "arcade": "[-f frames] [-k script] [file.zip]: a Golden-Age Z80 arcade game on the TV (Namco Pac-Man / Ms. "
+                  "Pac-Man WSG, Namco Galaxian starfield, Konami Frogger / Scramble dual-Z80 + AY-3-8910, Nintendo Donkey "
+                  "Kong DMA + DAC; no file: built-in Maze Chomp)",
         "rf": "the aerial input: the MxL603 tuner (I2C 0x60) and the S3811's DVB-T demodulator as dump.bin drives "
               "them -- init, tune <MHz|channel> [6|7|8], status (lock, level, quality, errors, the stream's "
               "parameters), scan, services (the multiplex's channel names), ts <s> [file] (the PIDs, or a .ts "

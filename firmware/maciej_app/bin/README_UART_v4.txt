@@ -346,6 +346,98 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
                        Sord M5 / CGL M5 na TV (256 x 192 x3, 60 Hz NTSC, Z80
                        3,58 MHz + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, dzwiek
                        SN76489AN 48 kHz, wbudowany Monitor BIOS albo m5.rom)
+  pv1000 [-f klatki] <plik.pv|plik.bin|plik.rom>
+                       Casio PV-1000 na TV (256 x 192 x3, 59,92 Hz, Z80 3,58 MHz,
+                       NEC D65010G031 VDP, 3-kanalowy dzwiek PSG 48 kHz)
+  astro [-f klatki] [plik.ast|plik.bin|plik.rom]
+                       Bally Astrocade na TV (320 x 204 x3, 59,92 Hz, Z80 1,79
+                       MHz, blitter Data Chip Magic-RAM + dzielona paleta 256
+                       kolorow, 3-glosowy syntezator 48 kHz, klawiatura 0..9;
+                       wbudowany BIOS i gra Star Blaster albo astro.bin w astro/)
+  arcadia [-f klatki] <plik.a2k|plik.bin>
+                       Emerson Arcadia 2001 na TV (640 x 624, 59,92 Hz, Signetics
+                       2650 + 2637 UVI wideo i dzwiek 48 kHz, klawiatura 0..9)
+  vc4000 [-f klatki] <plik.vc4|plik.bin>
+                       Interton VC 4000 na TV (768 x 672, 50 Hz PAL, Signetics
+                       2650 + 2636 PVI siatka/obiekty/LED i dzwiek 48 kHz, 0..9)
+  studio2 [-f klatki] [plik.st2|plik.bin]
+                       RCA Studio II na TV (1024 x 640, 60 Hz, COSMAC CDP1802 +
+                       CDP1861 Pixie DMA + ton CA555 48 kHz, klawiatura 0..9;
+                       wbudowany BIOS i gra albo studio2.bin w studio2/)
+  scv [-f klatki] <plik.scv|plik.bin|plik.cart>
+                       Epoch Super Cassette Vision na TV (768 x 666, 59,92 Hz,
+                       NEC uPD7801G 4 MHz, Epoch TV-1 VDP, dzwiek uPD1771C 48 kHz,
+                       zapis SRAM .sav, wbudowany BIOS albo upd7801g.s01 w scv/)
+  vb [-m 0|1|2|3] [-f klatki] <plik.vb|plik.vboy>
+                       Nintendo Virtual Boy na TV (384 x 224 x3 = 1152 x 672,
+                       50,27 Hz, 32-bit NEC V810 RISC 20 MHz, VIP 32 Worlds/OBJ,
+                       tryby 0 Red/Black, 1 Red/Cyan 3D Anaglyph, 2 White, 3 Amber
+                       pod V/F2/M, 6-kanalowy dzwiek VSU 48 kHz, 64 KB SRAM .sav)
+  sgx [-f klatki] <plik.sgx>
+                       NEC SuperGrafx na TV (256/320/512 x 240, HuC6280, podwojny
+                       HuC6270 VDC 128 KB VRAM + HuC6202 VPC, 32 KB WRAM, PSG
+                       48 kHz, zapis BRAM 2 KB w .sav)
+  pcecd [-f klatki] <plik.cue|plik.iso>
+                       PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card na TV
+                       (plyty .cue/.bin i .iso czytane strumieniowo, Redbook CD-DA
+                       + OKI MSM5205 ADPCM + 6-ch PSG 48 kHz, 256 KB System Card
+                       3.0 + 2 MB Arcade Card RAM, 2 KB BRAM .sav; wbudowany BIOS
+                       System Card 3.0 albo syscard3.pce w pcecd/)
+  segacd [-r j|u|e] [-f klatki] <plik.cue|plik.iso>
+                       Sega CD / Mega-CD na TV (Main-68000 7,67 MHz + Sub-68000
+                       12,5 MHz + Z80, 512 KB PRG-RAM, 256 KB Word-RAM, Stamp ASIC
+                       skalowanie/obrot 3D, LC89510 CDC + CDD, YM2612 + PSG +
+                       Ricoh RF5C164 8-ch PCM + Redbook CD-DA 48 kHz, 8 KB BRAM
+                       .sav; wbudowany CDBIOS albo bios_CD_U/E/J.bin w segacd/)
+  bbc [-f klatki] [plik.ssd|plik.dsd|plik.uef]
+                       BBC Micro Model B / Acorn Electron na TV (2 MHz 6502,
+                       MC6845 CRTC + Video ULA tryby 0..6 + SAA5050 Teletext
+                       Mode 7 + Electron ULA, 2x 6522 VIA, dzwiek SN76489 48 kHz;
+                       wbudowany OS/BASIC albo os12.rom + basic2.rom; bez pliku: BASIC)
+  ti99 [-f klatki] [plik.rpk|plik.bin|plik.zip]
+                       Texas Instruments TI-99/4A na TV (16-bit TMS9900 3 MHz,
+                       GROM + CRU, 32 KB Expansion RAM, bankowanie 378/379i,
+                       TMS9918A VDP, dzwiek TMS9919 48 kHz; bez pliku: TI BASIC)
+  oric [-f klatki] [plik.tap|plik.dsk]
+                       Tangerine Oric-1 / Oric Atmos 48K na TV (6502 1 MHz,
+                       HCS10017 ULA 240 x 224 Text + Hires, 6522 VIA, dzwiek
+                       AY-3-8912 48 kHz; bez pliku: Atmos BASIC)
+  plus4 [-f klatki] [plik.prg|plik.tap|plik.t64]
+                       Commodore Plus/4 i C16 na TV (MOS 7501/8501 1,77 MHz,
+                       64 KB RAM, MOS 7360/8360 TED 121 kolorow + 2-glosowy
+                       dzwiek 48 kHz; bez pliku: BASIC V3.5)
+  zx81 [-f klatki] [plik.p|plik.81]
+                       Sinclair ZX81 16K na TV (Z80 3,25 MHz, ULA D_FILE
+                       256 x 192, VSync FRAMES 50 Hz, dzwiek 48 kHz; bez pliku: BASIC)
+  pc88 [-f klatki] [plik.d88|plik.n88]
+                       NEC PC-8801mkIISR na TV (Z80 4 MHz, 64 KB RAM + 48 KB
+                       640 x 200 GVRAM + Text VRAM, Sub-CPU dysk HLE, dzwiek
+                       Yamaha YM2203 OPN FM/SSG + beeper 48 kHz; bez pliku: N88-BASIC)
+  mz700 [-f klatki] [plik.mzt|plik.mzf]
+                       Sharp MZ-700 na TV (Z80 3,58 MHz, 64 KB RAM, wideo GRB
+                       320 x 200 CGROM, dzwiek Intel 8253 PIT 48 kHz; bez pliku: Monitor)
+  x1 [-f klatki] [plik.d88|plik.2d|plik.tap]
+                       Sharp X1 na TV (Z80 4 MHz, 16-bit I/O 48 KB GVRAM +
+                       kolorowy PCG 256 znakow, dzwiek AY-3-8910 48 kHz)
+  s32x [-r j|u|e] [-f klatki] <plik.32x|plik.bin>
+                       Sega 32X na TV (68000 7,67 MHz + podwojny 32-bit Hitachi
+                       SH-2 RISC 23 MHz + Z80, 256 KB SDRAM, SuperVDP 256 kolorow
+                       / RLE / 15-bit Direct, stereo 12-bit PWM + YM2612 + PSG
+                       48 kHz, zapis .sav SRAM; wbudowany MARS BIOS)
+  cd32 [-f klatki] <plik.cue|plik.iso>
+                       Commodore Amiga CD32 na TV (68EC020 14,18 MHz, 2 MB Chip
+                       RAM, AGA 8 bitplanow 256 kolorow / HAM8 + 2 MB Blitter +
+                       Copper, Akiko $C0CACAFE sprzetowe Chunky-to-Planar + CD DMA
+                       + pad 7-przyciskowy, Paula 4-ch + Redbook CD-DA 48 kHz,
+                       zapis 1 KB NVRAM w .sav)
+  cps2 [-f klatki] <plik.zip|plik.cps2>
+                       Capcom CPS-2 QSound na TV (384 x 224 x3, 68000 16 MHz +
+                       Z80, deszyfrowanie .key Feistel i tablic XOR .03x, warstwy
+                       Z-priority, 16-kanalowy QSound DSP 48 kHz, EEPROM 93C46 .sav)
+  arcade [-f klatki] [plik.zip]
+                       Zloty Wiek Automatow Z80 na TV (Namco Pac-Man / Ms. Pac-Man
+                       WSG, Namco Galaxian, Konami Frogger / Scramble 2xZ80 +
+                       AY-3-8910, Nintendo Donkey Kong DMA + DAC; bez pliku: gra)
   snd <polecenie>      dzwiek (prototyp): snd init, snd beep [Hz] [ms] (ton
                        testowy), snd vol 0..100, snd status, snd stop -
                        48 kHz na HDMI (po "video init") i na SCART (L/P)

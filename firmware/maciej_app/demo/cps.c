@@ -1768,6 +1768,16 @@ static void cps_branch(u32 at)
         m.clock += ((rem + 9) / 10) * 10;
         return;
     }
+    if (at > m.pc && at - m.pc == 4u && !(m.pc & 1u)) {
+        u32 op = cps_fetch(m.pc);
+        /* Capcom CPS-2 engine spinloop: TST.B/W/L d16(A5); BEQ.S *-4 */
+        if (op == 0x4A2Du || op == 0x4A6Du || op == 0x4AADu) {
+            s32 per = (op == 0x4AADu) ? 26 : 22;
+            s32 rem = S.slice_end_cyc - m.clock;
+            m.clock += ((rem + per - 1) / per) * per;
+            return;
+        }
+    }
     if (at > m.pc && at - m.pc == 6u && !(m.pc & 1u)) {
         u32 op = cps_fetch(m.pc);
         if ((op == 0x4A39u || op == 0x4A79u || op == 0x4AB9u) && cps_fetch(m.pc + 2u) == 0x00FFu) {

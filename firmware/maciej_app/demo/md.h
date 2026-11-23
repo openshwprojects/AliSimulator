@@ -80,4 +80,19 @@ u16 md_cram(int i);
 u16 md_vsram(int i);
 void md_registers(u32 r[18]);
 
+/* Sega CD / Mega-CD expansion unit attachment hooks (used by segacd.c) */
+struct md_addon {
+    void (*reset)(u16 *main_ram32kw);
+    void (*map)(u8 *rmap[256], u8 *wmap[256]);
+    u32  (*io_read)(u32 a, int size, s32 main_cyc);
+    void (*io_write)(u32 a, u32 v, int size, s32 main_cyc);
+    void (*run_line)(s32 main_cyc);
+    void (*end_frame)(s32 main_frame_cyc);
+    void (*mix_audio)(s16 *samples, int count, u32 rate);
+    void (*draw_line)(int y, u16 *out, int width, u16 md_bg);
+    void (*scanline)(int y, int active_h);
+};
+void md_attach_addon(const struct md_addon *ext, int pal_mode, int overseas_mode, const char *title);
+void md_remap(void);
+
 #endif

@@ -1,17 +1,12 @@
-#ifndef SCV_H
-#define SCV_H
+#ifndef SCV_EMU_H
+#define SCV_EMU_H
 
-#ifdef SCV_HOST
-#include <stdint.h>
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef int8_t   s8;
-typedef int16_t  s16;
-typedef int32_t  s32;
-#else
-#include "types.h"
-#endif
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef signed char s8;
+typedef signed short s16;
+typedef signed int s32;
 
 /*
  * Epoch Super Cassette Vision (1984, Japan / Yeno SCV in Europe):
@@ -45,5 +40,7 @@ int  scv_audio(s16 *out, int max);
 
 u32  scv_save_sram(u8 *dst, u32 max);
 void scv_load_sram(const u8 *src, u32 len);
+u8  *scv_save_ram(u32 *size, int *battery);
+int  scv_save_changed(void);
 
 #endif

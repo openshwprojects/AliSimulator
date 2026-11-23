@@ -107,11 +107,51 @@ static u8 pads[2], pad_shift[2], strobe, save_changed;
 #define FDS_TRACK_LEN  72704u
 #define FDS_BYTE_CYC   149u
 
+struct nes_exp_ws {
+    /* Shared VRC6 / VRC7 prescaler + counter IRQ */
+    u8  vrc_irq_latch, vrc_irq_cnt, vrc_irq_en, vrc_irq_ack_en, vrc_irq_cyc;
+    s32 vrc_presc;
+
+    /* Konami VRC6 (Mappers 24 & 26) 2x Pulse + Sawtooth */
+    u8  vrc6_p_ctrl[2], vrc6_p_en[2], vrc6_p_seq[2], vrc6_freq_ctrl;
+    u16 vrc6_p_per[2], vrc6_p_div[2];
+    u8  vrc6_saw_rate, vrc6_saw_en, vrc6_saw_step, vrc6_saw_acc;
+    u16 vrc6_saw_per, vrc6_saw_div;
+
+    /* Konami VRC7 (Mapper 85) 6-ch 2-op OPLL FM */
+    u8  vrc7_reg_sel;
+    u8  vrc7_regs[0x40];
+    u32 vrc7_phase[6][2];
+    s32 vrc7_env[6][2];                 /* 0..127 attenuation (127 = silent) */
+    u8  vrc7_eg_state[6][2];            /* 0=Off, 1=Att, 2=Dec, 3=Sus, 4=Rel */
+    s16 vrc7_prev[6][2];
+    u32 vrc7_eg_cnt;
+    u16 vrc7_logsin[256];
+    u16 vrc7_exp[256];
+    u8  vrc7_tabs_ready;
+
+    /* Namco 163 (Mapper 19) 8-ch Wavetable + 15-bit Cycle IRQ */
+    u8  n163_ram[128];
+    u8  n163_addr, n163_chr_nt_dis, n163_irq_en, n163_cur_ch;
+    u16 n163_irq;
+    s32 n163_ch_out[8];
+
+    /* Sunsoft 5B / FME-7 (Mapper 69) 3-ch AY + 16-bit Cycle IRQ */
+    u8  fme7_cmd, fme7_irq_en, fme7_cnt_en, s5b_sel;
+    u16 fme7_irq_cnt;
+    u8  s5b_regs[16], s5b_out[3];
+    u16 s5b_cnt[3], s5b_ncnt;
+    u32 s5b_lfsr;
+
+    u32 snd_level;
+};
+
 struct fds_mem {
     u8 prg_ram[0x8000];                 /* 32 KB writable program RAM at $6000..$DFFF */
     u8 bios[0x2000];                    /* 8 KB System BIOS ROM at $E000..$FFFF */
     u8 tmp_side[FDS_SIDE_RAW];          /* Scratch side buffer during WriteFile / AppendFile */
     u8 tracks[FDS_MAX_SIDES][FDS_TRACK_LEN];
+    struct nes_exp_ws exp;              /* Zero-.bss workspace for VRC6 / VRC7 / N163 / 5B */
 };
 
 #ifdef __mips__
@@ -160,6 +200,14 @@ static void __attribute__((noinline)) fds_write_reg(u16 a, u8 v);
 static void __attribute__((noinline)) fds_snd_step(u32 cyc);
 static u32  __attribute__((noinline)) fds_hle_step(void);
 static void __attribute__((noinline)) fds_reset_hw(void);
+static void __attribute__((noinline)) exp_reset_hw(void);
+static void __attribute__((noinline)) exp_irq_tick(u32 cyc);
+static u32  __attribute__((noinline)) exp_snd_period(void);
+static void __attribute__((noinline)) exp_snd_step(u32 cyc);
+static void __attribute__((noinline)) exp_mapper_write(u16 a, u8 v);
+static u8   __attribute__((noinline)) n163_low_read(u16 a);
+static void __attribute__((noinline)) n163_low_write(u16 a, u8 v);
+static u8 exp_irq_active;
 static u32 cpu_dot;                     /* where in the frame the 6502 is, in dots (at the instruction's start) */
 static u8 op_cycles;                    /* the instruction being run: its cycles (a read is in its last one) */
 static u8 vbl_seen;                     /* this frame's vertical blank flag was read before line 241 came */
@@ -364,6 +412,13 @@ static void mapper_write(u16 a, u8 v)
         if (a >= 0xC000)
             prg16(0, v);
         break;
+    case 19:
+    case 24:
+    case 26:
+    case 69:
+    case 85:
+        exp_mapper_write(a, v);
+        break;
     }
 }
 
@@ -404,6 +459,9 @@ static void mapper_start(void)
     else if (cart.mapper == 11 || cart.mapper == 34 || cart.mapper == 66) {
         prg16(0, 0);
         prg16(1, 1);
+    } else if (cart.mapper == 19 || cart.mapper == 24 || cart.mapper == 26 ||
+               cart.mapper == 69 || cart.mapper == 85) {
+        exp_reset_hw();
     }
 }
 
@@ -696,8 +754,8 @@ static const u16 noise_periods[16] = {4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 
 
 static void snd_mix(void)
 {
-    snd.level = (u32)pulse_mix[vc.out[0] + vc.out[1]] + tnd_mix[3 * vc.out[2] + 2 * vc.out[3] + vc.dmc_level] +
-                (fds.active ? fds.snd_level : 0u);
+    u32 ext = fds.active ? fds.snd_level : FDS_M->exp.snd_level;
+    snd.level = (u32)pulse_mix[vc.out[0] + vc.out[1]] + tnd_mix[3 * vc.out[2] + 2 * vc.out[3] + vc.dmc_level] + ext;
 }
 
 /* the sample made: its average level, the filters, into the ring */
@@ -801,8 +859,15 @@ static void snd_run(u32 n)
                 }
             }
             if (!c5) {
-                fds_snd_step(8);
-                c5 = (!fds.active || fds.wave_halt || fds.carr_freq == 0) ? IDLE : 8u;
+                if (fds.active) {
+                    fds_snd_step(8);
+                    c5 = (fds.wave_halt || fds.carr_freq == 0) ? IDLE : 8u;
+                } else {
+                    u32 per = exp_snd_period();
+                    if (per != IDLE)
+                        exp_snd_step(per);
+                    c5 = per;
+                }
             }
             snd_mix();
             level = snd.level;
@@ -870,7 +935,12 @@ static void snd_refresh(void)
     }
     if (!vc.dmc_left)
         vc.count[4] = IDLE;
-    vc.count[5] = (!fds.active || fds.wave_halt || fds.carr_freq == 0) ? IDLE : (vc.count[5] > 8u ? 8u : vc.count[5]);
+    if (fds.active) {
+        vc.count[5] = (fds.wave_halt || fds.carr_freq == 0) ? IDLE : (vc.count[5] > 8u ? 8u : vc.count[5]);
+    } else {
+        u32 per = exp_snd_period();
+        vc.count[5] = (per == IDLE) ? IDLE : (vc.count[5] > per ? per : vc.count[5]);
+    }
     snd_mix();
 }
 
@@ -1178,6 +1248,8 @@ static u8 rd(u16 a)
         return wram_low[a & 0x1FFF];
     if (fds.active && a >= 0x4020)
         return fds_read_reg(a);
+    if (!fds.active && cart.mapper == 19 && a >= 0x4800)
+        return n163_low_read(a);
     if (a == 0x4016 || a == 0x4017) {
         int i = a & 1;
         u8 b = strobe ? (pads[i] & 1) : (pad_shift[i] & 1);
@@ -1220,12 +1292,16 @@ static void wr(u16 a, u8 v)
         }
     } else if (fds.active && a >= 0x4020) {
         fds_write_reg(a, v);
+    } else if (!fds.active && cart.mapper == 19 && a >= 0x4800) {
+        n163_low_write(a, v);
     } else if (a == 0x4014) {                   /* the sprites, 256 bytes copied from a page of memory */
         for (int i = 0; i < 256; i++)
             oam[(u8)(ppu.oam_addr + i)] = rd((u16)(v << 8 | i));
         cpu.cycles += 513;
         cpu_dot += 513 * 3;
         apu_tick(513);
+        if (exp_irq_active)
+            exp_irq_tick(513);
         if (fds.active) {
             fds.dram_starve = 0;
             fds_sync(cpu.cycles);
@@ -1629,6 +1705,8 @@ static void run_to(u32 dot)
         cpu_dot += (cpu.cycles - before) * 3;   /* (a sprite copy inside the instruction counted itself) */
         cpu_dot -= (cpu.cycles - before - c) * 3;
         apu_tick(c);
+        if (exp_irq_active)
+            exp_irq_tick(c);
         if (fds.active && (fds.irq_enabled || (fds.ctrl & 1u)))
             fds_sync(cpu.cycles);
     }
@@ -1779,9 +1857,14 @@ const char *nes_load(u8 *image, u32 size)
     static const struct {
         u8 number;
         const char *name;
-    } known[] = {{0, "NROM"}, {1, "MMC1"}, {2, "UxROM"}, {3, "CNROM"}, {4, "MMC3"}, {7, "AxROM"},
-                 {11, "Color Dreams"}, {34, "BNROM"}, {66, "GxROM"}, {71, "Camerica"}};
+    } known[] = {
+        {0, "NROM"}, {1, "MMC1"}, {2, "UxROM"}, {3, "CNROM"}, {4, "MMC3"}, {7, "AxROM"},
+        {11, "Color Dreams"}, {19, "Namco 163"}, {24, "Konami VRC6"}, {26, "Konami VRC6b"},
+        {34, "BNROM"}, {66, "GxROM"}, {69, "Sunsoft 5B"}, {71, "Camerica"}, {85, "Konami VRC7"}
+    };
     fds.active = 0;
+    exp_irq_active = 0;
+    FDS_M->exp.snd_level = 0;
     if (size < 16 || image[0] != 'N' || image[1] != 'E' || image[2] != 'S' || image[3] != 0x1A)
         return "not a NES cartridge file (no iNES header)";
     u32 prg = image[4] * 0x4000u, chr = image[5] * 0x2000u, at = 16;
@@ -1802,7 +1885,7 @@ const char *nes_load(u8 *image, u32 size)
     char *p = text(info, "mapper ");
     p = number(p, mapper);
     if (!name) {
-        text(p, ": a cartridge board this player does not know (it knows 0, 1, 2, 3, 4, 7, 11, 34, 66, 71)");
+        text(p, ": a cartridge board this player does not know (it knows 0..4, 7, 11, 19, 24, 26, 34, 66, 69, 71, 85)");
         return info;
     }
     cart.prg = image + at;
@@ -3328,6 +3411,8 @@ const char *fds_load(u8 *image, u32 size)
     fds.ext_bios = saved_bios;
     fds.ext_bios_size = saved_bios_sz;
     fds.active = 1u;
+    exp_irq_active = 0u;
+    FDS_M->exp.snd_level = 0u;
     fds.num_sides = (u8)sides;
     fds.disk_dirty = 0u;
 
@@ -3381,4 +3466,603 @@ void fds_frame(u16 pad, u8 *picture)
     }
 
     nes_frame((u8)pad, 0, picture);
+}
+
+/* ============================================================================
+   NES Expansion Audio & Japanese Cartridge Mappers:
+   - Konami VRC6 (Mappers 24 & 26): 2x 8-duty Pulse + 6-bit Sawtooth + VRC IRQ
+   - Konami VRC7 (Mapper 85): 6-channel 2-operator OPLL FM + VRC IRQ
+   - Namco 163 / N163 (Mapper 19): 1..8-ch Wavetable RAM + 15-bit Cycle IRQ
+   - Sunsoft 5B / FME-7 (Mapper 69): 3-ch AY-3-8910 + 16-bit Cycle IRQ
+   ============================================================================ */
+
+static const u8 vrc7_rom_patches[15][8] = {
+    {0x03, 0x21, 0x05, 0x06, 0xE8, 0x81, 0x42, 0x27}, /* 1: Bell */
+    {0x13, 0x41, 0x14, 0x0D, 0xD8, 0xF6, 0x23, 0x12}, /* 2: Guitar */
+    {0x11, 0x11, 0x08, 0x08, 0xFA, 0xB2, 0x20, 0x12}, /* 3: Piano */
+    {0x31, 0x61, 0x0C, 0x07, 0xA8, 0x64, 0x61, 0x27}, /* 4: Flute */
+    {0x32, 0x21, 0x1E, 0x06, 0xE1, 0x76, 0x01, 0x28}, /* 5: Clarinet */
+    {0x02, 0x01, 0x06, 0x00, 0xA3, 0xE2, 0xF4, 0xF4}, /* 6: Rattling Bell */
+    {0x21, 0x61, 0x1D, 0x07, 0x82, 0x81, 0x11, 0x07}, /* 7: Trumpet */
+    {0x23, 0x21, 0x22, 0x17, 0xA2, 0x72, 0x01, 0x17}, /* 8: Reed Organ */
+    {0x35, 0x11, 0x25, 0x00, 0x40, 0x73, 0x72, 0x01}, /* 9: Soft Bell */
+    {0xB5, 0x01, 0x0F, 0x0F, 0xA8, 0xA5, 0x51, 0x02}, /* A: Xylophone */
+    {0x17, 0xC1, 0x24, 0x07, 0xF8, 0xF8, 0x22, 0x12}, /* B: Vibraphone */
+    {0x71, 0x23, 0x11, 0x06, 0x65, 0x74, 0x18, 0x16}, /* C: Brass */
+    {0x01, 0x02, 0xD3, 0x05, 0xC9, 0x95, 0x03, 0x02}, /* D: Bass Guitar */
+    {0x61, 0x63, 0x0C, 0x00, 0x94, 0xC0, 0x33, 0xF6}, /* E: Synthesizer */
+    {0x21, 0x72, 0x0D, 0x00, 0xC1, 0xD5, 0x56, 0x06}  /* F: Chorus */
+};
+
+static void vrc7_init_tables(struct nes_exp_ws *e)
+{
+    if (e->vrc7_tabs_ready)
+        return;
+    /* Quarter-sine -> -256 * log2(sin((i + 0.5) * pi / 512)) via integer Bhaskara */
+    for (u32 i = 0; i < 256u; i++) {
+        /* x in [1..511] representing angle / pi = x / 1024 */
+        u32 x = 2u * i + 1u;
+        u32 p = x * (1024u - x);                 /* max at x=512: 262144 */
+        u32 num = 16u * p;                       /* <= 4,194,304 */
+        u32 den = 5u * 262144u - 4u * p;         /* [262144 .. 1310720] */
+        u32 s16 = (num << 11) / (den >> 5);      /* sin in 0..65536 */
+        if (s16 == 0u) s16 = 1u;
+        if (s16 > 65536u) s16 = 65536u;
+        u32 sh = 0u, v = s16;
+        while (v < 32768u && sh < 16u) {
+            v <<= 1;
+            sh++;
+        }
+        /* v in [32768..65536]: frac = (65536 - v) / 32768 in [0..1] */
+        u32 frac = ((65536u - v) * 355u) >> 15;  /* ~256 * -log2(v/65536) */
+        u32 ls = sh * 256u + frac;
+        if (ls > 4095u) ls = 4095u;
+        e->vrc7_logsin[i] = (u16)ls;
+
+        /* Exp2 table: 1024 * 2^((255 - i) / 256) in [1024..2047] */
+        u32 f = 255u - i;
+        u32 ex = 1024u + ((f * (710u + ((f * 314u) >> 8))) >> 10);
+        if (ex > 2047u) ex = 2047u;
+        e->vrc7_exp[i] = (u16)ex;
+    }
+    e->vrc7_tabs_ready = 1u;
+}
+
+static s32 vrc7_op_out(const struct nes_exp_ws *e, u32 phase10, u32 att_log, u8 half_rect)
+{
+    u32 p = phase10 & 0x3FFu;
+    if (half_rect && (p & 0x200u))
+        return 0;
+    u32 idx = (p & 0x100u) ? (0xFFu - (p & 0xFFu)) : (p & 0xFFu);
+    u32 lv = (u32)e->vrc7_logsin[idx] + att_log;
+    if (lv >= (13u << 8))
+        return 0;
+    s32 mag = (s32)((u32)e->vrc7_exp[lv & 0xFFu] << 1) >> (lv >> 8);
+    return (p & 0x200u) ? -mag : mag;
+}
+
+static void exp_update_irq_flag(const struct nes_exp_ws *e)
+{
+    exp_irq_active = (e->vrc_irq_en || e->n163_irq_en || e->fme7_cnt_en) ? 1u : 0u;
+}
+
+static void exp_reset_hw(void)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+    u8 tabs_ok = e->vrc7_tabs_ready;
+    for (u32 i = 0; i < sizeof(*e); i++)
+        ((u8 *)e)[i] = 0;
+    e->vrc7_tabs_ready = tabs_ok;
+    if (cart.mapper == 85) {
+        vrc7_init_tables(e);
+        for (int ch = 0; ch < 6; ch++) {
+            e->vrc7_env[ch][0] = 127;
+            e->vrc7_env[ch][1] = 127;
+        }
+    }
+    e->s5b_lfsr = 1u;
+    e->s5b_regs[7] = 0x3Fu;
+    exp_irq_active = 0u;
+    prg8(0, 0);
+    prg8(1, 1);
+    prg8(2, (int)cart.prg8k - 2);
+    prg8(3, -1);
+    chr8(0);
+}
+
+static void vrc_irq_write_ctrl(struct nes_exp_ws *e, u8 v)
+{
+    e->vrc_irq_ack_en = v & 1u;
+    e->vrc_irq_en = (v >> 1) & 1u;
+    e->vrc_irq_cyc = (v >> 2) & 1u;
+    cart.irq = 0;
+    if (e->vrc_irq_en) {
+        e->vrc_irq_cnt = e->vrc_irq_latch;
+        e->vrc_presc = 341;
+    }
+    exp_update_irq_flag(e);
+}
+
+static void vrc_irq_write_ack(struct nes_exp_ws *e)
+{
+    cart.irq = 0;
+    e->vrc_irq_en = e->vrc_irq_ack_en;
+    exp_update_irq_flag(e);
+}
+
+static void exp_irq_tick(u32 cyc)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+    if (e->vrc_irq_en) {
+        if (e->vrc_irq_cyc) {
+            u32 left = cyc;
+            while (left--) {
+                if (e->vrc_irq_cnt == 0xFFu) {
+                    e->vrc_irq_cnt = e->vrc_irq_latch;
+                    cart.irq = 1;
+                } else {
+                    e->vrc_irq_cnt++;
+                }
+            }
+        } else {
+            e->vrc_presc -= (s32)(cyc * 3u);
+            while (e->vrc_presc <= 0) {
+                e->vrc_presc += 341;
+                if (e->vrc_irq_cnt == 0xFFu) {
+                    e->vrc_irq_cnt = e->vrc_irq_latch;
+                    cart.irq = 1;
+                } else {
+                    e->vrc_irq_cnt++;
+                }
+            }
+        }
+    }
+    if (e->n163_irq_en) {
+        u32 next = (u32)e->n163_irq + cyc;
+        if (next >= 0x7FFFu) {
+            e->n163_irq = 0x7FFFu;
+            cart.irq = 1;
+        } else {
+            e->n163_irq = (u16)next;
+        }
+    }
+    if (e->fme7_cnt_en) {
+        u16 prev = e->fme7_irq_cnt;
+        e->fme7_irq_cnt = (u16)(prev - cyc);
+        if (cyc > prev && e->fme7_irq_en)
+            cart.irq = 1;
+    }
+}
+
+static u8 n163_low_read(u16 a)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+    if (a < 0x5000u) {
+        u8 v = e->n163_ram[e->n163_addr & 0x7Fu];
+        if (e->n163_addr & 0x80u)
+            e->n163_addr = (u8)(0x80u | ((e->n163_addr + 1u) & 0x7Fu));
+        return v;
+    }
+    if (a < 0x5800u) {
+        cart.irq = 0;
+        return (u8)e->n163_irq;
+    }
+    if (a < 0x6000u) {
+        cart.irq = 0;
+        return (u8)((e->n163_irq >> 8) | (e->n163_irq_en ? 0x80u : 0u));
+    }
+    return (u8)(a >> 8);
+}
+
+static void n163_low_write(u16 a, u8 v)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+    if (a < 0x5000u) {
+        if (snd.rate)
+            snd_catch(cpu.cycles);
+        e->n163_ram[e->n163_addr & 0x7Fu] = v;
+        if (e->n163_addr & 0x80u)
+            e->n163_addr = (u8)(0x80u | ((e->n163_addr + 1u) & 0x7Fu));
+        if (snd.rate)
+            snd_refresh();
+        return;
+    }
+    if (a < 0x5800u) {
+        cart.irq = 0;
+        e->n163_irq = (u16)((e->n163_irq & 0x7F00u) | v);
+        return;
+    }
+    if (a < 0x6000u) {
+        cart.irq = 0;
+        e->n163_irq = (u16)((e->n163_irq & 0x00FFu) | ((u16)(v & 0x7Fu) << 8));
+        e->n163_irq_en = (v >> 7) & 1u;
+        exp_update_irq_flag(e);
+    }
+}
+
+static void vrc7_write_reg(struct nes_exp_ws *e, u8 reg, u8 v)
+{
+    if (reg >= 0x40u)
+        return;
+    u8 prev = e->vrc7_regs[reg];
+    e->vrc7_regs[reg] = v;
+    if (reg >= 0x20u && reg < 0x26u) {
+        int ch = reg - 0x20;
+        u8 kon_was = (prev >> 4) & 1u;
+        u8 kon_now = (v >> 4) & 1u;
+        if (kon_now && !kon_was) {
+            e->vrc7_phase[ch][0] = 0;
+            e->vrc7_phase[ch][1] = 0;
+            e->vrc7_eg_state[ch][0] = 1u;       /* Attack */
+            e->vrc7_eg_state[ch][1] = 1u;
+        } else if (!kon_now && kon_was) {
+            if (e->vrc7_eg_state[ch][0]) e->vrc7_eg_state[ch][0] = 4u; /* Release */
+            if (e->vrc7_eg_state[ch][1]) e->vrc7_eg_state[ch][1] = 4u;
+        }
+    }
+}
+
+static void exp_mapper_write(u16 a, u8 v)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+    if (cart.mapper == 24 || cart.mapper == 26) {
+        if (cart.mapper == 26)
+            a = (u16)((a & 0xFFFCu) | ((a & 1u) << 1) | ((a >> 1) & 1u));
+        u16 r = a & 0xF003u;
+        if (r >= 0x9000u && r <= 0xB002u && snd.rate)
+            snd_catch(cpu.cycles);
+        switch (r) {
+        case 0x8000: case 0x8001: case 0x8002: case 0x8003:
+            prg16(0, v & 0x0Fu);
+            break;
+        case 0x9000: e->vrc6_p_ctrl[0] = v; break;
+        case 0x9001: e->vrc6_p_per[0] = (u16)((e->vrc6_p_per[0] & 0xF00u) | v); break;
+        case 0x9002:
+            e->vrc6_p_per[0] = (u16)((e->vrc6_p_per[0] & 0x0FFu) | ((u16)(v & 0x0Fu) << 8));
+            e->vrc6_p_en[0] = (v >> 7) & 1u;
+            if (!e->vrc6_p_en[0]) e->vrc6_p_seq[0] = 0u;
+            break;
+        case 0x9003: e->vrc6_freq_ctrl = v; break;
+        case 0xA000: e->vrc6_p_ctrl[1] = v; break;
+        case 0xA001: e->vrc6_p_per[1] = (u16)((e->vrc6_p_per[1] & 0xF00u) | v); break;
+        case 0xA002:
+            e->vrc6_p_per[1] = (u16)((e->vrc6_p_per[1] & 0x0FFu) | ((u16)(v & 0x0Fu) << 8));
+            e->vrc6_p_en[1] = (v >> 7) & 1u;
+            if (!e->vrc6_p_en[1]) e->vrc6_p_seq[1] = 0u;
+            break;
+        case 0xB000: e->vrc6_saw_rate = v & 0x3Fu; break;
+        case 0xB001: e->vrc6_saw_per = (u16)((e->vrc6_saw_per & 0xF00u) | v); break;
+        case 0xB002:
+            e->vrc6_saw_per = (u16)((e->vrc6_saw_per & 0x0FFu) | ((u16)(v & 0x0Fu) << 8));
+            e->vrc6_saw_en = (v >> 7) & 1u;
+            if (!e->vrc6_saw_en) { e->vrc6_saw_step = 0u; e->vrc6_saw_acc = 0u; }
+            break;
+        case 0xB003: {
+            static const u8 mtab[4] = {1, 0, 2, 3};
+            if (!cart.four_screen)
+                mirror(mtab[(v >> 2) & 3u]);
+            break;
+        }
+        case 0xC000: case 0xC001: case 0xC002: case 0xC003:
+            prg8(2, v & 0x1Fu);
+            break;
+        case 0xD000: case 0xD001: case 0xD002: case 0xD003:
+            chr1(r & 3u, v);
+            break;
+        case 0xE000: case 0xE001: case 0xE002: case 0xE003:
+            chr1(4 + (r & 3u), v);
+            break;
+        case 0xF000: e->vrc_irq_latch = v; break;
+        case 0xF001: vrc_irq_write_ctrl(e, v); break;
+        case 0xF002: vrc_irq_write_ack(e); break;
+        }
+        if (r >= 0x9000u && r <= 0xB002u && snd.rate)
+            snd_refresh();
+        return;
+    }
+
+    if (cart.mapper == 85) {
+        int sub = ((a >> 4) & 1) | ((a >> 3) & 1);
+        switch (a & 0xF000u) {
+        case 0x8000:
+            prg8(sub ? 1 : 0, v & 0x3Fu);
+            break;
+        case 0x9000:
+            if ((a & 0x30u) == 0x10u || (a & 0x18u) == 0x08u) {
+                e->vrc7_reg_sel = v;
+            } else if ((a & 0x30u) == 0x30u || (a & 0x18u) == 0x18u) {
+                if (snd.rate) snd_catch(cpu.cycles);
+                vrc7_write_reg(e, e->vrc7_reg_sel, v);
+                if (snd.rate) snd_refresh();
+            } else {
+                prg8(2, v & 0x3Fu);
+            }
+            break;
+        case 0xA000: case 0xB000: case 0xC000: case 0xD000:
+            chr1((((a - 0xA000u) >> 11) & 6u) + (u32)sub, v);
+            break;
+        case 0xE000:
+            if (sub) {
+                e->vrc_irq_latch = v;
+            } else if (!cart.four_screen) {
+                static const u8 mtab[4] = {1, 0, 2, 3};
+                mirror(mtab[v & 3u]);
+            }
+            break;
+        case 0xF000:
+            if (sub) vrc_irq_write_ack(e);
+            else     vrc_irq_write_ctrl(e, v);
+            break;
+        }
+        return;
+    }
+
+    if (cart.mapper == 19) {
+        if (a < 0xC000u) {
+            int slot = (a - 0x8000u) >> 11;
+            u8 dis = (slot < 4) ? (e->n163_chr_nt_dis & 0x40u) : (e->n163_chr_nt_dis & 0x80u);
+            if (v >= 0xE0u && !dis)
+                chr_map[slot] = vram + (v & 1u) * 0x400u;
+            else
+                chr1(slot, v);
+        } else if (a < 0xE000u) {
+            int nt = (a - 0xC000u) >> 11;
+            if (v >= 0xE0u)
+                nt_map[nt] = vram + (v & 1u) * 0x400u;
+            else
+                nt_map[nt] = cart.chr + ((u32)v % cart.chr1k) * 0x400u;
+        } else if (a < 0xE800u) {
+            prg8(0, v & 0x3Fu);
+        } else if (a < 0xF000u) {
+            prg8(1, v & 0x3Fu);
+            e->n163_chr_nt_dis = v & 0xC0u;
+        } else if (a < 0xF800u) {
+            prg8(2, v & 0x3Fu);
+        } else {
+            e->n163_addr = v;
+        }
+        return;
+    }
+
+    if (cart.mapper == 69) {
+        switch (a & 0xE000u) {
+        case 0x8000:
+            e->fme7_cmd = v & 0x0Fu;
+            break;
+        case 0xA000:
+            if (e->fme7_cmd < 8u) {
+                chr1(e->fme7_cmd, v);
+            } else if (e->fme7_cmd == 8u) {
+                if (v & 0x40u)
+                    wram_low = save_ram;
+                else
+                    wram_low = cart.prg + ((u32)(v & 0x3Fu) % cart.prg8k) * 0x2000u;
+            } else if (e->fme7_cmd <= 11u) {
+                prg8(e->fme7_cmd - 9u, v & 0x3Fu);
+            } else if (e->fme7_cmd == 12u) {
+                static const u8 mtab[4] = {1, 0, 2, 3};
+                if (!cart.four_screen)
+                    mirror(mtab[v & 3u]);
+            } else if (e->fme7_cmd == 13u) {
+                cart.irq = 0;
+                e->fme7_irq_en = v & 1u;
+                e->fme7_cnt_en = (v >> 7) & 1u;
+                exp_update_irq_flag(e);
+            } else if (e->fme7_cmd == 14u) {
+                e->fme7_irq_cnt = (u16)((e->fme7_irq_cnt & 0xFF00u) | v);
+            } else if (e->fme7_cmd == 15u) {
+                e->fme7_irq_cnt = (u16)((e->fme7_irq_cnt & 0x00FFu) | ((u16)v << 8));
+            }
+            break;
+        case 0xC000:
+            e->s5b_sel = v & 0x0Fu;
+            break;
+        case 0xE000:
+            if (snd.rate) snd_catch(cpu.cycles);
+            e->s5b_regs[e->s5b_sel & 0x0Fu] = v;
+            if (snd.rate) snd_refresh();
+            break;
+        }
+    }
+}
+
+static u32 exp_snd_period(void)
+{
+    const struct nes_exp_ws *e = &FDS_M->exp;
+    if (cart.mapper == 24 || cart.mapper == 26)
+        return (e->vrc6_p_en[0] || e->vrc6_p_en[1] || e->vrc6_saw_en) ? 8u : IDLE;
+    if (cart.mapper == 85)
+        return 36u;
+    if (cart.mapper == 19)
+        return 15u;
+    if (cart.mapper == 69)
+        return 16u;
+    return IDLE;
+}
+
+static void exp_snd_step(u32 cyc)
+{
+    struct nes_exp_ws *e = &FDS_M->exp;
+
+    if (cart.mapper == 24 || cart.mapper == 26) {
+        if (!(e->vrc6_freq_ctrl & 1u)) {
+            u32 sh = (e->vrc6_freq_ctrl & 4u) ? 8u : ((e->vrc6_freq_ctrl & 2u) ? 4u : 0u);
+            for (int i = 0; i < 2; i++) {
+                if (!e->vrc6_p_en[i]) continue;
+                u32 per = ((u32)e->vrc6_p_per[i] >> sh) + 1u;
+                if (e->vrc6_p_div[i] <= cyc) {
+                    u32 rem = cyc - e->vrc6_p_div[i];
+                    u32 steps = 1u + rem / per;
+                    e->vrc6_p_seq[i] = (u8)((e->vrc6_p_seq[i] - steps) & 15u);
+                    e->vrc6_p_div[i] = (u16)(per - (rem % per));
+                } else {
+                    e->vrc6_p_div[i] = (u16)(e->vrc6_p_div[i] - cyc);
+                }
+            }
+            if (e->vrc6_saw_en) {
+                u32 per = ((u32)e->vrc6_saw_per >> sh) + 1u;
+                if (e->vrc6_saw_div <= cyc) {
+                    u32 rem = cyc - e->vrc6_saw_div;
+                    e->vrc6_saw_div = (u16)(per - (rem % per));
+                    e->vrc6_saw_step++;
+                    if (e->vrc6_saw_step >= 14u) {
+                        e->vrc6_saw_step = 0u;
+                        e->vrc6_saw_acc = 0u;
+                    } else if ((e->vrc6_saw_step & 1u) == 0u) {
+                        e->vrc6_saw_acc = (u8)(e->vrc6_saw_acc + e->vrc6_saw_rate);
+                    }
+                } else {
+                    e->vrc6_saw_div = (u16)(e->vrc6_saw_div - cyc);
+                }
+            }
+        }
+        u32 mix = 0u;
+        for (int i = 0; i < 2; i++) {
+            if (!e->vrc6_p_en[i]) continue;
+            u8 c = e->vrc6_p_ctrl[i];
+            u8 duty = (c >> 4) & 7u;
+            if ((c & 0x80u) || e->vrc6_p_seq[i] <= duty)
+                mix += c & 0x0Fu;
+        }
+        if (e->vrc6_saw_en)
+            mix += (e->vrc6_saw_acc >> 3) & 0x1Fu;
+        e->snd_level = mix * 250u;
+        return;
+    }
+
+    if (cart.mapper == 85) {
+        static const u8 mult_x2[16] = {1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30};
+        e->vrc7_eg_cnt++;
+        s32 sum = 0;
+        for (int ch = 0; ch < 6; ch++) {
+            u8 r10 = e->vrc7_regs[0x10 + ch];
+            u8 r20 = e->vrc7_regs[0x20 + ch];
+            u8 r30 = e->vrc7_regs[0x30 + ch];
+            u32 fnum = (u32)r10 | ((u32)(r20 & 1u) << 8);
+            u32 blk  = (r20 >> 1) & 7u;
+            u8  inst = (r30 >> 4) & 0x0Fu;
+            const u8 *pat = inst ? vrc7_rom_patches[inst - 1] : &e->vrc7_regs[0];
+
+            for (int op = 0; op < 2; op++) {
+                u8 pm = pat[op];
+                u32 step = (((fnum << blk) * mult_x2[pm & 0x0Fu]) >> 2);
+                e->vrc7_phase[ch][op] = (e->vrc7_phase[ch][op] + step) & 0x3FFFFu;
+
+                /* Envelope step (~49.7 kHz / 8 = 6.2 kHz scaled rate) */
+                if ((e->vrc7_eg_cnt & 7u) == 0u) {
+                    u8 st = e->vrc7_eg_state[ch][op];
+                    s32 env = e->vrc7_env[ch][op];
+                    u8 ar = (pat[4 + op] >> 4) & 0x0Fu;
+                    u8 dr = pat[4 + op] & 0x0Fu;
+                    u8 sl = (s32)((pat[6 + op] >> 4) & 0x0Fu) * 8;
+                    u8 rr = pat[6 + op] & 0x0Fu;
+                    if (st == 1u) {                     /* Attack */
+                        s32 d = ar ? (s32)(1 + (ar >> 1)) : 0;
+                        env -= d * 2;
+                        if (env <= 0) { env = 0; e->vrc7_eg_state[ch][op] = 2u; }
+                    } else if (st == 2u) {              /* Decay */
+                        if (env < sl) {
+                            if (dr && ((e->vrc7_eg_cnt >> 3) & ((1u << (4 - (dr >> 2))) - 1u)) == 0u)
+                                env++;
+                        } else {
+                            env = sl;
+                            e->vrc7_eg_state[ch][op] = 3u;
+                        }
+                    } else if (st == 3u) {              /* Sustain */
+                        if (!(pm & 0x20u)) {            /* Percussive tone decays in sustain */
+                            if (rr && ((e->vrc7_eg_cnt >> 4) & 3u) == 0u && env < 127)
+                                env++;
+                        }
+                    } else if (st == 4u) {              /* Release */
+                        u8 eff_r = (r20 & 0x20u) ? 5u : ((pm & 0x20u) ? rr : 7u);
+                        if (eff_r && ((e->vrc7_eg_cnt >> 3) & 1u) == 0u)
+                            env += (eff_r >> 2) + 1;
+                        if (env >= 127) { env = 127; e->vrc7_eg_state[ch][op] = 0u; }
+                    }
+                    e->vrc7_env[ch][op] = env;
+                }
+            }
+
+            if (e->vrc7_env[ch][1] >= 126)
+                continue;
+            u8 fb = pat[3] & 7u;
+            s32 fb_mod = fb ? ((s32)(e->vrc7_prev[ch][0] + e->vrc7_prev[ch][1]) >> (9 - fb)) : 0;
+            u32 mod_att = ((u32)(pat[2] & 0x3Fu) * 32u) + ((u32)e->vrc7_env[ch][0] * 16u);
+            s32 mod_out = vrc7_op_out(e, (e->vrc7_phase[ch][0] >> 8) + (u32)fb_mod, mod_att, (pat[3] >> 3) & 1u);
+            e->vrc7_prev[ch][1] = e->vrc7_prev[ch][0];
+            e->vrc7_prev[ch][0] = (s16)mod_out;
+
+            u32 car_att = ((u32)(r30 & 0x0Fu) * 128u) + ((u32)e->vrc7_env[ch][1] * 16u);
+            s32 car_out = vrc7_op_out(e, (e->vrc7_phase[ch][1] >> 8) + (u32)(mod_out >> 1), car_att, (pat[3] >> 4) & 1u);
+            sum += car_out;
+        }
+        /* Bias bipolar sum around +9000 (0..18000) so NES high-pass filter passes clean AC */
+        s32 lvl = 9000 + ((sum * 5) >> 3);
+        if (lvl < 0) lvl = 0;
+        if (lvl > 20000) lvl = 20000;
+        e->snd_level = (u32)lvl;
+        return;
+    }
+
+    if (cart.mapper == 19) {
+        u32 n_ch = ((u32)(e->n163_ram[0x7F] >> 4) & 7u) + 1u;
+        u32 ch_idx = e->n163_cur_ch % n_ch;
+        e->n163_cur_ch = (u8)((ch_idx + 1u) % n_ch);
+        u32 base = 0x78u - ch_idx * 8u;
+        u32 freq = (u32)e->n163_ram[base] | ((u32)e->n163_ram[base + 2u] << 8) |
+                   (((u32)e->n163_ram[base + 4u] & 3u) << 16);
+        u32 ph = (u32)e->n163_ram[base + 1u] | ((u32)e->n163_ram[base + 3u] << 8) |
+                 ((u32)e->n163_ram[base + 5u] << 16);
+        u32 wlen = 256u - (e->n163_ram[base + 4u] & 0xFCu);
+        ph += freq;
+        while (ph >= (wlen << 16))
+            ph -= (wlen << 16);
+        e->n163_ram[base + 1u] = (u8)ph;
+        e->n163_ram[base + 3u] = (u8)(ph >> 8);
+        e->n163_ram[base + 5u] = (u8)(ph >> 16);
+        u32 wpos = ((ph >> 16) + e->n163_ram[base + 6u]) & 0xFFu;
+        u8  b = e->n163_ram[wpos >> 1];
+        s32 nib = (s32)(((wpos & 1u) ? (b >> 4) : (b & 0x0Fu))) - 8;
+        s32 vol = (s32)(e->n163_ram[base + 7u] & 0x0Fu);
+        e->n163_ch_out[ch_idx] = nib * vol;     /* [-120 .. +105] */
+
+        s32 avg = 0;
+        for (u32 i = 0; i < n_ch; i++)
+            avg += e->n163_ch_out[i];
+        s32 lvl = 8000 + (avg * 64) / (s32)n_ch;
+        if (lvl < 0) lvl = 0;
+        if (lvl > 18000) lvl = 18000;
+        e->snd_level = (u32)lvl;
+        return;
+    }
+
+    if (cart.mapper == 69) {
+        static const u16 ay_vol[16] = {
+            0, 55, 80, 115, 165, 235, 335, 480, 685, 975, 1385, 1965, 2790, 3955, 5600, 7930
+        };
+        for (int c = 0; c < 3; c++) {
+            u16 per = (u16)(((u16)(e->s5b_regs[c * 2 + 1] & 0x0Fu) << 8) | e->s5b_regs[c * 2]);
+            if (per < 1u) per = 1u;
+            if (++e->s5b_cnt[c] >= per) {
+                e->s5b_cnt[c] = 0;
+                e->s5b_out[c] ^= 1u;
+            }
+        }
+        u16 nper = (u16)((e->s5b_regs[6] & 0x1Fu) * 2u);
+        if (nper < 2u) nper = 2u;
+        if (++e->s5b_ncnt >= nper) {
+            e->s5b_ncnt = 0;
+            u32 fb = ((e->s5b_lfsr ^ (e->s5b_lfsr >> 3)) & 1u);
+            e->s5b_lfsr = (e->s5b_lfsr >> 1) | (fb << 16);
+        }
+        u8 mix_reg = e->s5b_regs[7];
+        u32 sum = 0;
+        for (int c = 0; c < 3; c++) {
+            int t_on = ((mix_reg >> c) & 1u) ? 1 : e->s5b_out[c];
+            int n_on = ((mix_reg >> (c + 3)) & 1u) ? 1 : (int)(e->s5b_lfsr & 1u);
+            if (t_on && n_on)
+                sum += ay_vol[e->s5b_regs[8 + c] & 0x0Fu];
+        }
+        e->snd_level = sum >> 1;
+    }
 }
