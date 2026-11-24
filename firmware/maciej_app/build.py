@@ -43,8 +43,12 @@ DEMO_SOURCES = ("demo/main.c", "demo/time.c", "demo/uart.c", "demo/gfx.c",
                 "demo/cpc.c", "demo/vic20.c", "demo/apple2.c", "demo/coco.c", "demo/cvm5.c",
                 "demo/z80con.c", "demo/arcadia.c", "demo/scv.c", "demo/vb.c", "demo/segacd.c",
                 "demo/bbc.c", "demo/ti99.c", "demo/oric.c", "demo/ted81.c", "demo/jp8bit.c",
-                "demo/s32x.c", "demo/cd32.c", "demo/arcade.c")
+                "demo/s32x.c", "demo/cd32.c", "demo/arcade.c", "demo/prof.c")
 BEARSSL = HERE / "bearssl"                      # BearSSL 0.6's files a TLS client needs (bearssl/README.txt)
+# flags of single files after the common ones: the PlayStation player, whose rasterizer and GTE are the box's
+# busiest code, for the S3811's own CPU (a MIPS 24KEc: MIPS32 release 2's ext / ins / seb / seh, and the 24K's
+# pipeline for scheduling; its recompiler emits release-2 code already)
+FILE_FLAGS = {"demo/psx.c": ["-march=mips32r2", "-mtune=24kc"]}
 
 
 def _tree_digest(paths):
@@ -145,11 +149,14 @@ def build(output, version="v1", cross_prefix=None, *, sources=("app.c",),
         src_path = HERE / rel
         obj_path = obj_dir / f"{idx:03d}_{src_path.stem}.o"
         stamp_path = obj_dir / f"{idx:03d}_{src_path.stem}.stamp"
-        unit_key = hashlib.sha256((prefix + "\0" + "\0".join(flags) + "\0" + deps_hash + "\0" +
+        extra = FILE_FLAGS.get(rel, ())
+        unit_flags = [f for f in flags if not (f.startswith("-march=") and any(e.startswith("-march=") for e in extra))]
+        unit_flags += extra
+        unit_key = hashlib.sha256((prefix + "\0" + "\0".join(unit_flags) + "\0" + deps_hash + "\0" +
                                    rel + "\0").encode("utf-8") + src_path.read_bytes()).hexdigest()
         if obj_path.exists() and stamp_path.exists() and stamp_path.read_text(encoding="utf-8").strip() == unit_key:
             return str(obj_path)
-        subprocess.run([prefix + "gcc", *flags, "-c", str(src_path), "-o", str(obj_path)], check=True)
+        subprocess.run([prefix + "gcc", *unit_flags, "-c", str(src_path), "-o", str(obj_path)], check=True)
         stamp_path.write_text(unit_key + "\n", encoding="utf-8")
         return str(obj_path)
 

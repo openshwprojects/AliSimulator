@@ -318,6 +318,11 @@ COMMANDS = {
                  "(init [opticum|comsat] [rev0|rev1]); the demo runs this board's at start, before USB",
         "reboot": "restart through the original bootloader", "restart": "the same as reboot",
         "bootloader": "restart into the original bootloader; hold 'c' (or run the updater) to stay in it",
+        "prof": "[-f frame] [-c address length] [-e event0 event1] <command ...>: run the command with the sampling "
+                "profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code it was found "
+                "in, most first (-f: a game's samples from that frame on; -c: samples inside that code counted for "
+                "its caller; -e: the CPU's two performance counters count those events, from the -f frame for 100 "
+                "frames)",
         "ccc": "three 'c' on an empty line: restart for the UART updater's boot capture",
         "/": "every command may also be written with '/' in front (/restart)",
     },

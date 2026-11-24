@@ -41,6 +41,11 @@ typedef unsigned long long u64;
 #define PSX_VBL_LINE   240
 #define PSX_CYC_LINE   2144        /* 33.8688 MHz / (59.94 * 263) ~= 2148 cycles/scanline */
 
+/* VRAM rows lie VRAM_STRIDE pixels apart in memory, not 1024: the S3811's D-cache is 8 KB of four 2 KB ways, so
+   2048-byte rows put a texture's texels of one column all into one cache set (four rows cached at most: a
+   texture drawn at an angle missed on almost every texel); 2080-byte rows spread 64 rows over all 64 sets */
+#define VRAM_STRIDE 1040u
+
 struct psx_work {
     /* Hot small arrays placed in first 32 KB for 1-insn MIPS32 offset addressing */
     u8 scratch[0x400];             /* $1F800000..$1F8003FF (1 KB D-cache scratchpad) */
@@ -53,7 +58,7 @@ struct psx_work {
 
     /* Main memories in EMU_RAM_PHYS (total ~4.69 MB + 4.00 MB MIPS32 JIT = ~8.73 MB of 9.50 MB available) */
     u8 ram[PSX_RAM_SIZE];
-    u16 vram[1024 * 512];
+    u16 vram[VRAM_STRIDE * 512];
     u8 spu_ram[PSX_SPU_SIZE];
     u8 bios[PSX_BIOS_SIZE];
     u8 ext_bios[PSX_BIOS_SIZE];
@@ -64,13 +69,23 @@ struct psx_work {
 #define JIT_RAM_WORDS 524288u
 #define JIT_BUF_WORDS 524288u
 #define JIT_CHUNKS    32768u /* 64-byte cache-line granularity across 2 MB PS1 RAM */
+#define JIT_MAX_INSNS 44u    /* R3000 instructions in a block */
+#define JIT_BLOCK_MAX 1024u  /* words a block may need at most */
     u32 jit_entry[JIT_RAM_WORDS];
     u32 jit_buf[JIT_BUF_WORDS];
     u8  jit_has_code[JIT_CHUNKS];
+    u32 jit_code_bits[JIT_RAM_WORDS / 32u];     /* the RAM words recompiled code came from, one bit each: a write
+                                                   into a chunk with code changes code only on one of these (Tony
+                                                   Hawk's keeps a variable just after a function's last instructions,
+                                                   written every other frame: ~90 whole resets a run without this) */
 #endif
 };
 
 #ifdef __mips__
+typedef char psx_work_fits[(sizeof(struct psx_work) <= EMU_RAM_SIZE) ? 1 : -1];   /* (up to PICTURE_PHYS) */
+/* (VRAM's rows begin on 32-byte cache lines: the quick fill's pref 30 needs whole lines) */
+typedef char psx_vram_lines[((__builtin_offsetof(struct psx_work, vram) | (VRAM_STRIDE * 2u) | EMU_RAM_PHYS) & 31u)
+                            ? -1 : 1];
 #define W (*((struct psx_work *)KSEG0(EMU_RAM_PHYS)))
 #else
 static struct psx_work psx_host_work;
@@ -113,8 +128,10 @@ static struct psx_state_s {
     u32 jit_stop;          /* +0x210: non-zero when (IRQ pending || IsC cache isolate) */
     u8 *jit_hc_ptr;        /* +0x214: W.jit_has_code pointer */
     u32 jit_used;          /* +0x218: words used in W.jit_buf */
-    u32 jit_linked;        /* +0x21C: non-zero when direct native jumps link blocks */
+    s32 jit_bias;          /* +0x21C: budget parked when jit_stop came up in a helper ($s4 zeroed: the block's
+                              exit leaves; psx_jit_exit adds it back, so the instruction count stays exact) */
     u8  scratch[0x400];    /* +0x220..0x61F: 1 KB D-cache scratchpad ($1F800000..$1F8003FF) */
+    u32 jit_linked;        /* non-zero when direct native jumps link blocks */
 
     u32 cur_pc;
     u8 in_delay, next_delay;
@@ -162,6 +179,12 @@ static struct psx_state_s {
     u16 disp_x, disp_y;
     int disp_w, disp_h;
     u8 disp_24bpp, disp_disabled, vram_full_clear;
+    /* frame skipping in live play (skip_render 2 = the player is late): decided at a display flip, a whole game
+       frame's drawing into a buffer not shown is dropped (fs_active); when that buffer is shown next it is
+       "stale" and the player keeps the picture before it -- never an old frame in its place: drawing into a stale
+       buffer does not make it new (only the next flip, or fs_age: a game that stopped flipping) */
+    u8 fs_active, fs_dropped, disp_stale, disp_dirty, disp_flipped, fs_age;
+    u32 fs_skipped;
     u32 vram_gen;
     u32 clut4_gen[4], clut4_klo[4], clut4_khi[4];
     s32 clut4_cache[4][16];
@@ -242,6 +265,10 @@ static inline void sync_jit_stop(void)
                | (S.cop0[12] & 0x10000u);
 }
 
+/* counters for `psx` runs (printed by psx_print_stats after a game) */
+static u32 st_reset_flush, st_reset_inval, st_reset_full, st_reset_other, st_compiles, st_inval, st_beside;
+static u32 st_jit_enters, st_jit_insns, st_interp_runs, st_interp_insns;
+
 #ifdef __mips__
 static void jit_flush_all_icache(void)
 {
@@ -270,6 +297,8 @@ static void jit_reset_all(void)
         W.jit_entry[i] = 0u;
     for (u32 i = 0; i < JIT_CHUNKS; i++)
         W.jit_has_code[i] = 0u;
+    for (u32 i = 0; i < JIT_RAM_WORDS / 32u; i++)
+        W.jit_code_bits[i] = 0u;
     S.jit_used = 0u;
     S.jit_linked = 0u;
     S.jit_stop |= 2u;
@@ -277,18 +306,24 @@ static void jit_reset_all(void)
     jit_flush_all_icache();
 }
 
-static void jit_invalidate_chunk(u32 chunk)
+static void jit_invalidate_chunk(u32 chunk, u32 off21)
 {
     chunk &= (JIT_CHUNKS - 1u);
     if (!W.jit_has_code[chunk])
         return;
+    if (!(W.jit_code_bits[(off21 >> 7) & (JIT_RAM_WORDS / 32u - 1u)] & (1u << ((off21 >> 2) & 31u)))) {
+        st_beside++;                    /* a word beside code in the chunk: no code changed */
+        return;
+    }
+    st_inval++;
     if (S.jit_linked) {
+        st_reset_inval++;
         jit_reset_all();
         return;
     }
     W.jit_has_code[chunk] = 0u;
-    u32 cw = chunk << 4; /* 16 words per 64-byte chunk; blocks are <= 40 words */
-    u32 start_w = (cw > 48u) ? (cw - 48u) : 0u;
+    u32 cw = chunk << 4; /* 16 words per 64-byte chunk; blocks are <= JIT_MAX_INSNS + 1 words */
+    u32 start_w = (cw > JIT_MAX_INSNS + 4u) ? (cw - JIT_MAX_INSNS - 4u) : 0u;
     u32 end_w   = cw + 16u;
     for (u32 w = start_w; w < end_w; w++)
         W.jit_entry[w] = 0u;
@@ -298,7 +333,7 @@ static inline void jit_touch_ram(u32 off21)
 {
     u32 ch = off21 >> 6;
     if (__builtin_expect(W.jit_has_code[ch], 0))
-        jit_invalidate_chunk(ch);
+        jit_invalidate_chunk(ch, off21);
 }
 #else
 static inline void jit_reset_all(void) {}
@@ -919,29 +954,43 @@ static void mdec_decode_chunk(void)
             if (!ok_y) break;
             mdec_idct(b_cr, mcr);
             mdec_idct(b_cb, mcb);
-            for (int py = 0; py < 16; py++) {
-                for (int px = 0; px < 16; px++) {
-                    int q = ((py >> 3) << 1) | (px >> 3);
-                    int yv = b_y[q][(py & 7) * 8 + (px & 7)];
-                    int cr = b_cr[(py >> 1) * 8 + (px >> 1)];
-                    int cb = b_cb[(py >> 1) * 8 + (px >> 1)];
-                    s32 r = clamp_s8(yv + ((359 * cr + 128) >> 8));
-                    s32 g = clamp_s8(yv - ((88 * cb + 183 * cr + 128) >> 8));
-                    s32 b = clamp_s8(yv + ((454 * cb + 128) >> 8));
-                    u8 r8 = (u8)(r + (is_signed ? 0 : 128));
-                    u8 g8 = (u8)(g + (is_signed ? 0 : 128));
-                    u8 b8 = (u8)(b + (is_signed ? 0 : 128));
-                    if (depth == 2u) {
-                        W.mdec_out[out_p++] = r8;
-                        W.mdec_out[out_p++] = g8;
-                        W.mdec_out[out_p++] = b8;
-                    } else {
-                        u16 c15 = (u16)(stp | ((u16)(b8 >> 3) << 10) | ((u16)(g8 >> 3) << 5) | (r8 >> 3));
-                        W.mdec_out[out_p++] = (u8)c15;
-                        W.mdec_out[out_p++] = (u8)(c15 >> 8);
+            /* each Cr / Cb sample's terms once for its 2 x 2 pixels (they were worked out for every pixel); the
+               pixels where they always went: row py, column px of the 16 x 16 */
+            u32 bpp = (depth == 2u) ? 3u : 2u;
+            for (int cy = 0; cy < 8; cy++) {
+                for (int cx = 0; cx < 8; cx++) {
+                    int cr = b_cr[cy * 8 + cx];
+                    int cb = b_cb[cy * 8 + cx];
+                    int dr = (359 * cr + 128) >> 8;
+                    int dg = (88 * cb + 183 * cr + 128) >> 8;
+                    int db = (454 * cb + 128) >> 8;
+                    for (int sy = 0; sy < 2; sy++) {
+                        int py = cy * 2 + sy;
+                        for (int sx = 0; sx < 2; sx++) {
+                            int px = cx * 2 + sx;
+                            int q = ((py >> 3) << 1) | (px >> 3);
+                            int yv = b_y[q][(py & 7) * 8 + (px & 7)];
+                            s32 r = clamp_s8(yv + dr);
+                            s32 g = clamp_s8(yv - dg);
+                            s32 b = clamp_s8(yv + db);
+                            u8 r8 = (u8)(r + (is_signed ? 0 : 128));
+                            u8 g8 = (u8)(g + (is_signed ? 0 : 128));
+                            u8 b8 = (u8)(b + (is_signed ? 0 : 128));
+                            u32 o = out_p + (u32)(py * 16 + px) * bpp;
+                            if (depth == 2u) {
+                                W.mdec_out[o] = r8;
+                                W.mdec_out[o + 1u] = g8;
+                                W.mdec_out[o + 2u] = b8;
+                            } else {
+                                u16 c15 = (u16)(stp | ((u16)(b8 >> 3) << 10) | ((u16)(g8 >> 3) << 5) | (r8 >> 3));
+                                W.mdec_out[o] = (u8)c15;
+                                W.mdec_out[o + 1u] = (u8)(c15 >> 8);
+                            }
+                        }
                     }
                 }
             }
+            out_p += 256u * bpp;
         }
     }
     S.mdec_in_pos = (u32)(p - base);
@@ -1197,23 +1246,23 @@ static inline u16 gpu_fetch_texel(u32 u, u32 v, u32 tpage, u32 clut_word)
     u32 cx = (clut_word & 0x3Fu) * 16u;
 
     if (depth == 0u) { /* 4bpp CLUT */
-        u16 w16 = W.vram[((ty_base + v) & 511u) * 1024u + ((tx_base + (u >> 2)) & 1023u)];
+        u16 w16 = W.vram[((ty_base + v) & 511u) * VRAM_STRIDE + ((tx_base + (u >> 2)) & 1023u)];
         u32 idx = (w16 >> ((u & 3u) * 4u)) & 0x0Fu;
-        return W.vram[cy * 1024u + ((cx + idx) & 1023u)];
+        return W.vram[cy * VRAM_STRIDE + ((cx + idx) & 1023u)];
     }
     if (depth == 1u) { /* 8bpp CLUT */
-        u16 w16 = W.vram[((ty_base + v) & 511u) * 1024u + ((tx_base + (u >> 1)) & 1023u)];
+        u16 w16 = W.vram[((ty_base + v) & 511u) * VRAM_STRIDE + ((tx_base + (u >> 1)) & 1023u)];
         u32 idx = (w16 >> ((u & 1u) * 8u)) & 0xFFu;
-        return W.vram[cy * 1024u + ((cx + idx) & 1023u)];
+        return W.vram[cy * VRAM_STRIDE + ((cx + idx) & 1023u)];
     }
     /* 15bpp direct */
-    return W.vram[((ty_base + v) & 511u) * 1024u + ((tx_base + u) & 1023u)];
+    return W.vram[((ty_base + v) & 511u) * VRAM_STRIDE + ((tx_base + u) & 1023u)];
 }
 
 static inline __attribute__((always_inline)) void gpu_plot_pixel(int x, int y, int r8, int g8, int b8,
                                                                  int do_dither, int is_semi, u32 abr, u16 extra_mask)
 {
-    u16 *dst = &W.vram[y * 1024 + x];
+    u16 *dst = &W.vram[y * VRAM_STRIDE + x];
     if (S.check_mask && (*dst & 0x8000u))
         return;
     if (do_dither && S.dither) {
@@ -1238,18 +1287,181 @@ static u32 gpu_inv_area[1024];
 static u16 clamp5_g[96];
 static u16 clamp5_b[96];
 
+/* ---- textured spans: opaque, no mask test, no interlace copy (gpu_draw_tri_slow's common cases) ----
+   One loop per texture depth and raw / modulated, everything in registers (the general loop kept ~16 values
+   on the stack).  The pixels are the general loop's: texel = the texture window's (u, v); 0 = transparent;
+   raw: texel | mask; modulated: each 5-bit channel t times the colour c (8.12 fixed point, flat = steps 0)
+   plus the dither d, clamp(((t * c >> 4) + d) >> 3) = clamp((t * c + 16 d) >> 7). */
+#define SPAN_CL_OFS 64                  /* the clamp table takes (x >> 7) from -64 to 447 */
+static u16 span_cl[2][3 * 512];         /* clamp(i - 64, 0, 31): red as it is, green << 5 (+512), blue << 10 (+1024);
+                                           [1]: the same with red | 0x8000 (the mask bit set: span_mod_body) */
+
+struct gpu_span {
+    const u8 *tex8;                     /* T 0 / 1 / 3: the texture page as bytes (2 * VRAM_STRIDE a row), from the
+                                           texture window's offsets: row ov, byte ou (T 0: ou / 2) */
+    const u16 *tex16;                   /* T 2: the texture page's pixels (VRAM_STRIDE a row), from row ov, x ou */
+    const u16 *clut;                    /* T 0: 16 colours; T 1: the CLUT (its x added); T 3: its VRAM row */
+    u32 cx;                             /* T 3 (8-bit with a CLUT that wraps at x 1024): the CLUT's x */
+    u32 au12, av12;                     /* texture window: u = ((u_c & au12) >> 12) | ou, v the same (ou, ov: in
+                                           tex8 / tex16) */
+    u32 mask_or;
+    s32 d16[4];                         /* the dither row times 16, by x & 3 (zeros: none) */
+    u32 dw;                             /* the same as bytes d16 + 128, the first pixel's in the low byte (rotated
+                                           right 8 a pixel): (t * c + d16 + 128) >> 7 is one more than the
+                                           value wanted, so the clamp table is read one entry lower */
+    const u8 *clb;                      /* span_mod_body's tables as bytes: span_cl[mask_or != 0] + SPAN_CL_OFS - 1
+                                           (a pointer read from here, not a constant: one base register for the
+                                           three tables, the mask bit in the red one -- the loop's values fit in
+                                           registers, none read from the stack a pixel) */
+};
+
+/* dither words for span_mod_body: [y & 3] = bytes d16 + 128 for x & 3 = 0..3; [4]: no dither */
+static u32 span_dw[5];
+
+static inline __attribute__((always_inline)) u32 span_texel(const struct gpu_span *sp, int T, u32 u_c, u32 v_c)
+{
+    /* (the window's ou / ov are in tex8 / tex16 already: bits the masks clear, so | is +; ou even, as T 0 needs) */
+    u32 uu = (u_c & sp->au12) >> 12;
+    u32 vv = (v_c & sp->av12) >> 12;
+    if (T == 0) {
+        u32 b = sp->tex8[vv * (2u * VRAM_STRIDE) + (uu >> 1)];
+        return sp->clut[(b >> ((uu & 1u) << 2)) & 15u];
+    }
+    if (T == 1)
+        return sp->clut[sp->tex8[vv * (2u * VRAM_STRIDE) + uu]];
+    if (T == 3)
+        return sp->clut[(sp->cx + sp->tex8[vv * (2u * VRAM_STRIDE) + uu]) & 1023u];
+    return sp->tex16[vv * VRAM_STRIDE + uu];
+}
+
+static inline __attribute__((always_inline)) u32 span_mod(u32 t, s32 r_c, s32 g_c, s32 b_c, s32 d16, u32 mask_or)
+{
+    s32 r = (s32)((t & 31u) * (u32)(r_c >> 12));
+    s32 g = (s32)(((t >> 5) & 31u) * (u32)(g_c >> 12));
+    s32 b = (s32)(((t >> 10) & 31u) * (u32)(b_c >> 12));
+    const u16 *cl = span_cl[0] + SPAN_CL_OFS;
+    return (u32)cl[(r + d16) >> 7] | cl[512 + ((g + d16) >> 7)] | cl[1024 + ((b + d16) >> 7)] |
+           (t & 0x8000u) | mask_or;
+}
+
+/* n pixels from dst, raw: texel | mask */
+static inline __attribute__((always_inline)) void span_raw_body(const struct gpu_span *sp, int T, u16 *dst, int n,
+                                                                  u32 u_c, u32 v_c, s32 du, s32 dv)
+{
+    u32 mask_or = sp->mask_or;
+    for (u16 *end = dst + n; dst < end; dst++, u_c += (u32)du, v_c += (u32)dv) {
+        u32 t = span_texel(sp, T, u_c, v_c);
+        if (t)
+            *dst = (u16)(t | mask_or);
+    }
+}
+
+/* modulated (sp->dw: the dither word for the first pixel) */
+static inline __attribute__((always_inline)) void span_mod_body(const struct gpu_span *sp, int T, u16 *dst, int x0,
+                                                                  int n, u32 u_c, u32 v_c, s32 du, s32 dv,
+                                                                  s32 r_c, s32 g_c, s32 b_c, s32 dr, s32 dg, s32 db)
+{
+    (void)x0;
+    u32 dw = sp->dw;
+    const u8 *cl = sp->clb;                             /* (bytes: the tables' offsets fold) */
+    for (u16 *end = dst + n; dst < end; dst++) {
+        u32 t = span_texel(sp, T, u_c, v_c);
+        if (t) {
+            s32 d = (s32)(dw & 0xFFu);                     /* d16 + 128 */
+            s32 r = (s32)((t & 31u) * (u32)(r_c >> 12)) + d;
+            s32 g = (s32)(((t >> 5) & 31u) * (u32)(g_c >> 12)) + d;
+            s32 b = (s32)(((t >> 10) & 31u) * (u32)(b_c >> 12)) + d;
+            *dst = (u16)(*(const u16 *)(cl + ((r >> 7) << 1)) | *(const u16 *)(cl + 1024 + ((g >> 7) << 1)) |
+                         *(const u16 *)(cl + 2048 + ((b >> 7) << 1)) | (t & 0x8000u));
+        }
+        dw = (dw >> 8) | (dw << 24);
+        u_c += (u32)du; v_c += (u32)dv; r_c += dr; g_c += dg; b_c += db;
+    }
+}
+
+/* semi-transparent (no mask test, no interlace copy): a texel with bit 15 set is blended with what is there
+   (gpu_blend, mode abr), the others are drawn as opaque; raw or modulated as above */
+static inline __attribute__((always_inline)) void span_semi_body(const struct gpu_span *sp, int T, int MOD, u16 *dst,
+                                                                   int x0, int n, u32 u_c, u32 v_c, s32 du, s32 dv,
+                                                                   s32 r_c, s32 g_c, s32 b_c, s32 dr, s32 dg, s32 db,
+                                                                   u32 abr)
+{
+    u32 mask_or = sp->mask_or;
+    const s32 *d16 = sp->d16;
+    u32 x = (u32)x0;
+    for (u16 *end = dst + n; dst < end; dst++, x++) {
+        u32 t = span_texel(sp, T, u_c, v_c);
+        if (t) {
+            u32 fg = MOD ? (span_mod(t, r_c, g_c, b_c, d16[x & 3u], 0u) & 0x7FFFu) : (t & 0x7FFFu);
+            if (t & 0x8000u)
+                fg = gpu_blend(*dst, (u16)fg, abr);
+            *dst = (u16)(fg | (t & 0x8000u) | mask_or);
+        }
+        u_c += (u32)du; v_c += (u32)dv;
+        if (MOD) { r_c += dr; g_c += dg; b_c += db; }
+    }
+}
+
+#define SPAN_SEMI(name, T, MOD)                                                                                     \
+static void __attribute__((noinline)) name(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,     \
+                                           s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db, u32 abr)  \
+{ span_semi_body(sp, T, MOD, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db, abr); }
+SPAN_SEMI(span_semi_raw4, 0, 0)
+SPAN_SEMI(span_semi_raw8, 1, 0)
+SPAN_SEMI(span_semi_raw8w, 3, 0)
+SPAN_SEMI(span_semi_raw15, 2, 0)
+SPAN_SEMI(span_semi_mod4, 0, 1)
+SPAN_SEMI(span_semi_mod8, 1, 1)
+SPAN_SEMI(span_semi_mod8w, 3, 1)
+SPAN_SEMI(span_semi_mod15, 2, 1)
+
+/* untextured, semi-transparent: the colour (8.12, flat = steps 0) plus the dither d (d4: by x & 3, zeros: none),
+   clamp((c + d) >> 3), blended */
+static void __attribute__((noinline)) span_semi_notex(u16 *dst, int x0, int n, s32 r_c, s32 g_c, s32 b_c, s32 dr,
+                                                      s32 dg, s32 db, const s32 *d4, u32 abr, u32 mask_or)
+{
+    const u16 *cl = span_cl[0] + SPAN_CL_OFS;
+    u32 x = (u32)x0;
+    for (u16 *end = dst + n; dst < end; dst++, x++, r_c += dr, g_c += dg, b_c += db) {
+        s32 d = d4[x & 3u];
+        u32 fg = (u32)cl[((r_c >> 12) + d) >> 3] | cl[512 + (((g_c >> 12) + d) >> 3)] |
+                 cl[1024 + (((b_c >> 12) + d) >> 3)];
+        *dst = (u16)(gpu_blend(*dst, (u16)fg, abr) | mask_or);
+    }
+}
+
+static void __attribute__((noinline)) span_raw4(const struct gpu_span *sp, u16 *dst, int n, u32 u, u32 v, s32 du, s32 dv)
+{ span_raw_body(sp, 0, dst, n, u, v, du, dv); }
+static void __attribute__((noinline)) span_raw8(const struct gpu_span *sp, u16 *dst, int n, u32 u, u32 v, s32 du, s32 dv)
+{ span_raw_body(sp, 1, dst, n, u, v, du, dv); }
+static void __attribute__((noinline)) span_raw8w(const struct gpu_span *sp, u16 *dst, int n, u32 u, u32 v, s32 du, s32 dv)
+{ span_raw_body(sp, 3, dst, n, u, v, du, dv); }
+static void __attribute__((noinline)) span_raw15(const struct gpu_span *sp, u16 *dst, int n, u32 u, u32 v, s32 du, s32 dv)
+{ span_raw_body(sp, 2, dst, n, u, v, du, dv); }
+static void __attribute__((noinline)) span_mod4(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
+                                               s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
+{ span_mod_body(sp, 0, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
+static void __attribute__((noinline)) span_mod8(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
+                                               s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
+{ span_mod_body(sp, 1, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
+static void __attribute__((noinline)) span_mod8w(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
+                                                s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
+{ span_mod_body(sp, 3, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
+static void __attribute__((noinline)) span_mod15(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
+                                                s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
+{ span_mod_body(sp, 2, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
+
 static void __attribute__((noinline)) gpu_span_tex4_flat_notw(u16 *dst, int count, int lace2,
                                                               const u8 *tpage_u8, const s32 *clut_baked,
                                                               u32 u24, u32 v24, u32 du24, u32 dv24)
 {
-    const u32 vmask = 0x7F800u;
     if (lace2) {
         for (int i = 0; i < count; i++, dst++, u24 += du24, v24 += dv24) {
-            u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+            u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
             s32 px = clut_baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
             if (px >= 0) {
                 dst[0] = (u16)px;
-                dst[1024] = (u16)px;
+                dst[VRAM_STRIDE] = (u16)px;
             }
         }
     } else {
@@ -1258,15 +1470,15 @@ static void __attribute__((noinline)) gpu_span_tex4_flat_notw(u16 *dst, int coun
             u32 u0 = u24, v0 = v24;
             u32 u1 = u0 + du24, v1 = v0 + dv24;
             u24 = u1 + du24; v24 = v1 + dv24;
-            u8 b0 = tpage_u8[((v0 >> 13) & vmask) + (u0 >> 25)];
-            u8 b1 = tpage_u8[((v1 >> 13) & vmask) + (u1 >> 25)];
+            u8 b0 = tpage_u8[(v0 >> 24) * (2u * VRAM_STRIDE) + (u0 >> 25)];
+            u8 b1 = tpage_u8[(v1 >> 24) * (2u * VRAM_STRIDE) + (u1 >> 25)];
             s32 p0 = clut_baked[(b0 >> ((u0 >> 22) & 4u)) & 0x0Fu];
             s32 p1 = clut_baked[(b1 >> ((u1 >> 22) & 4u)) & 0x0Fu];
             if (p0 >= 0) dst[0] = (u16)p0;
             if (p1 >= 0) dst[1] = (u16)p1;
         }
         if (i < count) {
-            u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+            u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
             s32 px = clut_baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
             if (px >= 0)
                 dst[0] = (u16)px;
@@ -1281,7 +1493,6 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
                                                               s32 r_c, s32 g_c, s32 b_c,
                                                               s32 dr_dx, s32 dg_dx, s32 db_dx)
 {
-    const u32 vmask = 0x7F800u;
     if (!use_dither && !lace2) {
         int count = xr - xl + 1;
         int i = 0;
@@ -1290,8 +1501,8 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
             u32 u0 = u24, v0 = v24;
             u32 u1 = u0 + du24, v1 = v0 + dv24;
             u24 = u1 + du24; v24 = v1 + dv24;
-            u8 b0 = tpage_u8[((v0 >> 13) & vmask) + (u0 >> 25)];
-            u8 b1 = tpage_u8[((v1 >> 13) & vmask) + (u1 >> 25)];
+            u8 b0 = tpage_u8[(v0 >> 24) * (2u * VRAM_STRIDE) + (u0 >> 25)];
+            u8 b1 = tpage_u8[(v1 >> 24) * (2u * VRAM_STRIDE) + (u1 >> 25)];
             s32 cg0 = clut_rm[(b0 >> ((u0 >> 22) & 4u)) & 0x0Fu];
             s32 cg1 = clut_rm[(b1 >> ((u1 >> 22) & 4u)) & 0x0Fu];
             s32 r0 = r_c >> 12, g0 = g_c >> 12, bl0 = b_c >> 12;
@@ -1311,7 +1522,7 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
             }
         }
         if (i < count) {
-            u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+            u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
             s32 cg = clut_rm[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
             if (cg >= 0) {
                 int tr = ((cg & 31) * (r_c >> 12)) >> 7;
@@ -1326,7 +1537,7 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
     if (use_dither) {
         if (lace2) {
             for (int x = xl; x <= xr; x++, dst++, u24 += du24, v24 += dv24, r_c += dr_dx, g_c += dg_dx, b_c += db_dx) {
-                u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+                u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
                 s32 cg = clut_rm[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
                 if (cg >= 0) {
                     int d = drow[x & 3];
@@ -1337,12 +1548,12 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
                                    clamp5_g[((tg + d) >> 3) + 16] |
                                    clamp5_tab[((tr + d) >> 3) + 16] | (cg & 0x8000));
                     dst[0] = px;
-                    dst[1024] = px;
+                    dst[VRAM_STRIDE] = px;
                 }
             }
         } else {
             for (int x = xl; x <= xr; x++, dst++, u24 += du24, v24 += dv24, r_c += dr_dx, g_c += dg_dx, b_c += db_dx) {
-                u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+                u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
                 s32 cg = clut_rm[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
                 if (cg >= 0) {
                     int d = drow[x & 3];
@@ -1357,7 +1568,7 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
         }
     } else {
         for (int x = xl; x <= xr; x++, dst++, u24 += du24, v24 += dv24, r_c += dr_dx, g_c += dg_dx, b_c += db_dx) {
-            u8 b8 = tpage_u8[((v24 >> 13) & vmask) + (u24 >> 25)];
+            u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
             s32 cg = clut_rm[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
             if (cg >= 0) {
                 int tr = ((cg & 31) * (r_c >> 12)) >> 7;
@@ -1365,8 +1576,125 @@ static void __attribute__((noinline)) gpu_span_tex4_gour_notw(u16 *dst, int xl, 
                 int tb = (((cg >> 10) & 31) * (b_c >> 12)) >> 7;
                 u16 px = (u16)(clamp5_b[tb + 16] | clamp5_g[tg + 16] | clamp5_tab[tr + 16] | (cg & 0x8000));
                 dst[0] = px;
-                dst[1024] = px;
+                dst[VRAM_STRIDE] = px;
             }
+        }
+    }
+}
+
+/* the rows of a triangle drawn by the span loops (gpu_draw_tri_slow's set-up, no interlace copy): the same
+   edges and refinement, its products stepped from row to row instead of multiplied out (the same values, mod
+   2^32), in a small function whose values stay in registers */
+struct tri_rows {
+    int x0, y0, x1, y1, x2, y2;         /* sorted by y */
+    s32 s01, s02, s12;
+    int minx, maxx, miny, maxy, y_step;
+    s32 e0_row, e1_row, e2_row, a12, a20, a01, step_e0, step_e1, step_e2;
+    u32 u_row, v_row, r_row, g_row, b_row;
+    s32 du_dx, dv_dx, du_dy, dv_dy, dr_dx, dg_dx, db_dx, dr_dy, dg_dy, db_dy;
+    s32 fr, fg, fb;                     /* flat: the colour << 12 */
+    int gouraud, kind, t, dither;
+    u32 abr, mask_or;
+};
+
+static void __attribute__((noinline)) gpu_tri_span_rows(const struct tri_rows *tr, struct gpu_span *sp)
+{
+    int y = tr->miny, y_step = tr->y_step, x0 = tr->x0, y0 = tr->y0, x1 = tr->x1, y1 = tr->y1;
+    int minx = tr->minx, maxx = tr->maxx, kind = tr->kind, gouraud = tr->gouraud;
+    u32 xa = (u32)(x0 << 16) + (u32)tr->s02 * (u32)(y - y0), step_xa = (u32)tr->s02 * (u32)y_step;
+    int in_bot = (y >= y1);
+    u32 xb, step_xb;
+    if (!in_bot) {
+        xb = (u32)(x0 << 16) + (u32)tr->s01 * (u32)(y - y0);
+        step_xb = (u32)tr->s01 * (u32)y_step;
+    } else {
+        xb = (tr->y2 > y1) ? (u32)(x1 << 16) + (u32)tr->s12 * (u32)(y - y1) : (u32)(x1 << 16);
+        step_xb = (u32)tr->s12 * (u32)y_step;
+    }
+    s32 e0 = tr->e0_row, e1 = tr->e1_row, e2 = tr->e2_row, a12 = tr->a12, a20 = tr->a20, a01 = tr->a01;
+    u32 u_row = tr->u_row, v_row = tr->v_row, r_row = tr->r_row, g_row = tr->g_row, b_row = tr->b_row;
+    for (; y <= tr->maxy; y += y_step) {
+        if (!in_bot && y >= y1) {
+            in_bot = 1;
+            xb = (tr->y2 > y1) ? (u32)(x1 << 16) + (u32)tr->s12 * (u32)(y - y1) : (u32)(x1 << 16);
+            step_xb = (u32)tr->s12 * (u32)y_step;
+        }
+        s32 lo = (s32)xa < (s32)xb ? (s32)xa : (s32)xb, hi = (s32)xa > (s32)xb ? (s32)xa : (s32)xb;
+        int xl = (lo >> 16) - 1, xr = (hi >> 16) + 2;
+        if (xl < minx) xl = minx;
+        if (xr > maxx) xr = maxx;
+        s32 dx0 = xl - minx;
+        s32 w0 = e0 + a12 * dx0, w1 = e1 + a20 * dx0, w2 = e2 + a01 * dx0;
+        while (xl <= xr && (w0 | w1 | w2) < 0) { xl++; w0 += a12; w1 += a20; w2 += a01; }
+        if (xl <= xr) {
+            s32 dx1 = xr - minx;
+            s32 r0 = e0 + a12 * dx1, r1 = e1 + a20 * dx1, r2 = e2 + a01 * dx1;
+            while (xr >= xl && (r0 | r1 | r2) < 0) { xr--; r0 -= a12; r1 -= a20; r2 -= a01; }
+        }
+        if (xl <= xr) {
+            u32 dx = (u32)(xl - minx);
+            int n = xr - xl + 1;
+            u16 *d = W.vram + y * VRAM_STRIDE + xl;
+            u32 uc = u_row + (u32)tr->du_dx * dx, vc = v_row + (u32)tr->dv_dx * dx;
+            s32 du = tr->du_dx, dv = tr->dv_dx;
+            if (kind == 1 || kind == 3) {
+                switch ((kind == 3 ? 4 : 0) + tr->t) {
+                case 0: span_raw4(sp, d, n, uc, vc, du, dv); break;
+                case 1: span_raw8(sp, d, n, uc, vc, du, dv); break;
+                case 2: span_raw15(sp, d, n, uc, vc, du, dv); break;
+                case 3: span_raw8w(sp, d, n, uc, vc, du, dv); break;
+                case 4: span_semi_raw4(sp, d, xl, n, uc, vc, du, dv, 0, 0, 0, 0, 0, 0, tr->abr); break;
+                case 5: span_semi_raw8(sp, d, xl, n, uc, vc, du, dv, 0, 0, 0, 0, 0, 0, tr->abr); break;
+                case 6: span_semi_raw15(sp, d, xl, n, uc, vc, du, dv, 0, 0, 0, 0, 0, 0, tr->abr); break;
+                default: span_semi_raw8w(sp, d, xl, n, uc, vc, du, dv, 0, 0, 0, 0, 0, 0, tr->abr); break;
+                }
+            } else {
+                s32 r_c, g_c, b_c, sdr = 0, sdg = 0, sdb = 0;
+                if (gouraud) {
+                    r_c = (s32)(r_row + (u32)tr->dr_dx * dx);
+                    g_c = (s32)(g_row + (u32)tr->dg_dx * dx);
+                    b_c = (s32)(b_row + (u32)tr->db_dx * dx);
+                    sdr = tr->dr_dx;
+                    sdg = tr->dg_dx;
+                    sdb = tr->db_dx;
+                } else {
+                    r_c = tr->fr;
+                    g_c = tr->fg;
+                    b_c = tr->fb;
+                }
+                if (kind == 2) {
+                    u32 w = span_dw[tr->dither ? (y & 3) : 4], s = ((u32)xl & 3u) * 8u;
+                    sp->dw = s ? (w >> s) | (w << (32u - s)) : w;
+                    switch (tr->t) {
+                    case 0: span_mod4(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                    case 1: span_mod8(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                    case 2: span_mod15(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                    default: span_mod8w(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                    }
+                } else {                        /* 4: semi-transparent modulated */
+                    const s8 *drow = gpu_dither[y & 3];
+                    for (int k = 0; k < 4; k++)
+                        sp->d16[k] = tr->dither ? (s32)drow[k] * 16 : 0;
+                    switch (tr->t) {
+                    case 0: span_semi_mod4(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
+                    case 1: span_semi_mod8(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
+                    case 2: span_semi_mod15(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
+                    default: span_semi_mod8w(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
+                    }
+                }
+            }
+        }
+        xa += step_xa;
+        xb += step_xb;
+        e0 += tr->step_e0;
+        e1 += tr->step_e1;
+        e2 += tr->step_e2;
+        u_row += (u32)tr->du_dy;
+        v_row += (u32)tr->dv_dy;
+        if (gouraud) {
+            r_row += (u32)tr->dr_dy;
+            g_row += (u32)tr->dg_dy;
+            b_row += (u32)tr->db_dy;
         }
     }
 }
@@ -1446,7 +1774,7 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
         tw_and_v = 0xFFu & ~((u32)S.tw_my << 3);
         tw_or_v  = ((u32)(S.tw_oy & S.tw_my) << 3);
         if (depth == 0u) {
-            const u16 *crow = W.vram + cy * 1024u;
+            const u16 *crow = W.vram + cy * VRAM_STRIDE;
             for (u32 i = 0; i < 16u; i++)
                 clut4_raw[i] = crow[(cx + i) & 1023u];
         }
@@ -1454,8 +1782,64 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
 
     int opaque_nomask = (!is_semi && !S.check_mask);
     int tex8_ok = (is_tex && depth == 1u && opaque_nomask && tx_base + 128u <= 1024u && ty_base + 256u <= 512u);
-    const u8  *tpage_u8  = (const u8 *)(W.vram + ty_base * 1024u + tx_base);
-    const u16 *clut8_row = W.vram + cy * 1024u;
+    const u8  *tpage_u8  = (const u8 *)(W.vram + ty_base * VRAM_STRIDE + tx_base);
+    const u16 *clut8_row = W.vram + cy * VRAM_STRIDE;
+
+    /* the span loops above (each case with the dither of the loop it replaces): textures, opaque or
+       semi-transparent, and semi-transparent colours; no mask test */
+    struct gpu_span sp;
+    int span_kind = 0, span_dither = 0;         /* 0: the loops below; 1 raw; 2 modulated; 3 / 4 the same
+                                                   semi-transparent; 5 semi-transparent colour */
+    u32 span_t = depth == 3u ? 2u : depth;
+    if (!is_tex && is_semi && !S.check_mask) {
+        span_kind = 5;
+        span_dither = is_gouraud && S.dither;
+    } else if (is_tex && !S.check_mask &&
+        (span_t == 0u || (span_t == 1u && tx_base + 128u <= 1024u) || (span_t == 2u && tx_base + 256u <= 1024u))) {
+        sp.tex8 = tpage_u8 + tw_or_v * (2u * VRAM_STRIDE) + (span_t == 0u ? tw_or_u >> 1 : tw_or_u);
+        sp.tex16 = W.vram + (ty_base + tw_or_v) * VRAM_STRIDE + tx_base + tw_or_u;
+        sp.clut = span_t == 0u ? clut4_raw : clut8_row;
+        sp.cx = cx;
+        if (span_t == 1u && cx + 255u <= 1023u)
+            sp.clut = clut8_row + cx;           /* (the CLUT does not wrap: its x added once) */
+        else if (span_t == 1u)
+            span_t = 3u;
+        sp.au12 = tw_and_u << 12;
+        sp.av12 = tw_and_v << 12;
+        sp.mask_or = mask_or;
+        sp.clb = (const u8 *)(span_cl[mask_or ? 1 : 0] + (SPAN_CL_OFS - 1));
+        if (is_raw) {
+            span_kind = is_semi ? 3 : 1;
+        } else {
+            span_kind = is_semi ? 4 : 2;
+            span_dither = !is_semi && (span_t == 1u || span_t == 3u) ? (is_gouraud ? use_dither : 0)
+                                                                     : (S.dither != 0u);
+        }
+    }
+
+    /* textured spans and no interlace copy on any row: the rows in gpu_tri_span_rows */
+    if (span_kind >= 1 && span_kind <= 4 &&
+        !(lace && (S.skip_render == 0u || maxx >= S.disp_w || maxy >= S.disp_h))) {
+        struct tri_rows tr;
+        tr.x0 = x0; tr.y0 = y0; tr.x1 = x1; tr.y1 = y1; tr.x2 = x2; tr.y2 = y2;
+        tr.s01 = s01; tr.s02 = s02; tr.s12 = s12;
+        tr.minx = minx; tr.maxx = maxx; tr.miny = miny; tr.maxy = maxy; tr.y_step = y_step;
+        tr.e0_row = e0_row; tr.e1_row = e1_row; tr.e2_row = e2_row;
+        tr.a12 = a12; tr.a20 = a20; tr.a01 = a01;
+        tr.step_e0 = step_e0; tr.step_e1 = step_e1; tr.step_e2 = step_e2;
+        tr.u_row = u_row; tr.v_row = v_row; tr.r_row = r_row; tr.g_row = g_row; tr.b_row = b_row;
+        tr.du_dx = du_dx; tr.dv_dx = dv_dx; tr.du_dy = du_dy; tr.dv_dy = dv_dy;
+        tr.dr_dx = dr_dx; tr.dg_dx = dg_dx; tr.db_dx = db_dx; tr.dr_dy = dr_dy; tr.dg_dy = dg_dy; tr.db_dy = db_dy;
+        tr.fr = v0.r << 12; tr.fg = v0.g << 12; tr.fb = v0.b << 12;
+        tr.gouraud = is_gouraud;
+        tr.kind = span_kind;
+        tr.t = (int)span_t;
+        tr.dither = span_dither;
+        tr.abr = abr;
+        tr.mask_or = mask_or;
+        gpu_tri_span_rows(&tr, &sp);
+        return;
+    }
 
     for (int y = miny; y <= maxy; y += y_step) {
         s32 xa = (x0 << 16) + s02 * (y - y0);
@@ -1479,16 +1863,62 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
             u32 dx = (u32)(xl - minx);
             s32 u_c = (s32)(u_row + (u32)du_dx * dx);
             s32 v_c = (s32)(v_row + (u32)dv_dx * dx);
-            u16 *row = W.vram + y * 1024;
+            u16 *row = W.vram + y * VRAM_STRIDE;
             int dup_odd = lace && (S.skip_render == 0u || maxx >= S.disp_w || maxy >= S.disp_h);
-            u16 *row2 = (dup_odd && y + 1 <= S.clip_y2) ? (row + 1024) : 0;
+            u16 *row2 = (dup_odd && y + 1 <= S.clip_y2) ? (row + VRAM_STRIDE) : 0;
 
-            if (tex8_ok && !is_gouraud) {
+            if (span_kind && !row2) {
+                int n = xr - xl + 1;
+                u16 *d = row + xl;
+                u32 uc = (u32)u_c, vc = (u32)v_c;
+                s32 r_c = 0, g_c = 0, b_c = 0, sdr = 0, sdg = 0, sdb = 0;
+                if (span_kind != 1 && span_kind != 3) {
+                    if (is_gouraud) {
+                        r_c = (s32)(r_row + (u32)dr_dx * dx);
+                        g_c = (s32)(g_row + (u32)dg_dx * dx);
+                        b_c = (s32)(b_row + (u32)db_dx * dx);
+                        sdr = dr_dx;
+                        sdg = dg_dx;
+                        sdb = db_dx;
+                    } else {
+                        r_c = v0.r << 12;
+                        g_c = v0.g << 12;
+                        b_c = v0.b << 12;
+                    }
+                    if (span_kind == 2) {               /* (the dither word, turned to x's phase) */
+                        u32 w = span_dw[span_dither ? (y & 3) : 4], s = ((u32)xl & 3u) * 8u;
+                        sp.dw = s ? (w >> s) | (w << (32u - s)) : w;
+                    } else {
+                        const s8 *drow = gpu_dither[y & 3];
+                        for (int k = 0; k < 4; k++)
+                            sp.d16[k] = span_dither ? (s32)drow[k] * (span_kind == 5 ? 1 : 16) : 0;
+                    }
+                }
+                switch (span_kind * 4 + (int)span_t) {
+                case 1 * 4 + 0: span_raw4(&sp, d, n, uc, vc, du_dx, dv_dx); break;
+                case 1 * 4 + 1: span_raw8(&sp, d, n, uc, vc, du_dx, dv_dx); break;
+                case 1 * 4 + 2: span_raw15(&sp, d, n, uc, vc, du_dx, dv_dx); break;
+                case 1 * 4 + 3: span_raw8w(&sp, d, n, uc, vc, du_dx, dv_dx); break;
+                case 2 * 4 + 0: span_mod4(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                case 2 * 4 + 1: span_mod8(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                case 2 * 4 + 2: span_mod15(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                case 2 * 4 + 3: span_mod8w(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                case 3 * 4 + 0: span_semi_raw4(&sp, d, xl, n, uc, vc, du_dx, dv_dx, 0, 0, 0, 0, 0, 0, abr); break;
+                case 3 * 4 + 1: span_semi_raw8(&sp, d, xl, n, uc, vc, du_dx, dv_dx, 0, 0, 0, 0, 0, 0, abr); break;
+                case 3 * 4 + 2: span_semi_raw15(&sp, d, xl, n, uc, vc, du_dx, dv_dx, 0, 0, 0, 0, 0, 0, abr); break;
+                case 3 * 4 + 3: span_semi_raw8w(&sp, d, xl, n, uc, vc, du_dx, dv_dx, 0, 0, 0, 0, 0, 0, abr); break;
+                case 4 * 4 + 0: span_semi_mod4(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb, abr); break;
+                case 4 * 4 + 1: span_semi_mod8(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb, abr); break;
+                case 4 * 4 + 2: span_semi_mod15(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb, abr); break;
+                case 4 * 4 + 3: span_semi_mod8w(&sp, d, xl, n, uc, vc, du_dx, dv_dx, r_c, g_c, b_c, sdr, sdg, sdb, abr); break;
+                default: span_semi_notex(d, xl, n, r_c, g_c, b_c, sdr, sdg, sdb, sp.d16, abr, mask_or); break;
+                }
+            } else if (tex8_ok && !is_gouraud) {
                 int raw_or_neutral = is_raw || (v0.r == 128 && v0.g == 128 && v0.b == 128);
                 for (int x = xl; x <= xr; x++, u_c += du_dx, v_c += dv_dx) {
                     u32 uu = ((u32)(u_c >> 12) & tw_and_u) | tw_or_u;
                     u32 vv = ((u32)(v_c >> 12) & tw_and_v) | tw_or_v;
-                    u8 idx = tpage_u8[vv * 2048u + uu];
+                    u8 idx = tpage_u8[vv * (2u * VRAM_STRIDE) + uu];
                     u16 tex = clut8_row[(cx + idx) & 1023u];
                     if (tex != 0u) {
                         u16 px;
@@ -1513,7 +1943,7 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
                 for (int x = xl; x <= xr; x++, u_c += du_dx, v_c += dv_dx, r_c += dr_dx, g_c += dg_dx, b_c += db_dx) {
                     u32 uu = ((u32)(u_c >> 12) & tw_and_u) | tw_or_u;
                     u32 vv = ((u32)(v_c >> 12) & tw_and_v) | tw_or_v;
-                    u8 idx = tpage_u8[vv * 2048u + uu];
+                    u8 idx = tpage_u8[vv * (2u * VRAM_STRIDE) + uu];
                     u16 tex = clut8_row[(cx + idx) & 1023u];
                     if (tex != 0u) {
                         int d = use_dither ? drow[x & 3] : 0;
@@ -1553,10 +1983,10 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
                         u32 uu = ((u32)(u_c >> 12) & tw_and_u) | tw_or_u;
                         u32 vv = ((u32)(v_c >> 12) & tw_and_v) | tw_or_v;
                         u16 tex = (depth == 0u)
-                            ? clut4_raw[(W.vram[((ty_base + vv) & 511u) * 1024u + ((tx_base + (uu >> 2)) & 1023u)] >> ((uu & 3u) << 2)) & 0x0Fu]
+                            ? clut4_raw[(W.vram[((ty_base + vv) & 511u) * VRAM_STRIDE + ((tx_base + (uu >> 2)) & 1023u)] >> ((uu & 3u) << 2)) & 0x0Fu]
                             : (depth == 1u)
-                                ? W.vram[cy * 1024u + ((cx + ((W.vram[((ty_base + vv) & 511u) * 1024u + ((tx_base + (uu >> 1)) & 1023u)] >> ((uu & 1u) << 3)) & 0xFFu)) & 1023u)]
-                                : W.vram[((ty_base + vv) & 511u) * 1024u + ((tx_base + uu) & 1023u)];
+                                ? W.vram[cy * VRAM_STRIDE + ((cx + ((W.vram[((ty_base + vv) & 511u) * VRAM_STRIDE + ((tx_base + (uu >> 1)) & 1023u)] >> ((uu & 1u) << 3)) & 0xFFu)) & 1023u)]
+                                : W.vram[((ty_base + vv) & 511u) * VRAM_STRIDE + ((tx_base + uu) & 1023u)];
                         if (tex != 0u) {
                             if (is_raw) {
                                 u16 *dst = &row[x];
@@ -1632,7 +2062,7 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     u32 du24 = (u32)du_dx << 12, dv24 = (u32)dv_dx << 12;
 
     u32 tx_base = (tpage & 0x0Fu) * 64u, ty_base = ((tpage >> 4) & 1u) * 256u;
-    const u8 *tpage_u8 = (const u8 *)(W.vram + ty_base * 1024u + tx_base);
+    const u8 *tpage_u8 = (const u8 *)(W.vram + ty_base * VRAM_STRIDE + tx_base);
     u32 cy = (clut >> 6) & 0x1FFu, cx = (clut & 0x3Fu) * 16u;
 
     int raw_or_neutral = is_raw || (v0.r == 128 && v0.g == 128 && v0.b == 128);
@@ -1648,7 +2078,7 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     if (!baked) {
         u32 slot = (S.clut4_slot++) & 3u;
         s32 *dst_c = S.clut4_cache[slot];
-        const u16 *crow = W.vram + cy * 1024u;
+        const u16 *crow = W.vram + cy * VRAM_STRIDE;
         if (raw_or_neutral) {
             for (u32 i = 0; i < 16u; i++) {
                 u16 t = crow[(cx + i) & 1023u];
@@ -1701,7 +2131,7 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
         }
         if (xl <= xr) {
             u32 dx = (u32)(xl - minx);
-            gpu_span_tex4_flat_notw(W.vram + y * 1024 + xl, xr - xl + 1, dup_odd && (y + 1 <= clip_y2),
+            gpu_span_tex4_flat_notw(W.vram + y * VRAM_STRIDE + xl, xr - xl + 1, dup_odd && (y + 1 <= clip_y2),
                                     tpage_u8, baked, (u_row + (u32)du_dx * dx) << 12,
                                     (v_row + (u32)dv_dx * dx) << 12, du24, dv24);
         }
@@ -1761,10 +2191,10 @@ static void __attribute__((noinline)) gpu_tri_tex4_gour(struct gpu_vtx v0, struc
     s32 db_dy = (s32)(((s64)(b12 * v0.b + b20 * v1.b + b01 * v2.b) * (s64)inv_area) >> 18) * y_step;
 
     u32 tx_base = (tpage & 0x0Fu) * 64u, ty_base = ((tpage >> 4) & 1u) * 256u;
-    const u8 *tpage_u8 = (const u8 *)(W.vram + ty_base * 1024u + tx_base);
+    const u8 *tpage_u8 = (const u8 *)(W.vram + ty_base * VRAM_STRIDE + tx_base);
     u32 cy = (clut >> 6) & 0x1FFu, cx = (clut & 0x3Fu) * 16u;
     s32 clut_rm[16];
-    const u16 *crow = W.vram + cy * 1024u;
+    const u16 *crow = W.vram + cy * VRAM_STRIDE;
     for (u32 i = 0; i < 16u; i++) {
         u16 t = crow[(cx + i) & 1023u];
         clut_rm[i] = (t == 0u) ? -1 : (s32)(u32)(t | mask_or);
@@ -1796,7 +2226,7 @@ static void __attribute__((noinline)) gpu_tri_tex4_gour(struct gpu_vtx v0, struc
         }
         if (xl <= xr) {
             u32 dx = (u32)(xl - minx);
-            gpu_span_tex4_gour_notw(W.vram + y * 1024 + xl, xl, xr, dup_odd && (y + 1 <= clip_y2),
+            gpu_span_tex4_gour_notw(W.vram + y * VRAM_STRIDE + xl, xl, xr, dup_odd && (y + 1 <= clip_y2),
                                     use_dither, tpage_u8, clut_rm, gpu_dither[y & 3],
                                     (u_row + (u32)du_dx * dx) << 12, (v_row + (u32)dv_dx * dx) << 12, du24, dv24,
                                     (s32)(r_row + (u32)dr_dx * dx), (s32)(g_row + (u32)dg_dx * dx),
@@ -1899,14 +2329,14 @@ static void __attribute__((noinline)) gpu_draw_tri(const struct gpu_vtx *pv0, co
                 while (xr >= xl && (r0 | r1 | r2) < 0) { xr--; r0 -= a12; r1 -= a20; r2 -= a01; }
             }
             if (xl <= xr) {
-                u16 *row = W.vram + y * 1024;
+                u16 *row = W.vram + y * VRAM_STRIDE;
                 int x = xl;
                 if (x & 1) row[x++] = flat_col;
                 for (; x + 1 <= xr; x += 2)
                     *(u32 *)(row + x) = flat32;
                 if (x <= xr) row[x] = flat_col;
                 if (dup_odd && y + 1 <= S.clip_y2) {
-                    u16 *row2 = row + 1024;
+                    u16 *row2 = row + VRAM_STRIDE;
                     int x2 = xl;
                     if (x2 & 1) row2[x2++] = flat_col;
                     for (; x2 + 1 <= xr; x2 += 2)
@@ -1977,7 +2407,7 @@ static void gpu_draw_rect(u8 op)
     int xflip = (S.gpustat >> 12) & 1;
     int yflip = (S.gpustat >> 13) & 1;
 
-    int lace_even = (S.skip_render == 1u && S.disp_h > 240 && S.clip_y2 >= 240 && x0 + w <= S.disp_w);
+    int lace_even = (S.skip_render != 0u && S.disp_h > 240 && S.clip_y2 >= 240 && x0 + w <= S.disp_w);
     if (x0 + w > S.disp_w || y0 + h > S.disp_h)
         S.vram_gen++;
     for (int dy = 0; dy < h; dy++) {
@@ -1996,7 +2426,7 @@ static void gpu_draw_rect(u8 op)
                 u16 tex = gpu_fetch_texel(tu, tv, tpage, clut);
                 if (tex == 0u) continue;
                 if (is_raw) {
-                    u16 *dst = &W.vram[y * 1024 + x];
+                    u16 *dst = &W.vram[y * VRAM_STRIDE + x];
                     if (S.check_mask && (*dst & 0x8000u)) continue;
                     u16 fg = tex & 0x7FFFu;
                     if (is_semi && (tex & 0x8000u))
@@ -2026,10 +2456,27 @@ static const u8 gp0_poly_words[32] = {
     8, 8, 8, 8, 12, 12, 12, 12
 };
 
+/* does VRAM rectangle x1..x2, y1..y2 (inclusive) meet the part shown? (a shown part that wraps: always yes) */
+static inline int gpu_rect_shown(int x1, int y1, int x2, int y2)
+{
+    int dx = S.disp_x, dy = S.disp_y, dw = S.disp_w, dh = S.disp_h;
+    if (dx + dw > 1024 || dy + dh > 512)
+        return 1;
+    return x1 < dx + dw && x2 >= dx && y1 < dy + dh && y2 >= dy;
+}
+
+/* a primitive about to be drawn: dropped while a game frame is skipped (it goes to a buffer not shown);
+   else it marks the picture changed when the drawing area meets what is shown */
 static inline int gpu_can_skip_draw(void)
 {
-    return S.skip_render >= 2u && S.vram_full_clear &&
-           S.clip_x1 == 0 && S.clip_x2 < S.disp_w;
+    int shown = gpu_rect_shown(S.clip_x1, S.clip_y1, S.clip_x2, S.clip_y2);
+    if (S.fs_active && !shown) {
+        S.fs_dropped = 1u;
+        return 1;
+    }
+    if (shown)
+        S.disp_dirty = 1u;
+    return 0;
 }
 
 static inline void gpu_exec_poly_words(const u32 *buf, u8 op)
@@ -2110,22 +2557,46 @@ static void gp0_exec_packet(void)
             u32 fh = (S.gp0_buf[2] >> 16) & 0x1FFu;
             if (x0 == 0u && fw >= (u32)S.disp_w && fh >= (u32)(S.disp_h > 240 ? 240 : S.disp_h))
                 S.vram_full_clear = 1u;
-            if (S.skip_render >= 2u && S.vram_full_clear && x0 == 0u && x0 + fw <= (u32)S.disp_w)
-                return;
+            if (fw && fh) {
+                int shown = gpu_rect_shown((int)x0, (int)y0, (int)(x0 + fw - 1u), (int)(y0 + fh - 1u));
+                if (S.fs_active && !shown && (int)x0 >= S.clip_x1 && (int)(x0 + fw - 1u) <= S.clip_x2 &&
+                    (int)y0 >= S.clip_y1 && (int)(y0 + fh - 1u) <= S.clip_y2) {
+                    S.fs_dropped = 1u;                  /* (clearing the skipped frame's own buffer) */
+                    return;
+                }
+                if (shown)
+                    S.disp_dirty = 1u;
+            }
             S.vram_gen++;
             u16 r5 = (u16)((w0 >> 3) & 31u);
             u16 g5 = (u16)(((w0 >> 11) & 31u) << 5);
             u16 b5 = (u16)(((w0 >> 19) & 31u) << 10);
             u16 col = r5 | g5 | b5;
             u32 col32 = (u32)col | ((u32)col << 16);
-            u32 dy_step = (S.skip_render == 1u && S.disp_h > 240 && x0 + fw <= (u32)S.disp_w && fh > 240u) ? 2u : 1u;
+            u32 dy_step = (S.skip_render != 0u && S.disp_h > 240 && x0 + fw <= (u32)S.disp_w && fh > 240u) ? 2u : 1u;
             u32 dy_init = (dy_step == 2u && (y0 & 1u)) ? 1u : 0u;
             for (u32 dy = dy_init; dy < fh; dy += dy_step) {
-                u16 *row = W.vram + ((y0 + dy) & 511u) * 1024u;
+                u16 *row = W.vram + ((y0 + dy) & 511u) * VRAM_STRIDE;
                 if (x0 + fw <= 1024u) {
                     u32 *r32 = (u32 *)(row + x0);
+#ifdef __mips__
+                    /* whole 32-byte lines (rows 2080 bytes apart, x0 and fw in 16 pixels): each one allocated
+                       without being read from memory first (pref 30, PrepareForStore), then all of it written */
+                    for (u32 *e = r32 + (fw >> 1); r32 < e; r32 += 8) {
+                        __asm__ volatile("pref 30, 0(%0)" : : "r"(r32) : "memory");
+                        r32[0] = col32;
+                        r32[1] = col32;
+                        r32[2] = col32;
+                        r32[3] = col32;
+                        r32[4] = col32;
+                        r32[5] = col32;
+                        r32[6] = col32;
+                        r32[7] = col32;
+                    }
+#else
                     for (u32 w = 0, wn = fw >> 1; w < wn; w++)
                         r32[w] = col32;
+#endif
                 } else {
                     for (u32 dx = 0; dx < fw; dx++)
                         row[(x0 + dx) & 1023u] = col;
@@ -2177,10 +2648,14 @@ static void gp0_exec_packet(void)
         u32 cw = ((S.gp0_buf[3] - 1u) & 0x3FFu) + 1u;
         u32 ch = (((S.gp0_buf[3] >> 16) - 1u) & 0x1FFu) + 1u;
         u16 mask_or = S.set_mask ? 0x8000u : 0u;
+        if (sx == dx && sy == dy && !mask_or)
+            return;                     /* (onto itself: nothing changes -- Tony Hawk's 2 x 1 at 0,0 most frames) */
+        if (dx + cw > 1024u || dy + ch > 512u || gpu_rect_shown((int)dx, (int)dy, (int)(dx + cw - 1u), (int)(dy + ch - 1u)))
+            S.disp_dirty = 1u;
         for (u32 y = 0; y < ch; y++) {
             for (u32 x = 0; x < cw; x++) {
-                u16 sv = W.vram[((sy + y) & 511u) * 1024u + ((sx + x) & 1023u)];
-                u16 *dp = &W.vram[((dy + y) & 511u) * 1024u + ((dx + x) & 1023u)];
+                u16 sv = W.vram[((sy + y) & 511u) * VRAM_STRIDE + ((sx + x) & 1023u)];
+                u16 *dp = &W.vram[((dy + y) & 511u) * VRAM_STRIDE + ((dx + x) & 1023u)];
                 if (!(S.check_mask && (*dp & 0x8000u)))
                     *dp = sv | mask_or;
             }
@@ -2196,6 +2671,9 @@ static void gp0_exec_packet(void)
         S.vram_th = (u16)((((S.gp0_buf[2] >> 16) - 1u) & 0x1FFu) + 1u);
         S.vram_cx = S.vram_cy = 0;
         S.gp0_mode = 1u;
+        if (S.vram_tx + S.vram_tw > 1024 || S.vram_ty + S.vram_th > 512 ||
+            gpu_rect_shown(S.vram_tx, S.vram_ty, S.vram_tx + S.vram_tw - 1, S.vram_ty + S.vram_th - 1))
+            S.disp_dirty = 1u;
         return;
     }
 
@@ -2248,7 +2726,7 @@ static void gp0_exec_packet(void)
 
 static inline void vram_put_half(u16 val)
 {
-    u16 *dst = &W.vram[((S.vram_ty + S.vram_cy) & 511u) * 1024u + ((S.vram_tx + S.vram_cx) & 1023u)];
+    u16 *dst = &W.vram[((S.vram_ty + S.vram_cy) & 511u) * VRAM_STRIDE + ((S.vram_tx + S.vram_cx) & 1023u)];
     if (!(S.check_mask && (*dst & 0x8000u)))
         *dst = val | (S.set_mask ? 0x8000u : 0u);
     if (++S.vram_cx >= S.vram_tw) {
@@ -2256,6 +2734,66 @@ static inline void vram_put_half(u16 val)
         if (++S.vram_cy >= S.vram_th)
             S.gp0_mode = 0u;
     }
+}
+
+/* words from RAM (2 MB offset `addr`, ascending) into the CPU -> VRAM transfer in progress (gp0_mode 1): what as
+   many gpu_gp0() calls do -- two vram_put_half() a word, a word's upper half dropped when the transfer ends after
+   its lower one -- with the position in registers and the row's address once a row.  Videos (MDEC) and textures
+   arrive this way by DMA: Tony Hawk's intro spent ~19% of its time in a call a word.  Returns the words used */
+static u32 gpu_vram_write_block(u32 addr, u32 n)
+{
+    u32 tx = S.vram_tx, ty = S.vram_ty, tw = S.vram_tw, th = S.vram_th, cx = S.vram_cx, cy = S.vram_cy;
+    u16 mask_or = S.set_mask ? 0x8000u : 0u;
+    int check = S.check_mask;
+    if (!check && !((tx | tw | cx) & 1u) && tx + tw <= 1024u) {
+        /* even x and width, no mask test, no wrap at x 1024: each word is two pixels side by side in one row --
+           one 32-bit store a word (rows 2080 bytes apart, x even: aligned) */
+        u32 mask32 = mask_or ? 0x80008000u : 0u, i = 0;
+        while (i < n) {
+            u32 *d = (u32 *)&W.vram[((ty + cy) & 511u) * VRAM_STRIDE + tx + cx];
+            u32 k, run = (tw - cx) >> 1;
+            if (run > n - i)
+                run = n - i;
+            for (k = 0; k < run; k++, addr = (addr + 4u) & 0x1FFFFCu)
+                d[k] = *(const u32 *)(W.ram + addr) | mask32;
+            i += run;
+            cx += run * 2u;
+            if (cx >= tw) {
+                cx = 0;
+                if (++cy >= th) {
+                    S.vram_cx = (u16)cx;
+                    S.vram_cy = (u16)cy;
+                    S.gp0_mode = 0u;
+                    return i;
+                }
+            }
+        }
+        S.vram_cx = (u16)cx;
+        S.vram_cy = (u16)cy;
+        return n;
+    }
+    u16 *row = &W.vram[((ty + cy) & 511u) * VRAM_STRIDE];
+    for (u32 i = 0; i < n; i++, addr = (addr + 4u) & 0x1FFFFCu) {
+        u32 w = *(const u32 *)(W.ram + addr);
+        for (int h = 0; h < 2; h++, w >>= 16) {
+            u16 *dst = &row[(tx + cx) & 1023u];
+            if (!(check && (*dst & 0x8000u)))
+                *dst = (u16)((u16)w | mask_or);
+            if (++cx >= tw) {
+                cx = 0;
+                if (++cy >= th) {
+                    S.vram_cx = (u16)cx;
+                    S.vram_cy = (u16)cy;
+                    S.gp0_mode = 0u;
+                    return i + 1u;
+                }
+                row = &W.vram[((ty + cy) & 511u) * VRAM_STRIDE];
+            }
+        }
+    }
+    S.vram_cx = (u16)cx;
+    S.vram_cy = (u16)cy;
+    return n;
 }
 
 static void gpu_gp0(u32 word)
@@ -2304,7 +2842,7 @@ static void gpu_gp0(u32 word)
 static u32 gpu_read_data(void)
 {
     if (S.gpustat & (1u << 27)) {
-        u16 lo = W.vram[((S.vram_ry + S.vram_rcy) & 511u) * 1024u + ((S.vram_rx + S.vram_rcx) & 1023u)];
+        u16 lo = W.vram[((S.vram_ry + S.vram_rcy) & 511u) * VRAM_STRIDE + ((S.vram_rx + S.vram_rcx) & 1023u)];
         if (++S.vram_rcx >= S.vram_rw) {
             S.vram_rcx = 0;
             if (++S.vram_rcy >= S.vram_rh)
@@ -2312,7 +2850,7 @@ static u32 gpu_read_data(void)
         }
         u16 hi = 0;
         if (S.gpustat & (1u << 27)) {
-            hi = W.vram[((S.vram_ry + S.vram_rcy) & 511u) * 1024u + ((S.vram_rx + S.vram_rcx) & 1023u)];
+            hi = W.vram[((S.vram_ry + S.vram_rcy) & 511u) * VRAM_STRIDE + ((S.vram_rx + S.vram_rcx) & 1023u)];
             if (++S.vram_rcx >= S.vram_rw) {
                 S.vram_rcx = 0;
                 if (++S.vram_rcy >= S.vram_rh)
@@ -2342,6 +2880,8 @@ static void gpu_gp1(u32 word)
         S.disp_w = PSX_W_DEF;
         S.disp_h = PSX_H_DEF;
         S.disp_disabled = S.vram_full_clear = 0;
+        S.fs_active = S.fs_dropped = S.disp_stale = 0;
+        S.disp_dirty = 1u;
         break;
     case 0x01u: /* Reset Command Buffer */
         S.gp0_len = S.gp0_mode = 0;
@@ -2350,6 +2890,8 @@ static void gpu_gp1(u32 word)
         S.gpustat &= ~(1u << 24);
         break;
     case 0x03u: /* Display Enable (0=on, 1=off) */
+        if (S.disp_disabled != (u8)(arg & 1u))
+            S.disp_dirty = 1u;
         S.disp_disabled = (u8)(arg & 1u);
         if (S.disp_disabled) S.gpustat |= (1u << 23);
         else                 S.gpustat &= ~(1u << 23);
@@ -2357,10 +2899,22 @@ static void gpu_gp1(u32 word)
     case 0x04u: /* DMA Direction */
         S.gpustat = (S.gpustat & ~(3u << 29)) | ((arg & 3u) << 29);
         break;
-    case 0x05u: /* Start of Display Area in VRAM */
-        S.disp_x = (u16)(arg & 0x3FEu);
-        S.disp_y = (u16)((arg >> 10) & 0x1FFu);
+    case 0x05u: { /* Start of Display Area in VRAM */
+        u16 nx = (u16)(arg & 0x3FEu), ny = (u16)((arg >> 10) & 0x1FFu);
+        if (nx != S.disp_x || ny != S.disp_y) {         /* a flip: the next game frame begins */
+            S.disp_stale = (u8)(S.fs_active && S.fs_dropped);   /* the buffer shown now was not drawn */
+            /* the player is late: skip drawing the coming game frame -- never two in a row */
+            S.fs_active = (u8)(S.skip_render >= 2u && !S.disp_stale);
+            S.fs_dropped = 0u;
+            S.fs_age = 0u;
+            S.fs_skipped += S.fs_active;
+            S.disp_dirty = 1u;
+            S.disp_flipped = 1u;
+        }
+        S.disp_x = nx;
+        S.disp_y = ny;
         break;
+    }
     case 0x06u: /* Horizontal Display Range */
         break;
     case 0x07u: /* Vertical Display Range */
@@ -2370,6 +2924,7 @@ static void gpu_gp1(u32 word)
         S.disp_w = (arg & 0x40u) ? 368 : wtab[arg & 3u];
         S.disp_h = ((arg & 0x04u) && (arg & 0x20u)) ? 480 : 240;
         S.disp_24bpp = (u8)((arg >> 4) & 1u);
+        S.disp_dirty = 1u;
         if (arg & 0x08u)
             S.is_pal = 1u;
         S.gpustat = (S.gpustat & ~0x7F4000u)
@@ -2411,23 +2966,24 @@ static void gpu_scanout(u16 *picture)
             u16 *dst = picture + y * w;
             for (int x = 0; x < w; x++) {
                 u32 bo = (row_byte_base + (u32)x * 3u) & 0xFFFFFu;
-                u8 r = vbytes[bo];
-                u8 g = vbytes[(bo + 1u) & 0xFFFFFu];
-                u8 b = vbytes[(bo + 2u) & 0xFFFFFu];
+                u32 b1 = (bo + 1u) & 0xFFFFFu, b2 = (bo + 2u) & 0xFFFFFu;
+                u8 r = vbytes[(bo >> 11) * (2u * VRAM_STRIDE) + (bo & 2047u)];
+                u8 g = vbytes[(b1 >> 11) * (2u * VRAM_STRIDE) + (b1 & 2047u)];
+                u8 b = vbytes[(b2 >> 11) * (2u * VRAM_STRIDE) + (b2 & 2047u)];
                 dst[x] = (u16)(((u16)(b >> 3) << 10) | ((u16)(g >> 3) << 5) | (r >> 3));
             }
         }
     } else if (((S.disp_x | (u16)w | ((u32)(__UINTPTR_TYPE__)picture >> 1)) & 1u) == 0u && S.disp_x + w <= 1024) {
         int wn = w >> 1;
         for (int y = 0; y < h; y++) {
-            const u32 *s32 = (const u32 *)(W.vram + ((S.disp_y + y) & 511) * 1024 + S.disp_x);
+            const u32 *s32 = (const u32 *)(W.vram + ((S.disp_y + y) & 511) * VRAM_STRIDE + S.disp_x);
             u32 *d32 = (u32 *)(picture + y * w);
             for (int i = 0; i < wn; i++)
                 d32[i] = s32[i] & 0x7FFF7FFFu;
         }
     } else {
         for (int y = 0; y < h; y++) {
-            const u16 *src = W.vram + ((S.disp_y + y) & 511) * 1024;
+            const u16 *src = W.vram + ((S.disp_y + y) & 511) * VRAM_STRIDE;
             u16 *dst = picture + y * w;
             for (int x = 0; x < w; x++)
                 dst[x] = src[(S.disp_x + x) & 1023] & 0x7FFFu;
@@ -2550,8 +3106,17 @@ static void dma_run(int ch)
             }
             S.dma_madr[2] = 0xFFFFFFu;
         } else if (dir_from_ram) {
-            for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu)
+            for (u32 i = 0; i < words; ) {
+                if (S.gp0_mode == 1u && step > 0) {             /* pixels of a CPU -> VRAM transfer: a block */
+                    u32 used = gpu_vram_write_block(addr, words - i);
+                    i += used;
+                    addr = (addr + used * 4u) & 0x1FFFFCu;
+                    continue;
+                }
                 gpu_gp0(ram_rd32(addr));
+                i++;
+                addr = (u32)((int)addr + step) & 0x1FFFFCu;
+            }
             S.dma_madr[2] = addr;
         } else {
             for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu)
@@ -2560,16 +3125,25 @@ static void dma_run(int ch)
         }
     } else if (ch == 3) { /* CD-ROM -> RAM */
         S.cd_xa_streak = 0u;
+        /* (the FIFO's place in a register, 4 bytes a word while 4 are left: it was kept in S a byte -- a video's
+           sectors came through here at ~10% of the time; past the end the last byte again, as before) */
+        u32 pos = S.cd_fifo_pos, len = S.cd_fifo_len;
+        const u8 *f = W.cd_fifo;
         for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu) {
-            u32 w = 0;
-            for (int b = 0; b < 4; b++) {
-                u8 v = (S.cd_fifo_pos < S.cd_fifo_len)
-                    ? W.cd_fifo[S.cd_fifo_pos++]
-                    : (S.cd_fifo_len ? W.cd_fifo[S.cd_fifo_len - 1u] : 0u);
-                w |= (u32)v << (b * 8);
+            u32 w;
+            if (pos + 4u <= len) {
+                w = (u32)f[pos] | ((u32)f[pos + 1u] << 8) | ((u32)f[pos + 2u] << 16) | ((u32)f[pos + 3u] << 24);
+                pos += 4u;
+            } else {
+                w = 0;
+                for (int b = 0; b < 4; b++) {
+                    u8 v = (pos < len) ? f[pos++] : (len ? f[len - 1u] : 0u);
+                    w |= (u32)v << (b * 8);
+                }
             }
             ram_wr32(addr, w);
         }
+        S.cd_fifo_pos = pos;
         S.dma_madr[3] = addr;
     } else if (ch == 4) { /* SPU <-> RAM */
         for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu) {
@@ -4216,12 +4790,14 @@ static int hle_bios_call(u32 table, u32 fn)
             S.r[4]  = a1;
             S.r[5]  = a2;
             S.r[31] = 0xBFC00300u;
+            st_reset_other++;
             jit_reset_all();
             S.pc = pc0;
             S.next_pc = pc0 + 4u;
             return 1;
         }
         case 0x44u: /* FlushCache */
+            st_reset_flush++;
             jit_reset_all();
             break;
         case 0x49u: /* GPU_cw */
@@ -4592,6 +5168,7 @@ static int r3000_run_batch(int count)
                     for (u32 i = 0; i < 1024u; i++) W.ram[0x0500u + i] = W.exec_low_tables[i];
                     hle_ev_cb_cursor = 0u;
                     update_cop0_irq();
+                    st_reset_other++;
                     jit_reset_all();
                     pc = S.pc = S.exec_saved.ra;
                     next_pc = S.next_pc = pc + 4u;
@@ -4999,11 +5576,13 @@ typedef char jit_chk_gted[(__builtin_offsetof(struct psx_state_s, gte_d)      ==
 typedef char jit_chk_gtec[(__builtin_offsetof(struct psx_state_s, gte_c)      == 0x110) ? 1 : -1];
 typedef char jit_chk_stop[(__builtin_offsetof(struct psx_state_s, jit_stop)   == 0x210) ? 1 : -1];
 typedef char jit_chk_hc  [(__builtin_offsetof(struct psx_state_s, jit_hc_ptr) == 0x214) ? 1 : -1];
+typedef char jit_chk_bias[(__builtin_offsetof(struct psx_state_s, jit_bias)   == 0x21C) ? 1 : -1];
 typedef char jit_chk_spad[(__builtin_offsetof(struct psx_state_s, scratch)    == 0x220) ? 1 : -1];
 
 extern int  psx_jit_enter(int budget, void *s_ptr, void *ram_ptr, void *entry_ptr);
 extern void psx_jit_exit(void);
 extern void psx_jit_link_ram(void);
+extern void psx_jit_link_ram2(void);
 extern void psx_jit_nclip(void);
 extern void psx_jit_call_hlp(void);
 extern void psx_jit_lb(void);
@@ -5084,6 +5663,7 @@ __asm__(
     ".globl psx_jit_enter\n"
     ".globl psx_jit_exit\n"
     ".globl psx_jit_link_ram\n"
+    ".globl psx_jit_link_ram2\n"
     ".globl psx_jit_nclip\n"
     ".globl psx_jit_call_hlp\n"
     ".globl psx_jit_lb\n"
@@ -5152,6 +5732,27 @@ __asm__(
     "    nop\n"
     "    jr    $t2\n"
     "    nop\n"
+    /* a block's exit not linked yet: "jal psx_jit_link_ram2; addiu $s4, $s4, -cost; .word target_pc" -- the
+       target compiled: the jal becomes "j target" (the addiu stays its delay slot) and it goes there (the
+       target's prologue tests the budget); not compiled: leaves with $a0 = target_pc */
+    "psx_jit_link_ram2:\n"
+    "    lw    $a0, 0($ra)\n"
+    "    ext   $t1, $a0, 0, 21\n"
+    "    addu  $t1, $s2, $t1\n"
+    "    lw    $t2, 0($t1)\n"
+    "    sltiu $t0, $t2, 2\n"
+    "    bne   $t0, $0, psx_jit_exit\n"
+    "    ext   $t3, $t2, 2, 26\n"
+    "    lui   $t0, 0x0800\n"
+    "    or    $t3, $t3, $t0\n"
+    "    addiu $t1, $ra, -8\n"
+    "    sw    $t3, 0($t1)\n"
+    "    cache 0x15, 0($t1)\n"
+    "    cache 0x10, 0($t1)\n"
+    "    sync\n"
+    "    .word 0x000000c0\n"
+    "    jr    $t2\n"
+    "    nop\n"
     "psx_jit_link_ram:\n"
     "    ext   $t1, $a0, 0, 21\n"
     "    addu  $t1, $s2, $t1\n"
@@ -5170,10 +5771,13 @@ __asm__(
     "    jr    $t2\n"
     "    nop\n"
     "psx_jit_exit:\n"
+    "    lw    $t1, 0x21C($s0)\n"        /* the budget a helper parked (jit_stop came up) */
     "    sw    $a0, 0x080($s0)\n"
     "    addiu $t0, $a0, 4\n"
     "    sw    $t0, 0x084($s0)\n"
     "    sw    $0,  0x000($s0)\n"
+    "    sw    $0,  0x21C($s0)\n"
+    "    addu  $s4, $s4, $t1\n"
     "    lw    $v0, 24($sp)\n"
     "    subu  $v0, $v0, $s4\n"
     "    lw    $s0, 28($sp)\n"
@@ -5234,7 +5838,15 @@ __asm__(
     "    sw    $ra, 48($sp)\n"
     "    jalr  $t0\n"
     "    nop\n"
-    "    lw    $a2, 16($sp)\n"
+    /* the helper raised jit_stop (an IRQ, a write to code): the budget is parked and $s4 zeroed, so the
+       block's own exit test leaves -- the blocks do not test jit_stop themselves */
+    "    lw    $t0, 0x210($s0)\n"
+    "    beq   $t0, $0, 3f\n"
+    "    lw    $t1, 0x21C($s0)\n"
+    "    addu  $t1, $t1, $s4\n"
+    "    sw    $t1, 0x21C($s0)\n"
+    "    addu  $s4, $0, $0\n"
+    "3:  lw    $a2, 16($sp)\n"
     "    lw    $a3, 20($sp)\n"
     "    lw    $t4, 24($sp)\n"
     "    lw    $t5, 28($sp)\n"
@@ -5958,7 +6570,22 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
     }
 
     /* Loads: LB(0x20), LH(0x21), LWL(0x22), LW(0x23), LBU(0x24), LHU(0x25), LWR(0x26) */
-    if (opc >= 0x20u && opc <= 0x26u) {
+    if (opc == 0x20u || opc == 0x21u || opc == 0x23u || opc == 0x24u || opc == 0x25u) {
+        void *thunk = (opc == 0x23u) ? (void *)psx_jit_lw
+                    : (opc == 0x25u) ? (void *)psx_jit_lhu
+                    : (opc == 0x21u) ? (void *)psx_jit_lh
+                    : (opc == 0x24u) ? (void *)psx_jit_lbu : (void *)psx_jit_lb;
+        /* (a call of the shared thunk, 3 words: in line it was 11 and the 16 KB I-cache made that slower) */
+        u32 rsh = rc_read(pp, rc, rs, 0xFFu);
+        *(*pp)++ = J_J(0x03u, thunk);
+        *(*pp)++ = J_I(0x09u, rsh, 4u, imm);
+        if (rt) {
+            u32 rth = rc_write(pp, rc, rt, 0xFFu, 0xFFu);
+            *(*pp)++ = J_R(0, 2u, 0u, rth, 0u, 0x21u);
+        }
+        return;
+    }
+    if (opc >= 0x20u && opc <= 0x26u) {                 /* LWL / LWR */
         jit_emit_load_into_v0(pp, rc, op);
         if (rt) {
             u32 rth = rc_write(pp, rc, rt, 0xFFu, 0xFFu);
@@ -5994,47 +6621,68 @@ static int jit_target_safe_after_load(u32 target_pc, u32 load_rt)
     return jit_classify_nonbranch(op0, &dm) == 1;
 }
 
+/* a jump to another block (in RAM), its delay slot `delay` (0: nop): compiled already -> "j code" (2 words),
+   else "jal psx_jit_link_ram2; delay; .word target_pc" (3 words; the jal becomes a j once the target is compiled) */
+static void jit_emit_exit_to(u32 **pp, u32 target_pc, u32 known_code, int cost_delta)
+{
+    u32 *p = *pp;
+    u32 delay = cost_delta ? J_I(0x09u, 20u, 20u, cost_delta) : 0u;   /* addiu $s4, $s4, cost_delta */
+    if (known_code >= 2u) {
+        *p++ = J_J(0x02u, known_code);
+        *p++ = delay;
+    } else {
+        *p++ = J_J(0x03u, (void *)psx_jit_link_ram2);
+        *p++ = delay;
+        *p++ = target_pc;
+    }
+    *pp = p;
+}
+
 static void __attribute__((noinline, optimize("Os"))) jit_emit_direct_jump_ram(u32 **pp, u32 target_pc, u32 known_code, int cost)
 {
     u32 *p = *pp;
     S.jit_linked = 1u;
-    *p++ = J_I(0x09u, 20u, 20u, -cost);                                    /* [0] addiu $s4, $s4, -cost */
-    *p++ = J_I(0x23u, 16u, 8u, 0x210);                                     /* [1] lw    $t0, 0x210($s0) */
-    *p++ = J_I(0x06u, 20u, 0u, 5);                                         /* [2] blez  $s4, [8] (3 + 5 = 8) */
-    *p++ = J_I(0x0Fu, 0u, 4u, target_pc >> 16);                            /* [3] [delay] lui $a0, hi(target_pc) */
-    *p++ = J_I(0x05u, 8u, 0u, 3);                                          /* [4] bne   $t0, $0, [8] (5 + 3 = 8) */
-    *p++ = J_I(0x0Du, 4u, 4u, target_pc);                                  /* [5] [delay] ori $a0, $a0, lo(target_pc) */
-    *p++ = (known_code >= 2u) ? J_J(0x02u, known_code)
-                              : J_J(0x03u, (void *)psx_jit_link_ram);      /* [6] j known_code OR jal psx_jit_link_ram */
-    *p++ = 0u;                                                             /* [7] [delay] nop */
-    *p++ = J_J(0x02u, (void *)psx_jit_exit);                               /* [8] j psx_jit_exit */
-    *p++ = J_I(0x0Du, 4u, 4u, target_pc);                                  /* [9] [delay] ori $a0, $a0, lo(target_pc) */
+    /* the target's prologue tests the budget (and $s4 zeroed by a helper that raised jit_stop) */
+    jit_emit_exit_to(&p, target_pc, known_code, -cost);
     *pp = p;
+}
+
+/* psx_frame's Pattern 7 / Pattern 8 VBlank waits: left to the interpreter, which fast-forwards them (never
+   recompiled) */
+static int jit_wait_loop_at(u32 off)
+{
+    if (off + 68u > PSX_RAM_SIZE)
+        return 0;
+    const u32 *rp0 = (const u32 *)(W.ram + off);
+    if ((rp0[0] >> 26) == 0x03u && rp0[1] == 0u && (rp0[15] & 0xFC1FFFFFu) == 0x1000FFF0u)
+        return 1;
+    return off + 96u <= PSX_RAM_SIZE &&
+           rp0[0] == 0x8FA20010u && rp0[2] == 0x2442FFFFu && rp0[3] == 0xAFA20010u &&
+           rp0[6] == 0x1443000Bu && rp0[22] == 0x1440FFE9u;
 }
 
 static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start_pc)
 {
-    if (S.jit_used + 1024u > JIT_BUF_WORDS)
+    if (S.jit_used + JIT_BLOCK_MAX > JIT_BUF_WORDS) {
+        st_reset_full++;
         jit_reset_all();
+    }
+    st_compiles++;
 
     u32 start_off = start_pc & 0x1FFFFCu;
     /* Leave Namco/PsyQ VBlank wait loops uncompiled so Pattern 7 / Pattern 8 fast-forwards immediately */
-    if (start_off + 68u <= PSX_RAM_SIZE) {
-        const u32 *rp0 = (const u32 *)(W.ram + start_off);
-        if ((rp0[0] >> 26) == 0x03u && rp0[1] == 0u && (rp0[15] & 0xFC1FFFFFu) == 0x1000FFF0u) {
-            W.jit_entry[start_off >> 2] = 1u;
-            return 1u;
-        }
-        if (start_off + 96u <= PSX_RAM_SIZE &&
-            rp0[0] == 0x8FA20010u && rp0[2] == 0x2442FFFFu && rp0[3] == 0xAFA20010u &&
-            rp0[6] == 0x1443000Bu && rp0[22] == 0x1440FFE9u) {
-            W.jit_entry[start_off >> 2] = 1u;
-            return 1u;
-        }
+    if (jit_wait_loop_at(start_off)) {
+        W.jit_entry[start_off >> 2] = 1u;
+        return 1u;
     }
 
     u32 *block_start = &W.jit_buf[S.jit_used];
     u32 *p = block_start;
+    /* the prologue: the budget (blocks run on while $s4 > 0; a helper that raised jit_stop zeroed it) */
+    *p++ = J_I(0x07u, 20u, 0u, 3);                      /* bgtz  $s4, body */
+    *p++ = J_I(0x0Fu, 0u, 4u, start_pc >> 16);          /* [delay] lui $a0, hi(start_pc) */
+    *p++ = J_J(0x02u, (void *)psx_jit_exit);            /* j     psx_jit_exit */
+    *p++ = J_I(0x0Du, 4u, 4u, start_pc);                /* [delay] ori $a0, $a0, lo(start_pc) */
     struct jit_rc rc;
     rc_init(&rc);
     int cost = 0;
@@ -6042,7 +6690,7 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
     u32 last_off = start_off;
     int ended_by_branch = 0;
 
-    while (k < 44u) {
+    while (k < JIT_MAX_INSNS) {
         u32 cur_pc  = start_pc + k * 4u;
         u32 cur_off = cur_pc & 0x1FFFFCu;
         if (cur_off < 0x1000u || cur_off > 0x1FFFF4u)
@@ -6085,8 +6733,8 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
             }
 
             if (opc == 0x02u || opc == 0x03u) { /* J / JAL */
-                rc_flush_all(&p, &rc);
-                if (opc == 0x03u) { j_emit_li32(&p, 9u, fall_pc); j_emit_store_gpr(&p, 9u, 31u); }
+                /* the link through the register cache (no flush before the delay slot: it reloaded them) */
+                if (opc == 0x03u) { u32 rah = rc_write(&p, &rc, 31u, 0xFFu, 0xFFu); j_emit_li32(&p, rah, fall_pc); }
                 int extra = 0;
                 jit_emit_nonbranch(&p, &rc, delay_op, &extra);
                 rc_flush_all(&p, &rc);
@@ -6106,9 +6754,11 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
                     *p++ = J_I(0x09u, 20u, 20u, -cost);
                 }
             } else if (opc == 0x00u) { /* JR / JALR */
-                rc_load_into_hreg(&p, &rc, 22u, rs); /* $s6 = target */
-                rc_flush_all(&p, &rc);
-                if ((op & 0x3Fu) == 0x09u && rd) { j_emit_li32(&p, 9u, fall_pc); j_emit_store_gpr(&p, 9u, rd); }
+                rc_load_into_hreg(&p, &rc, 22u, rs); /* $s6 = target (before the link: JALR rd = rs) */
+                if ((op & 0x3Fu) == 0x09u && rd) {
+                    u32 rdh = rc_write(&p, &rc, rd, 0xFFu, 0xFFu);
+                    j_emit_li32(&p, rdh, fall_pc);
+                }
                 int extra = 0;
                 jit_emit_nonbranch(&p, &rc, delay_op, &extra);
                 rc_flush_all(&p, &rc);
@@ -6171,59 +6821,59 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
                 last_off = cur_off + 4u;
                 k += 2u;
             } else { /* BEQ, BNE, BLEZ, BGTZ, REGIMM */
-                rc_load_into_hreg(&p, &rc, 8u, rs);
-                if (opc == 0x04u || opc == 0x05u)
-                    rc_load_into_hreg(&p, &rc, 9u, rt);
-                rc_flush_all(&p, &rc);
-                if (opc == 0x01u && (rt & 0x1Eu) == 0x10u) {
-                    j_emit_li32(&p, 10u, fall_pc);
-                    j_emit_store_gpr(&p, 10u, 31u);
-                }
-
                 int both_ram = ((fall_pc - 0x80001000u) < 0x001FF000u && !(fall_pc & 3u) &&
                                 (rel_pc  - 0x80001000u) < 0x001FF000u && !(rel_pc  & 3u));
+                if (!both_ram) {
+                    rc_load_into_hreg(&p, &rc, 8u, rs);
+                    if (opc == 0x04u || opc == 0x05u)
+                        rc_load_into_hreg(&p, &rc, 9u, rt);
+                    rc_flush_all(&p, &rc);
+                    if (opc == 0x01u && (rt & 0x1Eu) == 0x10u) {
+                        j_emit_li32(&p, 10u, fall_pc);
+                        j_emit_store_gpr(&p, 10u, 31u);
+                    }
+                }
 
                 if (both_ram) {
                     S.jit_linked = 1u;
                     u32 fall_code = (fall_pc == start_pc) ? (u32)(__UINTPTR_TYPE__)block_start : W.jit_entry[(fall_pc & 0x1FFFFCu) >> 2];
                     u32 rel_code  = (rel_pc  == start_pc) ? (u32)(__UINTPTR_TYPE__)block_start : W.jit_entry[(rel_pc  & 0x1FFFFCu) >> 2];
 
-                    if (opc == 0x04u || opc == 0x05u) *p++ = J_I(opc, 8u, 9u, 2);
-                    else if (opc == 0x01u)            *p++ = J_I(0x01u, 8u, rt & 1u, 2);
-                    else                              *p++ = J_I(opc, 8u, 0u, 2);
-                    *p++ = J_I(0x0Du, 0u, 22u, 1u);                /* [delay] $s6 = 1 (taken) */
-                    *p++ = J_R(0, 0u, 0u, 22u, 0u, 0x21u);         /* not taken: $s6 = 0 */
+                    /* the condition into $s6 from the cached registers, before the delay slot's instruction runs
+                       (and before a link): taken when it is non-zero (taken_if_set) or zero */
+                    u32 rsh = rc_read(&p, &rc, rs, 0xFFu);
+                    int taken_if_set;
+                    if (opc == 0x04u || opc == 0x05u) {         /* BEQ / BNE: xor $s6, rs, rt */
+                        u32 rth = rc_read(&p, &rc, rt, rsh);
+                        *p++ = J_R(0, rsh, rth, 22u, 0u, 0x26u);
+                        taken_if_set = (opc == 0x05u);
+                    } else if (opc == 0x06u || opc == 0x07u) {  /* BLEZ / BGTZ: slti $s6, rs, 1 */
+                        *p++ = J_I(0x0Au, rsh, 22u, 1u);
+                        taken_if_set = (opc == 0x06u);
+                    } else {                                    /* BLTZ(AL) / BGEZ(AL): srl $s6, rs, 31 */
+                        *p++ = J_R(0, 0u, rsh, 22u, 31u, 0x02u);
+                        taken_if_set = !(rt & 1u);
+                    }
+                    if (opc == 0x01u && (rt & 0x1Eu) == 0x10u) {     /* BLTZAL / BGEZAL: the link, taken or not */
+                        u32 rah = rc_write(&p, &rc, 31u, 0xFFu, 0xFFu);
+                        j_emit_li32(&p, rah, fall_pc);
+                    }
 
                     int extra = 0;
                     jit_emit_nonbranch(&p, &rc, delay_op, &extra);
-                    rc_flush_all(&p, &rc);
                     cost += 2 + extra;
                     last_off = cur_off + 4u;
                     k += 2u;
+                    rc_flush_all(&p, &rc);
 
-                    *p++ = J_I(0x09u, 20u, 20u, -cost);            /* [ 0] addiu $s4, $s4, -cost */
-                    *p++ = J_I(0x23u, 16u, 8u, 0x210);             /* [ 1] lw    $t0, 0x210($s0) */
-                    *p++ = J_I(0x05u, 22u, 0u, 7);                 /* [ 2] bne   $s6, $0, [10] (taken_arm) */
-                    *p++ = J_I(0x0Fu, 0u, 4u, fall_pc >> 16);      /* [ 3] [delay] lui $a0, hi(fall_pc) */
-                    *p++ = J_I(0x06u, 20u, 0u, 12);                /* [ 4] blez  $s4, [17] (bail_exit) */
-                    *p++ = J_I(0x0Du, 4u, 4u, fall_pc);            /* [ 5] [delay] ori $a0, $a0, lo(fall_pc) */
-                    *p++ = J_I(0x05u, 8u, 0u, 10);                 /* [ 6] bne   $t0, $0, [17] (bail_exit) */
-                    *p++ = 0u;                                     /* [ 7] nop */
-                    *p++ = (fall_code >= 2u) ? J_J(0x02u, fall_code)
-                         : (fall_code == 1u) ? J_J(0x02u, (void *)psx_jit_exit)
-                         : J_J(0x03u, (void *)psx_jit_link_ram);   /* [ 8] j fall_code / jal psx_jit_link_ram */
-                    *p++ = 0u;                                     /* [ 9] nop */
-                    *p++ = J_I(0x0Fu, 0u, 4u, rel_pc >> 16);       /* [10] lui   $a0, hi(rel_pc) */
-                    *p++ = J_I(0x06u, 20u, 0u, 5);                 /* [11] blez  $s4, [17] (bail_exit) */
-                    *p++ = J_I(0x0Du, 4u, 4u, rel_pc);             /* [12] [delay] ori $a0, $a0, lo(rel_pc) */
-                    *p++ = J_I(0x05u, 8u, 0u, 3);                  /* [13] bne   $t0, $0, [17] (bail_exit) */
-                    *p++ = 0u;                                     /* [14] nop */
-                    *p++ = (rel_code >= 2u) ? J_J(0x02u, rel_code)
-                         : (rel_code == 1u) ? J_J(0x02u, (void *)psx_jit_exit)
-                         : J_J(0x03u, (void *)psx_jit_link_ram);   /* [15] j rel_code / jal psx_jit_link_ram */
-                    *p++ = 0u;                                     /* [16] nop */
-                    *p++ = J_J(0x02u, (void *)psx_jit_exit);       /* [17] j     psx_jit_exit */
-                    *p++ = 0u;                                     /* [18] nop */
+                    /* bne/beq $s6, $0, taken; [delay] addiu $s4, -cost; the fall-through's exit; taken: the
+                       branch target's exit (each 2 words, 3 while not linked; the targets' prologues test the
+                       budget) */
+                    u32 fall_words = (fall_code >= 2u) ? 2u : 3u;
+                    *p++ = J_I(taken_if_set ? 0x05u : 0x04u, 22u, 0u, 1u + fall_words);
+                    *p++ = J_I(0x09u, 20u, 20u, -cost);
+                    jit_emit_exit_to(&p, fall_pc, fall_code, 0);
+                    jit_emit_exit_to(&p, rel_pc, rel_code, 0);
                 } else {
                     j_emit_li32(&p, 10u, fall_pc);
                     j_emit_li32(&p, 11u, rel_pc);
@@ -6267,7 +6917,7 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
                 ((ncls != 0 || nbr) &&
                  !jit_insn_reads_gpr(next_op, load_rt) && !jit_insn_writes_gpr(next_op, load_rt))) {
                 /* Fast path: next instruction does not touch load_rt (or LWL+LWR merge pair) */
-            } else if (ncls == 1 && k + 1u < 44u) {
+            } else if (ncls == 1 && k + 1u < JIT_MAX_INSNS) {
                 /* True R3000A load-delay overlap: evaluate load into 20($sp), run next_op on old GPR, then commit */
                 jit_emit_load_into_v0(&p, &rc, op);
                 *p++ = J_I(0x2Bu, 29u, 2u, 20);
@@ -6315,6 +6965,8 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
     S.jit_used = (u32)(p - W.jit_buf);
     for (u32 c = (start_off >> 6); c <= (last_off >> 6); c++)
         W.jit_has_code[c] = 1u;
+    for (u32 w = (start_off >> 2); w <= (last_off >> 2); w++)
+        W.jit_code_bits[(w >> 5) & (JIT_RAM_WORDS / 32u - 1u)] |= 1u << (w & 31u);
 
     /* Write back D-cache & invalidate I-cache over the newly emitted block */
     u32 ca = (u32)(__UINTPTR_TYPE__)block_start & ~15u;
@@ -6588,7 +7240,7 @@ const char *psx_load(const u8 *data, u32 size, const char *path)
     hle_ev_cb_cursor = 0u;
 
     for (u32 i = 0; i < PSX_RAM_SIZE; i++) W.ram[i] = 0u;
-    for (u32 i = 0; i < 1024u * 512u; i++) W.vram[i] = 0u;
+    for (u32 i = 0; i < VRAM_STRIDE * 512u; i++) W.vram[i] = 0u;
     for (u32 i = 0; i < PSX_SPU_SIZE; i++) W.spu_ram[i] = 0u;
     for (u32 i = 0; i < 0x1000u; i++)      W.io[i] = 0u;
     gpu_recip_dy[0] = 0u;
@@ -6600,6 +7252,21 @@ const char *psx_load(const u8 *data, u32 size, const char *path)
     for (u32 i = 0; i < 96u; i++) {
         clamp5_g[i] = (u16)clamp5_tab[i] << 5;
         clamp5_b[i] = (u16)clamp5_tab[i] << 10;
+    }
+    for (int y = 0; y < 4; y++) {
+        span_dw[y] = 0u;
+        for (int k = 0; k < 4; k++)
+            span_dw[y] |= (u32)(gpu_dither[y][k] * 16 + 128) << (8 * k);
+    }
+    span_dw[4] = 0x80808080u;
+    for (int i = 0; i < 512; i++) {
+        int v = i - SPAN_CL_OFS;
+        u16 c = (u16)(v < 0 ? 0 : v > 31 ? 31 : v);
+        for (int k = 0; k < 2; k++) {
+            span_cl[k][i] = (u16)(c | (k ? 0x8000u : 0u));
+            span_cl[k][512 + i] = (u16)(c << 5);
+            span_cl[k][1024 + i] = (u16)(c << 10);
+        }
     }
     S.vram_gen = 1u;
     jit_reset_all();
@@ -6696,14 +7363,92 @@ void psx_set_region(int region) { S.region_override = (u8)region; }
 void psx_set_skip_render(int skip) { S.skip_render = (u8)skip; }
 int psx_jammed(void) { return S.jammed; }
 
+#ifdef __mips__
+/* prof.c's hook: the samples in the recompiled code, by the R3000 block each 64-byte piece belongs to (the
+   block starting in it or before it, as the code is laid down now), the 40 hottest: "G guest-address samples" */
+void prof_report_more(const volatile u32 *h, u32 pieces, u32 shift)
+{
+    u32 base = (u32)(__UINTPTR_TYPE__)W.jit_buf, used = S.jit_used * 4u;
+    if (!used)
+        return;
+    u32 first = (base - 0x80000000u) >> shift, last = (base + used - 1u - 0x80000000u) >> shift;
+    if (last >= pieces)
+        return;
+    u32 n = last - first + 1u;
+    u32 *map = (u32 *)KSEG0(0x05400000u);               /* (scratch: WGET_PHYS beside prof.c's histogram) */
+    u32 *key = map + n, *cnt = key + 4096;
+    for (u32 k = 0; k < n; k++)
+        map[k] = 0u;
+    for (u32 i = 0; i < JIT_RAM_WORDS; i++) {
+        u32 e = W.jit_entry[i];
+        if (e >= base && e < base + used)
+            map[((e - 0x80000000u) >> shift) - first] = 0x80000000u | (i << 2);
+    }
+    for (u32 k = 0, cur = 0; k < n; k++) {
+        if (map[k])
+            cur = map[k];
+        else
+            map[k] = cur;
+    }
+    for (u32 j = 0; j < 4096u; j++)
+        key[j] = cnt[j] = 0u;
+    u32 total = 0;
+    for (u32 k = 0; k < n; k++) {
+        u32 c = h[first + k], pc = map[k];
+        if (!c || !pc)
+            continue;
+        total += c;
+        for (u32 j = (pc >> 2) & 4095u, tries = 0; tries < 4096u; j = (j + 1u) & 4095u, tries++) {
+            if (key[j] == pc || !key[j]) {
+                key[j] = pc;
+                cnt[j] += c;
+                break;
+            }
+        }
+    }
+    uprintf("prof: %u samples in the recompiled code (%u resets since it was laid down)\n", total,
+            st_reset_flush + st_reset_inval + st_reset_full + st_reset_other);
+    for (int t = 0; t < 40; t++) {
+        u32 best = 0;
+        for (u32 j = 1; j < 4096u; j++)
+            if (cnt[j] > cnt[best])
+                best = j;
+        if (!cnt[best])
+            break;
+        uprintf("G %08x %u\n", key[best], cnt[best]);
+        cnt[best] = 0u;
+    }
+}
+
+void psx_print_stats(void)
+{
+    uprintf("psx: recompiler: %u blocks compiled; resets: %u by FlushCache, %u by a write to code, %u full, "
+            "%u other; %u code pieces written, %u writes beside code\n", st_compiles, st_reset_flush,
+            st_reset_inval, st_reset_full, st_reset_other, st_inval, st_beside);
+    uprintf("psx: %u entries into recompiled code ran %u instructions; %u interpreter runs %u\n", st_jit_enters,
+            st_jit_insns, st_interp_runs, st_interp_insns);
+    st_compiles = st_reset_flush = st_reset_inval = st_reset_full = st_reset_other = st_inval = st_beside = 0;
+    st_jit_enters = st_jit_insns = st_interp_runs = st_interp_insns = 0;
+}
+#endif
+
 const u16 *psx_vram_frame(int *stride, int *is_24bpp)
 {
-    if (stride) *stride = 1024;
+    if (stride) *stride = (int)VRAM_STRIDE;
     if (is_24bpp) *is_24bpp = S.disp_24bpp;
     if (S.disp_disabled || S.disp_24bpp || (S.disp_x & 1u) || (S.disp_w & 1u) ||
         S.disp_x + S.disp_w > 1024 || S.disp_y + S.disp_h > 512)
         return 0;
-    return W.vram + (u32)S.disp_y * 1024u + S.disp_x;
+    return W.vram + (u32)S.disp_y * VRAM_STRIDE + S.disp_x;
+}
+
+/* live play, a 24-bit picture (videos): line y's bytes (R, G, B a pixel), the same gpu_scanout reads, when the
+   line lies in one VRAM row (x and 3 bytes a pixel within its 2048 bytes: a video at x 0 always does); else 0 */
+const u8 *psx_vram_line24(int y)
+{
+    if (S.disp_disabled || !S.disp_24bpp || (u32)S.disp_x * 2u + (u32)S.disp_w * 3u > 2048u)
+        return 0;
+    return (const u8 *)(W.vram + (((u32)S.disp_y + (u32)y) & 511u) * VRAM_STRIDE + S.disp_x);
 }
 
 u8 *psx_save_ram(u32 *size, int *battery)
@@ -6953,6 +7698,8 @@ void psx_frame(u16 pad, u16 *picture)
                 if (jent >= 2u) {
                     int jbudget = insn_per_line - ran;
                     int jdone = psx_jit_enter(jbudget, &S, W.ram, W.jit_entry);
+                    st_jit_enters++;
+                    st_jit_insns += (u32)jdone;
                     if (jdone > 0) {
                         ran += jdone;
                         psx_advance_periph(jdone, in_vbl);
@@ -6964,6 +7711,8 @@ void psx_frame(u16 pad, u16 *picture)
                 int batch = insn_per_line - ran;
                 if (batch > 4) batch = 4;
                 int done = r3000_run_batch(batch);
+                st_interp_runs++;
+                st_interp_insns += (u32)done;
                 ran += done;
                 psx_advance_periph(done, in_vbl);
             }
@@ -6984,6 +7733,43 @@ void psx_frame(u16 pad, u16 *picture)
             spu_step_lines((u32)(PSX_LINES_NTSC & 15));
     }
 
-    if (picture && S.skip_render < 2u && (S.skip_render == 0u || !psx_vram_frame(0, 0)))
+    if (picture && S.skip_render == 0u)                 /* (live play: the player asks, psx_scanout) */
         gpu_scanout(picture);
+    /* a game frame being skipped, or a stale buffer shown, ends at the next flip; a game that stops flipping (it
+       draws straight into what is shown from then on) gets its drawing, and its picture shown, back after 8 frames
+       (a game frame of 8 vblanks: 7.5 a second) -- what it draws then is shown, an old buffer alone is not */
+    if ((S.fs_active | S.disp_stale) && ++S.fs_age > 8u)
+        S.fs_active = S.disp_stale = 0u;
+}
+
+void psx_scanout(u16 *picture)
+{
+    gpu_scanout(picture);
+}
+
+/* live play: has what is shown changed since the last call (a flip, drawing or a transfer into it, the
+   display's mode)?  And is it a frame whose drawing was skipped (keep the picture before it)? */
+int psx_display_changed(void)
+{
+    int d = S.disp_dirty;
+    S.disp_dirty = 0u;
+    return d;
+}
+
+int psx_display_stale(void)
+{
+    return S.disp_stale;
+}
+
+/* has the shown part moved (a flip: every line changes) since the last call? */
+int psx_display_flipped(void)
+{
+    int f = S.disp_flipped;
+    S.disp_flipped = 0u;
+    return f;
+}
+
+u32 psx_frames_skipped(void)
+{
+    return S.fs_skipped;
 }

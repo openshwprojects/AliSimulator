@@ -28,8 +28,15 @@ int psx_height(void);
 int psx_pal(void);
 void psx_set_region(int region);            /* 0 = auto, 'J'/'U' = 60 Hz NTSC, 'E' = 50 Hz PAL */
 void psx_set_skip_render(int skip);
+void psx_print_stats(void);                 /* the recompiler's counters since the last call (box only) */
 const u16 *psx_vram_frame(int *stride, int *is_24bpp);
-void psx_frame(u16 pad, u16 *picture);      /* up to 640 x 480 15-bit BGR555 */
+const u8 *psx_vram_line24(int y);           /* a 24-bit picture's line y (3 bytes a pixel), or 0 (psx_scanout) */
+void psx_frame(u16 pad, u16 *picture);      /* up to 640 x 480 15-bit BGR555 (skip_render 0: every frame) */
+void psx_scanout(u16 *picture);             /* live play (skip_render 1 / 2): the picture when it is shown */
+int psx_display_changed(void);              /* what is shown changed since the last call */
+int psx_display_stale(void);                /* what is shown is a skipped game frame: keep the old picture */
+int psx_display_flipped(void);              /* the shown part moved since the last call (all lines changed) */
+u32 psx_frames_skipped(void);               /* game frames whose drawing was skipped */
 int psx_jammed(void);
 u8 *psx_save_ram(u32 *size, int *battery);
 int psx_save_changed(void);

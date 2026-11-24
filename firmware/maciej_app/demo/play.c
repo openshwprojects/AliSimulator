@@ -77,6 +77,8 @@
 #include "zip.h"
 #include "image.h"
 
+void prof_frame(u32 n);                         /* prof.c: `prof -f N` counts a game's samples from frame N on */
+
 /* a machine, as the player sees it */
 struct machine {
     int w, h, xs, ys;                   /* the picture's size; how many times wider and higher on the TV */
@@ -357,14 +359,154 @@ static const struct machine vb_machine;
 static const struct machine pcecd_machine;
 static struct machine segacd_machine;
 
-/* Direct zero-copy PS1 VRAM -> KSEG1(FB_PHYS) scanout blit with dirty-line & 480i even/odd row reuse */
-static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
+/* words of one picture row into the frame buffer at byte offset `off`: through the cache, each whole 32-byte line
+   allocated without being read from memory (pref 30, PrepareForStore) and written back at once (cache 0x15), the
+   ends that are not whole lines uncached.  Uncached stores took ~10 cycles each here (a 1024 x 720 picture ~7 ms);
+   the memory gets the same words either way (a core that ignored the hint would just fill the lines first) */
+static void __attribute__((optimize("O3"))) fb_put_row(u32 off, const u32 *src, int words)
+{
+    u32 a = 0x80000000u | (FB_PHYS + off);
+    volatile u32 *uc = (volatile u32 *)KSEG1(FB_PHYS + off);
+    int i = 0;
+    for (; i < words && ((a + (u32)i * 4u) & 31u); i++)
+        uc[i] = src[i];
+    u32 *line = 0;
+    for (; i + 8 <= words; i += 8) {
+        line = (u32 *)(a + (u32)i * 4u);
+        __asm__ volatile("pref 30, 0(%0)" : : "r"(line) : "memory");
+        line[0] = src[i];
+        line[1] = src[i + 1];
+        line[2] = src[i + 2];
+        line[3] = src[i + 3];
+        line[4] = src[i + 4];
+        line[5] = src[i + 5];
+        line[6] = src[i + 6];
+        line[7] = src[i + 7];
+        /* (the line before written back, as fb_put_row_x2 does: the first time, the line of the uncached head or
+           one before -- written back only if it is in the cache: frame-buffer lines never stay there dirty) */
+        __asm__ volatile("cache 0x15, -32(%0)" : : "r"(line) : "memory");
+    }
+    if (line)
+        __asm__ volatile("cache 0x15, 0(%0)" : : "r"(line) : "memory");
+    for (; i < words; i++)
+        uc[i] = src[i];
+}
+
+/* two BGR555 pixels (a word of the PS1's VRAM) -> each of them twice in ARGB1555 (o0: the first, o1: the second):
+   G stays, R and B change places, bit 15 (the PS1's mask bit) set -- 12 instructions (MIPS32r2 ins), where GCC's
+   own code for the same took ~19 */
+#define PSX_PAIR(c, o0, o1) \
+    __asm__(".set push\n\t.set mips32r2\n\t" \
+            "and  %[p], %[cc], %[mg]\n\t"       /* G of both */ \
+            "sll  %[t], %[cc], 10\n\t" \
+            "and  %[t], %[t], %[mr]\n\t"        /* R of both, where B was */ \
+            "or   %[p], %[p], %[t]\n\t" \
+            "srl  %[t], %[cc], 10\n\t" \
+            "and  %[t], %[t], %[mb]\n\t"        /* B of both, where R was */ \
+            "or   %[p], %[p], %[t]\n\t" \
+            "or   %[p], %[p], %[ma]\n\t"        /* bit 15 of both */ \
+            "sll  %[a], %[p], 16\n\t" \
+            "ins  %[a], %[p], 0, 16\n\t"        /* the first pixel twice */ \
+            "srl  %[b], %[p], 16\n\t" \
+            "ins  %[b], %[b], 16, 16\n\t"       /* the second twice */ \
+            ".set pop" \
+            : [p] "=&r"(p_), [t] "=&r"(t_), [a] "=&r"(o0), [b] "=&r"(o1) \
+            : [cc] "r"(c), [mg] "r"(0x03E003E0u), [mr] "r"(0x7C007C00u), [mb] "r"(0x001F001Fu), \
+              [ma] "r"(0x80008000u))
+
+/* one PS1 picture row (`wn` words of two BGR555 pixels, a multiple of 4) into `rows` frame-buffer rows from byte
+   offset `off` (32-byte aligned), each pixel twice in ARGB1555: converted in registers and written as whole lines as
+   fb_put_row does, without the row being stored and read back between; `keep`: the words copied there too.
+   Timed on the box for a 512 x 240 picture (720 rows of 2 KB): 5.5 ms with the line written back at once and
+   GCC's conversion; 3.3 ms with the source fetched ahead (pref 0), each line written back once the next one is
+   written (cache 0x15 on the line before: the last ones after the loop) and the conversion above.  Writing 1.4 MB
+   alone takes 1.7 ms */
+static void __attribute__((optimize("O3"))) fb_put_row_x2(u32 off, const u32 *s32, int wn, int rows, u32 *keep)
+{
+    u32 *line = (u32 *)(0x80000000u | (FB_PHYS + off));
+    for (int w = 0; w < wn; w += 4, line += 8) {
+        __asm__ volatile("pref 0, 64(%0)" : : "r"(s32 + w));
+        u32 c0 = s32[w], c1 = s32[w + 1], c2 = s32[w + 2], c3 = s32[w + 3];
+        if (keep) {
+            keep[w] = c0;
+            keep[w + 1] = c1;
+            keep[w + 2] = c2;
+            keep[w + 3] = c3;
+        }
+        u32 o[8], p_, t_;
+        PSX_PAIR(c0, o[0], o[1]);
+        PSX_PAIR(c1, o[2], o[3]);
+        PSX_PAIR(c2, o[4], o[5]);
+        PSX_PAIR(c3, o[6], o[7]);
+        u32 *l = line;
+        for (int r = 0; r < rows; r++, l += SCREEN_W / 2) {
+            __asm__ volatile("pref 30, 0(%0)" : : "r"(l) : "memory");
+            l[0] = o[0];
+            l[1] = o[1];
+            l[2] = o[2];
+            l[3] = o[3];
+            l[4] = o[4];
+            l[5] = o[5];
+            l[6] = o[6];
+            l[7] = o[7];
+            /* (the line before written back: the first time a line just left of the picture, or before the frame
+               buffer -- written back only if it is in the cache, nothing lost either way) */
+            __asm__ volatile("cache 0x15, -32(%0)" : : "r"(l) : "memory");
+        }
+    }
+    for (int r = 0; r < rows; r++, line += SCREEN_W / 2)
+        __asm__ volatile("cache 0x15, -32(%0)" : : "r"(line) : "memory");
+}
+
+/* a 24-bit PS1 picture (videos) straight from VRAM's bytes into the frame buffer: what psx_scanout + show() drew
+   -- each channel's top 5 bits as ARGB1555, xs (2 or 3) times as wide, ys times as high -- without the 15-bit
+   picture between, its byte-by-byte VRAM addressing and its line-by-line comparison (a video changes every line).
+   Every line is drawn and `before` is not kept: returns 2.  0: a line not in one VRAM row, a width this does not
+   cover (psx_scanout + show() then) */
+static int __attribute__((optimize("O3"))) show_psx_vram24(void)
+{
+    static u32 pair_buf[SCREEN_W / 2];
+    if (pw <= 0 || ph <= 0 || (pw & 1) || !psx_vram_line24(0))
+        return 0;
+    int xs = m->xs, ys = m->ys;
+    while (xs > 1 && pw * xs > SCREEN_W) xs--;
+    while (ys > 1 && ph * ys > SCREEN_H) ys--;
+    if (xs != 2 && xs != 3)
+        return 0;
+    int out_w = (pw * xs) & ~1, out_x = ((SCREEN_W - out_w) / 2) & ~1, out_y = (SCREEN_H - ph * ys) / 2;
+    if (out_y < 0)
+        out_y = 0;
+    for (int y = 0; y < ph && out_y + y * ys < SCREEN_H; y++) {
+        const u8 *s = psx_vram_line24(y);
+        u32 *o = pair_buf;
+        for (int x = 0; x < pw; x += 2, s += 6) {
+            u32 p = 0x8000u | ((u32)(s[0] >> 3) << 10) | ((u32)(s[1] >> 3) << 5) | (u32)(s[2] >> 3);
+            u32 q = 0x8000u | ((u32)(s[3] >> 3) << 10) | ((u32)(s[4] >> 3) << 5) | (u32)(s[5] >> 3);
+            if (xs == 3) {
+                *o++ = p | (p << 16);
+                *o++ = p | (q << 16);
+                *o++ = q | (q << 16);
+            } else {
+                *o++ = p | (p << 16);
+                *o++ = q | (q << 16);
+            }
+        }
+        for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++)
+            fb_put_row(((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) * 2u, pair_buf, out_w / 2);
+    }
+    return 2;
+}
+
+/* Direct zero-copy PS1 VRAM -> FB_PHYS scanout blit with dirty-line & 480i even/odd row reuse (`all`: every line;
+   `keep`: the lines drawn copied into `before` for the next one's diff -- not after a flip, every line changes) */
+static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all, int keep)
 {
     int vstride = 0, is24 = 0;
     const u16 *vbase = psx_vram_frame(&vstride, &is24);
-    if (!vbase || is24 || ((unsigned long)vbase & 3u) || pw <= 0 || ph <= 0)
+    if (is24)
+        return show_psx_vram24();
+    if (!vbase || ((unsigned long)vbase & 3u) || pw <= 0 || ph <= 0)
         return 0;
-    volatile u32 *fb = (volatile u32 *)KSEG1(FB_PHYS);
     static u32 pair_buf[SCREEN_W / 2];
     int xs = m->xs, ys = m->ys;
     while (xs > 1 && pw * xs > SCREEN_W) xs--;
@@ -374,6 +516,7 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
 
     if (xs == 2 && !(pw & 1) && pw * 2 <= SCREEN_W) {
         int wn = pw >> 1;
+        int fused = !((out_x * 2) & 31) && !(wn & 3);      /* (whole lines: fb_put_row_x2) */
         if (ph > 240 && ys == 1) {
             /* 480i single-field progressive scanout: diff & convert only the 240 even VRAM lines */
             for (int y = 0; y < ph && out_y + y < SCREEN_H; y += 2) {
@@ -387,20 +530,23 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
                     if (!diff)
                         continue;
                 }
+                if (fused) {
+                    fb_put_row_x2(((u32)(out_y + y) * SCREEN_W + (u32)out_x) * 2u, s32, wn,
+                                  out_y + y + 1 < SCREEN_H ? 2 : 1, keep ? o32 : 0);
+                    continue;
+                }
                 for (int w = 0; w < wn; w++) {
                     u32 c01 = s32[w];
-                    o32[w] = c01;
+                    if (keep)
+                        o32[w] = c01;
                     u32 c0 = c01 & 0x7FFFu, c1 = (c01 >> 16) & 0x7FFFu;
                     u32 p0 = 0x8000u | ((c0 & 0x1Fu) << 10) | (c0 & 0x3E0u) | ((c0 >> 10) & 0x1Fu);
                     u32 p1 = 0x8000u | ((c1 & 0x1Fu) << 10) | (c1 & 0x3E0u) | ((c1 >> 10) & 0x1Fu);
                     pair_buf[w * 2]     = p0 | (p0 << 16);
                     pair_buf[w * 2 + 1] = p1 | (p1 << 16);
                 }
-                for (int r = 0; r < 2 && out_y + y + r < SCREEN_H; r++) {
-                    volatile u32 *to = fb + ((u32)(out_y + y + r) * SCREEN_W + (u32)out_x) / 2;
-                    for (int w = 0, n2 = wn * 2; w < n2; w++)
-                        to[w] = pair_buf[w];
-                }
+                for (int r = 0; r < 2 && out_y + y + r < SCREEN_H; r++)
+                    fb_put_row(((u32)(out_y + y + r) * SCREEN_W + (u32)out_x) * 2u, pair_buf, wn * 2);
             }
             return 1;
         }
@@ -415,20 +561,24 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
                 if (!diff)
                     continue;
             }
+            if (fused) {
+                int rows = SCREEN_H - (out_y + y * ys);
+                fb_put_row_x2(((u32)(out_y + y * ys) * SCREEN_W + (u32)out_x) * 2u, s32, wn, rows < ys ? rows : ys,
+                              keep ? o32 : 0);
+                continue;
+            }
             for (int w = 0; w < wn; w++) {
                 u32 c01 = s32[w];
-                o32[w] = c01;
+                if (keep)
+                    o32[w] = c01;
                 u32 c0 = c01 & 0x7FFFu, c1 = (c01 >> 16) & 0x7FFFu;
                 u32 p0 = 0x8000u | ((c0 & 0x1Fu) << 10) | (c0 & 0x3E0u) | ((c0 >> 10) & 0x1Fu);
                 u32 p1 = 0x8000u | ((c1 & 0x1Fu) << 10) | (c1 & 0x3E0u) | ((c1 >> 10) & 0x1Fu);
                 pair_buf[w * 2]     = p0 | (p0 << 16);
                 pair_buf[w * 2 + 1] = p1 | (p1 << 16);
             }
-            for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++) {
-                volatile u32 *to = fb + ((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) / 2;
-                for (int w = 0, n2 = wn * 2; w < n2; w++)
-                    to[w] = pair_buf[w];
-            }
+            for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++)
+                fb_put_row(((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) * 2u, pair_buf, wn * 2);
         }
         return 1;
     }
@@ -447,7 +597,8 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
             }
             for (int w = 0; w < wn; w++) {
                 u32 c01 = s32[w];
-                o32[w] = c01;
+                if (keep)
+                    o32[w] = c01;
                 u32 c0 = c01 & 0x7FFFu, c1 = (c01 >> 16) & 0x7FFFu;
                 u32 p = 0x8000u | ((c0 & 0x1Fu) << 10) | (c0 & 0x3E0u) | ((c0 >> 10) & 0x1Fu);
                 u32 q = 0x8000u | ((c1 & 0x1Fu) << 10) | (c1 & 0x3E0u) | ((c1 >> 10) & 0x1Fu);
@@ -455,11 +606,8 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
                 pair_buf[w * 3 + 1] = p | (q << 16);
                 pair_buf[w * 3 + 2] = q | (q << 16);
             }
-            for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++) {
-                volatile u32 *to = fb + ((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) / 2;
-                for (int w = 0, n3 = wn * 3; w < n3; w++)
-                    to[w] = pair_buf[w];
-            }
+            for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++)
+                fb_put_row(((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) * 2u, pair_buf, wn * 3);
         }
         return 1;
     }
@@ -470,9 +618,8 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all)
    screen's picture (`all`: every line) */
 static void __attribute__((optimize("O3"))) show(int all)
 {
-    /* (uncached; through the cache with its lines written back after each line is no faster: the whole 800 x 720
-       takes 9 to 10 ms either way) */
-    volatile u32 *fb = (volatile u32 *)KSEG1(FB_PHYS);
+    /* (fb_put_row: plain cached writes with the lines written back were no faster than uncached ones -- the
+       whole 800 x 720 took 9 to 10 ms either way -- the lines are now allocated without being read) */
     static union {
         u32 pair[SCREEN_W / 2];
         u16 pixel[SCREEN_W];
@@ -565,11 +712,8 @@ static void __attribute__((optimize("O3"))) show(int all)
             }
         }
     out:
-        for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++) {
-            volatile u32 *to = fb + ((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) / 2;
-            for (int w = 0; w < out_w / 2; w++)
-                to[w] = row.pair[w];
-        }
+        for (int r = 0; r < ys && out_y + y * ys + r < SCREEN_H; r++)
+            fb_put_row(((u32)(out_y + y * ys + r) * SCREEN_W + (u32)out_x) * 2u, row.pair, out_w / 2);
     }
 }
 
@@ -936,7 +1080,9 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
                                                                        together; frames longer than their time) */
     u16 pad = 0;
     int first = 1, by_script = *script != 0;    /* (a test's buttons: the script's alone) */
-    int psx_live = (m == &psx_machine && !frames), psx_skipped = 0;
+    int psx_live = (m == &psx_machine && !frames), psx_pending = 0, psx_flip = 0;
+    int psx_before_ok = 0;                      /* (`before` holds what the TV shows: diffs work) */
+    u32 psx_held = 0, psx_flips = 0;            /* (pictures shown: the game's frames that reached the TV; flips) */
     if (m == &psx_machine)
         psx_set_skip_render(psx_live ? 1 : 0);
     /* sound, played as it is made (a test's run of -f frames makes none); what does not fit in the sound's ring
@@ -951,14 +1097,15 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     for (;; n++) {
         if (frames && n == frames)
             break;
+        prof_frame(n);
         int held = buttons(n == 0);
         if (held < 0)
             break;
         pad = by_script ? scripted(&script, n, pad) : (u16)held;
-        int do_skip = (psx_live && n > 30 && !first && psx_skipped < 2 && now_ticks() > next);
+        /* PlayStation, live: more than a frame behind -> psx.c skips drawing the next whole game frame (decided
+           at the game's display flip; that frame is then never shown: the picture before it stays) */
         if (psx_live)
-            psx_set_skip_render(do_skip ? 2 : 1);
-        psx_skipped = do_skip ? (psx_skipped + 1) : 0;
+            psx_set_skip_render(n > 30 && !first && now_ticks() > next + frame_ticks ? 2 : 1);
         u64 t0 = now_ticks();
         m->frame(pad, picture);
         u64 ts = now_ticks();
@@ -984,9 +1131,29 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
             }
         }
         u64 t1 = now_ticks();
-        if (!do_skip) {
-            if (!(psx_live && show_psx_vram_direct(first)))
-                show(first);
+        if (psx_live) {
+            /* shown when the game's picture changed (a flip, drawing into what is shown, a video's frame), at once
+               -- never a skipped game frame (the picture before it stays) */
+            psx_pending |= psx_display_changed();
+            psx_flip |= psx_display_flipped();
+            if (first || (psx_pending && !psx_display_stale())) {
+                int whole = first || psx_flip || !psx_before_ok;
+                int drawn = show_psx_vram_direct(whole, !psx_flip);
+                if (drawn) {
+                    psx_before_ok = drawn == 1 && !psx_flip;    /* (2: a 24-bit picture, `before` not kept) */
+                } else {
+                    psx_scanout(picture);
+                    show(whole);
+                    psx_before_ok = 1;
+                }
+                psx_held += !first;
+                psx_flips += psx_flip && !first;
+                psx_pending = 0;
+                psx_flip = 0;
+                first = 0;
+            }
+        } else {
+            show(first);
             first = 0;
         }
         u64 t2 = now_ticks();
@@ -1018,6 +1185,12 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
             n ? draw / n : 0,
             slowest, m->frame_us, slowest_at, slowest_draw, over, late ? " (some frames came late)" : "",
             crc32((const u8 *)picture, (u32)(pw * ph * (m->colours ? 1 : 2))));
+    if (m == &psx_machine) {
+        psx_print_stats();
+        if (psx_live)
+            uprintf("psx: %u pictures shown (%u at a flip); %u game frames not drawn (the run was late)\n",
+                    psx_held, psx_flips, psx_frames_skipped());
+    }
     if (sound) {
         uprintf("sound: %u us a frame of the run handing it over\n", n ? sound_us / n : 0);
         m->audio_rate(0);

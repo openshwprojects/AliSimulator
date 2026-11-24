@@ -103,12 +103,33 @@ struct disk {
     struct volume vol[VOLUMES];
 };
 
-/* GCC calls these for structure copies; there is no C library */
+/* GCC calls these for structure copies and for loops that clear or copy (a player's 2 MB table cleared,
+   sound buffers, ...); there is no C library.  Words at a time when both places share their alignment (four
+   bytes a store: a 2 MB clear took ~13 ms byte by byte), bytes for the rest */
 void *memcpy(void *to, const void *from, unsigned n) __attribute__((optimize("no-tree-loop-distribute-patterns")));
 void *memcpy(void *to, const void *from, unsigned n)
 {
     u8 *d = to;
     const u8 *s = from;
+    if (n >= 8 && !(((u32)d ^ (u32)s) & 3u)) {
+        while ((u32)d & 3u) {
+            *d++ = *s++;
+            n--;
+        }
+        u32 *dw = (u32 *)d;
+        const u32 *sw = (const u32 *)s;
+        for (; n >= 16; n -= 16, dw += 4, sw += 4) {
+            u32 a = sw[0], b = sw[1], c = sw[2], e = sw[3];
+            dw[0] = a;
+            dw[1] = b;
+            dw[2] = c;
+            dw[3] = e;
+        }
+        for (; n >= 4; n -= 4)
+            *dw++ = *sw++;
+        d = (u8 *)dw;
+        s = (const u8 *)sw;
+    }
     while (n--)
         *d++ = *s++;
     return to;
@@ -118,6 +139,25 @@ void *memset(void *to, int c, unsigned n) __attribute__((optimize("no-tree-loop-
 void *memset(void *to, int c, unsigned n)
 {
     u8 *d = to;
+    if (n >= 8) {
+        while ((u32)d & 3u) {
+            *d++ = (u8)c;
+            n--;
+        }
+        u32 v = (u8)c;
+        v |= v << 8;
+        v |= v << 16;
+        u32 *dw = (u32 *)d;
+        for (; n >= 16; n -= 16, dw += 4) {
+            dw[0] = v;
+            dw[1] = v;
+            dw[2] = v;
+            dw[3] = v;
+        }
+        for (; n >= 4; n -= 4)
+            *dw++ = v;
+        d = (u8 *)dw;
+    }
     while (n--)
         *d++ = (u8)c;
     return to;
@@ -129,12 +169,20 @@ void *memmove(void *to, const void *from, unsigned n)
 {
     u8 *d = to;
     const u8 *s = from;
-    if (d < s)
-        while (n--)
-            *d++ = *s++;
-    else if (d > s)
+    if (d < s || d >= s + n)            /* (forward is safe: it never reads what it wrote) */
+        return memcpy(to, from, n);
+    if (d > s) {
+        if (n >= 8 && !(((u32)d ^ (u32)s) & 3u)) {     /* backward, words where aligned */
+            while ((u32)(d + n) & 3u) {
+                n--;
+                d[n] = s[n];
+            }
+            for (; n >= 4; n -= 4)
+                *(u32 *)(d + n - 4) = *(const u32 *)(s + n - 4);
+        }
         while (n--)
             d[n] = s[n];
+    }
     return to;
 }
 

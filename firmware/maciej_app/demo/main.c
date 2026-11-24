@@ -486,6 +486,7 @@ static void cmd_watchdog(int argc, char **argv);
 static void cmd_clear(int argc, char **argv);
 static void cmd_reboot(int argc, char **argv);
 static void cmd_bootloader(int argc, char **argv);
+static void cmd_prof(int argc, char **argv);
 static void cmd_video(int argc, char **argv);
 static void cmd_testscreen(int argc, char **argv);
 static void cmd_console(int argc, char **argv);
@@ -682,7 +683,8 @@ static const struct command commands[] = {
     {"nes", "[-f frames] [-k script] <file>", "play a NES / Famicom cartridge file (.nes: NROM..MMC5 plus Konami VRC6, "
      "VRC7 FM, Namco 163 wavetable & Sunsoft 5B expansion audio) on the TV: arrows or W A S D, "
      "X = A, Z = B, Enter = Start, Tab = Select; Ctrl-C or Esc ends (-f: that many frames as fast as they go, "
-     "then the picture's CRC-32; -k: a test's buttons, frame:hex,...).  Every player also takes its game in a "
+     "then the picture's CRC-32; -k: a test's buttons, frame:hex,... or @path: read from that file).  Every "
+     "player also takes its game in a "
      ".zip (the largest file in it that is no text or picture) or a .gz", cmd_nes},
     {"gb", "[-f frames] [-k script] <file>", "play a Game Boy cartridge file (.gb, .gbc) on the TV -- a Game Boy "
      "Color game in its colours, an older one in four shades: the keys and the options of nes", cmd_gb},
@@ -980,8 +982,62 @@ static const struct command commands[] = {
     {"reboot", "", "restart through the original bootloader", cmd_reboot},
     {"restart", "", "the same as reboot", cmd_reboot},
     {"bootloader", "", "restart into the original bootloader: hold 'c' (or run maciej_uart.py) to stay", cmd_bootloader},
+    {"prof", "[-f frame] [-c address length] [-e event0 event1] <command ...>", "run the command with the sampling "
+     "profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code it was found in, most "
+     "first (-f: a game's samples from that frame on; -c: samples inside that code counted for its caller, as $ra "
+     "says; -e: the CPU's two performance counters count those events, from the -f frame for 100 frames: 0 cycles, "
+     "1 instructions, 9 I-cache accesses / misses, 10 D-cache accesses / writebacks, 11 D-cache misses)", cmd_prof},
     {0, 0, 0, 0},
 };
+
+/* prof.c */
+int prof_start(void);
+void prof_stop(void);
+void prof_report(void);
+void prof_from(u32 frame);
+void prof_caller(u32 lo, u32 len);
+void prof_events(u32 e0, u32 e1);
+
+static void cmd_prof(int argc, char **argv)
+{
+    u32 from = 0, lo = 0, len = 0, e0 = 0, e1 = 0;
+    int events = 0;
+    for (;;) {
+        if (argc > 3 && str_eq(argv[1], "-f") && parse_u32(argv[2], &from)) {
+            argc -= 2;
+            argv += 2;
+        } else if (argc > 4 && str_eq(argv[1], "-c") && parse_u32(argv[2], &lo) && parse_u32(argv[3], &len)) {
+            argc -= 3;
+            argv += 3;
+        } else if (argc > 4 && str_eq(argv[1], "-e") && parse_u32(argv[2], &e0) && parse_u32(argv[3], &e1)) {
+            events = 1;
+            argc -= 3;
+            argv += 3;
+        } else {
+            break;
+        }
+    }
+    if (argc < 2) {
+        uprintf("usage: prof [-f frame] [-c address length] [-e event0 event1] <command ...>\n");
+        return;
+    }
+    if (events)
+        prof_events(e0, e1);
+    prof_from(from);
+    prof_caller(lo, len);
+    const struct command *c = commands;
+    while (c->name && !str_eq(c->name, argv[1]))
+        c++;
+    if (!c->name || c->run == cmd_prof) {
+        uprintf("prof: unknown command '%s'\n", argv[1]);
+        return;
+    }
+    if (prof_start() < 0)
+        return;
+    c->run(argc - 1, argv + 1);
+    prof_stop();
+    prof_report();
+}
 
 static int mem_range_ok(u32 a, u32 len)
 {
@@ -1700,6 +1756,20 @@ static void cmd_game(int argc, char **argv, int (*play)(const char *, u32, const
         } else if (argc > first + 1 && str_eq(argv[first], "-k")) {
             script = argv[first + 1];
             first += 2;
+            if (script[0] == '@') {             /* -k @file: the script read from a file (longer than a line) */
+                static char from_file[8192];
+                u32 size = 0;
+                int got = disk_read_head(script + 1, (u8 *)from_file, sizeof(from_file) - 1, &size);
+                if (got < 0) {
+                    uprintf("-k: cannot read %s\n", script + 1);
+                    return;
+                }
+                u32 n = (u32)got;
+                while (n && (from_file[n - 1] == '\n' || from_file[n - 1] == '\r' || from_file[n - 1] == ' '))
+                    n--;
+                from_file[n] = 0;
+                script = from_file;
+            }
         } else {
             break;
         }

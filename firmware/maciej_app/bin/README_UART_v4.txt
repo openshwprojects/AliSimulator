@@ -527,6 +527,15 @@ Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
   reboot / restart     restart przez oryginalny bootloader
   bootloader           restart do oryginalnego bootloadera: przytrzymaj klawisz c
                        (albo uruchom maciej_uart.py), zeby w nim zostac
+  prof [-f klatka] [-c adres dl] [-e zdarz0 zdarz1] <komenda ...>
+                       uruchamia komende z profilerem probkujacym (zegar CPU,
+                       ok. 10 000 probek na sekunde) i wypisuje 64-bajtowe
+                       kawalki kodu, w ktorych ja zastal, od najczestszych
+                       (-f: w grze dopiero od tej klatki; -c: probki z tego
+                       kodu liczone dla funkcji, ktora go wywolala; -e: dwa
+                       liczniki wydajnosci procesora licza te zdarzenia przez
+                       100 klatek od klatki -f: 0 cykle, 1 instrukcje,
+                       9 dostepy / chybienia I-cache, 11 chybienia D-cache)
 
 Konsola na TV (widok po starcie): to samo co na UART - komunikaty startowe,
 znak zachety, wpisywane komendy (z UART albo klawiatury USB), ich wyniki
