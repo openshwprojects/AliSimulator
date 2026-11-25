@@ -3499,6 +3499,269 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
         return;
     }
 
+    /* Fast 8-pixel sub-tile sliver paths for 16x16-pixel BGs (2bpp / 4bpp and 8bpp) */
+    if (!opt_mode && mos_sz == 1 && !hires_m56 && tile_w16 && tile_h16 && (bpp == 2 || bpp == 4)) {
+        int sy = eff_y + vofs;
+        int ty = sy >> 4;
+        int fy = sy & 15;
+        int sx = hofs;
+        int x = 0;
+        u16 chr_shift = (bpp == 2) ? (chr_base_w >> 3) : (chr_base_w >> 4);
+        u32 map_row[2];
+        {
+            u32 base_w = (u32)(sc_reg & 0xFCu) << 8, sy_scr = ((u32)ty >> 5) & 1u;
+            for (u32 sx_scr = 0; sx_scr < 2u; sx_scr++) {
+                u32 screen = 0;
+                switch (sc_reg & 3u) {
+                case 1: screen = sx_scr; break;
+                case 2: screen = sy_scr; break;
+                case 3: screen = sx_scr | (sy_scr << 1); break;
+                }
+                map_row[sx_scr] = base_w + (screen << 10) + (u32)((ty & 31) << 5);
+            }
+        }
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        u8 *mz = lc->main_z, *ms = lc->main_src, *sz = lc->sub_z;
+        u16 *mc = lc->main_col, *sc = lc->sub_col;
+        int main_only = on_main && !on_sub && !m_win_on;
+        while (x < SNES_W) {
+            int tx0 = sx & 7;
+            int n = 8 - tx0;
+            if (x + n > SNES_W)
+                n = SNES_W - x;
+            u32 tx = (u32)(sx >> 4);
+            u32 waddr = (map_row[(tx >> 5) & 1u] + (tx & 31u)) & 0x7FFFu;
+            u32 ent = vram[waddr * 2u] | ((u32)vram[waddr * 2u + 1u] << 8);
+            int py16 = (ent & 0x8000u) ? (15 - fy) : fy;
+            u32 sub_x = ((u32)(sx >> 3) ^ (ent >> 14)) & 1u;
+            u16 tid = (u16)(chr_shift + (ent & 0x03FFu) + sub_x + ((u32)(py16 & 8) << 1));
+            u32 row32 = (bpp == 2) ? get_tile2(tid)[py16 & 7] : get_tile4(tid)[py16 & 7];
+            if (row32) {
+                if (ent & 0x4000u)
+                    row32 = flip_nibbles32(row32);
+                row32 >>= (tx0 << 2);
+                u32 pal = (ent >> 10) & 7u;
+                const u16 *pal_p = (bpp == 2) ? &cg[(mode0_pal_off + pal * 4u) & 0xFFu]
+                                              : &cg[(pal * 16u) & 0xFFu];
+                u8 z = (ent & 0x2000u) ? z_hi : z_lo;
+                if (main_only) {
+                    for (int dx = x; row32 && dx < x + n; dx++, row32 >>= 4) {
+                        u32 px = row32 & 0x0Fu;
+                        if (px && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = pal_p[px];
+                            ms[dx] = bit;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < n; i++, row32 >>= 4) {
+                        u32 px = row32 & 0x0Fu;
+                        if (!px)
+                            continue;
+                        int dx = x + i;
+                        u16 col = pal_p[px];
+                        if (on_main && (!m_win_on || !wmask[dx]) && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = col;
+                            ms[dx] = bit;
+                        }
+                        if (on_sub && (!s_win_on || !wmask[dx]) && z > sz[dx]) {
+                            sz[dx] = z;
+                            sc[dx] = col;
+                        }
+                    }
+                }
+            }
+            x += n;
+            sx += n;
+        }
+        return;
+    }
+
+    if (!opt_mode && mos_sz == 1 && !hires_m56 && tile_w16 && tile_h16 && bpp == 8) {
+        int sy = eff_y + vofs;
+        int ty = sy >> 4;
+        int fy = sy & 15;
+        int sx = hofs;
+        int x = 0;
+        u16 chr_shift = chr_base_w >> 5;
+        u32 map_row[2];
+        {
+            u32 base_w = (u32)(sc_reg & 0xFCu) << 8, sy_scr = ((u32)ty >> 5) & 1u;
+            for (u32 sx_scr = 0; sx_scr < 2u; sx_scr++) {
+                u32 screen = 0;
+                switch (sc_reg & 3u) {
+                case 1: screen = sx_scr; break;
+                case 2: screen = sy_scr; break;
+                case 3: screen = sx_scr | (sy_scr << 1); break;
+                }
+                map_row[sx_scr] = base_w + (screen << 10) + (u32)((ty & 31) << 5);
+            }
+        }
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        int single_m = on_main && !on_sub && !m_win_on && !direct_col;
+        int single_s = on_sub && !on_main && !s_win_on && !direct_col;
+        u8 *dst_z = single_m ? lc->main_z : lc->sub_z;
+        u16 *dst_c = single_m ? lc->main_col : lc->sub_col;
+        while (x < SNES_W) {
+            int tx0 = sx & 7;
+            int n = 8 - tx0;
+            if (x + n > SNES_W)
+                n = SNES_W - x;
+            u32 tx = (u32)(sx >> 4);
+            u32 waddr = (map_row[(tx >> 5) & 1u] + (tx & 31u)) & 0x7FFFu;
+            u32 ent = vram[waddr * 2u] | ((u32)vram[waddr * 2u + 1u] << 8);
+            int py16 = (ent & 0x8000u) ? (15 - fy) : fy;
+            int hf = (ent & 0x4000u) != 0;
+            u32 sub_x = (((u32)(sx >> 3) & 1u) ^ (u32)hf);
+            const u8 *tr = get_tile8((u16)(chr_shift + (ent & 0x03FFu) + sub_x + ((u32)(py16 & 8) << 1))) + (py16 & 7) * 8;
+            u8 pal = (u8)((ent >> 10) & 7u);
+            u8 z = (ent & 0x2000u) ? z_hi : z_lo;
+            if (single_m || single_s) {
+                const u8 *t = tr + (hf ? 7 - tx0 : tx0);
+                int step = hf ? -1 : 1;
+                for (int dx = x; dx < x + n; dx++, t += step) {
+                    u32 px = *t;
+                    if (px && z > dst_z[dx]) {
+                        dst_z[dx] = z;
+                        dst_c[dx] = cg[px];
+                        if (single_m)
+                            lc->main_src[dx] = bit;
+                    }
+                }
+                x += n;
+                sx += n;
+                continue;
+            }
+            for (int i = 0; i < n; i++) {
+                u8 px = tr[hf ? (7 - (tx0 + i)) : (tx0 + i)];
+                if (!px)
+                    continue;
+                int dx = x + i;
+                u16 col = direct_col ? direct_color_15(px, pal) : M->cgram[px];
+                if (on_main && (!m_win_on || !wmask[dx]) && z > lc->main_z[dx]) {
+                    lc->main_z[dx] = z;
+                    lc->main_col[dx] = col;
+                    lc->main_src[dx] = bit;
+                }
+                if (on_sub && (!s_win_on || !wmask[dx]) && z > lc->sub_z[dx]) {
+                    lc->sub_z[dx] = z;
+                    lc->sub_col[dx] = col;
+                }
+            }
+            x += n;
+            sx += n;
+        }
+        return;
+    }
+
+    /* Fast 4-pixel sub-tile sliver path for hi-res Modes 5 & 6 (including Mode 6 offset-per-tile and interlace) */
+    if (mos_sz == 1 && hires_m56 && (bpp == 2 || bpp == 4)) {
+        int base_sy = (eff_y + vofs) << (ilace_m56 ? 1 : 0);
+        u16 chr_shift = (bpp == 2) ? (chr_base_w >> 3) : (chr_base_w >> 4);
+        u32 map_row[2] = { 0, 0 };
+        if (!opt_mode) {
+            int ty = base_sy >> (tile_h16 ? 4 : 3);
+            u32 base_w = (u32)(sc_reg & 0xFCu) << 8, sy_scr = ((u32)ty >> 5) & 1u;
+            for (u32 sx_scr = 0; sx_scr < 2u; sx_scr++) {
+                u32 screen = 0;
+                switch (sc_reg & 3u) {
+                case 1: screen = sx_scr; break;
+                case 2: screen = sy_scr; break;
+                case 3: screen = sx_scr | (sy_scr << 1); break;
+                }
+                map_row[sx_scr] = base_w + (screen << 10) + (u32)((ty & 31) << 5);
+            }
+        }
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        u8 *mz = lc->main_z, *ms = lc->main_src, *sz = lc->sub_z;
+        u16 *mc = lc->main_col, *sc = lc->sub_col;
+        int main_only = on_main && !on_sub && !m_win_on;
+        u8 bg_enable = (bg == 0) ? 0x20u : 0x40u;
+        int x = 0;
+        while (x < SNES_W) {
+            int u0 = (x + hofs) & 3;
+            int n = 4 - u0;
+            if (x + n > SNES_W)
+                n = SNES_W - x;
+            if (opt_mode && x < 8 && x + n > 8)
+                n = 8 - x;
+
+            int xh = x + hofs;
+            int sy = base_sy;
+            if (opt_mode && (x >= 8 || (hofs & ~7u) != 0)) {
+                int col_idx = ((x + (hofs & 7)) >> 3) - 1;
+                if (col_idx >= 0) {
+                    int opt_tx = (col_idx + (S.bg_hofs[2] >> 3)) & 63;
+                    int opt_ty = S.bg_vofs[2] >> 3;
+                    u16 hv = fetch_bg_map_entry(S.bg_sc[2], opt_tx, opt_ty);
+                    u16 vv = fetch_bg_map_entry(S.bg_sc[2], opt_tx, opt_ty + 1);
+                    if ((hv >> 8) & bg_enable)
+                        xh = x + (hv & 0x03F8u) + (hofs & 7);
+                    if ((vv >> 8) & bg_enable)
+                        sy = (eff_y + (vv & 0x03FFu)) << (ilace_m56 ? 1 : 0);
+                }
+            }
+
+            u32 tx = (u32)(xh >> 3);
+            u32 ent;
+            if (!opt_mode) {
+                u32 waddr = (map_row[(tx >> 5) & 1u] + (tx & 31u)) & 0x7FFFu;
+                ent = vram[waddr * 2u] | ((u32)vram[waddr * 2u + 1u] << 8);
+            } else {
+                ent = fetch_bg_map_entry(sc_reg, (int)tx, sy >> (tile_h16 ? 4 : 3));
+            }
+
+            int hflip = (ent >> 14) & 1;
+            u32 h_add = (u32)(((xh >> 2) & 1) ^ hflip);
+            int fy = sy & (tile_h16 ? 15 : 7);
+            int py_full = (ent & 0x8000u) ? ((tile_h16 ? 15 : 7) - fy) : fy;
+            u32 v_add = (tile_h16 && py_full >= 8) ? 16u : 0u;
+            u16 tid = (u16)(chr_shift + (ent & 0x03FFu) + h_add + v_add);
+            u32 row32 = (bpp == 2) ? get_tile2(tid)[py_full & 7] : get_tile4(tid)[py_full & 7];
+            if (row32) {
+                if (hflip)
+                    row32 = flip_nibbles32(row32);
+                row32 >>= (u0 << 3);
+                u32 pal = (ent >> 10) & 7u;
+                const u16 *pal_p = (bpp == 2) ? &cg[(pal * 4u) & 0xFFu] : &cg[(pal * 16u) & 0xFFu];
+                u8 z = (ent & 0x2000u) ? z_hi : z_lo;
+                if (main_only) {
+                    for (int dx = x; row32 && dx < x + n; dx++, row32 >>= 8) {
+                        u32 px = row32 & 0x0Fu;
+                        if (px && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = pal_p[px];
+                            ms[dx] = bit;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < n; i++, row32 >>= 8) {
+                        u32 px = row32 & 0x0Fu;
+                        if (!px)
+                            continue;
+                        int dx = x + i;
+                        u16 col = pal_p[px];
+                        if (on_main && (!m_win_on || !wmask[dx]) && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = col;
+                            ms[dx] = bit;
+                        }
+                        if (on_sub && (!s_win_on || !wmask[dx]) && z > sz[dx]) {
+                            sz[dx] = z;
+                            sc[dx] = col;
+                        }
+                    }
+                }
+            }
+            x += n;
+        }
+        return;
+    }
+
     for (int x = 0; x < SNES_W; x++) {
         int eff_x = (mos_sz > 1) ? (x - (x % mos_sz)) : x;
         int sx = eff_x + hofs;

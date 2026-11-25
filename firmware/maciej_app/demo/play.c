@@ -2417,11 +2417,25 @@ static int psx_ci_word(const u8 *p, u32 rem, const char *kw)
     return k == rem || p[k] == ' ' || p[k] == '\t' || p[k] == '\r' || p[k] == '\n';
 }
 
+static void cdrom_close_disc(void);
+static int cd_cb_read_2352(u32 lba, u8 *dst2352);
+static const struct cdrom_toc *cdrom_open_disc(const char *path, const u8 *head, u32 head_len, const char **err_out);
+static int psx_cue_active;
+
+static int psx_cue_sector(u32 lba, u8 *buf2352)
+{
+    return cd_cb_read_2352(lba, buf2352) == 0 ? 2352 : -1;
+}
+
 static const char *psx_open(u8 *image, u32 size, const char *path)
 {
     if (psx_stream_active) {
         disk_stream_close();
         psx_stream_active = 0;
+    }
+    if (psx_cue_active) {
+        cdrom_close_disc();
+        psx_cue_active = 0;
     }
     psx_set_disc(0, 0, 0);
 
@@ -2444,102 +2458,34 @@ static const char *psx_open(u8 *image, u32 size, const char *path)
                  (path[plen - 2] | 32) == 'u' && (path[plen - 1] | 32) == 'e';
 
     if (is_cue) {
-        char track_rel[128];
-        track_rel[0] = 0;
-        u32 hint_ssz = 0, base_lba = 0, extra_secs = 0;
-        int in_track1 = 0;
-        int dir_len = 0;
-        for (int i = 0; path[i]; i++)
-            if (path[i] == '/' || path[i] == '\\' || path[i] == ':')
-                dir_len = i + 1;
-        for (u32 i = 0; i < size;) {
-            while (i < size && (image[i] == ' ' || image[i] == '\t' || image[i] == '\r' || image[i] == '\n'))
-                i++;
-            u32 line_end = i;
-            while (line_end < size && image[line_end] != '\r' && image[line_end] != '\n')
-                line_end++;
-            u32 rem = line_end - i;
-            if (psx_ci_word(image + i, rem, "FILE")) {
-                char f_rel[128];
-                u32 p = i + 4u;
-                while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
-                    p++;
-                int tlen = 0;
-                if (p < line_end && image[p] == '"') {
-                    p++;
-                    while (p < line_end && image[p] != '"' && tlen < (int)sizeof(f_rel) - 1)
-                        f_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
-                } else {
-                    while (p < line_end && image[p] != ' ' && image[p] != '\t' && tlen < (int)sizeof(f_rel) - 1)
-                        f_rel[tlen++] = image[p] == '\\' ? '/' : (char)image[p], p++;
-                }
-                f_rel[tlen] = 0;
-                if (!track_rel[0]) {
-                    for (int c = 0; c <= tlen; c++) track_rel[c] = f_rel[c];
-                } else if (f_rel[0]) {
-                    char cand2[200];
-                    zx_join(cand2, sizeof(cand2), path, dir_len, f_rel);
-                    u64 sz2 = 0;
-                    if (disk_stream_open(cand2, &sz2) == 0) {
-                        disk_stream_close();
-                        u32 b2 = sz2 > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)sz2;
-                        extra_secs += 150u + (b2 / 2352u);
-                    }
-                }
-            } else if (psx_ci_word(image + i, rem, "TRACK")) {
-                u32 p = i + 5u;
-                while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
-                    p++;
-                int trk = 0;
-                while (p < line_end && image[p] >= '0' && image[p] <= '9')
-                    trk = trk * 10 + (image[p++] - '0');
-                in_track1 = (trk == 1);
-                if (trk == 1) {
-                    for (u32 q = p; q + 4u <= line_end; q++) {
-                        if (image[q] == '2' && image[q + 1] == '0' && image[q + 2] == '4' && image[q + 3] == '8')
-                            hint_ssz = 2048u;
-                        else if (image[q] == '2' && image[q + 1] == '3' && image[q + 2] == '5' && image[q + 3] == '2')
-                            hint_ssz = 2352u;
-                    }
-                }
-            } else if (in_track1 && psx_ci_word(image + i, rem, "INDEX")) {
-                u32 p = i + 5u;
-                while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
-                    p++;
-                int idx = 0;
-                while (p < line_end && image[p] >= '0' && image[p] <= '9')
-                    idx = idx * 10 + (image[p++] - '0');
-                while (p < line_end && (image[p] == ' ' || image[p] == '\t'))
-                    p++;
-                if (idx == 1 && p + 8u <= line_end && image[p + 2] == ':' && image[p + 5] == ':') {
-                    u32 mm = (u32)(image[p] - '0') * 10u + (u32)(image[p + 1] - '0');
-                    u32 ss = (u32)(image[p + 3] - '0') * 10u + (u32)(image[p + 4] - '0');
-                    u32 ff = (u32)(image[p + 6] - '0') * 10u + (u32)(image[p + 7] - '0');
-                    base_lba = (mm * 60u + ss) * 75u + ff;
-                }
-            }
-            i = line_end + 1u;
-        }
-        if (!track_rel[0])
-            return "no FILE entry in .cue sheet";
-        char cand[200];
-        zx_join(cand, sizeof(cand), path, dir_len, track_rel);
-        if (!disk_exists(cand)) {
-            const char *base = track_rel;
-            for (const char *q = track_rel; *q; q++)
-                if (*q == '/' || *q == ':')
-                    base = q + 1;
-            zx_join(cand, sizeof(cand), path, dir_len, base);
-        }
-        if (!disk_exists(cand))
-            return "the track file named in the .cue was not found beside it";
-        if (!psx_stream_disc(cand, hint_ssz, base_lba))
+        const char *cue_err = 0;
+        const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cue_err);
+        if (!toc)
+            return cue_err ? cue_err : "invalid .cue sheet";
+        u8 probe[2352];
+        if (cd_cb_read_2352(16u, probe) < 0) {
+            cdrom_close_disc();
             return "the track file in the .cue is not a valid ISO9660 PlayStation CD-ROM";
-        u32 bytes32 = psx_stream_fsize > 0xFFFFFFFFULL ? 0xFFFFFFFFu : (u32)psx_stream_fsize;
-        u32 t1_secs = ((psx_sec_size == 2048u) ? (u32)(psx_stream_fsize >> 11) : (bytes32 / 2352u)) - base_lba;
-        psx_cue_total = t1_secs + extra_secs;
-        psx_set_disc(psx_disk_sector, psx_cue_total, psx_sec_size);
+        }
+        u32 off = probe[15] == 1u ? 16u : 24u;
+        if (probe[off + 1u] != 'C' || probe[off + 2u] != 'D' || probe[off + 3u] != '0') {
+            cdrom_close_disc();
+            return "the track file in the .cue is not a valid ISO9660 PlayStation CD-ROM";
+        }
+        psx_cue_active = 1;
+        psx_set_disc(psx_cue_sector, toc->total_lba, 2352u);
+        u32 tlba[101];
+        u8  taud[101];
+        for (int t = 0; t <= 100; t++) {
+            tlba[t] = toc->tracks[t].lba;
+            taud[t] = toc->tracks[t].is_audio;
+        }
+        psx_set_toc(toc->first_track, toc->last_track, tlba, taud);
         const char *why = psx_load(0, 0, path);
+        if (why) {
+            cdrom_close_disc();
+            psx_cue_active = 0;
+        }
         psx_machine.frame_us = psx_pal() ? PSX_FRAME_US_PAL : PSX_FRAME_US;
         return why;
     }
@@ -2591,6 +2537,10 @@ int psx_play(const char *path, u32 frames, const char *script)
     if (psx_stream_active) {
         disk_stream_close();
         psx_stream_active = 0;
+    }
+    if (psx_cue_active) {
+        cdrom_close_disc();
+        psx_cue_active = 0;
     }
     psx_set_skip_render(0);
     psx_set_region(0);

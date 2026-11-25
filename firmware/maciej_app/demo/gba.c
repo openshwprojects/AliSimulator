@@ -3114,6 +3114,8 @@ static u32 step_arm(u32 inst_pc, s32 target_left)
     return cyc;
 }
 
+static u32 __attribute__((noinline)) step_thumb(u32 inst_pc, s32 target_left);
+
 static u32 step_thumb(u32 inst_pc, s32 target_left)
 {
     inst_pc &= ~1u;
@@ -3460,6 +3462,623 @@ static u32 step_thumb(u32 inst_pc, s32 target_left)
     return cyc;
 }
 
+typedef u16 __attribute__((may_alias)) u16_alias;
+typedef u32 __attribute__((may_alias)) u32_alias;
+
+static const u16 thumb_cond_mask[16] = {
+    0xF0F0u, 0x0F0Fu, 0xCCCCu, 0x3333u,
+    0xFF00u, 0x00FFu, 0xAAAAu, 0x5555u,
+    0x0C0Cu, 0xF3F3u, 0xAA55u, 0x55AAu,
+    0x0A05u, 0xF5FAu, 0xFFFFu, 0xFFFFu
+};
+
+INLINE u32 cpsr_nz(u32 cpsr, u32 res)
+{
+    return (cpsr & ~(FLAG_N | FLAG_Z)) | (res & FLAG_N) | ((u32)(res == 0u) << 30);
+}
+
+INLINE u32 cpsr_nzc(u32 cpsr, u32 res, u32 c)
+{
+    return (cpsr & ~(FLAG_N | FLAG_Z | FLAG_C)) | (res & FLAG_N) |
+           ((u32)(res == 0u) << 30) | ((c & 1u) << 29);
+}
+
+INLINE u32 cpsr_add(u32 cpsr, u32 a, u32 b, u32 *out)
+{
+    u32 res = a + b;
+    *out = res;
+    return (cpsr & 0x0FFFFFFFu) | (res & FLAG_N) | ((u32)(res == 0u) << 30) |
+           ((u32)(res < a) << 29) | (((~(a ^ b) & (a ^ res)) >> 3) & FLAG_V);
+}
+
+INLINE u32 cpsr_sub(u32 cpsr, u32 a, u32 b, u32 *out)
+{
+    u32 res = a - b;
+    *out = res;
+    return (cpsr & 0x0FFFFFFFu) | (res & FLAG_N) | ((u32)(res == 0u) << 30) |
+           ((u32)(a >= b) << 29) | ((((a ^ b) & (a ^ res)) >> 3) & FLAG_V);
+}
+
+INLINE u32 cpsr_adc(u32 cpsr, u32 a, u32 b, u32 cin, u32 *out)
+{
+    u32 res = a + b + cin;
+    u32 c = cin ? (res <= a) : (res < a);
+    *out = res;
+    return (cpsr & 0x0FFFFFFFu) | (res & FLAG_N) | ((u32)(res == 0u) << 30) |
+           (c << 29) | (((~(a ^ b) & (a ^ res)) >> 3) & FLAG_V);
+}
+
+INLINE u32 cpsr_sbc(u32 cpsr, u32 a, u32 b, u32 cin, u32 *out)
+{
+    u32 res = a - b - (1u - cin);
+    u32 c = cin ? (a >= b) : (a > b);
+    *out = res;
+    return (cpsr & 0x0FFFFFFFu) | (res & FLAG_N) | ((u32)(res == 0u) << 30) |
+           (c << 29) | ((((a ^ b) & (a ^ res)) >> 3) & FLAG_V);
+}
+
+#ifndef HOST_EXTRA
+static u32 __attribute__((noinline)) shift_reg_noinline(u32 val, u32 type, u32 amt, u32 *carry)
+{
+    return shift_reg(val, type, amt, carry);
+}
+
+/* Fast Thumb slice: direct u16 instruction pointer, register-resident CPSR and cycle budget,
+   64-way single-dispatch table, and inline IWRAM/EWRAM/ROM data accesses; cold/MMIO cases
+   punt cleanly to step_thumb so the hot loop stays small inside the 16 KB I-cache. */
+static int __attribute__((noinline)) run_thumb_slice(s32 target_left)
+{
+    u32 *const r = S.r;
+    u8 *const iwram = M->iwram;
+    u8 *const ewram = M->ewram;
+    const u8 *const rom = S.rom;
+    const u32 rom_size = S.rom_size;
+
+    u32 cpsr = S.cpsr;
+    s32 cyc_left = S.cyc_left;
+    s32 start_cyc = cyc_left;
+    s32 stop_left = target_left;
+    if (S.active_timers && S.tmr_next_cyc > stop_left)
+        stop_left = S.tmr_next_cyc;
+
+    u32 pc = r[15] & ~1u;
+    u32 last_op = 0, prev_op = 0;
+    int ran = 0, had_prev = 0;
+
+    const u16_alias *ip_base;
+    const u16_alias *ip;
+    const u16_alias *ip_end;
+    u32 pc_base;
+    u32 reg_bytes;
+    u32 fetch_cyc;
+    u32 ws_n32_pc;
+
+rebase:
+    {
+        u32 reg = pc >> 24;
+        if (reg >= 0x08u && reg <= 0x0Cu) {
+            u32 off = pc & 0x01FFFFFEu;
+            u32 lim = rom_size & ~1u;
+            if (reg == 0x0Cu && lim > 0x01000000u)
+                lim = 0x01000000u;
+            if (off >= lim)
+                goto unmapped;
+            ip_base   = (const u16_alias *)rom;
+            ip        = ip_base + (off >> 1);
+            ip_end    = ip_base + (lim >> 1);
+            pc_base   = pc & 0xFE000000u;
+            reg_bytes = lim;
+            fetch_cyc = S.ws_s16[reg];
+            ws_n32_pc = S.ws_n32[reg];
+        } else if (reg == 0x03u) {
+            u32 off   = pc & 0x7FFEu;
+            ip_base   = (const u16_alias *)iwram;
+            ip        = ip_base + (off >> 1);
+            ip_end    = ip_base + (0x8000u >> 1);
+            pc_base   = pc & 0xFFFF8000u;
+            reg_bytes = 0x8000u;
+            fetch_cyc = S.ws_s16[3];
+            ws_n32_pc = S.ws_n32[3];
+        } else if (reg == 0x02u) {
+            u32 off   = pc & 0x3FFFEu;
+            ip_base   = (const u16_alias *)ewram;
+            ip        = ip_base + (off >> 1);
+            ip_end    = ip_base + (0x40000u >> 1);
+            pc_base   = pc & 0xFFFC0000u;
+            reg_bytes = 0x40000u;
+            fetch_cyc = S.ws_s16[2];
+            ws_n32_pc = S.ws_n32[2];
+        } else {
+        unmapped:
+            if (!ran)
+                return 0;
+            goto exit_with_pc;
+        }
+    }
+
+    while (cyc_left > stop_left) {
+        if (__builtin_expect(ip >= ip_end, 0)) {
+            pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            goto rebase;
+        }
+        prev_op = last_op;
+        had_prev = ran;
+        u32 op = *ip++;
+        last_op = op;
+        ran = 1;
+        u32 cyc = fetch_cyc;
+        u32 addr, rd, val;
+
+        switch (op >> 10) {
+        case 0x00: case 0x01: { /* LSL Rd, Rs, #imm5 */
+            u32 d = op & 7u, v = r[(op >> 3) & 7u], amt = (op >> 6) & 31u;
+            if (amt == 0u) {
+                r[d] = v;
+                cpsr = cpsr_nz(cpsr, v);
+            } else {
+                u32 sc = (v >> (32u - amt)) & 1u;
+                u32 res = v << amt;
+                r[d] = res;
+                cpsr = cpsr_nzc(cpsr, res, sc);
+            }
+            break;
+        }
+        case 0x02: case 0x03: { /* LSR Rd, Rs, #imm5 */
+            u32 d = op & 7u, v = r[(op >> 3) & 7u], amt = (op >> 6) & 31u;
+            u32 sc, res;
+            if (amt == 0u) { sc = v >> 31; res = 0u; }
+            else           { sc = (v >> (amt - 1u)) & 1u; res = v >> amt; }
+            r[d] = res;
+            cpsr = cpsr_nzc(cpsr, res, sc);
+            break;
+        }
+        case 0x04: case 0x05: { /* ASR Rd, Rs, #imm5 */
+            u32 d = op & 7u, v = r[(op >> 3) & 7u], amt = (op >> 6) & 31u;
+            u32 sc, res;
+            if (amt == 0u) { sc = v >> 31; res = (u32)((s32)v >> 31); }
+            else           { sc = (v >> (amt - 1u)) & 1u; res = (u32)((s32)v >> amt); }
+            r[d] = res;
+            cpsr = cpsr_nzc(cpsr, res, sc);
+            break;
+        }
+        case 0x06: { /* ADD / SUB Rd, Rs, Rn */
+            u32 d = op & 7u, a = r[(op >> 3) & 7u], b = r[(op >> 6) & 7u];
+            cpsr = (op & 0x0200u) ? cpsr_sub(cpsr, a, b, &r[d]) : cpsr_add(cpsr, a, b, &r[d]);
+            break;
+        }
+        case 0x07: { /* ADD / SUB Rd, Rs, #imm3 */
+            u32 d = op & 7u, a = r[(op >> 3) & 7u], b = (op >> 6) & 7u;
+            cpsr = (op & 0x0200u) ? cpsr_sub(cpsr, a, b, &r[d]) : cpsr_add(cpsr, a, b, &r[d]);
+            break;
+        }
+        case 0x08: case 0x09: { /* MOV Rd, #imm8 */
+            u32 d = (op >> 8) & 7u, imm = op & 0xFFu;
+            r[d] = imm;
+            cpsr = (cpsr & ~(FLAG_N | FLAG_Z)) | ((u32)(imm == 0u) << 30);
+            break;
+        }
+        case 0x0A: case 0x0B: { /* CMP Rd, #imm8 */
+            u32 dummy;
+            cpsr = cpsr_sub(cpsr, r[(op >> 8) & 7u], op & 0xFFu, &dummy);
+            break;
+        }
+        case 0x0C: case 0x0D: { /* ADD Rd, #imm8 */
+            u32 d = (op >> 8) & 7u;
+            cpsr = cpsr_add(cpsr, r[d], op & 0xFFu, &r[d]);
+            break;
+        }
+        case 0x0E: case 0x0F: { /* SUB Rd, #imm8 */
+            u32 d = (op >> 8) & 7u;
+            cpsr = cpsr_sub(cpsr, r[d], op & 0xFFu, &r[d]);
+            break;
+        }
+        case 0x10: { /* Format 4: ALU */
+            u32 d = op & 7u, a = r[d], b = r[(op >> 3) & 7u], res, dummy;
+            u32 sc = (cpsr >> 29) & 1u;
+            switch ((op >> 6) & 15u) {
+            case 0x0: res = a & b; r[d] = res; cpsr = cpsr_nz(cpsr, res); break;
+            case 0x1: res = a ^ b; r[d] = res; cpsr = cpsr_nz(cpsr, res); break;
+            case 0x2: res = shift_reg_noinline(a, 0u, b, &sc); r[d] = res; cpsr = cpsr_nzc(cpsr, res, sc); cyc++; break;
+            case 0x3: res = shift_reg_noinline(a, 1u, b, &sc); r[d] = res; cpsr = cpsr_nzc(cpsr, res, sc); cyc++; break;
+            case 0x4: res = shift_reg_noinline(a, 2u, b, &sc); r[d] = res; cpsr = cpsr_nzc(cpsr, res, sc); cyc++; break;
+            case 0x5: cpsr = cpsr_adc(cpsr, a, b, sc, &r[d]); break;
+            case 0x6: cpsr = cpsr_sbc(cpsr, a, b, sc, &r[d]); break;
+            case 0x7: res = shift_reg_noinline(a, 3u, b, &sc); r[d] = res; cpsr = cpsr_nzc(cpsr, res, sc); cyc++; break;
+            case 0x8: cpsr = cpsr_nz(cpsr, a & b); break;
+            case 0x9: cpsr = cpsr_sub(cpsr, 0u, b, &r[d]); break;
+            case 0xA: cpsr = cpsr_sub(cpsr, a, b, &dummy); break;
+            case 0xB: cpsr = cpsr_add(cpsr, a, b, &dummy); break;
+            case 0xC: res = a | b; r[d] = res; cpsr = cpsr_nz(cpsr, res); break;
+            case 0xD: res = a * b; r[d] = res; cpsr = cpsr_nz(cpsr, res); cyc += 2u; break;
+            case 0xE: res = a & ~b; r[d] = res; cpsr = cpsr_nz(cpsr, res); break;
+            case 0xF: res = ~b; r[d] = res; cpsr = cpsr_nz(cpsr, res); break;
+            }
+            break;
+        }
+        case 0x11: { /* Format 5: Hi-reg ADD / CMP / MOV / BX */
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            r[15] = next_pc + 2u;
+            u32 d = (op & 7u) | ((op >> 4) & 8u);
+            u32 s = (op >> 3) & 15u;
+            u32 vs = r[s];
+            switch ((op >> 8) & 3u) {
+            case 0:
+                r[d] += vs;
+                if (d == 15u) {
+                    cyc += 2u;
+                    cyc_left -= (s32)cyc;
+                    pc = r[15] & ~1u;
+                    goto branch_pc;
+                }
+                break;
+            case 1: {
+                u32 dummy;
+                cpsr = cpsr_sub(cpsr, r[d], vs, &dummy);
+                break;
+            }
+            case 2:
+                r[d] = vs;
+                if (d == 15u) {
+                    cyc += 2u;
+                    cyc_left -= (s32)cyc;
+                    pc = vs & ~1u;
+                    goto branch_pc;
+                }
+                break;
+            case 3:
+                if (s == 15u)
+                    vs &= ~3u;
+                cyc += 2u;
+                cyc_left -= (s32)cyc;
+                if (vs & 1u) {
+                    pc = vs & ~1u;
+                    goto branch_pc;
+                }
+                cpsr &= ~CPSR_T;
+                pc = vs & ~3u;
+                goto exit_with_pc;
+            }
+            break;
+        }
+        case 0x12: case 0x13: { /* Format 6: LDR Rd, [PC, #imm8*4] */
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            addr = ((next_pc + 2u) & ~2u) + ((op & 0xFFu) << 2);
+            u32 aoff = addr - pc_base;
+            if (__builtin_expect(reg_bytes >= 4u && aoff <= reg_bytes - 4u, 1)) {
+                r[(op >> 8) & 7u] = *(const u32_alias *)((const u8 *)ip_base + aoff);
+                cyc += 1u + ws_n32_pc;
+                break;
+            }
+            goto slow_step;
+        }
+        case 0x14: /* STR / STRH Rd, [Rb, Ro] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + r[(op >> 6) & 7u];
+            val = r[rd];
+            if (op & 0x0200u) { cyc++; goto do_strh; }
+            goto do_str32;
+        case 0x15: /* STRB / LDSB Rd, [Rb, Ro] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + r[(op >> 6) & 7u];
+            if (!(op & 0x0200u)) { val = r[rd]; goto do_strb; }
+            {
+                u32 top = addr >> 24;
+                if (top == 0x03u) { r[rd] = (u32)(s32)(s8)iwram[addr & 0x7FFFu]; cyc += 2u; break; }
+                if (top == 0x02u) { r[rd] = (u32)(s32)(s8)ewram[addr & 0x3FFFFu]; cyc += 4u; break; }
+                if (top - 0x08u <= 1u && (addr & 0x01FFFFFFu) < rom_size) {
+                    r[rd] = (u32)(s32)(s8)rom[addr & 0x01FFFFFFu];
+                    cyc += 1u + S.ws_n16[8];
+                    break;
+                }
+                goto slow_step;
+            }
+        case 0x16: /* LDR / LDRH Rd, [Rb, Ro] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + r[(op >> 6) & 7u];
+            if (op & 0x0200u) goto do_ldrh;
+            goto do_ldr32;
+        case 0x17: /* LDRB / LDSH Rd, [Rb, Ro] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + r[(op >> 6) & 7u];
+            if (!(op & 0x0200u)) goto do_ldrb;
+            if (!(addr & 1u)) {
+                u32 top = addr >> 24;
+                if (top == 0x03u) { r[rd] = (u32)(s32)(s16)*(const u16_alias *)(iwram + (addr & 0x7FFEu)); cyc += 2u; break; }
+                if (top == 0x02u) { r[rd] = (u32)(s32)(s16)*(const u16_alias *)(ewram + (addr & 0x3FFFEu)); cyc += 4u; break; }
+                if (top - 0x08u <= 1u && (addr & 0x01FFFFFEu) + 2u <= rom_size) {
+                    r[rd] = (u32)(s32)(s16)*(const u16_alias *)(rom + (addr & 0x01FFFFFEu));
+                    cyc += 1u + S.ws_n16[8];
+                    break;
+                }
+            }
+            goto slow_step;
+        case 0x18: case 0x19: /* STR Rd, [Rb, #imm5*4] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + (((op >> 6) & 31u) << 2);
+            val = r[rd];
+            goto do_str32;
+        case 0x1A: case 0x1B: /* LDR Rd, [Rb, #imm5*4] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + (((op >> 6) & 31u) << 2);
+            goto do_ldr32;
+        case 0x1C: case 0x1D: /* STRB Rd, [Rb, #imm5] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + ((op >> 6) & 31u);
+            val = r[rd];
+            goto do_strb;
+        case 0x1E: case 0x1F: /* LDRB Rd, [Rb, #imm5] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + ((op >> 6) & 31u);
+            goto do_ldrb;
+        case 0x20: case 0x21: /* STRH Rd, [Rb, #imm5*2] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + (((op >> 6) & 31u) << 1);
+            val = r[rd];
+            goto do_strh;
+        case 0x22: case 0x23: /* LDRH Rd, [Rb, #imm5*2] */
+            rd = op & 7u;
+            addr = r[(op >> 3) & 7u] + (((op >> 6) & 31u) << 1);
+            goto do_ldrh;
+        case 0x24: case 0x25: /* STR Rd, [SP, #imm8*4] */
+            rd = (op >> 8) & 7u;
+            addr = r[13] + ((op & 0xFFu) << 2);
+            val = r[rd];
+            goto do_str32;
+        case 0x26: case 0x27: /* LDR Rd, [SP, #imm8*4] */
+            rd = (op >> 8) & 7u;
+            addr = r[13] + ((op & 0xFFu) << 2);
+            goto do_ldr32;
+
+        do_str32: {
+            u32 top = addr >> 24;
+            if (top == 0x03u) { *(u32_alias *)(iwram + (addr & 0x7FFCu)) = val; cyc += 1u; break; }
+            if (top == 0x02u) { *(u32_alias *)(ewram + (addr & 0x3FFFCu)) = val; cyc += 6u; break; }
+            if (top - 0x05u <= 2u) { bus_write32_slow(addr, val); cyc += S.ws_n32[top]; break; }
+            goto slow_step;
+        }
+        do_ldr32: {
+            u32 top = addr >> 24, v;
+            if (top == 0x03u) {
+                v = *(const u32_alias *)(iwram + (addr & 0x7FFCu));
+                cyc += 2u;
+            } else if (top == 0x02u) {
+                v = *(const u32_alias *)(ewram + (addr & 0x3FFFCu));
+                cyc += 7u;
+            } else if (top - 0x08u <= 1u && (addr & 0x01FFFFFCu) + 4u <= rom_size) {
+                v = *(const u32_alias *)(rom + (addr & 0x01FFFFFCu));
+                cyc += 1u + S.ws_n32[8];
+            } else if (top - 0x05u <= 2u) {
+                v = bus_read32_slow(addr);
+                cyc += 1u + S.ws_n32[top];
+            } else {
+                goto slow_step;
+            }
+            r[rd] = ror32(v, (addr & 3u) << 3);
+            break;
+        }
+        do_strb: {
+            u32 top = addr >> 24;
+            if (top == 0x03u) { iwram[addr & 0x7FFFu] = (u8)val; cyc += 1u; break; }
+            if (top == 0x02u) { ewram[addr & 0x3FFFFu] = (u8)val; cyc += 3u; break; }
+            if (top - 0x05u <= 2u) { bus_write8(addr, (u8)val); cyc += 1u; break; }
+            goto slow_step;
+        }
+        do_ldrb: {
+            u32 top = addr >> 24;
+            if (top == 0x03u) { r[rd] = iwram[addr & 0x7FFFu]; cyc += 2u; break; }
+            if (top == 0x02u) { r[rd] = ewram[addr & 0x3FFFFu]; cyc += 4u; break; }
+            if (top - 0x08u <= 1u && (addr & 0x01FFFFFFu) < rom_size) {
+                r[rd] = rom[addr & 0x01FFFFFFu];
+                cyc += 1u + S.ws_n16[8];
+                break;
+            }
+            if (top - 0x05u <= 2u) {
+                u16 h = bus_read16_slow(addr & ~1u);
+                r[rd] = (h >> ((addr & 1u) << 3)) & 0xFFu;
+                cyc += 2u;
+                break;
+            }
+            goto slow_step;
+        }
+        do_strh: {
+            u32 top = addr >> 24;
+            if (top == 0x03u) { *(u16_alias *)(iwram + (addr & 0x7FFEu)) = (u16)val; cyc += 1u; break; }
+            if (top == 0x02u) { *(u16_alias *)(ewram + (addr & 0x3FFFEu)) = (u16)val; cyc += 3u; break; }
+            if (top - 0x05u <= 2u) { bus_write16_slow(addr, (u16)val); cyc += 1u; break; }
+            goto slow_step;
+        }
+        do_ldrh: {
+            u32 top = addr >> 24, h;
+            if (top == 0x03u) {
+                h = *(const u16_alias *)(iwram + (addr & 0x7FFEu));
+                cyc += 2u;
+            } else if (top == 0x02u) {
+                h = *(const u16_alias *)(ewram + (addr & 0x3FFFEu));
+                cyc += 4u;
+            } else if (top - 0x08u <= 1u && (addr & 0x01FFFFFEu) + 2u <= rom_size) {
+                h = *(const u16_alias *)(rom + (addr & 0x01FFFFFEu));
+                cyc += 1u + S.ws_n16[8];
+            } else if (top - 0x05u <= 2u) {
+                h = bus_read16_slow(addr);
+                cyc += 2u;
+            } else {
+                goto slow_step;
+            }
+            r[rd] = (addr & 1u) ? ror32(h, 8u) : h;
+            break;
+        }
+
+        case 0x28: case 0x29: { /* ADD Rd, PC, #imm8*4 */
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            r[(op >> 8) & 7u] = ((next_pc + 2u) & ~2u) + ((op & 0xFFu) << 2);
+            break;
+        }
+        case 0x2A: case 0x2B: /* ADD Rd, SP, #imm8*4 */
+            r[(op >> 8) & 7u] = r[13] + ((op & 0xFFu) << 2);
+            break;
+        case 0x2C: case 0x2E: { /* ADD SP, #+-imm7*4 */
+            u32 off = (op & 0x7Fu) << 2;
+            r[13] = (op & 0x0080u) ? (r[13] - off) : (r[13] + off);
+            break;
+        }
+        case 0x2D: { /* PUSH */
+            u32 rlist = op & 0xFFu, pbit = (op >> 8) & 1u;
+            u32 cnt = popcnt16(rlist) + pbit;
+            if (__builtin_expect(!cnt, 0))
+                goto slow_step;
+            u32 a = r[13] - cnt * 4u;
+            if (__builtin_expect(a - 0x03000000u >= 0x00FFFFDCu, 0))
+                goto slow_step;
+            r[13] = a;
+            for (u32 m = rlist; m; m &= m - 1u) {
+                *(u32_alias *)(iwram + (a & 0x7FFCu)) = r[__builtin_ctz(m)];
+                a += 4u;
+            }
+            if (pbit)
+                *(u32_alias *)(iwram + (a & 0x7FFCu)) = r[14];
+            cyc += cnt;
+            break;
+        }
+        case 0x2F: { /* POP */
+            u32 rlist = op & 0xFFu, pbit = (op >> 8) & 1u;
+            if (__builtin_expect(!rlist && !pbit, 0))
+                goto slow_step;
+            u32 a = r[13];
+            if (__builtin_expect(a - 0x03000000u >= 0x00FFFFDCu, 0))
+                goto slow_step;
+            for (u32 m = rlist; m; m &= m - 1u) {
+                r[__builtin_ctz(m)] = *(const u32_alias *)(iwram + (a & 0x7FFCu));
+                a += 4u;
+                cyc++;
+            }
+            if (pbit) {
+                pc = *(const u32_alias *)(iwram + (a & 0x7FFCu)) & ~1u;
+                r[13] = a + 4u;
+                cyc += 2u;
+                cyc_left -= (s32)cyc;
+                goto branch_pc;
+            }
+            r[13] = a;
+            break;
+        }
+        case 0x30: case 0x31: { /* STMIA Rb!, {rlist} */
+            u32 rb = (op >> 8) & 7u, rlist = op & 0xFFu, base = r[rb];
+            if (__builtin_expect(!rlist || base - 0x03000000u >= 0x00FFFFDCu, 0))
+                goto slow_step;
+            u32 cnt = popcnt16(rlist), new_base = base + cnt * 4u, a = base;
+            int rb_first = ((rlist & ((1u << rb) - 1u)) == 0u);
+            for (u32 m = rlist; m; m &= m - 1u) {
+                int i = __builtin_ctz(m);
+                *(u32_alias *)(iwram + (a & 0x7FFCu)) = ((u32)i == rb && !rb_first) ? new_base : r[i];
+                a += 4u;
+            }
+            r[rb] = new_base;
+            cyc += cnt;
+            break;
+        }
+        case 0x32: case 0x33: { /* LDMIA Rb!, {rlist} */
+            u32 rb = (op >> 8) & 7u, rlist = op & 0xFFu, base = r[rb];
+            if (__builtin_expect(!rlist || base - 0x03000000u >= 0x00FFFFDCu, 0))
+                goto slow_step;
+            u32 cnt = popcnt16(rlist), a = base;
+            r[rb] = base + cnt * 4u;
+            for (u32 m = rlist; m; m &= m - 1u) {
+                r[__builtin_ctz(m)] = *(const u32_alias *)(iwram + (a & 0x7FFCu));
+                a += 4u;
+            }
+            cyc += cnt;
+            break;
+        }
+        case 0x34: case 0x35: case 0x36: case 0x37: { /* B<cond> / UNDEF / SWI */
+            u32 cond = (op >> 8) & 15u;
+            if (__builtin_expect(cond >= 0xEu || (op & 0xFFu) == 0xFBu, 0))
+                goto slow_step;
+            if ((thumb_cond_mask[cond] >> (cpsr >> 28)) & 1u) {
+                u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+                pc = (next_pc + 2u + (u32)((s32)(s8)(op & 0xFFu) << 1)) & ~1u;
+                cyc += 2u;
+                cyc_left -= (s32)cyc;
+                goto branch_pc;
+            }
+            break;
+        }
+        case 0x38: case 0x39: { /* Unconditional B offset11 */
+            if (__builtin_expect(op == 0xE7FEu, 0))
+                goto slow_step;
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            pc = (next_pc + 2u + (u32)(((s32)(op << 21)) >> 20)) & ~1u;
+            cyc += 2u;
+            cyc_left -= (s32)cyc;
+            goto branch_pc;
+        }
+        case 0x3A: case 0x3B: /* Unused sub==1: falls through with fetch_cyc */
+            break;
+        case 0x3C: case 0x3D: { /* BL prefix */
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            r[14] = (next_pc + 2u) + (u32)(((s32)(op << 21)) >> 9);
+            break;
+        }
+        case 0x3E: case 0x3F: { /* BL suffix */
+            u32 next_pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+            pc = (r[14] + ((op & 0x7FFu) << 1)) & ~1u;
+            r[14] = next_pc | 1u;
+            cyc += 2u;
+            cyc_left -= (s32)cyc;
+            goto branch_pc;
+        }
+        }
+
+        cyc_left -= (s32)cyc;
+        continue;
+
+    branch_pc:
+        {
+            u32 boff = pc - pc_base;
+            if (__builtin_expect(boff < reg_bytes, 1)) {
+                ip = (const u16_alias *)((const u8 *)ip_base + boff);
+                continue;
+            }
+            goto rebase;
+        }
+    }
+
+    pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+
+exit_with_pc:
+    S.cpsr = cpsr;
+    r[15] = pc;
+    S.last_fetch = last_op * 0x00010001u;
+    S.cyc_left = cyc_left;
+    if (S.active_timers) {
+        S.tmr_pend += (u32)(start_cyc - cyc_left);
+        if (cyc_left <= S.tmr_next_cyc)
+            timers_flush();
+    }
+    return 1;
+
+slow_step:
+    ip--;
+    pc = pc_base + (u32)((const u8 *)ip - (const u8 *)ip_base);
+    S.cpsr = cpsr;
+    r[15] = pc;
+    if (had_prev)
+        S.last_fetch = prev_op * 0x00010001u;
+    S.cyc_left = cyc_left;
+    if (S.active_timers)
+        S.tmr_pend += (u32)(start_cyc - cyc_left);
+    {
+        u32 c = step_thumb(pc, target_left);
+        S.cyc_left -= (s32)c;
+        if (S.active_timers) {
+            S.tmr_pend += c;
+            if (S.cyc_left <= S.tmr_next_cyc)
+                timers_flush();
+        }
+    }
+    return 1;
+}
+#endif
+
 static void run_cpu_slice(s32 target_left)
 {
     timers_flush();
@@ -3481,6 +4100,11 @@ static void run_cpu_slice(s32 target_left)
                 break;
             continue;
         }
+
+#ifndef HOST_EXTRA
+        if ((S.cpsr & CPSR_T) && run_thumb_slice(target_left))
+            continue;
+#endif
 
         u32 cyc = (S.cpsr & CPSR_T) ? step_thumb(S.r[15], target_left)
                                     : step_arm(S.r[15], target_left);

@@ -4,8 +4,8 @@
    - PS1 GPU (GP0/GP1, 1024 x 512 BGR555 VRAM, flat/Gouraud/textured 4bpp/8bpp/15bpp triangles, quads, lines & sprites, semi-transparency, dithering, mask bit, texture window, 15bpp & 24bpp display modes)
    - DMA0..6 (MDECin, MDECout, GPU VRAM & linked-list OT, CD-ROM, SPU, OTC) + 3 Root Counters
    - MDEC macroblock RLE + IDCT decoder (4bpp, 8bpp, 15bpp, 24bpp)
-   - SPU 24-voice XA-ADPCM synthesizer + ADSR mixed to 48 kHz mono
-   - Digital Joypad + 128 KB Memory Card (.sav) + CD-ROM XA/ISO9660 controller (.cue/.bin/.iso streaming + PS-X EXE)
+   - SPU 24-voice ADPCM synthesizer + ADSR + XA-ADPCM & Redbook CD-DA audio mixed to 48 kHz
+   - Digital Joypad + 128 KB Memory Card (.sav) + CD-ROM XA/CD-DA/ISO9660 controller (.cue/.bin/.iso streaming + PS-X EXE)
    - Clean-room built-in HLE BIOS (A0/B0/C0 kernel, events, pad polling, Memory Card calls and "bu00:" files, ISO9660 SYSTEM.CNF boot) + optional scph1001.bin */
 #pragma GCC optimize("O3")
 
@@ -54,6 +54,18 @@ typedef unsigned long long u64;
    2048-byte rows put a texture's texels of one column all into one cache set (four rows cached at most: a
    texture drawn at an angle missed on almost every texel); 2080-byte rows spread 64 rows over all 64 sets */
 #define VRAM_STRIDE 1040u
+#define COL_MAX_RUNS  512u
+#define COL_MAX_CLUTS 64u
+#define COL_STRIP_H   64
+#define CD_AUD_RING   8192u
+
+struct gpu_col_run {
+    const u8 *tcol;
+    u32 v24, dv24;
+    s16 next;
+    u16 x, y0, y1;
+    u8 cid, half, av8, pad;
+};
 
 struct psx_work {
     /* Hot small arrays placed in first 32 KB for 1-insn MIPS32 offset addressing */
@@ -91,6 +103,10 @@ struct psx_work {
     u32 mdec_in[PSX_MDEC_IN];      /* MDEC input: a command's parameter words (a 640 x 240 picture of Duke Nukem's
                                       logo videos is ~90 KB of them; it was 64 KB here and the pictures' right
                                       quarter stayed black) */
+    struct gpu_col_run col_runs[COL_MAX_RUNS];
+    s32 col_clut[COL_MAX_CLUTS][16];
+    u16 col_clut16[COL_MAX_CLUTS][16];
+    s16 cd_aud_ring[CD_AUD_RING][2];
 };
 
 #ifdef __mips__
@@ -202,6 +218,14 @@ static struct psx_state_s {
     u16 clut4_cx[4], clut4_cy[4];           /* where each baked CLUT is in VRAM (gpu_clut4_touch) */
     s32 clut4_cache[4][16];
     u8  clut4_slot;
+    u16 col_n, col_clut_n;
+    u8  col_batch_en, col_clut_last, col_bmin, col_bmax;
+    u8  col_copaque[COL_MAX_CLUTS];
+    u64 col_ckey[COL_MAX_CLUTS];
+    int col_x1, col_y1, col_x2, col_y2;
+    int col_tx1, col_ty1, col_tx2, col_ty2;
+    s16 col_head[64], col_tail[64];
+    u16 col_by0[64], col_by1[64];
 
     /* MDEC state */
     u32 mdec_cmd, mdec_stat;
@@ -221,11 +245,16 @@ static struct psx_state_s {
     u8 cd_pend_cmd;
     u8 cd_xa_streak, cd_xa_file, cd_xa_ch, cd_xa_sub, cd_xa_cod, cd_flt_file, cd_flt_ch;
     u8 cd_hdr_valid;       /* cd_buf holds the header of a sector read since the last seek (GetlocL) */
+    u8 cd_muted, cd_xa_zero, cd_xa_cur_file, cd_xa_cur_ch, spu_cdvol_set;
     int cd_req_delay;
     int cd_cmd_delay;
     int cd_read_delay;
     u32 cd_set_lba, cd_cur_lba;
     u32 cd_fifo_pos, cd_fifo_len;
+    s32 xa_p1[2], xa_p2[2];
+    s32 cd_res_l, cd_res_r;
+    u32 cd_res_phase;
+    u32 cd_aud_rpos, cd_aud_wpos, cd_aud_len;
 
     /* SIO0 Joypad & Memory Card */
     u16 sio_ctrl, sio_mode, sio_baud;
@@ -552,6 +581,203 @@ static u8 sio0_txrx(u8 tx)
    Turismo's streaming loader, whose sector ring filled faster than it decompressed, gave up and re-read
    its file forever */
 #define CD_SECTOR_UNITS(mode) (((mode) & 0x80u) ? 430480 : 860960)
+
+static const s32 adpcm_f0[5] = { 0,  60, 115,  98, 122 };
+static const s32 adpcm_f1[5] = { 0,   0, -52, -55, -60 };
+
+static struct {
+    u8  first, last;
+    u8  is_audio[101];
+    u32 lba[101];
+} psx_toc;
+
+static int cd_find_toc_track(u32 lba)
+{
+    if (psx_toc.last <= 1u)
+        return 1;
+    int trk = psx_toc.first ? (int)psx_toc.first : 1;
+    for (int t = (int)psx_toc.last; t >= (int)psx_toc.first && t >= 1; t--) {
+        if (lba >= psx_toc.lba[t]) {
+            trk = t;
+            break;
+        }
+    }
+    return trk;
+}
+
+static void cd_aud_push_frames(const s16 *lr, u32 n_in, u32 src_hz, int lock_263)
+{
+    u32 rate = S.sample_rate;
+    if (!rate || !n_in)
+        return;
+    int eff_pal = (S.region_override == 'E') ? 1 : (S.region_override ? 0 : (int)S.is_pal);
+    u32 eff_rate = (lock_263 && eff_pal) ? ((rate * 5994u) / 5000u) : rate;
+    u32 step = (src_hz << 12) / eff_rate;
+    u32 ph = S.cd_res_phase;
+    s32 pl = S.cd_res_l, pr = S.cd_res_r;
+    u32 wpos = S.cd_aud_wpos, rpos = S.cd_aud_rpos, len = S.cd_aud_len;
+    for (u32 i = 0; i < n_in; i++) {
+        s32 cl = lr[i * 2u], cr = lr[i * 2u + 1u];
+        while (ph < 4096u) {
+            s32 ol = pl + (((cl - pl) * (s32)ph) >> 12);
+            s32 or_ = pr + (((cr - pr) * (s32)ph) >> 12);
+            W.cd_aud_ring[wpos][0] = (s16)ol;
+            W.cd_aud_ring[wpos][1] = (s16)or_;
+            wpos = (wpos + 1u) & (CD_AUD_RING - 1u);
+            if (len < CD_AUD_RING)
+                len++;
+            else
+                rpos = (rpos + 1u) & (CD_AUD_RING - 1u);
+            ph += step;
+        }
+        ph -= 4096u;
+        pl = cl;
+        pr = cr;
+    }
+    S.cd_res_phase = ph;
+    S.cd_res_l = pl;
+    S.cd_res_r = pr;
+    S.cd_aud_wpos = wpos;
+    S.cd_aud_rpos = rpos;
+    S.cd_aud_len = len;
+}
+
+static void __attribute__((noinline)) cd_decode_xa_sector(const u8 *raw)
+{
+    const u32 *w32 = (const u32 *)(raw + 24);
+    u32 nz = 0u;
+    for (int i = 0; i < 576; i++)
+        nz |= w32[i];
+    if (!nz) {
+        if (S.cd_xa_zero < 32u)
+            S.cd_xa_zero++;
+        return;
+    }
+    S.cd_xa_zero = 0u;
+    u8 file = raw[16], ch = (u8)(raw[17] & 0x1Fu), coding = raw[19];
+    if (file != S.cd_xa_cur_file || ch != S.cd_xa_cur_ch) {
+        S.cd_xa_cur_file = file;
+        S.cd_xa_cur_ch = ch;
+        S.xa_p1[0] = S.xa_p1[1] = S.xa_p2[0] = S.xa_p2[1] = 0;
+    }
+    int stereo = coding & 1;
+    u32 src_hz = (coding & 4u) ? 18900u : 37800u;
+    int bits8  = (coding >> 4) & 1;
+    s16 pcm[224 * 2];
+
+    for (int sg = 0; sg < 18; sg++) {
+        const u8 *grp = raw + 24 + sg * 128;
+        if (!bits8) {
+            if (stereo) {
+                for (int pair = 0; pair < 4; pair++) {
+                    for (int c = 0; c < 2; c++) {
+                        int su = pair * 2 + c;
+                        u8 hdr = grp[4 + (su >> 2) * 8 + (su & 3)];
+                        u32 shift = hdr & 0x0Fu; if (shift > 12u) shift = 9u;
+                        u32 filt  = (hdr >> 4) & 3u;
+                        s32 p1 = S.xa_p1[c], p2 = S.xa_p2[c];
+                        s32 f0 = adpcm_f0[filt], f1 = adpcm_f1[filt];
+                        int nib_sh = (su & 1) * 4;
+                        for (int w = 0; w < 28; w++) {
+                            u8 b = grp[16 + w * 4 + (su >> 1)];
+                            int nib = (b >> nib_sh) & 0x0Fu;
+                            s32 s = ((s32)(s16)((u16)nib << 12) >> shift) + ((p1 * f0 + p2 * f1 + 32) >> 6);
+                            if (s < -32768) s = -32768;
+                            else if (s > 32767) s = 32767;
+                            pcm[(pair * 28 + w) * 2 + c] = (s16)s;
+                            p2 = p1; p1 = s;
+                        }
+                        S.xa_p1[c] = p1; S.xa_p2[c] = p2;
+                    }
+                }
+                cd_aud_push_frames(pcm, 112u, src_hz, 1);
+            } else {
+                s32 p1 = S.xa_p1[0], p2 = S.xa_p2[0];
+                for (int su = 0; su < 8; su++) {
+                    u8 hdr = grp[4 + (su >> 2) * 8 + (su & 3)];
+                    u32 shift = hdr & 0x0Fu; if (shift > 12u) shift = 9u;
+                    u32 filt  = (hdr >> 4) & 3u;
+                    s32 f0 = adpcm_f0[filt], f1 = adpcm_f1[filt];
+                    int nib_sh = (su & 1) * 4;
+                    for (int w = 0; w < 28; w++) {
+                        u8 b = grp[16 + w * 4 + (su >> 1)];
+                        int nib = (b >> nib_sh) & 0x0Fu;
+                        s32 s = ((s32)(s16)((u16)nib << 12) >> shift) + ((p1 * f0 + p2 * f1 + 32) >> 6);
+                        if (s < -32768) s = -32768;
+                        else if (s > 32767) s = 32767;
+                        s16 s16v = (s16)s;
+                        pcm[(su * 28 + w) * 2]     = s16v;
+                        pcm[(su * 28 + w) * 2 + 1] = s16v;
+                        p2 = p1; p1 = s;
+                    }
+                }
+                S.xa_p1[0] = p1; S.xa_p2[0] = p2;
+                cd_aud_push_frames(pcm, 224u, src_hz, 1);
+            }
+        } else {
+            if (stereo) {
+                for (int pair = 0; pair < 2; pair++) {
+                    for (int c = 0; c < 2; c++) {
+                        int su = pair * 2 + c;
+                        u8 hdr = grp[4 + su];
+                        u32 shift = hdr & 0x0Fu; if (shift > 8u) shift = 8u;
+                        u32 filt  = (hdr >> 4) & 3u;
+                        s32 p1 = S.xa_p1[c], p2 = S.xa_p2[c];
+                        s32 f0 = adpcm_f0[filt], f1 = adpcm_f1[filt];
+                        for (int w = 0; w < 28; w++) {
+                            u8 b = grp[16 + w * 4 + su];
+                            s32 s = ((s32)(s16)((u16)b << 8) >> shift) + ((p1 * f0 + p2 * f1 + 32) >> 6);
+                            if (s < -32768) s = -32768;
+                            else if (s > 32767) s = 32767;
+                            pcm[(pair * 28 + w) * 2 + c] = (s16)s;
+                            p2 = p1; p1 = s;
+                        }
+                        S.xa_p1[c] = p1; S.xa_p2[c] = p2;
+                    }
+                }
+                cd_aud_push_frames(pcm, 56u, src_hz, 1);
+            } else {
+                s32 p1 = S.xa_p1[0], p2 = S.xa_p2[0];
+                for (int su = 0; su < 4; su++) {
+                    u8 hdr = grp[4 + su];
+                    u32 shift = hdr & 0x0Fu; if (shift > 8u) shift = 8u;
+                    u32 filt  = (hdr >> 4) & 3u;
+                    s32 f0 = adpcm_f0[filt], f1 = adpcm_f1[filt];
+                    for (int w = 0; w < 28; w++) {
+                        u8 b = grp[16 + w * 4 + su];
+                        s32 s = ((s32)(s16)((u16)b << 8) >> shift) + ((p1 * f0 + p2 * f1 + 32) >> 6);
+                        if (s < -32768) s = -32768;
+                        else if (s > 32767) s = 32767;
+                        s16 s16v = (s16)s;
+                        pcm[(su * 28 + w) * 2]     = s16v;
+                        pcm[(su * 28 + w) * 2 + 1] = s16v;
+                        p2 = p1; p1 = s;
+                    }
+                }
+                S.xa_p1[0] = p1; S.xa_p2[0] = p2;
+                cd_aud_push_frames(pcm, 112u, src_hz, 1);
+            }
+        }
+    }
+}
+
+static void __attribute__((noinline)) cd_decode_cdda_sector(u32 lba)
+{
+    if (!S.has_disc || lba >= S.disc_sectors)
+        return;
+    if (S.sec_fn) {
+        if (S.sec_fn(lba, W.cd_buf) != 2352)
+            return;
+    } else if (S.mem_disc && S.disc_sec_size == 2352u && (lba + 1u) * 2352u <= S.mem_disc_size) {
+        const u8 *src = S.mem_disc + lba * 2352u;
+        for (int i = 0; i < 2352; i++)
+            W.cd_buf[i] = src[i];
+    } else {
+        return;
+    }
+    cd_aud_push_frames((const s16 *)W.cd_buf, 588u, 44100u, 0);
+}
+
 static void cd_push_resp(u8 v)
 {
     if (S.cd_resp_n < 16u)
@@ -569,7 +795,7 @@ static void cd_exec_cmd(u8 cmd)
 {
     S.cd_resp_n = 0;
     S.cd_resp_p = 0;
-    u8 stat = (u8)(0x02u | (S.cd_stat & 0x20u)); /* motor on + optional reading */
+    u8 stat = (u8)(0x02u | (S.cd_stat & 0xA0u)); /* motor on + optional reading / playing */
     if (cmd != 0x01u && cmd != 0x10u && cmd != 0x11u)
         S.cd_pend_cmd = 0u;
 
@@ -580,6 +806,7 @@ static void cd_exec_cmd(u8 cmd)
         break;
     case 0x02u: /* CdlSetloc (MM, SS, FF in BCD) */
         S.cd_xa_streak = 0u;
+        S.cd_xa_zero = 0u;
         if (S.cd_req_param_n >= 3u) {
             u32 mm = from_bcd(S.cd_req_param[0]);
             u32 ss = from_bcd(S.cd_req_param[1]);
@@ -590,18 +817,33 @@ static void cd_exec_cmd(u8 cmd)
         cd_push_resp(stat);
         cd_fire_irq(3u);
         break;
-    case 0x03u: /* CdlPlay */
+    case 0x03u: { /* CdlPlay */
         S.cd_xa_streak = 0u;
+        S.cd_xa_zero = 0u;
         S.cd_hdr_valid = 0u;
-        S.cd_cur_lba = S.cd_set_lba;
+        S.cd_aud_len = S.cd_aud_rpos = S.cd_aud_wpos = 0u;
+        if (S.cd_req_param_n >= 1u && S.cd_req_param[0] != 0u) {
+            u8 trk = from_bcd(S.cd_req_param[0]);
+            if (psx_toc.last >= 1u && trk >= psx_toc.first && trk <= psx_toc.last)
+                S.cd_cur_lba = psx_toc.lba[trk];
+            else
+                S.cd_cur_lba = S.cd_set_lba;
+        } else {
+            S.cd_cur_lba = S.cd_set_lba;
+        }
         S.cd_stat = 0x82u;
+        int eff_pal = (S.region_override == 'E') ? 1 : (S.region_override ? 0 : (int)S.is_pal);
+        S.cd_read_delay = eff_pal ? 718165 : 860960;
         cd_push_resp(S.cd_stat);
         cd_fire_irq(3u);
         break;
+    }
     case 0x06u: /* CdlReadN */
     case 0x1Bu: /* CdlReadS */
         S.cd_xa_streak = 0u;
+        S.cd_xa_zero = 0u;
         S.cd_xa_sub = 0u;
+        S.cd_xa_cur_file = 0xFFu;
         S.cd_fifo_pos = 0u;
         if (S.cd_cur_lba != S.cd_set_lba)               /* (a seek: no sector under the head is known yet) */
             S.cd_hdr_valid = 0u;
@@ -616,6 +858,11 @@ static void cd_exec_cmd(u8 cmd)
     case 0x09u: /* CdlPause */
     case 0x0Au: /* CdlInit */
         S.cd_xa_streak = 0u;
+        S.cd_xa_zero = 0u;
+        if (cmd == 0x0Au)
+            S.cd_muted = 0u;
+        if (cmd != 0x07u)
+            S.cd_aud_len = S.cd_aud_rpos = S.cd_aud_wpos = 0u;
         S.cd_stat = (cmd == 0x08u) ? 0x00u : 0x02u;
         S.cd_read_delay = 0;
         cd_push_resp(stat);
@@ -625,11 +872,17 @@ static void cd_exec_cmd(u8 cmd)
         S.cd_cmd_delay = 4096;
         break;
     case 0x0Bu: /* CdlMute */
+        S.cd_muted = 1u;
+        cd_push_resp(stat);
+        cd_fire_irq(3u);
+        break;
     case 0x0Cu: /* CdlDemute */
+        S.cd_muted = 0u;
         cd_push_resp(stat);
         cd_fire_irq(3u);
         break;
     case 0x0Du: /* CdlSetfilter */
+        S.cd_xa_zero = 0u;
         if (S.cd_req_param_n >= 2u) {
             S.cd_flt_file = S.cd_req_param[0];
             S.cd_flt_ch   = S.cd_req_param[1];
@@ -639,6 +892,7 @@ static void cd_exec_cmd(u8 cmd)
         break;
     case 0x0Eu: /* CdlSetmode */
         S.cd_xa_streak = 0u;
+        S.cd_xa_zero = 0u;
         if (S.cd_req_param_n >= 1u)
             S.cd_mode = S.cd_req_param[0];
         cd_push_resp(stat);
@@ -648,8 +902,8 @@ static void cd_exec_cmd(u8 cmd)
         cd_push_resp(stat);
         cd_push_resp(S.cd_mode);
         cd_push_resp(0u);
-        cd_push_resp(0u);
-        cd_push_resp(0u);
+        cd_push_resp(S.cd_flt_file);
+        cd_push_resp(S.cd_flt_ch);
         cd_fire_irq(3u);
         break;
     case 0x10u: { /* CdlGetlocL */
@@ -667,9 +921,11 @@ static void cd_exec_cmd(u8 cmd)
         break;
     }
     case 0x11u: { /* CdlGetlocP */
-        u32 rel = S.cd_cur_lba;
-        u32 absf = rel + 150u;
-        cd_push_resp(0x01u);
+        int trk = cd_find_toc_track(S.cd_cur_lba);
+        u32 tlba = (psx_toc.last > 1u) ? psx_toc.lba[trk] : 0u;
+        u32 rel = (S.cd_cur_lba >= tlba) ? (S.cd_cur_lba - tlba) : 0u;
+        u32 absf = S.cd_cur_lba + 150u;
+        cd_push_resp(to_bcd((u32)trk));
         cd_push_resp(0x01u);
         cd_push_resp(to_bcd(rel / (60u * 75u)));
         cd_push_resp(to_bcd((rel / 75u) % 60u));
@@ -682,13 +938,19 @@ static void cd_exec_cmd(u8 cmd)
     }
     case 0x13u: /* CdlGetTN */
         cd_push_resp(stat);
-        cd_push_resp(0x01u);
-        cd_push_resp(0x01u);
+        cd_push_resp(to_bcd(psx_toc.first ? psx_toc.first : 1u));
+        cd_push_resp(to_bcd(psx_toc.last ? psx_toc.last : 1u));
         cd_fire_irq(3u);
         break;
     case 0x14u: { /* CdlGetTD */
         u8 trk = S.cd_req_param_n ? from_bcd(S.cd_req_param[0]) : 0u;
-        u32 frames = (trk == 0u) ? (S.disc_sectors + 150u) : 150u;
+        u32 frames;
+        if (trk == 0u)
+            frames = S.disc_sectors + 150u;
+        else if (psx_toc.last > 1u && trk >= psx_toc.first && trk <= psx_toc.last)
+            frames = psx_toc.lba[trk] + 150u;
+        else
+            frames = 150u;
         cd_push_resp(stat);
         cd_push_resp(to_bcd(frames / (60u * 75u)));
         cd_push_resp(to_bcd((frames / 75u) % 60u));
@@ -775,15 +1037,59 @@ static void cd_step(int cycles)
         }
     }
 
+    if (S.cd_stat & 0x80u) {
+        S.cd_read_delay -= cycles;
+        while ((S.cd_stat & 0x80u) && S.cd_read_delay <= 0) {
+            int eff_pal = (S.region_override == 'E') ? 1 : (S.region_override ? 0 : (int)S.is_pal);
+            S.cd_read_delay += eff_pal ? 718165 : 860960;
+            int trk = cd_find_toc_track(S.cd_cur_lba);
+            u32 trk_end = (psx_toc.last > 1u && trk < (int)psx_toc.last) ? psx_toc.lba[trk + 1] : S.disc_sectors;
+            if (!S.has_disc || S.cd_cur_lba >= S.disc_sectors ||
+                ((S.cd_mode & 0x02u) && S.cd_cur_lba >= trk_end)) {
+                S.cd_stat = 0x02u;
+                S.cd_read_delay = 0;
+                if (!(S.cd_irq_flag & 0x07u)) {
+                    S.cd_resp_n = 0;
+                    S.cd_resp_p = 0;
+                    cd_push_resp(S.cd_stat);
+                    cd_fire_irq(4u); /* INT4 DataEnd */
+                }
+                return;
+            }
+            if (S.sample_rate != 0u && !S.cd_muted && (psx_toc.last <= 1u || psx_toc.is_audio[trk]))
+                cd_decode_cdda_sector(S.cd_cur_lba);
+            u32 absf = S.cd_cur_lba + 150u;
+            S.cd_cur_lba++;
+            if ((S.cd_mode & 0x04u) && (absf & 0x0Fu) == 0u && !(S.cd_irq_flag & 0x07u)) {
+                u32 tlba = (psx_toc.last > 1u) ? psx_toc.lba[trk] : 0u;
+                u32 rel = (S.cd_cur_lba - 1u >= tlba) ? (S.cd_cur_lba - 1u - tlba) : 0u;
+                u32 m = (absf & 0x10u) ? rel : absf;
+                S.cd_resp_n = 0;
+                S.cd_resp_p = 0;
+                cd_push_resp(S.cd_stat);
+                cd_push_resp(to_bcd((u32)trk));
+                cd_push_resp(0x01u);
+                cd_push_resp(to_bcd(m / (60u * 75u)));
+                cd_push_resp((u8)(to_bcd((m / 75u) % 60u) | ((absf & 0x10u) ? 0x80u : 0u)));
+                cd_push_resp(to_bcd(m % 75u));
+                cd_push_resp(0u);
+                cd_push_resp(0u);
+                cd_fire_irq(1u);
+            }
+        }
+        return;
+    }
+
     if ((S.cd_stat & 0x20u) && S.cd_read_delay > 0 && !(S.cd_irq_flag & 0x07u)) {
         S.cd_read_delay -= cycles;
         if (S.cd_read_delay <= 0) {
             S.cd_read_delay = CD_SECTOR_UNITS(S.cd_mode);
             if ((S.cd_mode & 0x42u) == 0x40u && S.cd_xa_streak >= 16u && S.cd_xa_sub &&
+                (S.sample_rate == 0u || S.cd_muted || S.cd_xa_zero >= 16u) &&
                 S.has_disc && S.cd_cur_lba < S.disc_sectors) {
                 /* Real PS1 CD-XA hardware behavior: when Setmode.6 (0x40) routes Real-Time XA-ADPCM sectors
                    to SPU (and AutoPause 0x02 is off), non-Data XA sectors do NOT enter Data FIFO or fire INT1.
-                   After 16 consecutive non-Data XA sectors, advance LBA & subheader without unused USB reads. */
+                   When silent (-f run, muted, or empty PSXS padding), skip unused USB reads after 16 sectors. */
                 u32 tot = S.cd_cur_lba + 150u;
                 u8 ch = (u8)((S.cd_cur_lba + S.cd_xa_ch) & 7u);
                 W.cd_buf[12] = to_bcd(tot / (60u * 75u));
@@ -808,6 +1114,10 @@ static void cd_step(int cycles)
                         S.cd_xa_ch   = (u8)(W.cd_buf[17] - (u8)(S.cd_cur_lba & 7u));
                         S.cd_xa_sub  = (u8)(sm & 0x7Fu);
                         S.cd_xa_cod  = W.cd_buf[19];
+                        if (S.sample_rate != 0u && !S.cd_muted &&
+                            (!(S.cd_mode & 0x08u) ||
+                             (W.cd_buf[16] == S.cd_flt_file && (W.cd_buf[17] & 0x1Fu) == (S.cd_flt_ch & 0x1Fu))))
+                            cd_decode_xa_sector(W.cd_buf);
                     }
                     if (S.cd_xa_sub && S.cd_xa_streak < 32u)
                         S.cd_xa_streak++;
@@ -824,6 +1134,7 @@ static void cd_step(int cycles)
                     return;
                 }
                 S.cd_xa_streak = 0u;
+                S.cd_xa_zero = 0u;
                 u32 * fd32 = (u32 *)W.cd_fifo;
                 if (S.cd_mode & 0x20u) {
                     const u32 *bs32 = (const u32 *)(W.cd_buf + 12);
@@ -1080,9 +1391,6 @@ static void mdec_execute(void)
 }
 
 /* ---- SPU 24-Voice XA-ADPCM Synthesizer (48 kHz mono) ---- */
-static const s32 adpcm_f0[5] = { 0,  60, 115,  98, 122 };
-static const s32 adpcm_f1[5] = { 0,   0, -52, -55, -60 };
-
 static void spu_decode_block(struct spu_voice *v)
 {
     u32 a = (u32)v->cur_addr & 0x7FFF0u;
@@ -1163,18 +1471,41 @@ static void spu_step_lines(u32 n_lines)
         rem = (S.aud_count < PSX_AUD_MAX) ? (PSX_AUD_MAX - S.aud_count) : 0u;
     if (!rem)
         return;
-    if (!(S.spu_ctrl & 0x8000u) || !S.spu_active_mask) {
+    int cd_en = (S.sample_rate != 0u && S.cd_aud_len != 0u && (S.spu_ctrl & 0x8000u) &&
+                 ((S.spu_ctrl & 0x0001u) || !S.spu_cdvol_set));
+    if (!(S.spu_ctrl & 0x8000u) || (!S.spu_active_mask && !cd_en)) {
         for (u32 i = 0; i < rem; i++)
             W.aud_buf[S.aud_count++] = 0;
         return;
     }
 
+    s32 cv_l = S.spu_cdvol_set ? (s32)(s16)((u16)W.io[0xDB0] | ((u16)W.io[0xDB1] << 8)) : 0x3FFF;
+    s32 cv_r = S.spu_cdvol_set ? (s32)(s16)((u16)W.io[0xDB2] | ((u16)W.io[0xDB3] << 8)) : 0x3FFF;
+    if (S.spu_cdvol_set && !(S.spu_ctrl & 0x4000u))
+        cv_l = cv_r = 0;
+
     s32 mix_buf[64];
     while (rem > 0u) {
         u32 ns = rem > 64u ? 64u : rem;
         rem -= ns;
-        for (u32 i = 0; i < ns; i++)
-            mix_buf[i] = 0;
+        if (cd_en && S.cd_aud_len != 0u) {
+            u32 rpos = S.cd_aud_rpos, alen = S.cd_aud_len;
+            for (u32 i = 0; i < ns; i++) {
+                if (alen) {
+                    s32 l = W.cd_aud_ring[rpos][0], r = W.cd_aud_ring[rpos][1];
+                    rpos = (rpos + 1u) & (CD_AUD_RING - 1u);
+                    alen--;
+                    mix_buf[i] = (l * cv_l + r * cv_r) >> 16;
+                } else {
+                    mix_buf[i] = 0;
+                }
+            }
+            S.cd_aud_rpos = rpos;
+            S.cd_aud_len = alen;
+        } else {
+            for (u32 i = 0; i < ns; i++)
+                mix_buf[i] = 0;
+        }
 
         u32 am = S.spu_active_mask;
         while (am) {
@@ -2374,6 +2705,259 @@ static inline __attribute__((always_inline)) void tri_col_rows(s32 e, s32 step, 
 }
 #define TRI_COL_ROWS 16                 /* (from this many rows on, the divisions cost less than the tests) */
 
+/* Wall columns queued during a GPU DMA list and drawn in 16-pixel x 64-row cache-line tiles: 16 adjacent columns
+   share one 32-byte D-cache line per row (2 KB of destination VRAM per tile = one way of all 64 sets in the
+   S3811's 8 KB 4-way D-cache), while preserving submission order within every bucket and flushing before any
+   CLUT, texture, or other VRAM read/write hazard. */
+static inline __attribute__((always_inline)) u32 col_trow(u32 v8)
+{
+    u32 t = v8 << 6;
+#ifdef __mips__
+    __asm__("" : "+r"(t));
+#endif
+    return (t + v8) << 5;               /* v8 * 65 * 32 = v8 * (2 * VRAM_STRIDE), 2 shifts + 1 add, no MDU mul */
+}
+
+static void __attribute__((noinline)) gpu_col_flush(void)
+{
+    if (!S.col_n)
+        return;
+    int bmin = S.col_bmin, bmax = S.col_bmax;
+    S.col_n = 0;
+    S.col_clut_n = 0;
+    for (int bx = bmin; bx <= bmax; bx++) {
+        int head = S.col_head[bx];
+        if (head < 0)
+            continue;
+        S.col_head[bx] = -1;
+        int ymin = S.col_by0[bx], ymax = S.col_by1[bx];
+        for (int ys = ymin; ys <= ymax; ys += COL_STRIP_H) {
+            int ye = ys + (COL_STRIP_H - 1);
+            if (ye > ymax)
+                ye = ymax;
+            int prev = -1, idx = head;
+            while (idx >= 0) {
+                struct gpu_col_run *r = &W.col_runs[idx];
+                int nxt = r->next;
+                int y0 = r->y0;
+                if (y0 <= ye) {
+                    int ya = y0 > ys ? y0 : ys;
+                    int y1 = r->y1;
+                    int yb = y1 < ye ? y1 : ye;
+                    int cnt = yb - ya + 1;
+                    u32 ya_u = (u32)ya, ya64 = ya_u << 6;
+#ifdef __mips__
+                    __asm__("" : "+r"(ya64));
+#endif
+                    u16 *dst = W.vram + ((ya64 + ya_u) << 4) + r->x;
+                    const u8 *tcol = r->tcol;
+                    u32 cid = r->cid, v24 = r->v24, dv24 = r->dv24, av8 = r->av8, half = r->half;
+                    if (av8 == 0xFFu && S.col_copaque[cid]) {
+                        const u16 *b16 = W.col_clut16[cid];
+                        if (half) {
+                            for (; cnt >= 4; cnt -= 4, dst += 4u * VRAM_STRIDE) {
+                                u32 v0 = v24, v1 = v0 + dv24, v2 = v1 + dv24, v3 = v2 + dv24;
+                                v24 = v3 + dv24;
+                                u8 t0 = tcol[col_trow(v0 >> 24)], t1 = tcol[col_trow(v1 >> 24)];
+                                u8 t2 = tcol[col_trow(v2 >> 24)], t3 = tcol[col_trow(v3 >> 24)];
+                                dst[0]               = b16[t0 >> 4];
+                                dst[VRAM_STRIDE]     = b16[t1 >> 4];
+                                dst[2u * VRAM_STRIDE]= b16[t2 >> 4];
+                                dst[3u * VRAM_STRIDE]= b16[t3 >> 4];
+                            }
+                            for (; cnt > 0; cnt--, dst += VRAM_STRIDE, v24 += dv24)
+                                dst[0] = b16[tcol[col_trow(v24 >> 24)] >> 4];
+                        } else {
+                            for (; cnt >= 4; cnt -= 4, dst += 4u * VRAM_STRIDE) {
+                                u32 v0 = v24, v1 = v0 + dv24, v2 = v1 + dv24, v3 = v2 + dv24;
+                                v24 = v3 + dv24;
+                                u8 t0 = tcol[col_trow(v0 >> 24)], t1 = tcol[col_trow(v1 >> 24)];
+                                u8 t2 = tcol[col_trow(v2 >> 24)], t3 = tcol[col_trow(v3 >> 24)];
+                                dst[0]               = b16[t0 & 0x0Fu];
+                                dst[VRAM_STRIDE]     = b16[t1 & 0x0Fu];
+                                dst[2u * VRAM_STRIDE]= b16[t2 & 0x0Fu];
+                                dst[3u * VRAM_STRIDE]= b16[t3 & 0x0Fu];
+                            }
+                            for (; cnt > 0; cnt--, dst += VRAM_STRIDE, v24 += dv24)
+                                dst[0] = b16[tcol[col_trow(v24 >> 24)] & 0x0Fu];
+                        }
+                    } else if (av8 == 0xFFu) {
+                        const s32 *baked = W.col_clut[cid];
+                        if (half) {
+                            for (; cnt >= 2; cnt -= 2, dst += 2u * VRAM_STRIDE) {
+                                u32 v0 = v24, v1 = v0 + dv24;
+                                v24 = v1 + dv24;
+                                u8 b0 = tcol[col_trow(v0 >> 24)], b1 = tcol[col_trow(v1 >> 24)];
+                                s32 p0 = baked[b0 >> 4], p1 = baked[b1 >> 4];
+                                if (p0 >= 0) dst[0] = (u16)p0;
+                                if (p1 >= 0) dst[VRAM_STRIDE] = (u16)p1;
+                            }
+                            if (cnt) {
+                                s32 p0 = baked[tcol[col_trow(v24 >> 24)] >> 4];
+                                if (p0 >= 0) dst[0] = (u16)p0;
+                                v24 += dv24;
+                            }
+                        } else {
+                            for (; cnt >= 2; cnt -= 2, dst += 2u * VRAM_STRIDE) {
+                                u32 v0 = v24, v1 = v0 + dv24;
+                                v24 = v1 + dv24;
+                                u8 b0 = tcol[col_trow(v0 >> 24)], b1 = tcol[col_trow(v1 >> 24)];
+                                s32 p0 = baked[b0 & 0x0Fu], p1 = baked[b1 & 0x0Fu];
+                                if (p0 >= 0) dst[0] = (u16)p0;
+                                if (p1 >= 0) dst[VRAM_STRIDE] = (u16)p1;
+                            }
+                            if (cnt) {
+                                s32 p0 = baked[tcol[col_trow(v24 >> 24)] & 0x0Fu];
+                                if (p0 >= 0) dst[0] = (u16)p0;
+                                v24 += dv24;
+                            }
+                        }
+                    } else {
+                        const s32 *baked = W.col_clut[cid];
+                        u32 av24 = av8 << 24;
+                        for (; cnt >= 2; cnt -= 2, dst += 2u * VRAM_STRIDE) {
+                            u32 v0 = v24, v1 = v0 + dv24;
+                            v24 = v1 + dv24;
+                            u8 b0 = tcol[col_trow((v0 & av24) >> 24)];
+                            u8 b1 = tcol[col_trow((v1 & av24) >> 24)];
+                            s32 p0 = baked[(b0 >> half) & 0x0Fu];
+                            s32 p1 = baked[(b1 >> half) & 0x0Fu];
+                            if (p0 >= 0) dst[0] = (u16)p0;
+                            if (p1 >= 0) dst[VRAM_STRIDE] = (u16)p1;
+                        }
+                        if (cnt) {
+                            s32 p0 = baked[(tcol[col_trow((v24 & av24) >> 24)] >> half) & 0x0Fu];
+                            if (p0 >= 0) dst[0] = (u16)p0;
+                            v24 += dv24;
+                        }
+                    }
+                    if (y1 <= ye) {
+                        if (prev < 0) head = nxt;
+                        else W.col_runs[prev].next = (s16)nxt;
+                        idx = nxt;
+                        continue;
+                    }
+                    r->v24 = v24;
+                }
+                prev = idx;
+                idx = nxt;
+            }
+            if (head < 0)
+                break;
+        }
+    }
+}
+
+static void __attribute__((noinline)) gpu_col_emit(int col_x, int y0, int n, const u8 *tcol, u32 half, u32 av8,
+                                                   u32 v24, u32 dv24, int tex_x, u32 ty_base,
+                                                   const s32 *baked, u64 ckey)
+{
+    if (n <= 0)
+        return;
+    int y1 = y0 + n - 1;
+    int ty1 = (int)ty_base, ty2 = ty1 + 255;
+    if (col_x == tex_x && y1 >= ty1 && y0 <= ty2) {
+        if (S.col_n)
+            gpu_col_flush();
+        u16 *dst = W.vram + (u32)y0 * VRAM_STRIDE + col_x;
+        u32 av24 = av8 << 24;
+        for (; n > 0; n--, dst += VRAM_STRIDE, v24 += dv24) {
+            s32 px = baked[(tcol[((v24 & av24) >> 24) * (2u * VRAM_STRIDE)] >> half) & 0x0Fu];
+            if (px >= 0)
+                dst[0] = (u16)px;
+        }
+        return;
+    }
+    if (S.col_n) {
+        if (S.col_n >= COL_MAX_RUNS ||
+            (tex_x >= S.col_x1 && tex_x <= S.col_x2 && ty2 >= S.col_y1 && ty1 <= S.col_y2) ||
+            (col_x >= S.col_tx1 && col_x <= S.col_tx2 && y1 >= S.col_ty1 && y0 <= S.col_ty2))
+            gpu_col_flush();
+    }
+    int cid = -1;
+    int cn = S.col_clut_n;
+    if (cn > 0) {
+        int last = S.col_clut_last;
+        if (last < cn && S.col_ckey[last] == ckey) {
+            cid = last;
+        } else {
+            for (int s = 0; s < cn; s++) {
+                if (S.col_ckey[s] == ckey) {
+                    cid = s;
+                    break;
+                }
+            }
+        }
+    }
+    if (cid < 0) {
+        if (cn >= (int)COL_MAX_CLUTS) {
+            gpu_col_flush();
+            cn = 0;
+        }
+        cid = cn;
+        s32 *dc = W.col_clut[cid];
+        u16 *dc16 = W.col_clut16[cid];
+        s32 m = 0;
+        for (int k = 0; k < 16; k++) {
+            s32 v = baked[k];
+            dc[k] = v;
+            dc16[k] = (u16)v;
+            m |= v;
+        }
+        S.col_copaque[cid] = (u8)(m >= 0);
+        S.col_ckey[cid] = ckey;
+        S.col_clut_n = (u16)(cn + 1);
+    }
+    S.col_clut_last = (u8)cid;
+
+    int idx = S.col_n;
+    int bx = col_x >> 4;
+    if (idx == 0) {
+        for (int i = 0; i < 64; i++)
+            S.col_head[i] = -1;
+        S.col_bmin = S.col_bmax = (u8)bx;
+        S.col_x1 = S.col_x2 = col_x;
+        S.col_y1 = y0; S.col_y2 = y1;
+        S.col_tx1 = S.col_tx2 = tex_x;
+        S.col_ty1 = ty1; S.col_ty2 = ty2;
+    } else {
+        if (bx < S.col_bmin) S.col_bmin = (u8)bx;
+        if (bx > S.col_bmax) S.col_bmax = (u8)bx;
+        if (col_x < S.col_x1) S.col_x1 = col_x;
+        if (col_x > S.col_x2) S.col_x2 = col_x;
+        if (y0 < S.col_y1) S.col_y1 = y0;
+        if (y1 > S.col_y2) S.col_y2 = y1;
+        if (tex_x < S.col_tx1) S.col_tx1 = tex_x;
+        if (tex_x > S.col_tx2) S.col_tx2 = tex_x;
+        if (ty1 < S.col_ty1) S.col_ty1 = ty1;
+        if (ty2 > S.col_ty2) S.col_ty2 = ty2;
+    }
+    S.col_n = (u16)(idx + 1);
+
+    struct gpu_col_run *r = &W.col_runs[idx];
+    r->tcol = tcol;
+    r->v24 = v24;
+    r->dv24 = dv24;
+    r->next = -1;
+    r->x = (u16)col_x;
+    r->y0 = (u16)y0;
+    r->y1 = (u16)y1;
+    r->cid = (u8)cid;
+    r->half = (u8)half;
+    r->av8 = (u8)av8;
+
+    if (S.col_head[bx] < 0) {
+        S.col_head[bx] = S.col_tail[bx] = (s16)idx;
+        S.col_by0[bx] = (u16)y0;
+        S.col_by1[bx] = (u16)y1;
+    } else {
+        W.col_runs[S.col_tail[bx]].next = (s16)idx;
+        S.col_tail[bx] = (s16)idx;
+        if (y0 < S.col_by0[bx]) S.col_by0[bx] = (u16)y0;
+        if (y1 > S.col_by1[bx]) S.col_by1[bx] = (u16)y1;
+    }
+}
+
 static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struct gpu_vtx v1, struct gpu_vtx v2,
                                                         int minx, int maxx, int miny, int maxy, s32 area,
                                                         int lace, int is_raw, u32 tpage, u32 clut)
@@ -2421,6 +3005,11 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     u32 au24 = (0xFFu & ~((u32)S.tw_mx << 3)) << 24, av24 = (0xFFu & ~((u32)S.tw_my << 3)) << 24;
     const u8 *tex8 = tpage_u8 + ((u32)(S.tw_oy & S.tw_my) << 3) * (2u * VRAM_STRIDE) + ((u32)(S.tw_ox & S.tw_mx) << 2);
 
+    if (S.col_n) {
+        int cy = (int)((clut >> 6) & 0x1FFu), cx = (int)((clut & 0x3Fu) * 16u);
+        if (cy >= S.col_y1 && cy <= S.col_y2 && cx + 15 >= S.col_x1 && cx <= S.col_x2)
+            gpu_col_flush();
+    }
     const s32 *baked = clut4_baked(clut, is_raw, v0.r, v0.g, v0.b, mask_or);
 
     if (maxx - minx <= 1 && !dup_odd) {
@@ -2432,6 +3021,10 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
         int two = maxx > minx, rows = (maxy - miny) / y_step + 1;
         u32 u24 = u_row << 12, v24 = v_row << 12, du_dy24 = (u32)du_dy << 12, dv_dy24 = (u32)dv_dy << 12;
         u16 *dst = W.vram + miny * VRAM_STRIDE + minx;
+        u32 ox_b = (u32)(S.tw_ox & S.tw_mx) << 2;
+        int raw_n = is_raw || (v0.r == 128 && v0.g == 128 && v0.b == 128);
+        u64 ckey = ((u64)(raw_n ? 0u : ((u32)v0.r | ((u32)v0.g << 8) | ((u32)v0.b << 16))) << 32) |
+                   (clut & 0x7FFFu) | (mask_or ? 0x8000u : 0u) | (raw_n ? 0x10000u : 0u) | (1ULL << 56);
         if (rows >= TRI_COL_ROWS) {
             /* A high one: an edge function is linear down a column, so the rows on which a column is inside are
                one run -- found with a division an edge instead of three tests a row.  With one of the two columns
@@ -2463,14 +3056,24 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
                 v24 += dv_dy24 * (u32)lo;
                 dst += pitch * (u32)lo;
                 if (!du_dy24) {
-                    const u8 *tcol = tex8 + ((u24 & au24) >> 25);
+                    u32 ub = (u24 & au24) >> 25;
+                    const u8 *tcol = tex8 + ub;
                     u32 half = (u24 >> 22) & 4u;
+                    if (S.col_batch_en && !lace) {
+                        gpu_col_emit(minx + (lo0 > hi0), miny + lo, n, tcol, half, av24 >> 24, v24, dv_dy24,
+                                     (int)(tx_base + ((ox_b + ub) >> 1)), ty_base, baked, ckey);
+                        return;
+                    }
+                    if (S.col_n)
+                        gpu_col_flush();
                     for (; n > 0; n--, dst += pitch, v24 += dv_dy24) {
                         s32 px = baked[(tcol[((v24 & av24) >> 24) * (2u * VRAM_STRIDE)] >> half) & 0x0Fu];
                         if (px >= 0)
                             dst[0] = (u16)px;
                     }
                 } else {
+                    if (S.col_n)
+                        gpu_col_flush();
                     for (; n > 0; n--, dst += pitch, u24 += du_dy24, v24 += dv_dy24) {
                         u8 b8 = tex8[((v24 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u24 & au24) >> 25)];
                         s32 px = baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
@@ -2480,7 +3083,44 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
                 }
                 return;
             }
+            if (S.col_batch_en && !lace && !du_dy24 &&
+                !(maxx >= (int)tx_base && minx <= (int)tx_base + 63 && maxy >= (int)ty_base && miny <= (int)ty_base + 255)) {
+                u32 ub0 = (u24 & au24) >> 25, u1 = u24 + du24, ub1 = (u1 & au24) >> 25;
+                gpu_col_emit(minx, miny + lo0, hi0 - lo0 + 1, tex8 + ub0, (u24 >> 22) & 4u, av24 >> 24,
+                             v24 + dv_dy24 * (u32)lo0, dv_dy24, (int)(tx_base + ((ox_b + ub0) >> 1)), ty_base, baked, ckey);
+                gpu_col_emit(minx + 1, miny + lo1, hi1 - lo1 + 1, tex8 + ub1, (u1 >> 22) & 4u, av24 >> 24,
+                             v24 + dv24 + dv_dy24 * (u32)lo1, dv_dy24, (int)(tx_base + ((ox_b + ub1) >> 1)), ty_base, baked, ckey);
+                return;
+            }
         }
+        if (S.col_batch_en && !lace && !du_dy24 &&
+            !(two && maxx >= (int)tx_base && minx <= (int)tx_base + 63 && maxy >= (int)ty_base && miny <= (int)ty_base + 255)) {
+            int lo0 = -1, hi0 = -2, lo1 = -1, hi1 = -2;
+            s32 e0 = e0_row, e1 = e1_row, e2 = e2_row;
+            for (int r = 0; r < rows; r++, e0 += step_e0, e1 += step_e1, e2 += step_e2) {
+                if ((e0 | e1 | e2) >= 0) {
+                    if (lo0 < 0) lo0 = r;
+                    hi0 = r;
+                }
+                if (two && ((e0 + a12) | (e1 + a20) | (e2 + a01)) >= 0) {
+                    if (lo1 < 0) lo1 = r;
+                    hi1 = r;
+                }
+            }
+            if (lo0 >= 0) {
+                u32 ub0 = (u24 & au24) >> 25;
+                gpu_col_emit(minx, miny + lo0, hi0 - lo0 + 1, tex8 + ub0, (u24 >> 22) & 4u, av24 >> 24,
+                             v24 + dv_dy24 * (u32)lo0, dv_dy24, (int)(tx_base + ((ox_b + ub0) >> 1)), ty_base, baked, ckey);
+            }
+            if (lo1 >= 0) {
+                u32 u1 = u24 + du24, ub1 = (u1 & au24) >> 25;
+                gpu_col_emit(minx + 1, miny + lo1, hi1 - lo1 + 1, tex8 + ub1, (u1 >> 22) & 4u, av24 >> 24,
+                             v24 + dv24 + dv_dy24 * (u32)lo1, dv_dy24, (int)(tx_base + ((ox_b + ub1) >> 1)), ty_base, baked, ckey);
+            }
+            return;
+        }
+        if (S.col_n)
+            gpu_col_flush();
         for (int y = miny; y <= maxy; y += y_step, dst += VRAM_STRIDE * (u32)y_step) {
             if ((e0_row | e1_row | e2_row) >= 0) {
                 u8 b8 = tex8[((v24 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u24 & au24) >> 25)];
@@ -2535,6 +3175,8 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
             rc->u24 = (u_row + (u32)du_dx * dx) << 12;
             rc->v24 = (v_row + (u32)dv_dx * dx) << 12;
             if (++nrec == SPAN_RECS) {
+                if (S.col_n)
+                    gpu_col_flush();
                 if (tw)
                     gpu_span_tex4_flat_tw_rows(rec, nrec, tex8, baked, du24, dv24, au24, av24);
                 else
@@ -2548,6 +3190,8 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     }
     if (!nrec)
         return;
+    if (S.col_n)
+        gpu_col_flush();
     if (tw)
         gpu_span_tex4_flat_tw_rows(rec, nrec, tex8, baked, du24, dv24, au24, av24);
     else
@@ -2703,10 +3347,15 @@ static void __attribute__((noinline)) gpu_draw_tri(const struct gpu_vtx *pv0, co
                slow path) */
             gpu_clut4_touch(minx, miny, maxx, maxy + 1);
         } else {
+            if (S.col_n)
+                gpu_col_flush();
             gpu_tri_tex4_gour(v0, v1, v2, minx, maxx, miny, maxy, area, lace, tpage, clut);
         }
         return;
     }
+
+    if (S.col_n)
+        gpu_col_flush();
 
     if (!is_gouraud && !is_tex && !is_semi && !S.check_mask) {
         int y_step = lace ? 2 : 1;
@@ -3209,6 +3858,8 @@ static void gp0_exec_packet(void)
                 if (shown)
                     S.disp_dirty = 1u;
             }
+            if (S.col_n)
+                gpu_col_flush();
             S.vram_gen++;
             u16 r5 = (u16)((w0 >> 3) & 31u);
             u16 g5 = (u16)(((w0 >> 11) & 31u) << 5);
@@ -3263,9 +3914,12 @@ static void gp0_exec_packet(void)
         u32 c0 = S.gp0_buf[0], xy0 = S.gp0_buf[1];
         u32 c1 = gour ? S.gp0_buf[2] : c0;
         u32 xy1 = S.gp0_buf[gour ? 3 : 2];
-        if (!gpu_can_skip_draw())
+        if (!gpu_can_skip_draw()) {
+            if (S.col_n)
+                gpu_col_flush();
             gpu_draw_line(sign_ext11(xy0) + S.off_x, sign_ext11(xy0 >> 16) + S.off_y, c0,
                           sign_ext11(xy1) + S.off_x, sign_ext11(xy1 >> 16) + S.off_y, c1, gour, semi);
+        }
         if (poly) {
             S.gp0_mode = 2u;
             S.gp0_poly_gouraud = (u8)gour;
@@ -3278,8 +3932,11 @@ static void gp0_exec_packet(void)
     }
 
     if (top == 3u) { /* Rectangle */
-        if (!gpu_can_skip_draw())
+        if (!gpu_can_skip_draw()) {
+            if (S.col_n)
+                gpu_col_flush();
             gpu_draw_rect(op);
+        }
         return;
     }
 
@@ -3292,6 +3949,8 @@ static void gp0_exec_packet(void)
         u16 mask_or = S.set_mask ? 0x8000u : 0u;
         if (sx == dx && sy == dy && !mask_or)
             return;                     /* (onto itself: nothing changes -- Tony Hawk's 2 x 1 at 0,0 most frames) */
+        if (S.col_n)
+            gpu_col_flush();
         if (dx + cw > 1024u || dy + ch > 512u || gpu_rect_shown((int)dx, (int)dy, (int)(dx + cw - 1u), (int)(dy + ch - 1u)))
             S.disp_dirty = 1u;
         if (!S.check_mask && sx + cw <= 1024u && dx + cw <= 1024u && sy + ch <= 512u && dy + ch <= 512u &&
@@ -3339,6 +3998,8 @@ static void gp0_exec_packet(void)
     }
 
     if (top == 5u) { /* CPU -> VRAM */
+        if (S.col_n)
+            gpu_col_flush();
         S.vram_gen++;
         S.vram_tx = (u16)(S.gp0_buf[1] & 0x3FFu);
         S.vram_ty = (u16)((S.gp0_buf[1] >> 16) & 0x1FFu);
@@ -3353,6 +4014,8 @@ static void gp0_exec_packet(void)
     }
 
     if (top == 6u) { /* VRAM -> CPU */
+        if (S.col_n)
+            gpu_col_flush();
         S.vram_rx = (u16)(S.gp0_buf[1] & 0x3FFu);
         S.vram_ry = (u16)((S.gp0_buf[1] >> 16) & 0x1FFu);
         S.vram_rw = (u16)(((S.gp0_buf[2] - 1u) & 0x3FFu) + 1u);
@@ -3474,6 +4137,8 @@ static u32 gpu_vram_write_block(u32 addr, u32 n)
 static void gpu_gp0(u32 word)
 {
     if (S.gp0_mode == 1u) { /* CPU -> VRAM pixel stream */
+        if (S.col_n)
+            gpu_col_flush();
         vram_put_half((u16)word);
         if (S.gp0_mode == 1u)
             vram_put_half((u16)(word >> 16));
@@ -3490,10 +4155,13 @@ static void gpu_gp0(u32 word)
         if (S.gp0_len >= need) {
             u32 nc = S.gp0_poly_gouraud ? S.gp0_buf[0] : S.gp0_poly_prev_col;
             u32 nxy = S.gp0_buf[S.gp0_poly_gouraud ? 1 : 0];
-            if (!gpu_can_skip_draw())
+            if (!gpu_can_skip_draw()) {
+                if (S.col_n)
+                    gpu_col_flush();
                 gpu_draw_line(sign_ext11(S.gp0_poly_prev_xy) + S.off_x, sign_ext11(S.gp0_poly_prev_xy >> 16) + S.off_y, S.gp0_poly_prev_col,
                               sign_ext11(nxy) + S.off_x, sign_ext11(nxy >> 16) + S.off_y, nc,
                               S.gp0_poly_gouraud, S.gp0_poly_semi);
+            }
             S.gp0_poly_prev_xy = nxy;
             S.gp0_poly_prev_col = nc;
             S.gp0_len = 0;
@@ -3516,6 +4184,8 @@ static void gpu_gp0(u32 word)
 
 static u32 gpu_read_data(void)
 {
+    if (S.col_n)
+        gpu_col_flush();
     if (S.gpustat & (1u << 27)) {
         u16 lo = W.vram[((S.vram_ry + S.vram_rcy) & 511u) * VRAM_STRIDE + ((S.vram_rx + S.vram_rcx) & 1023u)];
         if (++S.vram_rcx >= S.vram_rw) {
@@ -3539,6 +4209,8 @@ static u32 gpu_read_data(void)
 
 static void gpu_gp1(u32 word)
 {
+    if (S.col_n)
+        gpu_col_flush();
     u8 op = (u8)((word >> 24) & 0x3Fu);
     u32 arg = word & 0xFFFFFFu;
     switch (op) {
@@ -3628,6 +4300,8 @@ static void gpu_gp1(u32 word)
 
 static void gpu_scanout(u16 *picture)
 {
+    if (S.col_n)
+        gpu_col_flush();
     int w = S.disp_w, h = S.disp_h;
     if (S.disp_disabled) {
         for (int i = 0; i < w * h; i++)
@@ -3733,7 +4407,9 @@ static void dma_run(int ch)
         }
         ram_wr32(addr, 0x00FFFFFFu);
     } else if (ch == 2) { /* GPU */
+        u8 prev_batch = S.col_batch_en;
         if (sync == 2u) { /* Linked-list Ordering Table */
+            S.col_batch_en = 1u;
             u32 guard = 0;
             const u8 *ram_base = W.ram;
             while ((addr & 0x800000u) == 0u && addr != 0xFFFFFFu && guard++ < 0x40000u) {
@@ -3779,10 +4455,16 @@ static void dma_run(int ch)
                     break;
                 addr = next & 0x1FFFFCu;
             }
+            if (S.col_n)
+                gpu_col_flush();
+            S.col_batch_en = prev_batch;
             S.dma_madr[2] = 0xFFFFFFu;
         } else if (dir_from_ram) {
+            S.col_batch_en = 1u;
             for (u32 i = 0; i < words; ) {
                 if (S.gp0_mode == 1u && step > 0) {             /* pixels of a CPU -> VRAM transfer: a block */
+                    if (S.col_n)
+                        gpu_col_flush();
                     u32 used = gpu_vram_write_block(addr, words - i);
                     i += used;
                     addr = (addr + used * 4u) & 0x1FFFFCu;
@@ -3792,8 +4474,13 @@ static void dma_run(int ch)
                 i++;
                 addr = (u32)((int)addr + step) & 0x1FFFFCu;
             }
+            if (S.col_n)
+                gpu_col_flush();
+            S.col_batch_en = prev_batch;
             S.dma_madr[2] = addr;
         } else {
+            if (S.col_n)
+                gpu_col_flush();
             for (u32 i = 0; i < words; i++, addr = (u32)((int)addr + step) & 0x1FFFFCu)
                 ram_wr32(addr, gpu_read_data());
             S.dma_madr[2] = addr;
@@ -4148,6 +4835,7 @@ static void io_write8(u32 off, u8 val)
     if (off == 0x0F6u) { S.dicr = (S.dicr & ~0x00FF0000u) | ((u32)val << 16); dicr_update_irq(); return; }
     if (off == 0x0F7u) { S.dicr &= ~(((u32)val & 0x7Fu) << 24); dicr_update_irq(); return; }
     if (off == 0x1041u) return; /* POST */
+    if ((off & 0xFFCu) == 0xDB0u) S.spu_cdvol_set = 1u;
     W.io[off & 0xFFFu] = val;
 }
 
@@ -4215,6 +4903,7 @@ static void io_write16(u32 off, u16 val)
         return;
     }
     if (off == 0xDAAu) { S.spu_ctrl = val; return; }
+    if ((off & 0xFFCu) == 0xDB0u) S.spu_cdvol_set = 1u;
     W.io[off & 0xFFFu] = (u8)val;
     W.io[(off + 1u) & 0xFFFu] = (u8)(val >> 8);
 }
@@ -8571,6 +9260,24 @@ void psx_set_disc(psx_sector_fn fn, u32 total_sectors, u32 sector_size)
     S.disc_sectors = total_sectors;
     S.disc_sec_size = sector_size;
     S.has_disc = (fn != 0 && total_sectors > 0u) ? 1u : 0u;
+    psx_toc.first = psx_toc.last = 0u;
+}
+
+void psx_set_toc(int first_track, int last_track, const u32 *track_lba, const u8 *track_is_audio)
+{
+    psx_toc.first = psx_toc.last = 0u;
+    if (!track_lba || first_track < 1 || last_track < first_track || last_track > 99)
+        return;
+    psx_toc.first = (u8)first_track;
+    psx_toc.last  = (u8)last_track;
+    for (int t = 0; t <= 100; t++) {
+        psx_toc.lba[t] = 0u;
+        psx_toc.is_audio[t] = 0u;
+    }
+    for (int t = first_track; t <= last_track; t++) {
+        psx_toc.lba[t] = track_lba[t];
+        psx_toc.is_audio[t] = track_is_audio ? track_is_audio[t] : 0u;
+    }
 }
 
 const char *psx_load(const u8 *data, u32 size, const char *path)
@@ -8720,7 +9427,12 @@ int psx_width(void)  { return S.disp_w > 0 ? S.disp_w : PSX_W_DEF; }
 int psx_height(void) { return S.disp_h > 0 ? S.disp_h : PSX_H_DEF; }
 int psx_pal(void)    { return (S.region_override == 'E') ? 1 : (S.region_override ? 0 : S.is_pal); }
 void psx_set_region(int region) { S.region_override = (u8)region; }
-void psx_set_skip_render(int skip) { S.skip_render = (u8)skip; }
+void psx_set_skip_render(int skip)
+{
+    if (S.col_n)
+        gpu_col_flush();
+    S.skip_render = (u8)skip;
+}
 int psx_jammed(void) { return S.jammed; }
 
 #ifdef __mips__
@@ -8794,6 +9506,8 @@ void psx_print_stats(void)
 
 const u16 *psx_vram_frame(int *stride, int *is_24bpp)
 {
+    if (S.col_n)
+        gpu_col_flush();
     if (stride) *stride = (int)VRAM_STRIDE;
     if (is_24bpp) *is_24bpp = S.disp_24bpp;
     if (S.disp_disabled || S.disp_24bpp || (S.disp_x & 1u) || (S.disp_w & 1u) ||
@@ -8806,6 +9520,8 @@ const u16 *psx_vram_frame(int *stride, int *is_24bpp)
    line lies in one VRAM row (x and 3 bytes a pixel within its 2048 bytes: a video at x 0 always does); else 0 */
 const u8 *psx_vram_line24(int y)
 {
+    if (S.col_n)
+        gpu_col_flush();
     if (S.disp_disabled || !S.disp_24bpp || (u32)S.disp_x * 2u + (u32)S.disp_w * 3u > 2048u)
         return 0;
     return (const u8 *)(W.vram + (((u32)S.disp_y + (u32)y) & 511u) * VRAM_STRIDE + S.disp_x);
@@ -8875,7 +9591,7 @@ static inline void psx_advance_periph(int units, int in_vbl)
         return;
     if (S.sio_busy)
         sio_advance(units * 4);
-    if (S.cd_req_valid || S.cd_pend_cmd || (S.cd_stat & 0x20u))
+    if (S.cd_req_valid || S.cd_pend_cmd || (S.cd_stat & 0xA0u))
         cd_step(units * 4);
     rcnt_step(units * 2, 0, in_vbl);
 }

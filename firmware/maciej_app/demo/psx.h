@@ -20,6 +20,7 @@ typedef int (*psx_sector_fn)(u32 lba, u8 *buf2352);
 
 void psx_set_bios(const u8 *data, u32 size);
 void psx_set_disc(psx_sector_fn fn, u32 total_sectors, u32 sector_size);
+void psx_set_toc(int first_track, int last_track, const u32 *track_lba, const u8 *track_is_audio);
 int psx_is_exe(const u8 *head, u32 got);
 const char *psx_load(const u8 *data, u32 size, const char *path);
 const char *psx_info(void);

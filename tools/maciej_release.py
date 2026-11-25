@@ -178,7 +178,7 @@ COMMANDS = {
                 "704 x 624; exec.bin + grom.bin in intv/ or built-in EXEC/GROM) with AY-3-8914 sound",
         "psx": "[-f frames] [-k script] <file.exe|file.cue|file.iso>: a Sony PlayStation 1 program or CD-ROM on the TV "
                "(R3000A + GTE 3D, GPU 15/24bpp, MDEC, streaming .cue/.bin & .iso, scph1001.bin in psx/ or built-in BIOS) "
-               "with 24-voice SPU XA-ADPCM sound and 128 KB Memory Card (.sav)",
+               "with 24-voice SPU, XA-ADPCM and CD-DA sound and 128 KB Memory Card (.sav)",
         "cps": "[-f frames] [-k script] <file.cps|file.zip>: a Capcom CPS-1 / CPS-1.5 / CPS-2 arcade game on the TV "
                "(384 x 224 three times as large; 10/12/16 MHz 68000 + Z80, Feistel .key & Kabuki decryption, 3 scroll "
                "layers + rowscroll + Z-priority sprites) with YM2151 + OKIM6295 / 16-voice QSound DSP sound and 93C46 "

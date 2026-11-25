@@ -287,8 +287,9 @@ A command may also start with '/' (e.g. /restart, /lsusb).
   psx [-f frames] <file.exe|file.cue|file.iso>
                        Sony PlayStation 1 on the TV (R3000A + GTE 3D, GPU
                        15/24bpp, MDEC, .cue/.bin and .iso CDs read as a
-                       stream, 24-voice SPU ADPCM sound, 128 KB memory card
-                       .sav; scph1001.bin in psx/ or a built-in BIOS)
+                       stream, 24-voice SPU ADPCM, XA-ADPCM and CD-DA sound,
+                       128 KB memory card .sav; scph1001.bin in psx/ or a
+                       built-in BIOS)
   cps [-f frames] <file.cps|file.zip>
                        Capcom CPS-1 / CPS-1.5 / CPS-2 arcade games on the TV
                        (384 x 224 x3, 68000 + Z80, CPS-2 .key and Kabuki
@@ -768,26 +769,26 @@ ARM7TDMI + DirectSound), Atari 7800 ("a78", 4.3-6 ms) and Atari Lynx ("lynx",
 5-8.2 ms), Vectrex ("vectrex", 6-15.7 ms, 540 x 720), Famicom Disk System
 ("fds", 4.6-11.3 ms), Neo Geo Pocket Color ("ngp", 8.8-11 ms), Odyssey2 /
 Videopac ("odyssey2", 2.5 ms), Intellivision ("intv", 4.4 ms) and Sony
-PlayStation 1 ("psx", R3000A + GTE 3D + SPU ADPCM, streamed .cue/.bin and
-PS-X .exe: 2-15 ms/frame on homebrew 3D games and demos; the explorer tells
-PlayStation .exe files from DOS programs by itself). The PlayStation's memory
-card (slot 1; slot 2 is empty) is the game's .sav file, a 128 KB card image:
-with the built-in BIOS too, games check it, format it, save to it and load
-from it (checked with a career of Tony Hawk's Pro Skater and the records of
-Tekken 3). Like every .sav it is written to the disk when the player is left
-(Esc), not at the moment the game saves: leave the player before the box is
-switched off.
+PlayStation 1 ("psx", R3000A + GTE 3D + SPU ADPCM, XA-ADPCM and CD-DA,
+streamed .cue/.bin and PS-X .exe: 2-15 ms/frame on homebrew 3D games and
+demos; the explorer tells PlayStation .exe files from DOS programs by itself).
+The PlayStation's memory card (slot 1; slot 2 is empty) is the game's .sav
+file, a 128 KB card image: with the built-in BIOS too, games check it, format
+it, save to it and load from it (checked with a career of Tony Hawk's Pro
+Skater and the records of Tekken 3). Like every .sav it is written to the disk
+when the player is left (Esc), not at the moment the game saves: leave the
+player before the box is switched off.
 Three commercial games were checked on the S3811 box on 2026-11-25 (their
 files are not part of this package). Super Mario Kart ("snes"): the
 cartridge's DSP-1 maths chip is emulated - its commands in the chip's own
 fixed point (multiply, inverse, the rotations, the projection and the raster
 parameters the game draws its Mode 7 track with); a frame of a race takes
 14.4 ms + 1.8 ms of drawing, where 16.6 ms would be every frame drawn.
-Another World for the Game Boy Advance ("gba"): 8.3 ms + 0.8 ms, full speed.
+Another World for the Game Boy Advance ("gba"): 7.7 ms + 0.8 ms, full speed.
 Duke Nukem: Total Meltdown ("psx", the European disc, PAL): the logo videos,
-the menus and the first level; in the level a frame takes about 13.3 ms +
-2.1 ms of the machine's 20 ms. Its music is CD audio, which the player does
-not play: the game has its sound effects only.
+the menus and the first level, with XA-ADPCM video and level music; in the
+level a frame takes about 12.1 ms + 1.9 ms of the machine's 20 ms. Discs with
+Redbook CD-DA audio tracks in a .cue play their CD audio through the SPU too.
 A Super Nintendo or Game Boy Advance frame that starts more than a frame late
 is run without its picture (never two in a row): the game and its sound keep
 their speed, the picture loses that frame, and leaving the player says how
@@ -803,6 +804,14 @@ to 24 % faster, the others up to 8 %); Game Boy Advance lines composed by
 painting the layers from the back and written to the TV four pixels at a time
 (games with colour effects 15.8 -> 6.3 ms and 22.6 -> 15.3 ms a frame, tile
 games 11 to 38 % faster).
+A third round the same day, again with the same picture sums on the box:
+Game Boy Advance Thumb instructions fetched directly from a pointer in ROM or
+RAM with register-resident flags (Blocktrap 17.0 -> 10.3 ms a frame, Another
+World 8.3 -> 7.7 ms); Super Nintendo 16-pixel-tile backgrounds and hi-res
+Modes 5 and 6 drawn by tile slivers instead of pixel by pixel (Monster Farm
+Jump 18.0 -> 12.9 ms); PlayStation one-pixel textured wall columns batched
+into cache-line strips before writing VRAM (Duke Nukem in a level 13.3 ->
+12.1 ms).
 Archives: every emulator takes a game in a .zip (the stored and deflate
 methods; the largest file that is not text, a picture or a directory is taken)
 or in a .gz (an Amiga .adz too); the CRC-32 sum is checked. The save file is

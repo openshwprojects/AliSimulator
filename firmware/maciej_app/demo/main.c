@@ -777,7 +777,7 @@ static const struct command commands[] = {
      "or W A S D, X/Z/C = side buttons, Enter = Enter / 1, Tab = Clear, 0..9 on USB keyboard; the options of nes",
      cmd_intv},
     {"psx", "[-r j|u|e] [-f frames] [-k script] <file>", "play a Sony PlayStation 1 program or disc (.exe, .cue, .iso, .bin) on the "
-     "TV with its R3000A + GTE 3D geometry, MDEC video and 24-voice SPU XA-ADPCM sound (scph1001.bin in psx/ if present, "
+     "TV with its R3000A + GTE 3D geometry, MDEC video and 24-voice SPU, XA-ADPCM and CD-DA sound (scph1001.bin in psx/ if present, "
      "else built-in BIOS; -r u/j forces 60 Hz NTSC, R toggles 50/60 Hz): arrows or W A S D, X = Circle, Z = Cross, C = Triangle, V = Square, Q = L1, E = R1, Enter = "
      "Start, Tab = Select; 128 KB Memory Card kept in a .sav file; the options of nes", cmd_psx},
     {"cps", "[-f frames] [-k script] <file>", "play a Capcom CPS-1 / CPS-1.5 / CPS-2 arcade game (.cps, .cps1, .cps2, or "
