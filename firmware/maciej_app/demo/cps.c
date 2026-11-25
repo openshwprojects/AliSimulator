@@ -248,7 +248,7 @@ static struct {
     u32 snd_rate, snd_rendered;
     u32 snd_head, snd_tail;
     u32 frame_num;
-    u8 sep_ready, cpu_ready;
+    u8 cpu_ready;
     char info[128];
 } S;
 
@@ -327,10 +327,10 @@ INLINE u16 reg16(const u8 *r, u32 off)
 
 /* ---- Planar bit-separation LUT (8 pixels -> u32 AAAABBBB..GGGGHHHH, inverted so 0 = transparent pen 15) ---- */
 
+/* (built at every load: the tables are in the players' shared memory, which the next machine played writes
+   over -- built once, behind a flag kept here, they were that machine's bytes after it) */
 static void init_sep_table(void)
 {
-    if (S.sep_ready)
-        return;
     for (u32 i = 0; i < 256; i++) {
         u32 a = 255u - i;
         a = ((a & 0xF0u) << 12) | (a & 0x0Fu);
@@ -338,7 +338,6 @@ static void init_sep_table(void)
         a = ((a & 0x02020202u) << 3) | (a & 0x01010101u);
         M->sep_tab[i] = a;
     }
-    S.sep_ready = 1;
 }
 
 /* ---- CPS-1 GFX Bank Mapper & CPS-B Board Configurations ---- */
@@ -3350,7 +3349,6 @@ const char *cps_load(u8 *image, u32 size, const char *path)
     const u8 *saved_extra = S.extra_ptr;
     u32 saved_extra_len = S.extra_len;
     cps_zero(&S, sizeof(S));
-    S.sep_ready = 1;
     S.cpu_ready = 1;
     S.extra_ptr = saved_extra;
     S.extra_len = saved_extra_len;

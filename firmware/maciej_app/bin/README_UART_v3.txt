@@ -1,29 +1,30 @@
 ELEKTRODA ALI M3801 TEST FOR MACIEJ - v3
 
-Aktualizacja UART dla bootloadera z dump_maciej.bin.
-Wymagania: Python 3.10+, pyserial, UART 3,3 V (115200, 8E1).
-Rozpakuj caly ZIP do jednego katalogu. Polacz TX-RX, RX-TX i GND.
-Zamknij inne programy uzywajace portu tunera. COM3 zastap swoim portem.
+UART update for the bootloader of dump_maciej.bin.
+Requirements: Python 3.10+, pyserial, a 3.3 V UART (115200, 8E1).
+Unpack the whole ZIP into one directory. Connect TX-RX, RX-TX and GND.
+Close other programs using the tuner's port. Replace COM3 with your port.
 
 python -m pip install pyserial
 python maciej_uart.py --port COM3 --capture-boot 60 flash elektroda_ali_m3801_maciej_v3.maincode.bin --backup before-maciej-v3.bin
 
-- Oryginalne oprogramowanie lub v1/v2: wlacz tuner po komunikacie gotowosci.
-- Gdy dziala juz v3: zostaw tuner wlaczony. Wysylane przez skrypt "c"
-  uruchomi go ponownie i przechwyci oryginalny bootloader.
-- Skrypt zapisze pelny backup, wgra maincode i zweryfikuje cale 4 MiB.
-  Dwa odczyty trwaja lacznie okolo 14 minut. Nie wylaczaj tunera podczas zapisu.
-- Do kolejnej aktualizacji uzyj nowej nazwy backupu. Stary nie jest nadpisywany.
+- Original firmware or v1/v2: switch the tuner on after the ready message.
+- When v3 already runs: leave the tuner on. The "c" the script sends
+  restarts it and captures the original bootloader.
+- The script saves a full backup, writes the maincode and verifies all 4 MiB.
+  The two reads take about 14 minutes in total. Do not switch the tuner off
+  while it writes.
+- For the next update use a new backup name. The old one is not overwritten.
 
-Komendy aplikacji - pojedynczy znak, bez Enter:
-- "v" - banner i "Version: v3"
+Application commands - a single character, without Enter:
+- "v" - the banner and "Version: v3"
 - "p" - "pong v3"
-- "r" - restart przez oryginalny bootloader, potem ponowny start aplikacji
-- "c" - restart do przechwycenia przez updater; updater musi dalej wysylac "c"
+- "r" - restart through the original bootloader, which starts the application
+- "c" - restart for capture by the updater; the updater must keep sending "c"
 
-Samo pojedyncze "c" nie gwarantuje pozostania w bootloaderze.
-Do aktualizacji uzywaj skryptu z --capture-boot 60 lub profilu ALIM3801
-w BK7231GUIFlashTool. Zwykle "r" bez przechwycenia uruchamia aplikacje.
+A single "c" alone does not guarantee staying in the bootloader.
+For updates use the script with --capture-boot 60 or the ALIM3801 profile
+in BK7231GUIFlashTool. A plain "r" without a capture starts the application.
 
-Do UART sluzy .maincode.bin. Bootloader, klucze i ustawienia zostaja zachowane.
-Nie potrzeba szyfrowania - uzywane sa LZMA i CRC.
+The UART update uses .maincode.bin. The bootloader, keys and settings are kept.
+No encryption is needed - LZMA and CRC are used.

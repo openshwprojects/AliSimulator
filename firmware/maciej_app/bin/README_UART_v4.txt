@@ -1,782 +1,884 @@
 ELEKTRODA ALI M3801 TEST FOR MACIEJ - v4 (demo)
 
-Aktualizacja UART dla bootloadera z dump_maciej.bin.
-Wymagania: Python 3.10+, pyserial, UART 3,3 V (115200, 8E1).
-Rozpakuj caly ZIP do jednego katalogu. Polacz TX-RX, RX-TX i GND.
-Zamknij inne programy uzywajace portu tunera. COM3 zastap swoim portem.
+UART update for the bootloader of dump_maciej.bin.
+Requirements: Python 3.10+, pyserial, a 3.3 V UART (115200, 8E1).
+Unpack the whole ZIP into one directory. Connect TX-RX, RX-TX and GND.
+Close other programs using the tuner's port. Replace COM3 with your port.
 
 python -m pip install pyserial
 python maciej_uart.py --port COM3 --capture-boot 60 flash elektroda_ali_m3801_maciej_v4.maincode.bin --backup before-maciej-v4.bin
 
-- Oryginalne oprogramowanie lub v1/v2: wlacz tuner po komunikacie gotowosci.
-- Gdy dziala v3 lub v4: zostaw tuner wlaczony. Wysylane przez skrypt "c"
-  uruchomi go ponownie i przechwyci oryginalny bootloader (v4 robi to po
-  trzech znakach "c" w pustej linii polecen).
-- Skrypt zapisze pelny backup, wgra maincode i zweryfikuje cale 4 MiB.
-  Dwa odczyty trwaja lacznie okolo 14 minut. Nie wylaczaj tunera podczas zapisu.
-- Do kolejnej aktualizacji uzyj nowej nazwy backupu. Stary nie jest nadpisywany.
+- Original firmware or v1/v2: switch the tuner on after the ready message.
+- When v3 or v4 runs: leave the tuner on. The "c" the script sends restarts
+  it and captures the original bootloader (v4 does this after three "c"
+  characters on an empty command line).
+- The script saves a full backup, writes the maincode and verifies all 4 MiB.
+  The two reads take about 14 minutes in total. Do not switch the tuner off
+  while it writes.
+- For the next update use a new backup name. The old one is not overwritten.
 
-v4 to demo z prawdziwa linia polecen: cale komendy zakonczone Enter.
-Terminal 115200 8E1 (np. PuTTY), znak zachety "m3801> ".
-Edycja linii jak w bashu: strzalki lewo/prawo, Home/End (Ctrl-A/Ctrl-E),
-Ctrl-strzalki (Alt-B/Alt-F) o slowo, Backspace, Delete (Ctrl-D), Ctrl-W
-kasuje slowo, Ctrl-U wszystko przed kursorem, Ctrl-K wszystko za nim,
-Ctrl-Y wkleja skasowane, Ctrl-L czysci ekran, Ctrl-C porzuca linie.
-Strzalki gora/dol przywracaja poprzednie komendy zaczynajace sie od tego,
-co juz wpisano (64 ostatnie, bez powtorzen); Ctrl-R szuka komendy
-zawierajacej wpisywany tekst; !! powtarza ostatnia, !n komende numer n z
-'history', !-n n-ta od konca, !tekst ostatnia zaczynajaca sie od tekstu.
-Tab dopelnia nazwe komendy, jej podkomende (np. "rf sp" -> "rf spectrum")
-i nazwe pliku albo katalogu na dysku ("ls 4:/c6" -> "ls 4:/c64/");
-gdy pasuje kilka, wypisuje je (dlugie listy po drugim Tab).
-Komende mozna tez zaczac od '/' (np. /restart, /lsusb).
+v4 is a demo with a real command line: whole commands ended with Enter.
+Terminal 115200 8E1 (e.g. PuTTY), prompt "m3801> ".
+Line editing as in bash: left/right arrows, Home/End (Ctrl-A/Ctrl-E),
+Ctrl-arrows (Alt-B/Alt-F) by a word, Backspace, Delete (Ctrl-D), Ctrl-W
+deletes a word, Ctrl-U everything before the cursor, Ctrl-K everything after
+it, Ctrl-Y pastes what was deleted, Ctrl-L clears the screen, Ctrl-C drops
+the line.
+Up/down arrows bring back earlier commands starting with what is already
+typed (the last 64, no repeats); Ctrl-R searches for a command containing the
+typed text; !! repeats the last one, !n the command numbered n in 'history',
+!-n the n-th from the end, !text the last one starting with text.
+Tab completes a command's name, its subcommand (e.g. "rf sp" -> "rf spectrum")
+and a file or directory name on a disk ("ls 4:/c6" -> "ls 4:/c64/");
+when several match, it lists them (long lists after a second Tab).
+A command may also start with '/' (e.g. /restart, /lsusb).
 
-  help                 lista komend (help <komenda> - opis jednej)
-  version / ping       banner i wersja / odpowiedz "pong v4"
-  info / uptime        uklad, zegar CPU, adresy w pamieci, czas pracy
-  echo <slowa>         wypisuje argumenty
-  md <adres> [dl]      zrzut pamieci (RAM, okno flash, rejestry)
-  mr <adres>           odczyt slowa 32-bit
-  mw <adres> <wart>    zapis slowa 32-bit (RAM i rejestry, nie flash)
-  screen ...           rysuje na ekranie testowym (i go pokazuje): demo | bars |
-                       clear [rrggbb] | text <x> <y> <slowa> |
+  help                 the list of commands (help <command> - one described)
+  version / ping       banner and version / answers "pong v4"
+  info / uptime        chip, CPU clock, memory addresses, time running
+  echo <words>         prints its arguments
+  md <addr> [len]      memory dump (RAM, flash window, registers)
+  mr <addr>            reads a 32-bit word
+  mw <addr> <value>    writes a 32-bit word (RAM and registers, not flash)
+  screen ...           draws on the test screen (and shows it): demo | bars |
+                       clear [rrggbb] | text <x> <y> <words> |
                        rect <x> <y> <w> <h> <rrggbb> | on | off
-  testscreen           ekran testowy na TV (ramki, paski kolorow); dowolny
-                       klawisz klawiatury USB (wpisuje sie tez) albo
-                       "console" wraca do konsoli
-  console              konsola na TV (widok po starcie)
-  explorer [n:][sciezka]
-                       menedzer plikow na TV w biezacym katalogu, zgrany z
-                       "cd" w obie strony: strzalki/PgUp/PgDn wybieraja,
-                       Enter otwiera (obraz: przegladarka, plik gry -
-                       .nes, .gb, .sms, .sg, .md, .crt, .adf itd., takze w
-                       .zip albo .gz: gra, inny plik: jego poczatek),
-                       Backspace w gore,
-                       "/" albo Tab - wpisywanie sciezki w pasku; mysz:
-                       klik, podwojny klik, kolko; Esc wraca do konsoli;
-                       F2 zmienia nazwe, F7 nowy katalog, Delete/F8
-                       usuwa (y), F5/F6 kopiuj/przenies plik, Insert wkleja
-  panel <tekst>        4 znaki na wyswietlaczu panelu; panel bright 0..7
-                       (plyty z TM1650)
-  keys                 stan klawiszy panelu (klawisze sa tez zglaszane same);
-                       bez TM1650: dwa przyciski na GPIO 31 i 9
-  ir                   ostatni kod pilota; ir raw on|off - czasy impulsow
-  usb                  port USB: stan, predkosc i deskryptory podlaczonego
-                       urzadzenia (VID:PID, nazwy, interfejsy); usb reset -
-                       reset magistrali, usb init - kontroler od nowa,
-                       usb kbd [report|interrupt|raw on|off] - klawiatura,
-                       usb mouse - mysz (kursor, przyciski, liczniki),
-                       usb reg <offset> [bajt] - rejestr kontrolera,
-                       usb ctl <typ> <zadanie> <wartosc> <indeks> <dlugosc>
-                       [urzadzenie] - dowolne zadanie kontrolne do urzadzenia
-                       o danym adresie (np. usb ctl 0x80 6 0x100 0 18 2);
-                       zadanie OUT wysyla bajty z ostatniego odczytu
-  lsusb                urzadzenia USB, po jednej linii
-  disks                dyski USB (pendrive, czytnik kart): rozmiar, partycje,
-                       systemy plikow
-  ls [n:][sciezka]     katalog na dysku USB (FAT12, FAT16, FAT32, NTFS, dlugie
-                       nazwy); n - numer urzadzenia z lsusb (np. ls 3:/docs),
-                       bez niego biezacy katalog (cd), a przed pierwszym cd
-                       pierwszy wolumin FAT; "dir" to samo
-  cd [n:][sciezka]     biezacy katalog, widoczny w znaku zachety
-                       (m3801 3:/Docs>); cd .. - wyzej, cd / - korzen,
-                       samo cd - bez katalogu; pwd - pokazuje go
-  cat [n:]sciezka      plik tekstowy z dysku USB (Ctrl-C przerywa; plik
-                       binarny: pierwsze 256 bajtow szesnastkowo)
-  mkdir <sciezka>      nowy katalog (ZAPIS na dysk; dlugie nazwy tez)
-  rmdir <sciezka>      usuwa pusty katalog (zapis)
-  rm [-r] <sciezka>    usuwa plik; -r: katalog z cala zawartoscia (zapis)
-  touch <sciezka>      nowy pusty plik (zapis)
-  cp [-r] <skad> <dokad>
-                       kopiuje plik (do katalogu: do niego, pod ta sama
-                       nazwa; takze na inny dysk); -r: katalog z cala
-                       zawartoscia (zapis)
-  mv <skad> <dokad>    zmienia nazwe pliku lub katalogu albo przenosi go
-                       do innego katalogu tego samego woluminu (zapis)
-  komenda > plik       to, co komenda wypisuje, trafia do pliku (np.
-                       ls > 4:/lista.txt, echo tekst > 4:/a.txt); >> dopisuje
-                       na koncu pliku; nazwy ze spacjami w "..." albo '...'
-  sector [n:]<numer>   jeden sektor dysku USB szesnastkowo
-  sum [n:]sciezka      plik przeczytany do konca: rozmiar, CRC-32 (jak 7-Zip),
-                       pierwsze bajty, predkosc (Ctrl-C przerywa)
-  head [-n N] <plik>   pierwsze N linii pliku (10); tail - ostatnie N
-  df [n:]              woluminy dyskow: rozmiar, wolne i zajete miejsce
+  testscreen           the test screen on the TV (boxes, colour bars); any
+                       key of the USB keyboard (it is typed too) or
+                       "console" goes back to the console
+  console              the console on the TV (the view after start)
+  explorer [n:][path]
+                       a file manager on the TV in the current directory,
+                       kept in step with "cd" both ways: arrows/PgUp/PgDn
+                       select, Enter opens (a picture: the viewer; a game
+                       file - .nes, .gb, .sms, .sg, .md, .crt, .adf etc.,
+                       also in .zip or .gz: the game; another file: its
+                       beginning), Backspace goes up,
+                       "/" or Tab - typing a path in the bar; mouse:
+                       click, double click, wheel; Esc goes back to the
+                       console; F2 renames, F7 new directory, Delete/F8
+                       deletes (y), F5/F6 copy/move a file, Insert pastes
+  panel <text>         4 characters on the panel display; panel bright 0..7
+                       (boards with a TM1650)
+  keys                 the panel keys' state (the keys are also reported by
+                       themselves); without a TM1650: two buttons on GPIO 31
+                       and 9
+  ir                   the last remote control code; ir raw on|off - pulse
+                       timings
+  usb                  the USB port: state, speed and the descriptors of the
+                       connected device (VID:PID, names, interfaces);
+                       usb reset - bus reset, usb init - the controller anew,
+                       usb kbd [report|interrupt|raw on|off] - the keyboard,
+                       usb mouse - the mouse (cursor, buttons, counters),
+                       usb reg <offset> [byte] - a controller register,
+                       usb ctl <type> <request> <value> <index> <length>
+                       [device] - any control request to the device at the
+                       given address (e.g. usb ctl 0x80 6 0x100 0 18 2);
+                       an OUT request sends the bytes of the last read
+  lsusb                USB devices, one line each
+  disks                USB disks (sticks, card readers): size, partitions,
+                       file systems
+  ls [n:][path]        a directory on a USB disk (FAT12, FAT16, FAT32, NTFS,
+                       long names); n - the device number from lsusb (e.g.
+                       ls 3:/docs), without it the current directory (cd),
+                       and before the first cd the first FAT volume; "dir"
+                       is the same
+  cd [n:][path]        the current directory, shown in the prompt
+                       (m3801 3:/Docs>); cd .. - up, cd / - the root,
+                       cd alone - no directory; pwd - shows it
+  cat [n:]path         a text file from a USB disk (Ctrl-C stops; a binary
+                       file: its first 256 bytes in hex)
+  mkdir <path>         a new directory (WRITES to the disk; long names too)
+  rmdir <path>         removes an empty directory (writes)
+  rm [-r] <path>       removes a file; -r: a directory with all it holds
+                       (writes)
+  touch <path>         a new empty file (writes)
+  cp [-r] <from> <to>
+                       copies a file (to a directory: into it, under the same
+                       name; also to another disk); -r: a directory with all
+                       it holds (writes)
+  mv <from> <to>       renames a file or directory or moves it to another
+                       directory of the same volume (writes)
+  command > file       what the command prints goes into the file (e.g.
+                       ls > 4:/list.txt, echo text > 4:/a.txt); >> appends
+                       to the end of the file; names with spaces in "..." or
+                       '...'
+  sector [n:]<number>  one sector of a USB disk in hex
+  sum [n:]path         a file read to its end: size, CRC-32 (as 7-Zip's),
+                       first bytes, speed (Ctrl-C stops)
+  head [-n N] <file>   the first N lines of a file (10); tail - the last N
+  df [n:]              the disks' volumes: size, free and used space
   ntfs [n:] [reset-journal]
-                       wolumin NTFS: geometria, stan dziennika i czy demo go
-                       zapisuje (tylko wolumin zamkniety czysto przez Windows:
-                       "Bezpieczne usuwanie"); reset-journal czysci dziennik
-                       tak jak ntfs-3g
-  view [-1] [-s | -c] <plik>
-                       obraz na TV (JPEG zwykly i progresywny, PNG, GIF, BMP),
-                       dopasowany do ekranu, obrocony wg EXIF zdjecia;
-                       strzalka w prawo / spacja - nastepny obraz z katalogu,
-                       w lewo - poprzedni, i - szczegoly, Esc albo q konczy.
-                       Zwykly JPEG dekoduje sprzetowo uklad wideo (-s: tylko
-                       procesor; -c: oba, porownane, nic nie pokazuje)
-  play [-n klatki] [-x] [-k] [-v] [-1] <plik>
-                       film z pliku (.ts, .mpg, .m2v, .vob, .264, .mp4,
-                       .mov: wideo MPEG-2, MPEG-1 albo H.264, dzwiek MPEG;
-                       dzwiek .mp4, AAC, nie gra) na TV, dekodowany
-                       sprzetowymi dekoderami MPEG-2 / H.264 ukladu;
-                       dzwiek przez "snd". Esc,
-                       Ctrl-C, q albo EXIT na pilocie konczy; -n tyle klatek,
-                       -x tak szybko jak dekoduje (bez dzwieku), -k ostatnia
-                       klatka zostaje na TV (zdejmuje ja Esc na klawiaturze
-                       USB, EXIT na pilocie albo "av off"), -v kazda klatka
-                       opisana, -1 obraz w swoim rozmiarze (zamiast na
-                       wysokosc ekranu)
-  av <polecenie>       dekoder wideo i warstwa obrazu: av status (rejestry),
-                       av shot <plik.bmp|plik.yuv> (ostatnia klatka do
-                       pliku), av show, av off (z powrotem menu), av reset
-  gb [-f klatki] <plik.gb>
-                       gra Game Boy albo Game Boy Color na TV (gra na Color
-                       w kolorach, starsza w czterech odcieniach), 59,7
-                       klatki na sekunde (kartridze bez MBC, MBC1, MBC2,
-                       MBC3, MBC5; bez dzwieku): klawisze jak w nes;
-                       pamiec z bateria w pliku .sav obok gry
-  nes [-f klatki] <plik.nes>
-                       gra NES na TV, 60 klatek na sekunde (mappery 0, 1, 2,
-                       3, 4, 7, 11, 34, 66, 71; bez dzwieku): strzalki albo
+                       an NTFS volume: geometry, the journal's state and
+                       whether the demo writes it (only a volume Windows
+                       closed cleanly: "Safely Remove Hardware");
+                       reset-journal clears the journal as ntfs-3g does
+  view [-1] [-s | -c] <file>
+                       a picture on the TV (JPEG baseline and progressive,
+                       PNG, GIF, BMP), fitted to the screen, turned as the
+                       photo's EXIF says; right arrow / space - the next
+                       picture of the directory, left - the previous one,
+                       i - details, Esc or q ends. The chip's video unit
+                       decodes baseline JPEG in hardware (-s: the CPU only;
+                       -c: both, compared, nothing shown)
+  play [-n frames] [-x] [-k] [-v] [-1] <file>
+                       a film from a file (.ts, .mpg, .m2v, .vob, .264, .mp4,
+                       .mov: MPEG-2, MPEG-1 or H.264 video, MPEG sound; the
+                       sound of .mp4, AAC, does not play) on the TV, decoded
+                       by the chip's hardware MPEG-2 / H.264 decoders;
+                       sound through "snd". Esc,
+                       Ctrl-C, q or EXIT on the remote ends; -n that many
+                       frames, -x as fast as it decodes (no sound), -k the
+                       last frame stays on the TV (Esc on the USB keyboard,
+                       EXIT on the remote or "av off" removes it), -v each
+                       frame described, -1 the picture at its own size
+                       (instead of the screen's height)
+  av <command>         the video decoder and the picture layer: av status
+                       (registers), av shot <file.bmp|file.yuv> (the last
+                       frame to a file), av show, av off (the menu back),
+                       av reset
+  gb [-f frames] <file.gb>
+                       a Game Boy or Game Boy Color game on the TV (a Color
+                       game in colour, an older one in four shades), 59.7
+                       frames a second (cartridges without an MBC, MBC1,
+                       MBC2, MBC3, MBC5; no sound): keys as in nes;
+                       battery memory in a .sav file next to the game
+  nes [-f frames] <file.nes>
+                       a NES game on the TV, 60 frames a second (mappers 0,
+                       1, 2, 3, 4, 7, 11, 34, 66, 71; no sound): arrows or
                        W A S D, X = A, Z = B, Enter = Start, Tab = Select
-                       (klawiatura USB, UART, pilot: strzalki, OK = A, 0 = B,
-                       MENU = Start, INFO = Select); Ctrl-C albo Esc konczy;
-                       pamiec baterii gry w pliku .sav obok niej. Kazdy
-                       emulator bierze tez gre spakowana w .zip (najwiekszy
-                       plik w nim, ktory nie jest tekstem ani obrazkiem)
-                       albo .gz (tez .adz Amigi)
-  sms [-f klatki] <plik.sms>
-                       gra Sega Master System na TV (256 x 192, 3 razy
-                       wiekszy; mappery Sega i Codemasters, pamiec kartridza
-                       w pliku .sav; bez dzwieku): X = przycisk 2, Z =
-                       przycisk 1, Enter = Pause; reszta jak w nes
-  gg [-f klatki] <plik.gg>
-                       gra Sega Game Gear na TV (160 x 144, 5 razy wiekszy):
-                       X = przycisk 2, Z = przycisk 1, Enter = Start
-  sg [-f klatki] <plik.sg|plik.sc>
-                       gra Sega SG-1000 / SC-3000 na TV (256 x 192, 3 razy
-                       wiekszy; kartridze do 48 KB, powyzej mapper Sega;
-                       tylko pady, bez dzwieku): X = przycisk 2, Z =
-                       przycisk 1, Enter = Pause; reszta jak w nes
-  megadrive [-r j|u|e] [-f klatki] <plik>
-                       gra Sega Mega Drive / Genesis na TV (320 x 224 albo
-                       256 x 224, 3 razy wiekszy; .md, .gen, .bin, .smd;
-                       NTSC albo PAL wg regionu z naglowka albo -r) z
-                       dzwiekiem (YM2612 i PSG): X = B, Z = A, Tab / spacja
-                       = C, Enter = Start (klawiatura USB, UART, pilot);
-                       pad 3-przyciskowy; pamiec kartridza w pliku .sav
-  zx [-f klatki] [plik]
-                       ZX Spectrum 48K / 128K + Pentagon BetaDisk 128 na TV
-                       (320 x 240 z ramka, 3 razy wiekszy, 50 klatek/s):
-                       snapshot (.sna, .z80), tasma (.tap, .tzx) albo dyskietka
-                       TR-DOS (.trd, .scl) z dzwiekiem beeper + AY-3-8912 48 kHz;
-                       bez pliku: BASIC. Opcjonalne 48.rom, 128.rom i trdos.rom
-                       w katalogu zx/ albo wbudowany loader. Klawiatura USB jest
-                       klawiatura Spectrum (Shift = CAPS SHIFT, Ctrl / Alt =
-                       SYMBOL SHIFT, Backspace = DELETE), strzalki to tez
-                       joystick Kempston (ogien: OK na pilocie); Esc konczy
-  a26 [-f klatki] <plik.a26>
-                       gra Atari 2600 na TV (160 x 228, 5 razy szerszy i 3
-                       razy wyzszy; kartridze 2K, 4K, F8, F6, F4 i ich RAM
-                       Superchip, FE, E0, 3F, E7, FA; NTSC; bez dzwieku):
-                       strzalki, X albo Z = ogien, Enter = Reset konsoli,
-                       Tab = Select
-  c64 [-f klatki] [plik]
-                       Commodore 64 (PAL) na TV (352 x 240 z ramka, 3 razy
-                       wiekszy, 50 klatek/s): program (.prg, .t64) albo
-                       dyskietka (.d64) - wczytuje sie i startuje (RUN) sam,
-                       LOAD z dyskietki dziala tez pozniej; albo kartridz
-                       (.crt: zwykly 8K/16K/Ultimax, Ocean, Magic Desk,
-                       EasyFlash, System 3, Dinamic, Fun Play, Super Games,
-                       RGCD, Simons' BASIC, Final Cartridge III) - start z
-                       kartridza; bez pliku: BASIC.
-                       ROM-y C64 to pliki kernal.rom, basic.rom i chargen.rom
-                       (nie ma ich w demie) obok programu, w katalogu c64/
-                       albo na szczycie dysku. Klawiatura USB jest klawiatura
-                       C64 (Tab = RUN/STOP, PageUp = RESTORE, Alt = C=),
-                       strzalki to joystick w porcie 2 (ogien: prawy Ctrl,
-                       OK na pilocie; F9 zamienia porty); MENU na pilocie =
-                       SPACJA, INFO = F7; znaki wpisane przez UART / telnet
-                       sa na nim wpisywane; Esc konczy
-  amiga [-f klatki] [plik.adf]
-                       Amiga 500 (PAL, OCS) na TV (352 x 272 z ramka, 2 razy
-                       wiekszy) z obrazem dyskietki (.adf) w stacji (bez
-                       pliku: pusta stacja). Kickstart to plik kick.rom (256
-                       albo 512 KB, nie ma go w demie) albo darmowy AROS:
-                       aros-rom.bin + aros-ext.bin - obok dyskietki, w
-                       katalogu amiga/ albo na szczycie dysku. Klawiatura USB
-                       jest klawiatura Amigi, strzalki to joystick (ogien:
-                       prawy Ctrl, OK na pilocie), lewy przycisk myszy: Page
-                       Up / Page Down albo 0 na pilocie; MENU = Return, INFO
-                       = spacja; bez dzwieku; Esc konczy
-  dos [-f klatki] <plik.exe>
-                       PC z DOS-em (286 AT z karta VGA: tryby tekstowe,
-                       CGA, EGA, 256 kolorow) na TV (320 x 200, 3 razy
-                       wiekszy) uruchamiajacy program DOS (.exe, .com);
-                       BIOS i DOS sa wbudowane, bez dzwieku. Klawiatura
-                       USB jest klawiatura PC (Esc konczy); pilot: strzalki,
-                       OK = gora, 0 = spacja, MENU = Enter, INFO = Esc
-  pce [-f klatki] <plik.pce>
-                       PC Engine / TurboGrafx-16 na TV z 6-kanalowym dzwiekiem
-                       PSG i 2 KB pamieci zapisu (.sav)
-  coleco [-f klatki] <plik.col>
-                       ColecoVision na TV (256 x 192 x3, MegaCart i Super Game
-                       Module, SN76489; coleco.rom w col/ albo wbudowany BIOS)
-  msx [-f klatki] <plik.rom|plik.mx1>
-                       MSX1 na TV (zwykle, Konami, Konami SCC, ASCII8/16,
-                       AY-3-8910 + SCC; msx.rom w msx/ albo wbudowany BIOS)
-  msx2 [-f klatki] <plik.mx2|plik.dsk|plik.rom>
-                       MSX2 na TV (Yamaha V9938 128 KB VRAM, SCREEN 0..8,
-                       sprzetowy blitter, 256 KB Mapper, RP5C01 RTC, dyskietki
-                       .dsk, dzwiek AY-3-8910 + SCC + YM2413; cbios_main_msx2.rom
-                       w msx2/ albo wbudowany BIOS MSX2)
-  ws [-f klatki] <plik.ws|plik.wsc>
-                       Bandai WonderSwan / WonderSwan Color na TV (224 x 144
-                       x5 albo pionowo 144 x 224 x3, dzwiek 4-kanalowy, .sav)
-  snes [-f klatki] <plik.sfc|plik.smc>
-                       Super Nintendo / Super Famicom na TV (LoROM, HiROM,
-                       ExHiROM, tryby 0-7, dzwiek SPC700 BRR, zapis .sav)
-  neogeo [-f klatki] <plik.neo>
-                       SNK Neo Geo AES / MVS na TV (320 x 224 x3, Z80 + YM2610,
-                       64 KB .sav; uni-bios.rom w neogeo/ albo wbudowany BIOS)
-  gba [-f klatki] <plik.gba>
-                       Game Boy Advance na TV (240 x 160 x4, DirectSound + PSG,
-                       SRAM / Flash / EEPROM .sav; gba_bios.bin albo wbudowany)
-  a78 [-f klatki] <plik.a78>
-                       Atari 7800 ProSystem na TV (MARIA, TIA + POKEY, .sav)
-  lynx [-f klatki] <plik.lnx|plik.lyx>
-                       Atari Lynx na TV (160 x 102 x6 albo pionowo, skalowanie
-                       Suzy, dzwiek Mikey; lynxboot.img albo wbudowany loader)
-  vectrex [-f klatki] [plik.vec]
-                       GCE Vectrex na TV (wektorowy ekran 540 x 720, AY-3-8912;
-                       bez pliku: Mine Storm z vectrex.rom albo Vector Storm)
-  fds [-f klatki] <plik.fds>
-                       Famicom Disk System na TV (1-8 stron, Q obraca dysk,
-                       dzwiek RP2C33, zapisy dysku w .sav, wbudowany BIOS)
-  ngp [-f klatki] <plik.ngp|plik.ngc>
-                       Neo Geo Pocket / Color na TV (160 x 152 x4, Z80 + T6W28
-                       + DAC, zapis Flash 64 KB w .sav, wbudowany BIOS)
-  odyssey2 [-f klatki] <plik.o2>
-                       Magnavox Odyssey2 / Videopac G7000 na TV (Intel 8048 +
-                       8244, 640 x 720, klawiatura 0..9, wbudowany BIOS)
-  intv [-f klatki] <plik.int|plik.rom>
-                       Mattel Intellivision na TV (CP1610 + STIC + AY-3-8914,
-                       704 x 624, wbudowane EXEC i GROM albo exec.bin/grom.bin)
-  psx [-f klatki] <plik.exe|plik.cue|plik.iso>
-                       Sony PlayStation 1 na TV (R3000A + GTE 3D, GPU 15/24bpp,
-                       MDEC, plyty CD .cue/.bin i .iso czytane strumieniowo,
-                       24-glosowy dzwiek SPU ADPCM, karta pamieci 128 KB .sav;
-                       scph1001.bin w psx/ albo wbudowany BIOS)
-  cps [-f klatki] <plik.cps|plik.zip>
-                       Automaty Capcom CPS-1 / CPS-1.5 / CPS-2 na TV (384 x 224
-                       x3, 68000 + Z80, deszyfrowanie CPS-2 .key i Kabuki, 3
-                       warstwy tla + rowscroll, dzwiek YM2151 + OKIM6295 oraz
-                       16-glosowy QSound DSP, zapis EEPROM 93C46 w .sav)
-  atarist [-f klatki] [plik.st|plik.msa|plik.prg]
-                       Atari 520ST / 1040STFM na TV (320 x 200 x3, 640 x 200,
-                       640 x 400; 68000 8 MHz, Shifter + STE Blitter, MFP, IKBD,
-                       WD1772 FDC, dzwiek YM2149F; darmowy EmuTOS etos256uk.img
-                       albo tos.img w atarist/, lub wbudowany TOS)
-  sys16 [-f klatki] <plik.s16|plik.zip>
-                       Automaty Sega System 16A / 16B / OutRun-Road na TV
-                       (320 x 224 x3, 68000 + Z80, mapper 315-5195, warstwy tli
-                       315-5197 + skalowane duszki + generator drogi, dzwiek
-                       YM2151 + uPD7759 + Sega 16-ch PCM, zapis NVRAM .sav)
-  atari8 [-f klatki] [plik.atr|plik.xex|plik.car|plik.rom]
-                       Atari 800XL / 130XE (128 KB) na TV (336 x 240 x3, SALLY
-                       6502C, ANTIC tryby 2..F + DLI + WSYNC, GTIA duszki P/M i
-                       tryby 9/10/11, bankowanie 130XE PORTB, dzwiek POKEY 48 kHz,
-                       zapis dyskietek .atr w .sav; wbudowany AltirraOS XL + BASIC
-                       albo atarixl.rom / ataribas.rom w atari8/; bez pliku: BASIC)
-  a5200 [-f klatki] <plik.a52|plik.car>
-                       Atari 5200 SuperSystem na TV (336 x 240 x3, kartridze
-                       4K..40K, ANTIC + GTIA + POKEY 48 kHz, drazek analogowy i
-                       klawiatura 0..9; wbudowany Altirra 5200 OS albo 5200.rom)
-  megaduck [-f klatki] <plik.duck|plik.md1|plik.bin>
-                       Mega Duck / Cougar Boy na TV (160 x 144 x5, 59,7 klatek/s,
-                       kartridze zwykle i bankowane $0001 / $B000, dzwiek 48 kHz,
-                       zapis SRAM w .sav)
-  sv [-f klatki] <plik.sv>
-                       Watara Supervision na TV (160 x 160 x4, 61 klatek/s,
-                       65SC02 4 MHz, kartridze 16..512 KB Magnum, dzwiek 48 kHz)
-  chip8 [-f klatki] <plik.ch8|plik.sc8|plik.xo8>
-                       CHIP-8 / SUPER-CHIP 1.1 / XO-CHIP na TV (128 x 64 x10 =
-                       1280 x 640, 4 warstwy 16 kolorow, dzwiek 48 kHz + wzorce
-                       XO-CHIP, zapis flag RPL w .sav)
-  channelf [-f klatki] <plik.chf|plik.bin|plik.rom>
-                       Fairchild Channel F / VES na TV (102 x 58 x10 = 1020 x 580,
-                       60 klatek/s, procesor Fairchild F8, pamiec F2102 + Schach,
-                       wbudowany HLE PSU albo sl31253.bin + sl31254.bin w channelf/,
-                       3-tonowy dzwiek 48 kHz)
-  pokemini [-f klatki] <plik.min>
-                       Nintendo Pokemon Mini na TV (96 x 64 x10 = 960 x 640, 72
-                       klatki/s, Seiko S1C88 4 MHz, PRC tlo + duszki, wbudowany
-                       FreeBIOS albo bios.min w pokemini/, dzwiek piezo PWM 48 kHz,
-                       zapis 8 KB EEPROM w .sav)
-  cpc [-f klatki] [plik.sna|plik.dsk|plik.cpr|plik.bin]
-                       Amstrad CPC 464 / 6128 + GX4000 na TV (384 x 240 x3 w
-                       Mode 0/1, 640 x 200 w Mode 2, 50 klatek/s, Z80 4 MHz,
-                       UM6845R CRTC, 40010 Gate Array, 128 KB RAM, uPD765 FDC z
-                       zapisem w .sav, dzwiek AY-3-8912 48 kHz, wbudowany OS +
-                       Locomotive BASIC 1.1 + AMSDOS; bez pliku: BASIC)
-  vic20 [-f klatki] [plik.prg|plik.crt|plik.a0|plik.d64]
-                       Commodore VIC-20 PAL na TV (224 x 240 x3, 50 klatek/s,
-                       MOS 6502, MOS 6561 VIC-I wideo + 4-kanalowy dzwiek 48 kHz,
-                       2x 6522 VIA, automatyczne rozszerzenie RAM 5K / +3K / +24K,
-                       wbudowane ROM-y KERNAL + BASIC V2 + chargen; bez pliku: BASIC)
-  apple2 [-f klatki] [plik.dsk|plik.do|plik.po|plik.nib|plik.bin]
-                       Apple IIe Enhanced (128 KB) na TV (280 x 192 x3 albo
-                       560 x 192 80-kol / Double Hi-Res, 59,92 klatek/s, WDC
-                       65C02, kolor artefaktowy NTSC Hi-Res, stacja Disk II GCR
-                       z zapisem .sav, glosnik $C030 + Mockingboard AY 48 kHz,
-                       wbudowane ROM-y Apple IIe + Disk II; bez pliku: BASIC)
-  coco [-f klatki] [plik.ccc|plik.rom|plik.bin|plik.cas]
-                       TRS-80 Color Computer 64K (NTSC 60 Hz) na TV (320 x 240
-                       x3 z ramka, Motorola MC6809, SAM MC6883, 2x MC6821 PIA,
-                       MC6847 VDG + kolory artefaktowe RG6, dzwiek 6-bit DAC +
-                       1-bit 48 kHz, wbudowany Color BASIC albo bas13.rom w coco/)
-  dragon [-f klatki] [plik.ccc|plik.rom|plik.bin|plik.cas]
-                       Dragon 32 / 64 (PAL 50 Hz) na TV (320 x 240 x3 z ramka,
-                       MC6809, SAM, 2x PIA z matryca klawiatury Dragona, MC6847
-                       VDG, dzwiek DAC 48 kHz, wbudowany BASIC albo d32.rom)
-  cv [-f klatki] <plik.cv|plik.rom|plik.bin>
-                       VTech CreatiVision / Dick Smith Wizzard na TV (256 x 192
-                       x3, 50 Hz PAL, 6502 2 MHz, PIA, TMS9929A VDP, dzwiek
-                       SN76489A 48 kHz, wbudowany BIOS albo bioscv.rom w cv/)
-  m5 [-f klatki] <plik.m5|plik.rom|plik.bin>
-                       Sord M5 / CGL M5 na TV (256 x 192 x3, 60 Hz NTSC, Z80
-                       3,58 MHz + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP, dzwiek
-                       SN76489AN 48 kHz, wbudowany Monitor BIOS albo m5.rom)
-  pv1000 [-f klatki] <plik.pv|plik.bin|plik.rom>
-                       Casio PV-1000 na TV (256 x 192 x3, 59,92 Hz, Z80 3,58 MHz,
-                       NEC D65010G031 VDP, 3-kanalowy dzwiek PSG 48 kHz)
-  astro [-f klatki] [plik.ast|plik.bin|plik.rom]
-                       Bally Astrocade na TV (320 x 204 x3, 59,92 Hz, Z80 1,79
-                       MHz, blitter Data Chip Magic-RAM + dzielona paleta 256
-                       kolorow, 3-glosowy syntezator 48 kHz, klawiatura 0..9;
-                       wbudowany BIOS i gra Star Blaster albo astro.bin w astro/)
-  arcadia [-f klatki] <plik.a2k|plik.bin>
-                       Emerson Arcadia 2001 na TV (640 x 624, 59,92 Hz, Signetics
-                       2650 + 2637 UVI wideo i dzwiek 48 kHz, klawiatura 0..9)
-  vc4000 [-f klatki] <plik.vc4|plik.bin>
-                       Interton VC 4000 na TV (768 x 672, 50 Hz PAL, Signetics
-                       2650 + 2636 PVI siatka/obiekty/LED i dzwiek 48 kHz, 0..9)
-  studio2 [-f klatki] [plik.st2|plik.bin]
-                       RCA Studio II na TV (1024 x 640, 60 Hz, COSMAC CDP1802 +
-                       CDP1861 Pixie DMA + ton CA555 48 kHz, klawiatura 0..9;
-                       wbudowany BIOS i gra albo studio2.bin w studio2/)
-  scv [-f klatki] <plik.scv|plik.bin|plik.cart>
-                       Epoch Super Cassette Vision na TV (768 x 666, 59,92 Hz,
-                       NEC uPD7801G 4 MHz, Epoch TV-1 VDP, dzwiek uPD1771C 48 kHz,
-                       zapis SRAM .sav, wbudowany BIOS albo upd7801g.s01 w scv/)
-  vb [-m 0|1|2|3] [-f klatki] <plik.vb|plik.vboy>
-                       Nintendo Virtual Boy na TV (384 x 224 x3 = 1152 x 672,
-                       50,27 Hz, 32-bit NEC V810 RISC 20 MHz, VIP 32 Worlds/OBJ,
-                       tryby 0 Red/Black, 1 Red/Cyan 3D Anaglyph, 2 White, 3 Amber
-                       pod V/F2/M, 6-kanalowy dzwiek VSU 48 kHz, 64 KB SRAM .sav)
-  sgx [-f klatki] <plik.sgx>
-                       NEC SuperGrafx na TV (256/320/512 x 240, HuC6280, podwojny
-                       HuC6270 VDC 128 KB VRAM + HuC6202 VPC, 32 KB WRAM, PSG
-                       48 kHz, zapis BRAM 2 KB w .sav)
-  pcecd [-f klatki] <plik.cue|plik.iso>
-                       PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card na TV
-                       (plyty .cue/.bin i .iso czytane strumieniowo, Redbook CD-DA
-                       + OKI MSM5205 ADPCM + 6-ch PSG 48 kHz, 256 KB System Card
-                       3.0 + 2 MB Arcade Card RAM, 2 KB BRAM .sav; wbudowany BIOS
-                       System Card 3.0 albo syscard3.pce w pcecd/)
-  segacd [-r j|u|e] [-f klatki] <plik.cue|plik.iso>
-                       Sega CD / Mega-CD na TV (Main-68000 7,67 MHz + Sub-68000
-                       12,5 MHz + Z80, 512 KB PRG-RAM, 256 KB Word-RAM, Stamp ASIC
-                       skalowanie/obrot 3D, LC89510 CDC + CDD, YM2612 + PSG +
-                       Ricoh RF5C164 8-ch PCM + Redbook CD-DA 48 kHz, 8 KB BRAM
-                       .sav; wbudowany CDBIOS albo bios_CD_U/E/J.bin w segacd/)
-  bbc [-f klatki] [plik.ssd|plik.dsd|plik.uef]
-                       BBC Micro Model B / Acorn Electron na TV (2 MHz 6502,
-                       MC6845 CRTC + Video ULA tryby 0..6 + SAA5050 Teletext
-                       Mode 7 + Electron ULA, 2x 6522 VIA, dzwiek SN76489 48 kHz;
-                       wbudowany OS/BASIC albo os12.rom + basic2.rom; bez pliku: BASIC)
-  ti99 [-f klatki] [plik.rpk|plik.bin|plik.zip]
-                       Texas Instruments TI-99/4A na TV (16-bit TMS9900 3 MHz,
-                       GROM + CRU, 32 KB Expansion RAM, bankowanie 378/379i,
-                       TMS9918A VDP, dzwiek TMS9919 48 kHz; bez pliku: TI BASIC)
-  oric [-f klatki] [plik.tap|plik.dsk]
-                       Tangerine Oric-1 / Oric Atmos 48K na TV (6502 1 MHz,
-                       HCS10017 ULA 240 x 224 Text + Hires, 6522 VIA, dzwiek
-                       AY-3-8912 48 kHz; bez pliku: Atmos BASIC)
-  plus4 [-f klatki] [plik.prg|plik.tap|plik.t64]
-                       Commodore Plus/4 i C16 na TV (MOS 7501/8501 1,77 MHz,
-                       64 KB RAM, MOS 7360/8360 TED 121 kolorow + 2-glosowy
-                       dzwiek 48 kHz; bez pliku: BASIC V3.5)
-  zx81 [-f klatki] [plik.p|plik.81]
-                       Sinclair ZX81 16K na TV (Z80 3,25 MHz, ULA D_FILE
-                       256 x 192, VSync FRAMES 50 Hz, dzwiek 48 kHz; bez pliku: BASIC)
-  pc88 [-f klatki] [plik.d88|plik.n88]
-                       NEC PC-8801mkIISR na TV (Z80 4 MHz, 64 KB RAM + 48 KB
-                       640 x 200 GVRAM + Text VRAM, Sub-CPU dysk HLE, dzwiek
-                       Yamaha YM2203 OPN FM/SSG + beeper 48 kHz; bez pliku: N88-BASIC)
-  mz700 [-f klatki] [plik.mzt|plik.mzf]
-                       Sharp MZ-700 na TV (Z80 3,58 MHz, 64 KB RAM, wideo GRB
-                       320 x 200 CGROM, dzwiek Intel 8253 PIT 48 kHz; bez pliku: Monitor)
-  x1 [-f klatki] [plik.d88|plik.2d|plik.tap]
-                       Sharp X1 na TV (Z80 4 MHz, 16-bit I/O 48 KB GVRAM +
-                       kolorowy PCG 256 znakow, dzwiek AY-3-8910 48 kHz)
-  s32x [-r j|u|e] [-f klatki] <plik.32x|plik.bin>
-                       Sega 32X na TV (68000 7,67 MHz + podwojny 32-bit Hitachi
-                       SH-2 RISC 23 MHz + Z80, 256 KB SDRAM, SuperVDP 256 kolorow
-                       / RLE / 15-bit Direct, stereo 12-bit PWM + YM2612 + PSG
-                       48 kHz, zapis .sav SRAM; wbudowany MARS BIOS)
-  cd32 [-f klatki] <plik.cue|plik.iso>
-                       Commodore Amiga CD32 na TV (68EC020 14,18 MHz, 2 MB Chip
-                       RAM, AGA 8 bitplanow 256 kolorow / HAM8 + 2 MB Blitter +
-                       Copper, Akiko $C0CACAFE sprzetowe Chunky-to-Planar + CD DMA
-                       + pad 7-przyciskowy, Paula 4-ch + Redbook CD-DA 48 kHz,
-                       zapis 1 KB NVRAM w .sav)
-  cps2 [-f klatki] <plik.zip|plik.cps2>
-                       Capcom CPS-2 QSound na TV (384 x 224 x3, 68000 16 MHz +
-                       Z80, deszyfrowanie .key Feistel i tablic XOR .03x, warstwy
-                       Z-priority, 16-kanalowy QSound DSP 48 kHz, EEPROM 93C46 .sav)
-  arcade [-f klatki] [plik.zip]
-                       Zloty Wiek Automatow Z80 na TV (Namco Pac-Man / Ms. Pac-Man
-                       WSG, Namco Galaxian, Konami Frogger / Scramble 2xZ80 +
-                       AY-3-8910, Nintendo Donkey Kong DMA + DAC; bez pliku: gra)
-  snd <polecenie>      dzwiek (prototyp): snd init, snd beep [Hz] [ms] (ton
-                       testowy), snd vol 0..100, snd status, snd stop -
-                       48 kHz na HDMI (po "video init") i na SCART (L/P)
-  rf <polecenie>       wejscie antenowe (DVB-T): tuner MxL603 (I2C 0x60)
-                       i demodulator S3811 ustawiane tak jak robi to
-                       oryginalny soft dump.bin: rf init, rf tune <MHz albo
-                       kanal> [6|7|8], rf status (lock, poziom, jakosc,
-                       bledy), rf scan, rf services (nazwy kanalow
-                       multipleksu), rf ts <s> [plik] (PID-y albo nagranie
-                       .ts), rf spectrum (poziom sygnalu z anteny od 174 do
-                       862 MHz jako wykres na TV), rf live [od do] (ten
-                       wykres odswiezany na biezaco, sterowany klawiszami);
-                       tylko DVB-T, nie DVB-T2
-  tty                  porty szeregowe USB: porty modulu GSM / LTE (SIMCom,
-                       Quectel, Huawei, ZTE ...), urzadzenia CDC ACM
-                       i przejsciowki USB-UART (CH340 / CH341, CP210x, FTDI,
+                       (USB keyboard, UART, remote: arrows, OK = A, 0 = B,
+                       MENU = Start, INFO = Select); Ctrl-C or Esc ends;
+                       the game's battery memory in a .sav file next to it.
+                       Every emulator also takes a game packed in a .zip
+                       (the largest file in it that is not text or a
+                       picture) or a .gz (an Amiga .adz too)
+  sms [-f frames] <file.sms>
+                       a Sega Master System game on the TV (256 x 192, 3
+                       times as large; Sega and Codemasters mappers,
+                       cartridge memory in a .sav file; no sound): X =
+                       button 2, Z = button 1, Enter = Pause; the rest as
+                       in nes
+  gg [-f frames] <file.gg>
+                       a Sega Game Gear game on the TV (160 x 144, 5 times
+                       as large): X = button 2, Z = button 1, Enter = Start
+  sg [-f frames] <file.sg|file.sc>
+                       a Sega SG-1000 / SC-3000 game on the TV (256 x 192, 3
+                       times as large; cartridges up to 48 KB, above that
+                       the Sega mapper; pads only, no sound): X = button 2,
+                       Z = button 1, Enter = Pause; the rest as in nes
+  megadrive [-r j|u|e] [-f frames] <file>
+                       a Sega Mega Drive / Genesis game on the TV (320 x 224
+                       or 256 x 224, 3 times as large; .md, .gen, .bin,
+                       .smd; NTSC or PAL by the header's region or -r) with
+                       sound (YM2612 and PSG): X = B, Z = A, Tab / space =
+                       C, Enter = Start (USB keyboard, UART, remote);
+                       3-button pad; cartridge memory in a .sav file
+  zx [-f frames] [file]
+                       ZX Spectrum 48K / 128K + Pentagon BetaDisk 128 on the
+                       TV (320 x 240 with the border, 3 times as large, 50
+                       frames/s): a snapshot (.sna, .z80), a tape (.tap,
+                       .tzx) or a TR-DOS disk (.trd, .scl) with beeper +
+                       AY-3-8912 sound at 48 kHz; without a file: BASIC.
+                       Optional 48.rom, 128.rom and trdos.rom in the zx/
+                       directory, or a built-in loader. The USB keyboard is
+                       the Spectrum's keyboard (Shift = CAPS SHIFT, Ctrl /
+                       Alt = SYMBOL SHIFT, Backspace = DELETE), the arrows
+                       are also a Kempston joystick (fire: OK on the
+                       remote); Esc ends
+  a26 [-f frames] <file.a26>
+                       an Atari 2600 game on the TV (160 x 228, 5 times as
+                       wide and 3 times as high; cartridges 2K, 4K, F8, F6,
+                       F4 and their Superchip RAM, FE, E0, 3F, E7, FA; NTSC;
+                       no sound): arrows, X or Z = fire, Enter = console
+                       Reset, Tab = Select
+  c64 [-f frames] [file]
+                       Commodore 64 (PAL) on the TV (352 x 240 with the
+                       border, 3 times as large, 50 frames/s): a program
+                       (.prg, .t64) or a disk (.d64) - it loads and starts
+                       (RUN) by itself, LOAD from the disk works later too;
+                       or a cartridge (.crt: normal 8K/16K/Ultimax, Ocean,
+                       Magic Desk, EasyFlash, System 3, Dinamic, Fun Play,
+                       Super Games, RGCD, Simons' BASIC, Final Cartridge
+                       III) - it starts from the cartridge; without a file:
+                       BASIC.
+                       The C64 ROMs are the files kernal.rom, basic.rom and
+                       chargen.rom (not in the demo) next to the program, in
+                       the c64/ directory or at the top of the disk. The USB
+                       keyboard is the C64's keyboard (Tab = RUN/STOP,
+                       PageUp = RESTORE, Alt = C=), the arrows are a
+                       joystick in port 2 (fire: right Ctrl, OK on the
+                       remote; F9 swaps the ports); MENU on the remote =
+                       SPACE, INFO = F7; characters typed on the UART /
+                       telnet are typed on it; Esc ends
+  amiga [-f frames] [file.adf]
+                       Amiga 500 (PAL, OCS) on the TV (352 x 272 with the
+                       border, 2 times as large) with a disk image (.adf) in
+                       the drive (without a file: an empty drive). Kickstart
+                       is the file kick.rom (256 or 512 KB, not in the demo)
+                       or the free AROS: aros-rom.bin + aros-ext.bin - next
+                       to the disk, in the amiga/ directory or at the top of
+                       the disk. The USB keyboard is the Amiga's keyboard,
+                       the arrows are a joystick (fire: right Ctrl, OK on
+                       the remote), left mouse button: Page Up / Page Down
+                       or 0 on the remote; MENU = Return, INFO = space; no
+                       sound; Esc ends
+  dos [-f frames] <file.exe>
+                       a PC with DOS (286 AT with a VGA card: text modes,
+                       CGA, EGA, 256 colours) on the TV (320 x 200, 3 times
+                       as large) running a DOS program (.exe, .com); BIOS
+                       and DOS are built in, no sound. The USB keyboard is
+                       the PC's keyboard (Esc ends); remote: arrows, OK =
+                       up, 0 = space, MENU = Enter, INFO = Esc
+  pce [-f frames] <file.pce>
+                       PC Engine / TurboGrafx-16 on the TV with 6-channel
+                       PSG sound and 2 KB of save memory (.sav)
+  coleco [-f frames] <file.col>
+                       ColecoVision on the TV (256 x 192 x3, MegaCart and
+                       Super Game Module, SN76489; coleco.rom in col/ or a
+                       built-in BIOS)
+  msx [-f frames] <file.rom|file.mx1>
+                       MSX1 on the TV (plain, Konami, Konami SCC, ASCII8/16,
+                       AY-3-8910 + SCC; msx.rom in msx/ or a built-in BIOS)
+  msx2 [-f frames] <file.mx2|file.dsk|file.rom>
+                       MSX2 on the TV (Yamaha V9938 128 KB VRAM, SCREEN
+                       0..8, hardware blitter, 256 KB Mapper, RP5C01 RTC,
+                       .dsk disks, AY-3-8910 + SCC + YM2413 sound;
+                       cbios_main_msx2.rom in msx2/ or a built-in MSX2 BIOS)
+  ws [-f frames] <file.ws|file.wsc>
+                       Bandai WonderSwan / WonderSwan Color on the TV (224 x
+                       144 x5 or upright 144 x 224 x3, 4-channel sound, .sav)
+  snes [-f frames] <file.sfc|file.smc>
+                       Super Nintendo / Super Famicom on the TV (LoROM,
+                       HiROM, ExHiROM, modes 0-7, the DSP-1 maths chip of
+                       Super Mario Kart, SPC700 BRR sound, .sav saves)
+  neogeo [-f frames] <file.neo>
+                       SNK Neo Geo AES / MVS on the TV (320 x 224 x3, Z80 +
+                       YM2610, 64 KB .sav; uni-bios.rom in neogeo/ or a
+                       built-in BIOS)
+  gba [-f frames] <file.gba>
+                       Game Boy Advance on the TV (240 x 160 x4, DirectSound
+                       + PSG, SRAM / Flash / EEPROM .sav; gba_bios.bin or a
+                       built-in one)
+  a78 [-f frames] <file.a78>
+                       Atari 7800 ProSystem on the TV (MARIA, TIA + POKEY,
+                       .sav)
+  lynx [-f frames] <file.lnx|file.lyx>
+                       Atari Lynx on the TV (160 x 102 x6 or upright, Suzy
+                       scaling, Mikey sound; lynxboot.img or a built-in
+                       loader)
+  vectrex [-f frames] [file.vec]
+                       GCE Vectrex on the TV (540 x 720 vector screen,
+                       AY-3-8912; without a file: Mine Storm from
+                       vectrex.rom or Vector Storm)
+  fds [-f frames] <file.fds>
+                       Famicom Disk System on the TV (1-8 sides, Q turns the
+                       disk, RP2C33 sound, disk saves in .sav, built-in BIOS)
+  ngp [-f frames] <file.ngp|file.ngc>
+                       Neo Geo Pocket / Color on the TV (160 x 152 x4, Z80 +
+                       T6W28 + DAC, 64 KB Flash save in .sav, built-in BIOS)
+  odyssey2 [-f frames] <file.o2>
+                       Magnavox Odyssey2 / Videopac G7000 on the TV (Intel
+                       8048 + 8244, 640 x 720, keypad 0..9, built-in BIOS)
+  intv [-f frames] <file.int|file.rom>
+                       Mattel Intellivision on the TV (CP1610 + STIC +
+                       AY-3-8914, 704 x 624, built-in EXEC and GROM or
+                       exec.bin/grom.bin)
+  psx [-f frames] <file.exe|file.cue|file.iso>
+                       Sony PlayStation 1 on the TV (R3000A + GTE 3D, GPU
+                       15/24bpp, MDEC, .cue/.bin and .iso CDs read as a
+                       stream, 24-voice SPU ADPCM sound, 128 KB memory card
+                       .sav; scph1001.bin in psx/ or a built-in BIOS)
+  cps [-f frames] <file.cps|file.zip>
+                       Capcom CPS-1 / CPS-1.5 / CPS-2 arcade games on the TV
+                       (384 x 224 x3, 68000 + Z80, CPS-2 .key and Kabuki
+                       decryption, 3 background layers + rowscroll, YM2151 +
+                       OKIM6295 sound and the 16-voice QSound DSP, EEPROM
+                       93C46 save in .sav)
+  atarist [-f frames] [file.st|file.msa|file.prg]
+                       Atari 520ST / 1040STFM on the TV (320 x 200 x3, 640 x
+                       200, 640 x 400; 68000 8 MHz, Shifter + STE Blitter,
+                       MFP, IKBD, WD1772 FDC, YM2149F sound; the free EmuTOS
+                       etos256uk.img or tos.img in atarist/, or a built-in
+                       TOS)
+  sys16 [-f frames] <file.s16|file.zip>
+                       Sega System 16A / 16B / OutRun-Road arcade games on
+                       the TV (320 x 224 x3, 68000 + Z80, 315-5195 mapper,
+                       315-5197 tile layers + scaled sprites + road
+                       generator, YM2151 + uPD7759 + Sega 16-ch PCM sound,
+                       NVRAM save in .sav)
+  atari8 [-f frames] [file.atr|file.xex|file.car|file.rom]
+                       Atari 800XL / 130XE (128 KB) on the TV (336 x 240 x3,
+                       SALLY 6502C, ANTIC modes 2..F + DLI + WSYNC, GTIA P/M
+                       sprites and modes 9/10/11, 130XE PORTB banking, POKEY
+                       sound 48 kHz, .atr disk saves in .sav; built-in
+                       AltirraOS XL + BASIC or atarixl.rom / ataribas.rom in
+                       atari8/; without a file: BASIC)
+  a5200 [-f frames] <file.a52|file.car>
+                       Atari 5200 SuperSystem on the TV (336 x 240 x3,
+                       cartridges 4K..40K, ANTIC + GTIA + POKEY 48 kHz,
+                       analogue stick and keypad 0..9; built-in Altirra 5200
+                       OS or 5200.rom)
+  megaduck [-f frames] <file.duck|file.md1|file.bin>
+                       Mega Duck / Cougar Boy on the TV (160 x 144 x5, 59.7
+                       frames/s, plain and $0001 / $B000 banked cartridges,
+                       48 kHz sound, SRAM save in .sav)
+  sv [-f frames] <file.sv>
+                       Watara Supervision on the TV (160 x 160 x4, 61
+                       frames/s, 65SC02 4 MHz, 16..512 KB Magnum cartridges,
+                       48 kHz sound)
+  chip8 [-f frames] <file.ch8|file.sc8|file.xo8>
+                       CHIP-8 / SUPER-CHIP 1.1 / XO-CHIP on the TV (128 x 64
+                       x10 = 1280 x 640, 4 planes of 16 colours, 48 kHz
+                       sound + XO-CHIP patterns, RPL flags saved in .sav)
+  channelf [-f frames] <file.chf|file.bin|file.rom>
+                       Fairchild Channel F / VES on the TV (102 x 58 x10 =
+                       1020 x 580, 60 frames/s, Fairchild F8 CPU, F2102 +
+                       Schach memory, built-in HLE PSU or sl31253.bin +
+                       sl31254.bin in channelf/, 3-tone sound 48 kHz)
+  pokemini [-f frames] <file.min>
+                       Nintendo Pokemon Mini on the TV (96 x 64 x10 = 960 x
+                       640, 72 frames/s, Seiko S1C88 4 MHz, PRC background +
+                       sprites, built-in FreeBIOS or bios.min in pokemini/,
+                       piezo PWM sound 48 kHz, 8 KB EEPROM save in .sav)
+  cpc [-f frames] [file.sna|file.dsk|file.cpr|file.bin]
+                       Amstrad CPC 464 / 6128 + GX4000 on the TV (384 x 240
+                       x3 in Mode 0/1, 640 x 200 in Mode 2, 50 frames/s, Z80
+                       4 MHz, UM6845R CRTC, 40010 Gate Array, 128 KB RAM,
+                       uPD765 FDC with saves in .sav, AY-3-8912 sound
+                       48 kHz, built-in OS + Locomotive BASIC 1.1 + AMSDOS;
+                       without a file: BASIC)
+  vic20 [-f frames] [file.prg|file.crt|file.a0|file.d64]
+                       Commodore VIC-20 PAL on the TV (224 x 240 x3, 50
+                       frames/s, MOS 6502, MOS 6561 VIC-I video + 4-channel
+                       sound 48 kHz, 2x 6522 VIA, automatic RAM expansion
+                       5K / +3K / +24K, built-in KERNAL + BASIC V2 + chargen
+                       ROMs; without a file: BASIC)
+  apple2 [-f frames] [file.dsk|file.do|file.po|file.nib|file.bin]
+                       Apple IIe Enhanced (128 KB) on the TV (280 x 192 x3
+                       or 560 x 192 80-column / Double Hi-Res, 59.92
+                       frames/s, WDC 65C02, NTSC Hi-Res artifact colour,
+                       Disk II GCR drive with .sav saves, $C030 speaker +
+                       Mockingboard AY 48 kHz, built-in Apple IIe + Disk II
+                       ROMs; without a file: BASIC)
+  coco [-f frames] [file.ccc|file.rom|file.bin|file.cas]
+                       TRS-80 Color Computer 64K (NTSC 60 Hz) on the TV (320
+                       x 240 x3 with the border, Motorola MC6809, SAM
+                       MC6883, 2x MC6821 PIA, MC6847 VDG + RG6 artifact
+                       colours, 6-bit DAC + 1-bit sound 48 kHz, built-in
+                       Color BASIC or bas13.rom in coco/)
+  dragon [-f frames] [file.ccc|file.rom|file.bin|file.cas]
+                       Dragon 32 / 64 (PAL 50 Hz) on the TV (320 x 240 x3
+                       with the border, MC6809, SAM, 2x PIA with the Dragon
+                       keyboard matrix, MC6847 VDG, DAC sound 48 kHz,
+                       built-in BASIC or d32.rom)
+  cv [-f frames] <file.cv|file.rom|file.bin>
+                       VTech CreatiVision / Dick Smith Wizzard on the TV
+                       (256 x 192 x3, 50 Hz PAL, 6502 2 MHz, PIA, TMS9929A
+                       VDP, SN76489A sound 48 kHz, built-in BIOS or
+                       bioscv.rom in cv/)
+  m5 [-f frames] <file.m5|file.rom|file.bin>
+                       Sord M5 / CGL M5 on the TV (256 x 192 x3, 60 Hz NTSC,
+                       Z80 3.58 MHz + Z80 CTC IM2, 36 KB RAM, TMS9918A VDP,
+                       SN76489AN sound 48 kHz, built-in Monitor BIOS or
+                       m5.rom)
+  pv1000 [-f frames] <file.pv|file.bin|file.rom>
+                       Casio PV-1000 on the TV (256 x 192 x3, 59.92 Hz, Z80
+                       3.58 MHz, NEC D65010G031 VDP, 3-channel PSG sound
+                       48 kHz)
+  astro [-f frames] [file.ast|file.bin|file.rom]
+                       Bally Astrocade on the TV (320 x 204 x3, 59.92 Hz,
+                       Z80 1.79 MHz, Data Chip Magic-RAM blitter + split
+                       256-colour palette, 3-voice synthesizer 48 kHz,
+                       keypad 0..9; built-in BIOS and the Star Blaster game
+                       or astro.bin in astro/)
+  arcadia [-f frames] <file.a2k|file.bin>
+                       Emerson Arcadia 2001 on the TV (640 x 624, 59.92 Hz,
+                       Signetics 2650 + 2637 UVI video and sound 48 kHz,
+                       keypad 0..9)
+  vc4000 [-f frames] <file.vc4|file.bin>
+                       Interton VC 4000 on the TV (768 x 672, 50 Hz PAL,
+                       Signetics 2650 + 2636 PVI grid/objects/LED and sound
+                       48 kHz, 0..9)
+  studio2 [-f frames] [file.st2|file.bin]
+                       RCA Studio II on the TV (1024 x 640, 60 Hz, COSMAC
+                       CDP1802 + CDP1861 Pixie DMA + CA555 tone 48 kHz,
+                       keypad 0..9; built-in BIOS and game or studio2.bin in
+                       studio2/)
+  scv [-f frames] <file.scv|file.bin|file.cart>
+                       Epoch Super Cassette Vision on the TV (768 x 666,
+                       59.92 Hz, NEC uPD7801G 4 MHz, Epoch TV-1 VDP,
+                       uPD1771C sound 48 kHz, SRAM .sav save, built-in BIOS
+                       or upd7801g.s01 in scv/)
+  vb [-m 0|1|2|3] [-f frames] <file.vb|file.vboy>
+                       Nintendo Virtual Boy on the TV (384 x 224 x3 = 1152 x
+                       672, 50.27 Hz, 32-bit NEC V810 RISC 20 MHz, VIP 32
+                       Worlds/OBJ, modes 0 Red/Black, 1 Red/Cyan 3D
+                       Anaglyph, 2 White, 3 Amber on V/F2/M, 6-channel VSU
+                       sound 48 kHz, 64 KB SRAM .sav)
+  sgx [-f frames] <file.sgx>
+                       NEC SuperGrafx on the TV (256/320/512 x 240, HuC6280,
+                       dual HuC6270 VDC 128 KB VRAM + HuC6202 VPC, 32 KB
+                       WRAM, PSG 48 kHz, 2 KB BRAM save in .sav)
+  pcecd [-f frames] <file.cue|file.iso>
+                       PC Engine CD-ROM2 / Super CD-ROM2 / Arcade Card on
+                       the TV (.cue/.bin and .iso CDs read as a stream,
+                       Redbook CD-DA + OKI MSM5205 ADPCM + 6-ch PSG 48 kHz,
+                       256 KB System Card 3.0 + 2 MB Arcade Card RAM, 2 KB
+                       BRAM .sav; built-in System Card 3.0 BIOS or
+                       syscard3.pce in pcecd/)
+  segacd [-r j|u|e] [-f frames] <file.cue|file.iso>
+                       Sega CD / Mega-CD on the TV (Main-68000 7.67 MHz +
+                       Sub-68000 12.5 MHz + Z80, 512 KB PRG-RAM, 256 KB
+                       Word-RAM, Stamp ASIC 3D scaling/rotation, LC89510 CDC
+                       + CDD, YM2612 + PSG + Ricoh RF5C164 8-ch PCM + Redbook
+                       CD-DA 48 kHz, 8 KB BRAM .sav; built-in CDBIOS or
+                       bios_CD_U/E/J.bin in segacd/)
+  bbc [-f frames] [file.ssd|file.dsd|file.uef]
+                       BBC Micro Model B / Acorn Electron on the TV (2 MHz
+                       6502, MC6845 CRTC + Video ULA modes 0..6 + SAA5050
+                       Teletext Mode 7 + Electron ULA, 2x 6522 VIA, SN76489
+                       sound 48 kHz; built-in OS/BASIC or os12.rom +
+                       basic2.rom; without a file: BASIC)
+  ti99 [-f frames] [file.rpk|file.bin|file.zip]
+                       Texas Instruments TI-99/4A on the TV (16-bit TMS9900
+                       3 MHz, GROM + CRU, 32 KB Expansion RAM, 378/379i
+                       banking, TMS9918A VDP, TMS9919 sound 48 kHz; without
+                       a file: TI BASIC)
+  oric [-f frames] [file.tap|file.dsk]
+                       Tangerine Oric-1 / Oric Atmos 48K on the TV (6502
+                       1 MHz, HCS10017 ULA 240 x 224 Text + Hires, 6522 VIA,
+                       AY-3-8912 sound 48 kHz; without a file: Atmos BASIC)
+  plus4 [-f frames] [file.prg|file.tap|file.t64]
+                       Commodore Plus/4 and C16 on the TV (MOS 7501/8501
+                       1.77 MHz, 64 KB RAM, MOS 7360/8360 TED 121 colours +
+                       2-voice sound 48 kHz; without a file: BASIC V3.5)
+  zx81 [-f frames] [file.p|file.81]
+                       Sinclair ZX81 16K on the TV (Z80 3.25 MHz, ULA D_FILE
+                       256 x 192, VSync FRAMES 50 Hz, sound 48 kHz; without
+                       a file: BASIC)
+  pc88 [-f frames] [file.d88|file.n88]
+                       NEC PC-8801mkIISR on the TV (Z80 4 MHz, 64 KB RAM +
+                       48 KB 640 x 200 GVRAM + Text VRAM, Sub-CPU disk HLE,
+                       Yamaha YM2203 OPN FM/SSG + beeper sound 48 kHz;
+                       without a file: N88-BASIC)
+  mz700 [-f frames] [file.mzt|file.mzf]
+                       Sharp MZ-700 on the TV (Z80 3.58 MHz, 64 KB RAM, GRB
+                       video 320 x 200 CGROM, Intel 8253 PIT sound 48 kHz;
+                       without a file: Monitor)
+  x1 [-f frames] [file.d88|file.2d|file.tap]
+                       Sharp X1 on the TV (Z80 4 MHz, 16-bit I/O 48 KB GVRAM
+                       + colour PCG of 256 characters, AY-3-8910 sound
+                       48 kHz)
+  s32x [-r j|u|e] [-f frames] <file.32x|file.bin>
+                       Sega 32X on the TV (68000 7.67 MHz + dual 32-bit
+                       Hitachi SH-2 RISC 23 MHz + Z80, 256 KB SDRAM,
+                       SuperVDP 256 colours / RLE / 15-bit Direct, stereo
+                       12-bit PWM + YM2612 + PSG 48 kHz, SRAM .sav save;
+                       built-in MARS BIOS)
+  cd32 [-f frames] <file.cue|file.iso>
+                       Commodore Amiga CD32 on the TV (68EC020 14.18 MHz,
+                       2 MB Chip RAM, AGA 8 bitplanes 256 colours / HAM8 +
+                       2 MB Blitter + Copper, Akiko $C0CACAFE hardware
+                       Chunky-to-Planar + CD DMA + 7-button pad, Paula 4-ch
+                       + Redbook CD-DA 48 kHz, 1 KB NVRAM save in .sav)
+  cps2 [-f frames] <file.zip|file.cps2>
+                       Capcom CPS-2 QSound on the TV (384 x 224 x3, 68000
+                       16 MHz + Z80, Feistel .key and .03x XOR table
+                       decryption, Z-priority layers, 16-channel QSound DSP
+                       48 kHz, EEPROM 93C46 .sav)
+  arcade [-f frames] [file.zip]
+                       Golden Age Z80 arcade games on the TV (Namco Pac-Man
+                       / Ms. Pac-Man WSG, Namco Galaxian, Konami Frogger /
+                       Scramble 2xZ80 + AY-3-8910, Nintendo Donkey Kong DMA
+                       + DAC; without a file: a game)
+  snd <command>        sound (prototype): snd init, snd beep [Hz] [ms] (a
+                       test tone), snd vol 0..100, snd status, snd stop -
+                       48 kHz on HDMI (after "video init") and on SCART (L/R)
+  rf <command>         the antenna input (DVB-T): the MxL603 tuner (I2C
+                       0x60) and the S3811 demodulator set up as the original
+                       dump.bin software does it: rf init, rf tune <MHz or
+                       channel> [6|7|8], rf status (lock, level, quality,
+                       errors), rf scan, rf services (the channel names of a
+                       multiplex), rf ts <s> [file] (the PIDs or a .ts
+                       recording), rf spectrum (the antenna's signal level
+                       from 174 to 862 MHz as a chart on the TV), rf live
+                       [from to] (that chart refreshed continuously,
+                       controlled with keys); DVB-T only, not DVB-T2
+  tty                  USB serial ports: the ports of a GSM / LTE module
+                       (SIMCom, Quectel, Huawei, ZTE ...), CDC ACM devices
+                       and USB-UART adapters (CH340 / CH341, CP210x, FTDI,
                        PL2303)
-  stty [n] [baud]      predkosc portu szeregowego (8N1): pokazuje albo
-                       ustawia, np. stty 0 9600 (przejsciowki startuja
-                       z 115200)
-  at [komenda]         jedna komenda AT do portu AT modulu i jej odpowiedz do
-                       OK / ERROR oraz to, co przychodzi zaraz po nich (dane
-                       AT+HTTPREAD); najpierw linie, ktore modul wyslal
-                       wczesniej (+HTTPACTION, RING); np. at +csq, at i,
-                       at +cpin?; linia zaczynajaca sie od AT tez tam trafia;
-                       dziala > plik
-  cu [n]               terminal polaczony z portem szeregowym n (bez n: port
-                       AT modulu): co wpiszesz, idzie do portu, odpowiedzi
-                       widac; "~." na poczatku linii albo Ctrl-] konczy
-  ifconfig             lacze sieciowe: adapter Ethernet USB (CDC ECM, np.
-                       RTL8153) albo modul LTE (RNDIS, np. SIMCom A7670E),
-                       gdy adaptera nie ma albo nie dostal adresu: MAC,
-                       adres IP z DHCP, router
-  dhcp                 ponownie prosi serwer DHCP o adres
-  arp                  tabela ARP
-  ping [-c n] <host>   ping jak w Linuksie przez siec: adres albo nazwa
-                       (DNS z DHCP), TTL i czas kazdej odpowiedzi, Ctrl-C
-                       konczy i pokazuje statystyke (samo "ping": pong)
-  wget [-O n:plik] [--no-check-certificate] <url>
-                       strona http:// albo https:// przez siec: na konsoli
-                       albo zapisana na dysku USB; przekierowania (301,
-                       302...) sa sledzone. https: TLS 1.2 (BearSSL),
-                       certyfikat sprawdzany wzgledem 118 glownych urzedow
-                       Mozilli i zegara z NTP ("date" musi pokazywac czas);
-                       --no-check-certificate nie sprawdza nic. Bez TLS 1.3.
-  ntp [serwer] / date  zegar z sieci (sam po DHCP) / data i godzina: UTC
-                       i polska (CET / CEST)
-  netstat              TCP: porty, polaczenia, liczniki
-  loop                 petla glowna: przebiegi, najwolniejszy, co trwalo
-  Przez siec: telnet <adres tunera> (port 23) - ta sama linia polecen co
-  na UART; python tools/maciej_netload.py <adres> [app.bin] - nowa wersja
-  demo uruchamiana z RAM w ~1 s (flash bez zmian, restart wraca do niej);
-  ftp://<adres tunera> (port 21, bez hasla, 2 klienty) - serwer FTP: w katalogu
-  glownym wszystkie dyski ("4 PHONE CARD", "9 ..."), pobieranie,
-  wysylanie, usuwanie, zmiana nazw i katalogi na FAT i NTFS (NTFS gdy demo
-  go zapisuje: "ntfs"); tryb pasywny (porty danych 50021/50022) i aktywny.
-  http://<adres tunera> (port 80, bez hasla) - strona tunera w przegladarce
-  (takze na telefonie): pliki na dyskach (przegladanie, pobieranie,
-  wysylanie przyciskiem albo przeciagnieciem, zmiana nazw, usuwanie, nowe
-  katalogi; obrazy i teksty otwieraja sie w przegladarce), obraz z TV na
-  zywo (co ok. 1 s; "Full size" - pelne 1280 x 720), pilot na ekranie
-  (strzalki, OK, Esc, Tab, A/B do gier, Ctrl-C) i linia polecen jak przez
-  telnet. Gdy dziala polecenie (np. gra), obraz, pilot i linia polecen
-  dzialaja dalej, a pliki czekaja na jego koniec; jeden plik naraz
-  (strona albo FTP - drugi dostaje "sprobuj za chwile").
-  \\<adres tunera>\4 (port 445, SMB2, bez hasla) - dyski jako udzialy
-  Windows: w Eksploratorze, "net view \\<adres>", "net use", robocopy;
-  kopiowanie w obie strony, zmiana nazw, usuwanie, katalogi. Logowanie
-  jako gosc: Windows 10 Home / Pro je przyjmuje, Windows 11 24H2 Pro oraz
-  wersje Enterprise / Education je blokuja. Jeden zapisywany plik naraz.
-  SSDP (UPnP, UDP 1900): tuner widac w Windows w "Sieci" (Inne urzadzenia)
-  jako "M3801 v4 demo (adres)"; dwuklik otwiera strone tunera.
-  Data i godzina z NTP: w prawym gornym rogu konsoli na TV, po czasie pracy
+  stty [n] [baud]      a serial port's speed (8N1): shows or sets it, e.g.
+                       stty 0 9600 (adapters start at 115200)
+  at [command]         one AT command to the module's AT port and its answer
+                       up to OK / ERROR plus what comes right after them
+                       (AT+HTTPREAD data); first the lines the module sent
+                       before (+HTTPACTION, RING); e.g. at +csq, at i,
+                       at +cpin?; a line starting with AT goes there too;
+                       > file works
+  cu [n]               a terminal connected to serial port n (without n: the
+                       module's AT port): what you type goes to the port, the
+                       answers are shown; "~." at the start of a line or
+                       Ctrl-] ends
+  ifconfig             the network link: a USB Ethernet adapter (CDC ECM,
+                       e.g. RTL8153) or an LTE module (RNDIS, e.g. SIMCom
+                       A7670E) when there is no adapter or it got no address:
+                       MAC, IP address from DHCP, router
+  dhcp                 asks the DHCP server for an address again
+  arp                  the ARP table
+  ping [-c n] <host>   ping as in Linux over the network: an address or a name
+                       (DNS from DHCP), the TTL and time of each answer,
+                       Ctrl-C ends and shows the statistics ("ping" alone:
+                       pong)
+  wget [-O n:file] [--no-check-certificate] <url>
+                       an http:// or https:// page over the network: on the
+                       console or saved on a USB disk; redirects (301, 302...)
+                       are followed. https: TLS 1.2 (BearSSL), the
+                       certificate checked against Mozilla's 118 root
+                       authorities and the clock from NTP ("date" must show
+                       the time); --no-check-certificate checks nothing.
+                       No TLS 1.3.
+  ntp [server] / date  the clock from the network (set by itself after DHCP)
+                       / date and time: UTC and Polish (CET / CEST)
+  netstat              TCP: ports, connections, counters
+  loop                 the main loop: passes, the slowest one, what took long
+  Over the network: telnet <tuner's address> (port 23) - the same command line
+  as on the UART; python tools/maciej_netload.py <address> [app.bin] - a new
+  demo version started from RAM in ~1 s (the flash unchanged, a restart goes
+  back to it);
+  ftp://<tuner's address> (port 21, no password, 2 clients) - an FTP server:
+  all disks in the root directory ("4 PHONE CARD", "9 ..."), download,
+  upload, delete, rename and directories on FAT and NTFS (NTFS when the demo
+  writes it: "ntfs"); passive mode (data ports 50021/50022) and active.
+  http://<tuner's address> (port 80, no password) - the tuner's page in a
+  browser (also on a phone): files on the disks (browsing, downloading,
+  uploading with a button or by dragging, renaming, deleting, new
+  directories; pictures and texts open in the browser), the TV picture live
+  (about every 1 s; "Full size" - the full 1280 x 720), an on-screen remote
+  (arrows, OK, Esc, Tab, A/B for games, Ctrl-C) and the command line as over
+  telnet. While a command runs (e.g. a game), the picture, the remote and the
+  command line keep working, and files wait for its end; one file at a time
+  (the page or FTP - the second one gets "try again in a moment").
+  \\<tuner's address>\4 (port 445, SMB2, no password) - the disks as Windows
+  shares: in Explorer, "net view \\<address>", "net use", robocopy; copying
+  both ways, renaming, deleting, directories. Logging in as a guest: Windows
+  10 Home / Pro accept it, Windows 11 24H2 Pro and the Enterprise / Education
+  editions block it. One file written at a time.
+  SSDP (UPnP, UDP 1900): the tuner shows in Windows under "Network" (Other
+  devices) as "M3801 v4 demo (address)"; a double click opens its page.
+  The date and time from NTP: in the top right corner of the TV console, after
+  the time running
   watchdog [test|off|on]
-                       watchdog ukladu: dziala od startu demo; gdy demo stanie
-                       na 8 s, tuner sam sie restartuje; test - przestaje go
-                       karmic (tuner restartuje sie po 8 s)
-  clear                czysci ekran terminala (i konsoli na TV)
-  history [n | -c]     poprzednie komendy z numerami (n ostatnich; -c
-                       czysci historie)
+                       the chip's watchdog: runs from the demo's start; when
+                       the demo stops for 8 s, the tuner restarts by itself;
+                       test - stops feeding it (the tuner restarts after 8 s)
+  clear                clears the terminal's screen (and the TV console)
+  history [n | -c]     the earlier commands with numbers (the last n; -c
+                       clears the history)
   video init [opticum|comsat] [rev0|rev1]
-                       odtwarza zapisy rejestrow, ktorymi oryginalne
-                       oprogramowanie plyty wlacza obraz 720p i nadajnik HDMI
-                       (demo robi to samo przy starcie);
-                       bez nazwy - tabela tej plyty, bez rev0/rev1 - tabela
-                       wersji ukladu (bajt 0xB8000000)
-  reboot / restart     restart przez oryginalny bootloader
-  bootloader           restart do oryginalnego bootloadera: przytrzymaj klawisz c
-                       (albo uruchom maciej_uart.py), zeby w nim zostac
-  prof [-f klatka] [-c adres dl] [-e zdarz0 zdarz1] <komenda ...>
-                       uruchamia komende z profilerem probkujacym (zegar CPU,
-                       ok. 10 000 probek na sekunde) i wypisuje 64-bajtowe
-                       kawalki kodu, w ktorych ja zastal, od najczestszych
-                       (-f: w grze dopiero od tej klatki; -c: probki z tego
-                       kodu liczone dla funkcji, ktora go wywolala; -e: dwa
-                       liczniki wydajnosci procesora licza te zdarzenia przez
-                       100 klatek od klatki -f: 0 cykle, 1 instrukcje,
-                       9 dostepy / chybienia I-cache, 11 chybienia D-cache)
+                       replays the register writes with which the board's
+                       original firmware turns on the 720p picture and the
+                       HDMI transmitter (the demo does the same at start);
+                       without a name - this board's table, without
+                       rev0/rev1 - the table of the chip's revision (byte
+                       0xB8000000)
+  reboot / restart     restart through the original bootloader
+  bootloader           restart into the original bootloader: hold the c key
+                       (or run maciej_uart.py) to stay in it
+  prof [-f frame] [-c addr len | -s event] [-e event0 event1] <command ...>
+                       runs the command with the sampling profiler (the CPU
+                       timer, about 10,000 samples a second) and lists the
+                       64-byte pieces of code it was found in, most first
+                       (-f: in a game only from that frame on; -c: samples
+                       in that code counted for the function that called
+                       it; -s: a sample every 10,000 of that event of
+                       performance counter 0 instead of the timer, e.g. 37
+                       I-cache miss stall cycles: where they go; -e: the
+                       CPU's two performance counters count those events
+                       for 100 frames from the -f frame: 0 cycles,
+                       1 instructions, 9 I-cache accesses / misses,
+                       11 D-cache misses, 37 I-cache / D-cache miss stall
+                       cycles)
 
-Konsola na TV (widok po starcie): to samo co na UART - komunikaty startowe,
-znak zachety, wpisywane komendy (z UART albo klawiatury USB), ich wyniki
-i zdarzenia ([usb] ..., [panel] ...) - jak konsola w Linuksie: 105 x 42
-znakow, pasek tytulu, znak zachety na zielono, kursor miga. Linie przewijaja
-sie w gore; ostatnie 512 linii zostaje - PgUp / PgDn (klawiatura USB albo
-ESC [ 5 ~ / ESC [ 6 ~ z terminala) przewija o pol ekranu. "testscreen"
-pokazuje dawny ekran demo (ekran testowy), klawisz na klawiaturze USB albo
-"console" wraca do konsoli.
-Zapis na dyski: mkdir, rmdir, rm, touch, cp, mv i "komenda > plik" zapisuja
-wolumin FAT (wszystkie kopie FAT, dlugie nazwy, FSInfo w FAT32; pliki
-tekstowe maja konce linii jak w Linuksie) i NTFS - ten tylko wtedy, gdy
-Windows zamknal go czysto (pusty dziennik: "Bezpieczne usuwanie" przed
-wyjeciem; "ntfs n:" mowi, czy demo go zapisuje). Po zapisie przez demo
-warto sprawdzic pendrive w Windows (chkdsk). Nowe pliki i katalogi maja date
-z zegara, gdy NTP go ustawil (czas polski); wczesniej 2026-11-13 12:00. Czesc
-katalogowa sciezki moze miec 95 znakow, nazwa 127 - dluzsze sa odrzucane.
-Dysk chroniony przed zapisem (MODE SENSE) nie jest zapisywany. Uwaga: zapis
-zmienia dane na pendrivie - najpierw sprobuj na pendrivie bez waznych plikow.
-Modul GSM / LTE (sprawdzone z SIMCom A7670E, 1e0e:9011): jego porty to
-ttyUSB0..3 ("tty"), "at +csq" pyta o zasieg, "cu" otwiera port AT jak
-terminal. Gdy modul sie zrestartuje (np. po AT+CRESET), demo samo
-konfiguruje go ponownie; pojedynczy blad transmisji USB (np. gdy modul nadaje
-w GSM) nie przerywa "at" ani "cu". Karta SIM z PIN-em: at +cpin=<PIN> (albo
-wylacz PIN w telefonie).
-Internet przez modul (jego funkcja RNDIS, jak usb0 w Linuksie): gdy nie ma
-adaptera Ethernet, gdy zostanie odlaczony albo nie dostanie adresu z DHCP,
-siec demo (ping, wget, ntp, telnet, FTP, netload) idzie przez modul; jego
-DHCP daje adres, a jego router wyjscie do sieci komorkowej. "ifconfig"
-pokazuje, ktore lacze jest w uzyciu. (Sprawdzone w emulatorze; modul musi
-miec aktywne polaczenie danych.)
-Strona WWW przez modul (jego wlasny klient HTTP):
-  at +cgact=1,1                              (polaczenie danych)
+The console on the TV (the view after start): the same as on the UART - the
+start-up messages, the prompt, the commands typed (on the UART or the USB
+keyboard), their results and events ([usb] ..., [panel] ...) - like a Linux
+console: 105 x 42 characters, a title bar, the prompt in green, a blinking
+cursor. Lines scroll up; the last 512 lines stay - PgUp / PgDn (USB keyboard
+or ESC [ 5 ~ / ESC [ 6 ~ from a terminal) scroll by half a screen.
+"testscreen" shows the demo's old screen (the test screen); a key on the USB
+keyboard or "console" goes back to the console.
+Writing to disks: mkdir, rmdir, rm, touch, cp, mv and "command > file" write
+a FAT volume (all FAT copies, long names, FSInfo in FAT32; text files have
+Linux line ends) and NTFS - the latter only when Windows closed it cleanly (an
+empty journal: "Safely Remove Hardware" before unplugging; "ntfs n:" says
+whether the demo writes it). After the demo has written a stick, it is worth
+checking it in Windows (chkdsk). New files and directories get their date from
+the clock once NTP has set it (Polish time); before that 2026-11-13 12:00. The
+directory part of a path may have 95 characters, a name 127 - longer ones are
+refused. A write-protected disk (MODE SENSE) is not written. Note: writing
+changes the data on the stick - try it first on a stick without important
+files.
+GSM / LTE module (tested with a SIMCom A7670E, 1e0e:9011): its ports are
+ttyUSB0..3 ("tty"), "at +csq" asks for the signal, "cu" opens the AT port as a
+terminal. When the module restarts (e.g. after AT+CRESET), the demo sets it up
+again by itself; a single USB transmission error (e.g. while the module
+transmits on GSM) does not interrupt "at" or "cu". A SIM card with a PIN:
+at +cpin=<PIN> (or turn the PIN off in a phone).
+The Internet through the module (its RNDIS function, like usb0 in Linux): when
+there is no Ethernet adapter, when it is unplugged or gets no address from
+DHCP, the demo's network (ping, wget, ntp, telnet, FTP, netload) goes through
+the module; its DHCP gives the address, and its router the way out to the
+mobile network. "ifconfig" shows which link is in use. (Tested in the
+emulator; the module must have an active data connection.)
+A web page through the module (its own HTTP client):
+  at +cgact=1,1                              (the data connection)
   at +httpinit
   at +httppara="URL","http://example.com/"
-  at +httpaction=0                           (po kilku sekundach modul wysle
-                                              +HTTPACTION: 0,200,<dlugosc>)
-  at +httpread=0,<dlugosc>                   (strona; mozna tez > plik)
+  at +httpaction=0                           (after a few seconds the module
+                                              sends +HTTPACTION: 0,200,<length>)
+  at +httpread=0,<length>                    (the page; > file works too)
   at +httpterm
-Sprawdzone przez GSM: example.com, 577 bajtow.
+Tested over GSM: example.com, 577 bytes.
 
-Pilot: kazda odebrana ramka NEC jest wypisywana z kodem i nazwa klawisza,
-pokazana na ekranie i na panelu. Klawisze panelu: wypisywane po nacisnieciu.
-USB: po podlaczeniu urzadzenia demo samo odczytuje jego deskryptory
-i pokazuje nazwe na ekranie. Pendrive i czytniki kart (mass storage, SCSI,
-bulk-only) sa od razu sprawdzane: nazwa, rozmiar, partycje (MBR lub GPT)
-i system plikow. Pliki mozna czytac i zapisywac na FAT12/16/32 i NTFS;
-exFAT jest rozpoznawany, ale nie czytany. Sprawdzone na Comsat TE 1050 HD:
-karta FAT16 w czytniku 05e3:0751 i pendrive NTFS 64 GB.
-Przejsciowki USB-UART (CH340 / CH341 w trybie szeregowym, CP210x, FTDI,
-PL2303): kazda jest portem ttyUSB<n> (115200 8N1), "stty n <baud>" zmienia
-predkosc, "cu n" otwiera terminal. Sprawdzone: CH340 1a86:7523 (ustawianie
-predkosci). CH341A w trybie I2C/SPI (1a86:5512, programator 24xx/25xx) jest
-tylko rozpoznawany.
-Obrazy: "view plik" albo Enter w eksploratorze; zdjecie 2000 x 1333 JPEG
-dekoduje sie okolo 1,5 s. Zwykly (nie progresywny) JPEG dekoduje uklad wideo
-(tryb JPEG dekodera MPEG-2): 1920 x 1080 w 56 ms zamiast 1 s, zdjecie
-6000 x 4000 pokazane w ok. 1 s zamiast 14 s. Progresywny, niskiej jakosci
-albo nietypowy JPEG dekoduje procesor jak dotad. Gry NES: "nes plik.nes" albo Enter w
-eksploratorze; dziala pelne 60 klatek/s (klatka ok. 8 ms + 1,5 ms rysowania).
-Gier komercyjnych (np. Mario) demo nie zawiera - mozna uzyc wlasnych kopii
-albo darmowych gier homebrew (np. Nova the Squirrel, Thwaite).
-Gry Game Boy i Game Boy Color: "gb plik.gb" (albo .gbc) lub Enter w
-eksploratorze; klatka ok. 6-7 ms + 0,7 ms rysowania (gra na Color w podwojnej
-predkosci ok. 12 ms + 1,5 ms), obraz 5 razy wiekszy (800 x 720).
-Gry Sega Master System i Game Gear: "sms plik.sms", "gg plik.gg" albo Enter
-w eksploratorze; klatka ok. 4-5 ms + 1-2 ms rysowania. ZX Spectrum 48K: "zx
-plik.tap" (albo .tzx, .sna, .z80) lub "zx" bez pliku (BASIC); potrzebny jest
-plik 48.rom (ROM Spectrum, 16 KB - Amstrad pozwala go uzywac w emulatorach)
-obok programu, w zx/ albo na szczycie dysku; klatka ok. 4 ms + 2,5 ms.
-Tasmy ladowane sa od razu przez procedure LD-BYTES z ROM-u, wiec gry z
-wlasnym turbo-loaderem sie nie wczytaja. Atari 2600: "a26 plik.a26" albo
-Enter w eksploratorze; klatka ok. 3,5-5,5 ms + 1 ms. Sprawdzone na Comsat TE
-1050 HD z darmowymi grami homebrew (np. Snake Pit, Sushi Nights, Ramiro el
-Vampiro, Halo 2600, Thrust).
-Commodore 64: "c64 plik.t64" (albo .prg, .d64) lub "c64" bez pliku (BASIC)
-albo Enter w eksploratorze; potrzebne sa ROM-y kernal.rom (8 KB), basic.rom
-(8 KB) i chargen.rom (4 KB) obok programu, w c64/ albo na szczycie dysku
-(pliki z VICE pod tymi nazwami). LOAD jest robiony od razu (bez stacji
-1541), wiec gry z wlasnym szybkim loaderem dzialajacym w stacji sie nie
-wczytaja. Klatka ok. 3-4 ms + 3-5 ms rysowania. Sprawdzone na Comsacie:
-Magicland Dizzy (wersja .t64 z trainerem), Hessian (.d64).
-Dzwiek (prototyp, jeszcze nie sluchany): uklad dzwiekowy S3811 ustawiany tak
-jak robi to oryginalny soft (dump.bin), 48 kHz na HDMI i na wyjsciu SCART.
-Gry NES graja z dzwiekiem (oba kanaly prostokatne, trojkat, szum, DMC). Na
-pudelku sprawdzone tylko po licznikach (sprzet pobiera probki z predkoscia
-48000/s, nic nie ginie). Test: "video init", "snd init", "snd beep 1000 3000".
-Filmy: "play plik.ts" albo Enter w eksploratorze (.ts, .mpg, .m2v, .vob,
-.264, .h264, .mp4, .m4v, .mov). Obraz MPEG-1/2 dekoduje sprzetowy dekoder
-MPEG-2 ukladu S3811 (ten sam, ktorego uzywa oryginalny soft do nagran),
-obraz H.264 - drugi silnik tego samego bloku (profile Baseline, Main
-i High, do 1920 x 1080); dzwiek MPEG (Layer II) dekodowany programowo,
-zmiksowany do mono. MPEG-2 na pudelku: plik 720 x 576, 25 klatek/s,
-6 Mbit/s gra w czasie rzeczywistym (500 klatek w 20,3 s, 0 bledow), klatki
-odczytane z pamieci zgodne z ffmpeg; 1920 x 1080 tez sie dekoduje (do
-24 ms na klatke), ale pojedyncze klatki HD sie spozniaja (3 na 250).
-Skaler obrazu bierze filtry z tablicy w RAM-ie (rejestr +0x1E4 wskazuje
-blok parametrow) - player wpisuje je sam, policzone tak jak w oryginalnym
-sofcie; bez nich obraz na TV byl rozsypany, choc klatki w pamieci dobre.
-Warstwa obrazu czyta klatke linia po linii (tryb 1 w +0x190, bity 17-18);
-w trybie pol (0) obraz mial polowe wysokosci, a pod nim byly smieci.
-Obraz na TV sprawdzony okiem (kamera telefonu): caly, kolory dobre.
-H.264 na pudelku: zwiastun Sintel 1920 x 1080, 24 klatki/s, gra w czasie
-rzeczywistym z dzwiekiem (1253 klatki w 52,6 s, zadna spozniona), klatki
-odczytane z pamieci identyczne co do bajtu z ffmpeg, obraz na TV sprawdzony
-okiem. Pliki .mp4 / .mov: obraz H.264 gra (720p z pliku .mp4 w czasie
-rzeczywistym, klatki identyczne z ffmpeg), dzwiek (zwykle AAC) nie - film
-gra bez dzwieku; z dzwiekiem: przerobic na .ts, np. "ffmpeg -i film.mp4
--c:v copy -c:a mp2 film.ts". Nie obslugiwane: H.264 z przeplotem (1080i,
-czeste w nagraniach z telewizji HD), 10 bitow, 4:2:2, HEVC (DVB-T2
-w Polsce i nowsze telefony: uklad nie ma do niego dekodera), pliki .mp4
-dzielone na fragmenty (moof). Pliki wrzucac przez FTP. Wczesniejsze wydania
-v4 potrafily zepsuc plik wysylany przez FTP na dysk USB (kilkadziesiat
-bajtow w kilku miejscach; blad w obsludze DMA kontrolera USB, naprawiony) -
-pliki wyslane wczesniej warto porownac z oryginalem.
-PC z DOS-em: "dos plik.exe" albo Enter w eksploratorze (.exe, .com); jeden
-program bez plikow danych obok (Magicland Dizzy z 1993 ich nie potrzebuje:
-spacja na ekranie ustawien, Z / X albo strzalki - chodzenie, K albo gora -
-skok, spacja albo Enter - podnies / uzyj). Klatka ok. 2,5-4 ms + 2-2,5 ms
-rysowania (z 14,3 ms). Sprawdzone na Comsacie: Magicland Dizzy (DOS).
-Amiga 500: "amiga plik.adf" albo Enter w eksploratorze; potrzebny jest
-Kickstart (kick.rom) albo darmowy zamiennik AROS (aros-rom.bin i aros-ext.bin
-ze strony aros.sourceforge.io) w amiga/. Dyskietka jest czytana tak jak
-prawdziwa stacja (sciezki MFM), wiec dzialaja tez gry z wlasnym loaderem.
-Klatka ok. 5,5-9 ms + 3-4 ms rysowania. Sprawdzone na Comsacie: Magicland
-Dizzy (wersja TRSi) z AROS-em - start ok. 30 s, intro wymaga klikniecia
-myszka (0 na pilocie albo Page Down).
-Sega Mega Drive / Genesis: "megadrive plik.md" (albo .gen, .bin, .smd) albo
-Enter w eksploratorze (.bin tylko gdy naglowek mowi, ze to gra Mega Drive).
-68000 jest ten sam co w Amidze (wspolny plik m68k.inc), Z80 ten sam co w
-Master System; obraz rysowany linia po linii (plany A i B, okno, sprite'y,
-cien / podswietlenie, przewijanie calym ekranem, pasami i liniami), dzwiek
-YM2612 (FM, 6 kanalow, DAC) i PSG. Na pudelku z dzwiekiem: Super Mario
-World (Taiwan) 12,3 ms + 2,7 ms rysowania, Super Mario Bros. (hack PD)
-9,3 + 1,9 ms, Snake 9,7 + 2,3 ms - pelne 60 klatek/s. Zapisy rejestrow
-ukladow dzwiekowych sa zbierane przez cala klatke i graja sie na jej koncu
-za jednym razem (to samo co probka po probce, ale tablice zostaja w
-cache'u: dzwiek kosztowal 5,1 ms klatki, teraz 2,3 ms), a operatory FM sa
-liczone co druga probke (26,6 kHz). Dema z efektami w kazdej linii
-(wobble, scaling) nie mieszcza sie w 16,7 ms. Nie ma: zmian w polowie
-linii, trybu interlace 2 (tylko pierwsze pole), SSG-EG i CSM w YM2612,
-pada 6-przyciskowego z klawiatury. Gra Super Mario World (Taiwan) ma
-zabezpieczenie (odczyt 0xA13000) - rozpoznawana po naglowku "SEGASEGA".
-Sega SG-1000 / SC-3000: "sg plik.sg" (albo .sc) albo Enter w eksploratorze;
-tryby obrazu TMS9918 (Graphics I i II z maskami, Multicolour, tekst 40
-kolumn, sprite'y 8x8 / 16x16 z limitem 4 na linie). Klatka ok. 5 ms + 1,6
-ms. Kartridze z wlasnym RAM-em: do 32 KB - 8 KB RAM-u od 0x8000 (The
-Castle), 33-48 KB z pustym 0x2000-0x3FFF - RAM tam. Bez klawiatury SC-3000.
-Kartridze C64 (.crt): "c64 gra.crt" albo Enter w eksploratorze; typ
-rozpoznawany po naglowku "C64 CARTRIDGE", nie po nazwie; ROM-y C64 nadal
-potrzebne. Klatka ok. 3,3 ms + 2,7 ms. Zapis do flasha EasyFlash jest
-ignorowany (gry nie zapisza stanu), zamrazarki (Action Replay itp.) i
-przycisk NMI Final Cartridge III nie sa obslugiwane.
-Kolejne konsole (wszystkie z dzwiekiem 48 kHz przez "snd", obsluga .zip/.gz,
-wbudowanymi czystymi zamiennikami BIOS-ow i otwieraniem z "explorer",
-sprawdzone na pudelku S3811 z darmowymi grami homebrew): PC Engine ("pce",
-4-10 ms/klatke), ColecoVision ("coleco", 2,5-3,5 ms) i MSX1 ("msx", 3-4,8 ms),
-WonderSwan / Color ("ws", 2-10 ms przy 75,5 Hz), Super Nintendo ("snes", 6-16
-ms, SPC700 BRR), Neo Geo AES/MVS ("neogeo", 2,5-14 ms, YM2610), Game Boy
-Advance ("gba", 5-17 ms, ARM7TDMI + DirectSound), Atari 7800 ("a78", 4,3-6 ms)
-i Atari Lynx ("lynx", 5-8,2 ms), Vectrex ("vectrex", 6-15,7 ms, 540 x 720),
-Famicom Disk System ("fds", 4,6-11,3 ms), Neo Geo Pocket Color ("ngp", 8,8-11
-ms), Odyssey2 / Videopac ("odyssey2", 2,5 ms), Intellivision ("intv", 4,4 ms)
-oraz Sony PlayStation 1 ("psx", R3000A + GTE 3D + SPU ADPCM, strumieniowe
-.cue/.bin i PS-X .exe: 2-15 ms/klatke na grach i demach 3D homebrew; eksplorator
-sam odroznia pliki .exe PlayStation od programow DOS).
-Archiwa: kazdy emulator bierze gre w .zip (metody stored i deflate; brany
-jest najwiekszy plik, ktory nie jest tekstem, obrazkiem ani katalogiem) albo
-w .gz (.adz Amigi tez); suma CRC-32 sprawdzana. Plik zapisu ma nazwe calego
-pliku gry z dopisanym .sav (gra.nes.sav; przy archiwum gra.zip.sav), wiec gry
-roznych konsol o tej samej nazwie maja osobne zapisy; starszy plik gra.sav
-o wlasciwym rozmiarze jest nadal czytany, a zapis o innym rozmiarze (innej
-konsoli) zostaje nietkniety. Gra w archiwum gra tak samo jak rozpakowana (te
-same sumy obrazu na pudelku).
-Wejscie antenowe ("rf"): tuner MaxLinear MxL603 na I2C 0x60 (SCB0) i
-demodulator COFDM wbudowany w S3811 - ustawiane rejestr w rejestr tak jak
-robi to oryginalny soft tunera (dump.bin). "rf scan" przeszukuje kanaly
-21-69, "rf services" czyta nazwy kanalow (PAT, SDT), "rf ts 10 4:/x.ts"
-nagrywa caly multipleks do pliku (do odtworzenia np. w VLC). Uwaga: S3811
-odbiera tylko DVB-T, a w Polsce multipleksy nadaja juz w DVB-T2, wiec na
-Comsacie w Polsce nie ma czego zlapac: tuner dziala, ale demodulator nie
-zlapie DVB-T2. "rf spectrum" rysuje na TV poziom sygnalu z anteny od 174
-do 862 MHz (ok. 35 s). Trzy rowne prostokaty po 8 MHz na 668,25, 742,5 i
-816,75 MHz to NIE multipleksy ani LTE, tylko zaklocenia z samego pudelka:
-harmoniczne jego zegara 74,25 MHz (zegar obrazu 720p; 9, 10 i 11 x 74,25).
-Poza nimi poziom stoi na minimum (16 %): przy tych pomiarach antena nie
-byla podlaczona. "rf live" to ten sam wykres mierzony w kolko: kazdy slupek rysowany
-od razu po pomiarze (jedno przejscie calego pasma to nadal kilkadziesiat
-sekund - tuner musi sie ustalic na kazdej czestotliwosci; waskie okno
-odswieza sie co pare sekund). Klawisze (klawiatura USB, UART, pilot):
-lewo / prawo - znacznik (czestotliwosc, kanal, poziom), gora / dol -
-zblizenie / oddalenie wokol znacznika, PgUp / PgDn - przesuniecie okna,
-F - cale pasmo, + / - krotszy / dluzszy czas pomiaru (szybciej, ale mniej
-dokladnie), spacja - pauza, P - zapamietywanie szczytow, Enter - proba
-zlapania DVB-T na kanale znacznika, Esc - koniec.
-Hub USB: demo wlacza zasilanie portow huba, resetuje kazdy port z urzadzeniem
-i odczytuje urzadzenia za hubem (takze hub za hubem), razem do 15 urzadzen
-(hub musi miec jeden z pierwszych 7 adresow);
-"lsusb" pokazuje kazde z numerem huba i portu. Podlaczenie i odlaczenie
-urzadzenia w hubie jest zauwazane w ciagu okolo sekundy. Urzadzenia low
-i full speed za hubem USB 2.0 sa obslugiwane przez translator huba (split).
-Sprawdzone na Comsat TE 1050 HD z hubem 7-portowym (2 x 1a40:0101): hub,
-drugi hub, trzy pamieci USB i klawiatura sa wykrywane, klawiatura za hubem
-pisze.
-Klawiatura USB (HID, protokol boot) pisze w tej samej linii polecen co UART:
-uklad US, Enter, Backspace, strzalki gora/dol, Caps Lock, Esc = Ctrl-C,
-przytrzymany klawisz sie powtarza. Wpisywana linie widac tez na TV (ramka
-COMMAND LINE). Klawisze czytane sa z endpointu przerwan klawiatury, tak jak
-robi to PC: kontroler pyta ja co 1 ms i dostaje raport, gdy zmieni sie stan
-klawiszy. "usb kbd report" przelacza na odczyt przez GET_REPORT co 16 ms,
-"usb kbd interrupt" z powrotem (demo przelacza sie tez samo, gdy wybrany
-sposob jest odrzucany). Nie kazda klawiatura podaje klawisze przez GET_REPORT:
-sprawdzona klawiatura low-speed 1a2c:2d23 odpowiada na nie zawsze zerami.
-Pisanie na tej klawiaturze sprawdzone na Comsat TE 1050 HD.
-Mysz USB (HID, protokol boot) przesuwa kursor (strzalke) po obrazie na TV,
-zaczynajac od srodka. Z wcisnietym lewym przyciskiem rysuje linie, prawy
-przycisk wybiera nastepny kolor (zolty, czerwony, zielony, niebieski, bialy,
-pomaranczowy); przyciski i kolko sa wypisywane na UART z pozycja kursora.
-Mysz odpytuje sam kontroler (jego endpoint D, co 8 ms), wiec nie przeszkadza
-klawiaturze ani dyskom USB. "usb mouse" pokazuje pozycje kursora i liczniki.
-Sprawdzone na Comsat TE 1050 HD: mysz A4Tech 09da:c10a (low speed) za hubem.
+The remote: every NEC frame received is printed with its code and the key's
+name, shown on the screen and on the panel. Panel keys: printed when pressed.
+USB: when a device is plugged in, the demo reads its descriptors by itself and
+shows its name on the screen. Sticks and card readers (mass storage, SCSI,
+bulk-only) are checked at once: name, size, partitions (MBR or GPT) and file
+system. Files can be read and written on FAT12/16/32 and NTFS; exFAT is
+recognised but not read. Tested on a Comsat TE 1050 HD: a FAT16 card in a
+05e3:0751 reader and a 64 GB NTFS stick.
+USB-UART adapters (CH340 / CH341 in serial mode, CP210x, FTDI, PL2303): each
+one is a port ttyUSB<n> (115200 8N1), "stty n <baud>" changes the speed,
+"cu n" opens a terminal. Tested: CH340 1a86:7523 (setting the speed). A
+CH341A in I2C/SPI mode (1a86:5512, a 24xx/25xx programmer) is only recognised.
+Pictures: "view file" or Enter in the explorer; a 2000 x 1333 JPEG photo
+decodes in about 1.5 s. The video unit (the MPEG-2 decoder's JPEG mode)
+decodes a baseline (not progressive) JPEG: 1920 x 1080 in 56 ms instead of
+1 s, a 6000 x 4000 photo shown in about 1 s instead of 14 s. A progressive,
+low-quality or unusual JPEG is decoded by the CPU as before. NES games:
+"nes file.nes" or Enter in the explorer; the full 60 frames/s (a frame takes
+about 8 ms + 1.5 ms of drawing).
+The demo includes no commercial games (e.g. Mario) - you can use your own
+copies or free homebrew games (e.g. Nova the Squirrel, Thwaite).
+Game Boy and Game Boy Color games: "gb file.gb" (or .gbc) or Enter in the
+explorer; a frame takes about 6-7 ms + 0.7 ms of drawing (a Color game at
+double speed about 12 ms + 1.5 ms), the picture 5 times as large (800 x 720).
+Sega Master System and Game Gear games: "sms file.sms", "gg file.gg" or Enter
+in the explorer; a frame takes about 4-5 ms + 1-2 ms of drawing. ZX Spectrum
+48K: "zx file.tap" (or .tzx, .sna, .z80) or "zx" without a file (BASIC); the
+file 48.rom is needed (the Spectrum ROM, 16 KB - Amstrad allows its use in
+emulators) next to the program, in zx/ or at the top of the disk; a frame
+takes about 4 ms + 2.5 ms. Tapes are loaded at once through the ROM's
+LD-BYTES routine, so games with their own turbo loader do not load. Atari
+2600: "a26 file.a26" or Enter in the explorer; a frame takes about 3.5-5.5 ms
++ 1 ms. Tested on a Comsat TE 1050 HD with free homebrew games (e.g. Snake
+Pit, Sushi Nights, Ramiro el Vampiro, Halo 2600, Thrust).
+Commodore 64: "c64 file.t64" (or .prg, .d64) or "c64" without a file (BASIC)
+or Enter in the explorer; the ROMs kernal.rom (8 KB), basic.rom (8 KB) and
+chargen.rom (4 KB) are needed next to the program, in c64/ or at the top of
+the disk (VICE's files under these names). LOAD is done at once (without a
+1541 drive), so games with their own fast loader running in the drive do not
+load. A frame takes about 3-4 ms + 3-5 ms of drawing. Tested on the Comsat:
+Magicland Dizzy (the .t64 version with a trainer), Hessian (.d64).
+Sound (prototype, not listened to yet): the S3811's sound unit set up as the
+original software (dump.bin) does it, 48 kHz on HDMI and on the SCART output.
+NES games play with sound (both square channels, triangle, noise, DMC). On
+the box it was checked only by counters (the hardware takes samples at
+48000/s, nothing is lost). Test: "video init", "snd init", "snd beep 1000
+3000".
+Films: "play file.ts" or Enter in the explorer (.ts, .mpg, .m2v, .vob, .264,
+.h264, .mp4, .m4v, .mov). The S3811's hardware MPEG-2 decoder (the same the
+original software uses for recordings) decodes the MPEG-1/2 picture, the
+H.264 picture is decoded by the same block's second engine (Baseline, Main
+and High profiles, up to 1920 x 1080); MPEG sound (Layer II) is decoded in
+software, mixed to mono. MPEG-2 on the box: a 720 x 576, 25 frames/s, 6 Mbit/s
+file plays in real time (500 frames in 20.3 s, 0 errors), the frames read
+from memory match ffmpeg's; 1920 x 1080 decodes too (up to 24 ms a frame),
+but single HD frames come late (3 in 250).
+The picture scaler takes its filters from a table in RAM (register +0x1E4
+points at the parameter block) - the player writes them itself, worked out as
+in the original software; without them the picture on the TV was scattered,
+although the frames in memory were right. The picture layer reads a frame
+line by line (mode 1 in +0x190, bits 17-18); in field mode (0) the picture had
+half the height, with garbage under it. The picture on the TV was checked by
+eye (a phone camera): whole, colours right.
+H.264 on the box: the Sintel trailer 1920 x 1080, 24 frames/s, plays in real
+time with sound (1253 frames in 52.6 s, none late), the frames read from
+memory identical to ffmpeg's byte for byte, the picture on the TV checked by
+eye. .mp4 / .mov files: the H.264 picture plays (720p from an .mp4 file in
+real time, frames identical to ffmpeg's), the sound (usually AAC) does not -
+the film plays without sound; with sound: convert it to .ts, e.g.
+"ffmpeg -i film.mp4 -c:v copy -c:a mp2 film.ts". Not supported: interlaced
+H.264 (1080i, common in HD TV recordings), 10 bits, 4:2:2, HEVC (DVB-T2 in
+Poland and newer phones: the chip has no decoder for it), fragmented .mp4
+files (moof). Upload the files over FTP. Earlier v4 releases could corrupt a
+file uploaded over FTP to a USB disk (a few dozen bytes in a few places; a bug
+in the handling of the USB controller's DMA, fixed) - files uploaded before
+are worth comparing with the original.
+A PC with DOS: "dos file.exe" or Enter in the explorer (.exe, .com); one
+program without data files next to it (Magicland Dizzy from 1993 needs none:
+space on the settings screen, Z / X or the arrows - walk, K or up - jump,
+space or Enter - pick up / use). A frame takes about 2.5-4 ms + 2-2.5 ms of
+drawing (of 14.3 ms). Tested on the Comsat: Magicland Dizzy (DOS).
+Amiga 500: "amiga file.adf" or Enter in the explorer; a Kickstart (kick.rom)
+or the free AROS replacement (aros-rom.bin and aros-ext.bin from
+aros.sourceforge.io) in amiga/ is needed. The disk is read as a real drive
+reads it (MFM tracks), so games with their own loader work too. A frame takes
+about 5.5-9 ms + 3-4 ms of drawing. Tested on the Comsat: Magicland Dizzy (the
+TRSi version) with AROS - the start takes about 30 s, the intro needs a mouse
+click (0 on the remote or Page Down).
+Sega Mega Drive / Genesis: "megadrive file.md" (or .gen, .bin, .smd) or Enter
+in the explorer (.bin only when the header says it is a Mega Drive game). The
+68000 is the same as in the Amiga (the shared file m68k.inc), the Z80 the same
+as in the Master System; the picture is drawn line by line (planes A and B,
+the window, sprites, shadow / highlight, scrolling of the whole screen, of
+strips and of lines), sound YM2612 (FM, 6 channels, DAC) and PSG. On the box
+with sound: Super Mario World (Taiwan) 12.3 ms + 2.7 ms of drawing, Super
+Mario Bros. (a PD hack) 9.3 + 1.9 ms, Snake 9.7 + 2.3 ms - the full 60
+frames/s. The register writes to the sound chips are collected through the
+whole frame and played at its end in one go (the same as sample by sample,
+but the tables stay in the cache: sound cost 5.1 ms of a frame, now 2.3 ms),
+and the FM operators are computed every second sample (26.6 kHz). Demos with
+effects on every line (wobble, scaling) do not fit in 16.7 ms. Missing:
+changes in the middle of a line, interlace mode 2 (the first field only),
+SSG-EG and CSM in the YM2612, a 6-button pad from the keyboard. The game Super
+Mario World (Taiwan) has a protection (a read of 0xA13000) - recognised by
+the "SEGASEGA" header.
+Sega SG-1000 / SC-3000: "sg file.sg" (or .sc) or Enter in the explorer; the
+TMS9918 picture modes (Graphics I and II with the masks, Multicolour, 40-column
+text, 8x8 / 16x16 sprites with the limit of 4 per line). A frame takes about
+5 ms + 1.6 ms. Cartridges with their own RAM: up to 32 KB - 8 KB of RAM from
+0x8000 (The Castle), 33-48 KB with an empty 0x2000-0x3FFF - RAM there. No
+SC-3000 keyboard.
+C64 cartridges (.crt): "c64 game.crt" or Enter in the explorer; the type is
+recognised by the "C64 CARTRIDGE" header, not by the name; the C64 ROMs are
+still needed. A frame takes about 3.3 ms + 2.7 ms. Writes to the EasyFlash's
+flash are ignored (games do not save their state), freezers (Action Replay
+etc.) and the Final Cartridge III NMI button are not supported.
+More consoles (all with 48 kHz sound through "snd", .zip/.gz support, built-in
+clean BIOS replacements and opening from "explorer", tested on the S3811 box
+with free homebrew games): PC Engine ("pce", 4-10 ms/frame), ColecoVision
+("coleco", 2.5-3.5 ms) and MSX1 ("msx", 3-4.8 ms), WonderSwan / Color ("ws",
+2-10 ms at 75.5 Hz), Super Nintendo ("snes", 6-16 ms, SPC700 BRR), Neo Geo
+AES/MVS ("neogeo", 2.5-14 ms, YM2610), Game Boy Advance ("gba", 5-17 ms,
+ARM7TDMI + DirectSound), Atari 7800 ("a78", 4.3-6 ms) and Atari Lynx ("lynx",
+5-8.2 ms), Vectrex ("vectrex", 6-15.7 ms, 540 x 720), Famicom Disk System
+("fds", 4.6-11.3 ms), Neo Geo Pocket Color ("ngp", 8.8-11 ms), Odyssey2 /
+Videopac ("odyssey2", 2.5 ms), Intellivision ("intv", 4.4 ms) and Sony
+PlayStation 1 ("psx", R3000A + GTE 3D + SPU ADPCM, streamed .cue/.bin and
+PS-X .exe: 2-15 ms/frame on homebrew 3D games and demos; the explorer tells
+PlayStation .exe files from DOS programs by itself). The PlayStation's memory
+card (slot 1; slot 2 is empty) is the game's .sav file, a 128 KB card image:
+with the built-in BIOS too, games check it, format it, save to it and load
+from it (checked with a career of Tony Hawk's Pro Skater and the records of
+Tekken 3). Like every .sav it is written to the disk when the player is left
+(Esc), not at the moment the game saves: leave the player before the box is
+switched off.
+Three commercial games were checked on the S3811 box on 2026-11-25 (their
+files are not part of this package). Super Mario Kart ("snes"): the
+cartridge's DSP-1 maths chip is emulated - its commands in the chip's own
+fixed point (multiply, inverse, the rotations, the projection and the raster
+parameters the game draws its Mode 7 track with); a frame of a race takes
+14.4 ms + 1.8 ms of drawing, where 16.6 ms would be every frame drawn.
+Another World for the Game Boy Advance ("gba"): 8.3 ms + 0.8 ms, full speed.
+Duke Nukem: Total Meltdown ("psx", the European disc, PAL): the logo videos,
+the menus and the first level; in the level a frame takes about 13.3 ms +
+2.1 ms of the machine's 20 ms. Its music is CD audio, which the player does
+not play: the game has its sound effects only.
+A Super Nintendo or Game Boy Advance frame that starts more than a frame late
+is run without its picture (never two in a row): the game and its sound keep
+their speed, the picture loses that frame, and leaving the player says how
+many were not drawn. Played that way Super Mario Kart's Grand Prix kept its
+60 frames a second with nine of every ten frames drawn.
+A second round on the three players the same day, each change checked by the
+same picture sums on the box and by random pictures drawn with the old and
+the new code: PlayStation rectangles - the sprites of 2D games and menus - by
+loops of their own (Tetrade 22.0 -> 6.3 ms a frame, Tekken 3's intro and
+menus 26.4 -> 20.8 ms); Super Nintendo colour maths on whole colours and each
+line's sprites listed once a frame (games with colour maths on every line 18
+to 24 % faster, the others up to 8 %); Game Boy Advance lines composed by
+painting the layers from the back and written to the TV four pixels at a time
+(games with colour effects 15.8 -> 6.3 ms and 22.6 -> 15.3 ms a frame, tile
+games 11 to 38 % faster).
+Archives: every emulator takes a game in a .zip (the stored and deflate
+methods; the largest file that is not text, a picture or a directory is taken)
+or in a .gz (an Amiga .adz too); the CRC-32 sum is checked. The save file is
+named after the whole game file with .sav added (game.nes.sav; for an archive
+game.zip.sav), so games of different consoles with the same name have
+separate saves; an older game.sav file of the right size is still read, and a
+save of another size (another console's) is left untouched. A game in an
+archive plays the same as unpacked (the same picture sums on the box).
+The antenna input ("rf"): the MaxLinear MxL603 tuner on I2C 0x60 (SCB0) and
+the COFDM demodulator built into the S3811 - set up register by register as
+the tuner's original software (dump.bin) does it. "rf scan" searches channels
+21-69, "rf services" reads the channel names (PAT, SDT), "rf ts 10 4:/x.ts"
+records the whole multiplex to a file (to play e.g. in VLC). Note: the S3811
+receives only DVB-T, and in Poland the multiplexes already broadcast in
+DVB-T2, so in Poland the Comsat has nothing to catch: the tuner works, but the
+demodulator cannot lock on DVB-T2. "rf spectrum" draws the antenna's signal
+level from 174 to 862 MHz on the TV (about 35 s). Three equal 8 MHz rectangles
+at 668.25, 742.5 and 816.75 MHz are NOT multiplexes or LTE but interference
+from the box itself: harmonics of its 74.25 MHz clock (the 720p picture clock;
+9, 10 and 11 x 74.25). Apart from them the level stays at the minimum (16 %):
+the antenna was not connected for these measurements. "rf live" is the same
+chart measured over and over: each bar drawn right after its measurement (one
+pass over the whole band still takes tens of seconds - the tuner must settle
+on every frequency; a narrow window refreshes every few seconds). Keys (USB
+keyboard, UART, remote): left / right - the marker (frequency, channel,
+level), up / down - zoom in / out around the marker, PgUp / PgDn - move the
+window, F - the whole band, + / - a shorter / longer measuring time (faster,
+but less accurate), space - pause, P - peak hold, Enter - try to lock DVB-T on
+the marker's channel, Esc - end.
+USB hub: the demo turns on the hub ports' power, resets each port with a
+device and reads the devices behind the hub (also a hub behind a hub), up to
+15 devices in all (the hub must have one of the first 7 addresses);
+"lsusb" shows each one with its hub and port number. Plugging a device into a
+hub and unplugging it is noticed within about a second. Low and full speed
+devices behind a USB 2.0 hub are handled through the hub's transaction
+translator (split). Tested on a Comsat TE 1050 HD with a 7-port hub
+(2 x 1a40:0101): the hub, a second hub, three USB memories and a keyboard are
+found, the keyboard behind the hub types.
+A USB keyboard (HID, boot protocol) types on the same command line as the
+UART: US layout, Enter, Backspace, up/down arrows, Caps Lock, Esc = Ctrl-C, a
+key held down repeats. The line being typed is also shown on the TV (the
+COMMAND LINE box). Keys are read from the keyboard's interrupt endpoint, as a
+PC does it: the controller polls it every 1 ms and gets a report when the keys
+change. "usb kbd report" switches to reading by GET_REPORT every 16 ms,
+"usb kbd interrupt" back (the demo also switches by itself when the chosen way
+is refused). Not every keyboard gives its keys through GET_REPORT: the tested
+low-speed keyboard 1a2c:2d23 always answers it with zeros. Typing on this
+keyboard was tested on a Comsat TE 1050 HD.
+A USB mouse (HID, boot protocol) moves a cursor (an arrow) over the picture on
+the TV, starting from the middle. With the left button held it draws lines,
+the right button picks the next colour (yellow, red, green, blue, white,
+orange); the buttons and the wheel are printed on the UART with the cursor's
+position. The controller polls the mouse by itself (its endpoint D, every
+8 ms), so it does not disturb the keyboard or USB disks. "usb mouse" shows the
+cursor's position and the counters. Tested on a Comsat TE 1050 HD: an A4Tech
+09da:c10a mouse (low speed) behind a hub.
 
-Plyty: Opticum HD N2 (dump_maciej.bin, panel TM1650 na GPIO 31 i 9) oraz
-Comsat TE 1050 HD (dump.bin: bez wyswietlacza, dwa przyciski na tych samych
-pinach, zwierane do masy). Gdy TM1650 nie odpowiada, demo przestaje sterowac
-tymi pinami i czyta je jako przyciski UP (GPIO 31) i DOWN (GPIO 9).
+Boards: Opticum HD N2 (dump_maciej.bin, a TM1650 panel on GPIO 31 and 9) and
+Comsat TE 1050 HD (dump.bin: no display, two buttons on the same pins,
+shorting to ground). When the TM1650 does not answer, the demo stops driving
+these pins and reads them as the UP (GPIO 31) and DOWN (GPIO 9) buttons.
 
-Obraz: aplikacja rysuje 1280x720 (ARGB1555) na warstwie OSD. Na S3811
-w wersji 1 naglowek warstwy (0x280 bajtow) niesie macierz RGB->YCbCr, tak jak
-w oryginalnych aplikacjach; bez niej kazdy kolor bylby czarny. Bootloader nie
-wlacza wyjscia wideo, wiec demo przy starcie samo odtwarza ustawienia obrazu
-swojej plyty (to samo co "video init"), a dopiero potem USB - tak jak oryginal,
-bo te zapisy rozlaczaja urzadzenie USB (po "video init" demo ustawia je
-ponownie). Sterownik HDMI oryginalu uruchamia nadajnik dopiero, gdy wykryje
-telewizor, dlatego tabele nagrano w emulatorze z "podlaczonym" telewizorem:
-obejmuja start nadajnika HDMI (wyjscie z resetu, wylaczenie wyciszenia)
-i koncza sie 1,5 s pozniej. Sprawdzone na Comsat TE 1050 HD (S3811 w wersji 1):
-obraz przez HDMI, kolory poprawne.
-Gdyby demo sie zawiesilo, watchdog po 8 s sam uruchomi tuner ponownie przez
-oryginalny bootloader (skrypt aktualizacji zlapie go bez wylaczania zasilania).
-Gdyby i to nie pomoglo: wylacz zasilanie i wlacz ponownie.
+Picture: the application draws 1280x720 (ARGB1555) on the OSD layer. On the
+S3811 revision 1 the layer's header (0x280 bytes) carries the RGB->YCbCr
+matrix, as in the original applications; without it every colour would be
+black. The bootloader does not turn the video output on, so at start the demo
+replays its board's picture settings by itself (the same as "video init"), and
+only then USB - as the original does, because these writes disconnect the USB
+device (after "video init" the demo sets it up again). The original's HDMI
+driver starts the transmitter only when it detects a TV, so the tables were
+recorded in the emulator with a "connected" TV: they include the HDMI
+transmitter's start (out of reset, mute off) and end 1.5 s later. Tested on a
+Comsat TE 1050 HD (S3811 revision 1): picture over HDMI, colours right.
+Should the demo hang, the watchdog restarts the tuner by itself after 8 s
+through the original bootloader (the update script catches it without a power
+cycle). Should even that not help: switch the power off and on again.
 
-Do UART sluzy .maincode.bin. Bootloader, klucze i ustawienia zostaja zachowane.
-Nie potrzeba szyfrowania - uzywane sa LZMA i CRC.
+The UART update uses .maincode.bin. The bootloader, keys and settings are
+kept. No encryption is needed - LZMA and CRC are used.

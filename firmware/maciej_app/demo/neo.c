@@ -2827,6 +2827,9 @@ const char *neo_load(u8 *image, u32 size)
     if (S.ngh == 0x253u || S.ngh == 0x256u || S.ngh == 0x263u) S.fix_banksw = 1;
     else if (S.ngh == 0x257u || S.ngh == 0x266u || S.ngh == 0x271u) S.fix_banksw = 2;
 
+    /* (the tables once more at every load: they are in the players' shared memory, which the next machine
+       played writes over -- with the flag still set they were that machine's bytes after it) */
+    S.tables_ready = 0;
     build_static_tables();
     for (u32 i = 0; i < 0x10000u; i++)
         M->nvram[i] = M->nvram_save[i] = 0;

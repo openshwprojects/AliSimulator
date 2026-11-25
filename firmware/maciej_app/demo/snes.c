@@ -79,6 +79,12 @@ struct snes_mem {
     u8 bright_lut[16][32];      /* Master brightness 0..15 * 5-bit channel */
 
     s16 audio_ring[4096];
+
+    u8 spr_yh[128][2];          /* each sprite's first line and height (0: off the left edge), for the line
+                                   scan; from OAM and OBSEL when S.oam_dirty */
+    u8 spr_line_n[240];         /* each line's sprites, at most 32 in the order of the scan: how many ... */
+    u8 spr_line[240][32];       /* ... and which -- made with spr_yh, and again when the scan's first sprite
+                                   (S.spr_first) changes */
 };
 
 #ifdef SNES_HOST
@@ -173,6 +179,24 @@ static struct {
     u32 sample_rate, resamp_acc;
     s16 prev_mono;
     int audio_count;
+
+    /* DSP-1 (cartridge types 03h..05h: Super Mario Kart, Pilotwings ...) */
+    struct {
+        u8 map;                 /* 0: none; its registers' place: 1 HiROM, 2 LoROM up to 1 MB, 3 LoROM 2 MB */
+        u8 state, cmd;          /* 0 waits for a command, 1 takes its parameters, 2 gives its results */
+        u16 sr, dr;             /* status (RQM 8000h, DRS 1000h, DRC 0400h) and data registers */
+        u16 pos;                /* the word under way */
+        s16 in[8], out[4];
+        /* the projection that command 02h sets up for 06h, 0Ah and 0Eh */
+        s16 centre_x, centre_y, v_offset, vplane_c, vplane_e;
+        s16 sin_aas, cos_aas, sin_azs, cos_azs, sin_azs_cl, cos_azs_cl;
+        s16 sec1_c, sec1_e, sec2_c, sec2_e;
+        s16 nx, ny, nz, gx, gy, gz, les_c, les_e, les;
+        s16 mat[3][3][3];       /* the attitude matrices A, B, C */
+    } d1;
+
+    u8 oam_dirty;               /* OAM or OBSEL written since M->spr_yh was worked out */
+    u8 spr_first;               /* the sprite the scan started from when M->spr_line was made */
 } S;
 
 static char info_buf[96];
@@ -1172,7 +1196,7 @@ static void bbus_wr(u8 reg, u8 v)
     }
     switch (reg) {
     case 0x00: S.inidisp = v; break;
-    case 0x01: S.obsel = v; break;
+    case 0x01: S.obsel = v; S.oam_dirty = 1; break;
     case 0x02:
         S.oamadd_reload = (u16)((S.oamadd_reload & 0x0100u) | v);
         S.oam_addr = (u16)((S.oamadd_reload << 1) & 0x3FFu);
@@ -1194,6 +1218,7 @@ static void bbus_wr(u8 reg, u8 v)
         } else {
             M->oam[512u + (a & 31u)] = v;
         }
+        S.oam_dirty = 1;
         S.oam_addr = (u16)((a + 1u) & 0x3FFu);
         break;
     }
@@ -1557,6 +1582,626 @@ static u32 mirror_rom_off(u32 off, u32 size)
     return off;
 }
 
+/* =====================================================================
+ * DSP-1: the maths coprocessor in the cartridges of Super Mario Kart, Pilotwings and a dozen others (a NEC
+ * uPD77C25 running Nintendo's program).  The game writes a command byte and its 16-bit parameters to the
+ * chip's data register and reads 16-bit results back; the status register's top bit says the chip is ready.
+ * The program is not run here: each command's result is worked out directly, in the program's own fixed-point
+ * steps (normalising to mantissa and exponent, the inverse by Newton's iteration from a table of seeds, sines
+ * from a table with a linear step, square roots between table nodes) as those who took the chip apart
+ * described them (Overload, Andreas Naive, neviksti and The Dumper; the Snes9x and bsnes documentation of the
+ * DSP-1), written anew.  The tables are computed from what they hold (sine, 1 / x, square root; pi * i comes
+ * from a multiplication).  Not compared with a real chip.
+ * ===================================================================== */
+#define D1 S.d1
+#define D1_RQM 0x8000u          /* status: ready for the next byte */
+#define D1_DRS 0x1000u          /* ... the second byte of a word is next */
+#define D1_DRC 0x0400u          /* ... the data register takes bytes (a command), not words */
+
+static const s16 d1_sin_half[128] = {       /* 32767 * sin(2 pi i / 256), the first half turn */
+    0x0000, 0x0324, 0x0648, 0x096A, 0x0C8C, 0x0FAB, 0x12C8, 0x15E2, 0x18F9, 0x1C0B, 0x1F1A, 0x2223,
+    0x2528, 0x2826, 0x2B1F, 0x2E11, 0x30FB, 0x33DF, 0x36BA, 0x398C, 0x3C56, 0x3F17, 0x41CE, 0x447A,
+    0x471C, 0x49B4, 0x4C3F, 0x4EBF, 0x5133, 0x539B, 0x55F5, 0x5842, 0x5A82, 0x5CB3, 0x5ED7, 0x60EB,
+    0x62F1, 0x64E8, 0x66CF, 0x68A6, 0x6A6D, 0x6C23, 0x6DC9, 0x6F5E, 0x70E2, 0x7254, 0x73B5, 0x7504,
+    0x7641, 0x776B, 0x7884, 0x7989, 0x7A7C, 0x7B5C, 0x7C29, 0x7CE3, 0x7D89, 0x7E1D, 0x7E9C, 0x7F09,
+    0x7F61, 0x7FA6, 0x7FD8, 0x7FF5, 0x7FFF, 0x7FF5, 0x7FD8, 0x7FA6, 0x7F61, 0x7F09, 0x7E9C, 0x7E1D,
+    0x7D89, 0x7CE3, 0x7C29, 0x7B5C, 0x7A7C, 0x7989, 0x7884, 0x776B, 0x7641, 0x7504, 0x73B5, 0x7254,
+    0x70E2, 0x6F5E, 0x6DC9, 0x6C23, 0x6A6D, 0x68A6, 0x66CF, 0x64E8, 0x62F1, 0x60EB, 0x5ED7, 0x5CB3,
+    0x5A82, 0x5842, 0x55F5, 0x539B, 0x5133, 0x4EBF, 0x4C3F, 0x49B4, 0x471C, 0x447A, 0x41CE, 0x3F17,
+    0x3C56, 0x398C, 0x36BA, 0x33DF, 0x30FB, 0x2E11, 0x2B1F, 0x2826, 0x2528, 0x2223, 0x1F1A, 0x1C0B,
+    0x18F9, 0x15E2, 0x12C8, 0x0FAB, 0x0C8C, 0x096A, 0x0648, 0x0324,
+};
+static const s16 d1_inv_seed[128] = {       /* 2^29 / (4000h + 80h * i): where the inverse's iteration starts */
+    0x7FFF, 0x7F02, 0x7E08, 0x7D12, 0x7C1F, 0x7B30, 0x7A45, 0x795D, 0x7878, 0x7797, 0x76BA, 0x75DF,
+    0x7507, 0x7433, 0x7361, 0x7293, 0x71C7, 0x70FE, 0x7038, 0x6F75, 0x6EB4, 0x6DF6, 0x6D3A, 0x6C81,
+    0x6BCA, 0x6B16, 0x6A64, 0x69B4, 0x6907, 0x685B, 0x67B2, 0x670B, 0x6666, 0x65C4, 0x6523, 0x6484,
+    0x63E7, 0x634C, 0x62B3, 0x621C, 0x6186, 0x60F2, 0x6060, 0x5FD0, 0x5F41, 0x5EB5, 0x5E29, 0x5D9F,
+    0x5D17, 0x5C91, 0x5C0C, 0x5B88, 0x5B06, 0x5A85, 0x5A06, 0x5988, 0x590B, 0x5890, 0x5816, 0x579D,
+    0x5726, 0x56B0, 0x563B, 0x55C8, 0x5555, 0x54E4, 0x5474, 0x5405, 0x5398, 0x532B, 0x52BF, 0x5255,
+    0x51EC, 0x5183, 0x511C, 0x50B6, 0x5050, 0x4FEC, 0x4F89, 0x4F26, 0x4EC5, 0x4E64, 0x4E05, 0x4DA6,
+    0x4D48, 0x4CEC, 0x4C90, 0x4C34, 0x4BDA, 0x4B81, 0x4B28, 0x4AD0, 0x4A79, 0x4A23, 0x49CD, 0x4979,
+    0x4925, 0x48D1, 0x487F, 0x482D, 0x47DC, 0x478C, 0x473C, 0x46ED, 0x469F, 0x4651, 0x4604, 0x45B8,
+    0x456C, 0x4521, 0x44D7, 0x448D, 0x4444, 0x43FC, 0x43B4, 0x436D, 0x4326, 0x42E0, 0x429A, 0x4255,
+    0x4211, 0x41CD, 0x4189, 0x4146, 0x4104, 0x40C2, 0x4081, 0x4040,
+};
+static const s16 d1_sqrt_tab[65] = {        /* 32768 * sqrt(i / 64) */
+    0x0000, 0x1000, 0x16A0, 0x1BB6, 0x2000, 0x23C6, 0x2731, 0x2A54, 0x2D41, 0x3000, 0x3298, 0x3510,
+    0x376C, 0x39B0, 0x3BDD, 0x3DF7, 0x4000, 0x41F8, 0x43E1, 0x45BE, 0x478D, 0x4952, 0x4B0B, 0x4CBB,
+    0x4E62, 0x5000, 0x5195, 0x5323, 0x54A9, 0x5629, 0x57A2, 0x5915, 0x5A82, 0x5BE9, 0x5D4B, 0x5EA8,
+    0x6000, 0x6152, 0x62A1, 0x63EB, 0x6531, 0x6673, 0x67B1, 0x68EB, 0x6A21, 0x6B54, 0x6C84, 0x6DB0,
+    0x6ED9, 0x7000, 0x7123, 0x7243, 0x7360, 0x747B, 0x7593, 0x76A8, 0x77BB, 0x78CC, 0x79DA, 0x7AE5,
+    0x7BEF, 0x7CF6, 0x7DFB, 0x7EFE, 0x7FFF,
+};
+/* the steepest view (zenith angle) that command 02h takes, by the exponent of the view centre's height */
+static const s16 d1_max_azs[16] = {
+    0x38B4, 0x38B7, 0x38BA, 0x38BE, 0x38C0, 0x38C4, 0x38C7, 0x38CA,
+    0x38CE, 0x38D0, 0x38D4, 0x38D7, 0x38DA, 0x38DD, 0x38E0, 0x38E4,
+};
+/* a command's words: parameters in the high nibble, results in the low one (Fh: the 1024 words of the chip's
+   data ROM; 00h: the three commands that stop the chip) */
+static const u8 d1_words[64] = {
+    0x21, 0x40, 0x74, 0x33, 0x22, 0x40, 0x33, 0x11, 0x32, 0x33, 0x14, 0x31, 0x32, 0x33, 0x22, 0x11,
+    0x22, 0x40, 0x74, 0x33, 0x63, 0x40, 0x33, 0x1F, 0x41, 0x33, 0x00, 0x31, 0x63, 0x33, 0x22, 0x1F,
+    0x21, 0x40, 0x74, 0x33, 0x22, 0x40, 0x33, 0x11, 0x31, 0x33, 0x00, 0x31, 0x32, 0x33, 0x22, 0x11,
+    0x22, 0x40, 0x74, 0x33, 0x63, 0x40, 0x33, 0x1F, 0x41, 0x33, 0x00, 0x31, 0x63, 0x33, 0x22, 0x1F,
+};
+
+static s32 d1_sin_at(int i)                 /* (i up to BFh) */
+{
+    return i < 128 ? d1_sin_half[i] : -(s32)d1_sin_half[i - 128];
+}
+
+static s16 d1_sin(s16 a)
+{
+    if (a < 0) {
+        if (a == -32768)
+            return 0;
+        return (s16)-d1_sin((s16)-a);
+    }
+    s32 step = ((a & 0xFF) * 205887) >> 16;                     /* pi * the angle's low byte */
+    s32 s = d1_sin_at(a >> 8) + ((step * d1_sin_at(0x40 + (a >> 8))) >> 15);
+    return (s16)(s > 32767 ? 32767 : s);
+}
+
+static s16 d1_cos(s16 a)
+{
+    if (a < 0) {
+        if (a == -32768)
+            return -32768;
+        a = (s16)-a;
+    }
+    s32 step = ((a & 0xFF) * 205887) >> 16;
+    s32 s = d1_sin_at(0x40 + (a >> 8)) - ((step * d1_sin_at(a >> 8)) >> 15);
+    return (s16)(s < -32768 ? -32767 : s);
+}
+
+/* how many bits the 15-bit m can be shifted up before its top bit differs from the sign (15: m is 0 or -1) */
+static int d1_headroom(s16 m)
+{
+    int n = 0;
+    s16 bit = 0x4000;
+    if (m < 0)
+        while ((m & bit) && bit) { bit >>= 1; n++; }
+    else
+        while (!(m & bit) && bit) { bit >>= 1; n++; }
+    return n;
+}
+
+static s16 d1_shl(s16 m, int n) { return (s16)(u16)((u32)(u16)m << n); }
+
+/* m as a mantissa with the exponent lowered by the shifts made */
+static void d1_norm(s16 m, s16 *c, s16 *e)
+{
+    int n = d1_headroom(m);
+    *c = d1_shl(m, n);
+    *e = (s16)(*e - n);
+}
+
+/* a 31-bit product as a mantissa; the exponent is the number of shifts.  With 4 shifts the chip loses the low
+   half's part (its data ROM has 0001h where the power of two 0010h belongs): kept */
+static void d1_norm32(s32 p, s16 *c, s16 *e)
+{
+    s16 lo = (s16)(p & 0x7FFF);
+    s16 hi = (s16)(p >> 15);
+    int n = d1_headroom(hi);
+    if (n == 0) {
+        *c = hi;
+    } else {
+        *c = d1_shl(hi, n);
+        if (n < 15) {
+            if (n != 4)
+                *c = (s16)(*c + (lo >> (15 - n)));
+        } else {
+            s16 bit = 0x4000;
+            if (hi < 0)
+                while ((lo & bit) && bit) { bit >>= 1; n++; }
+            else
+                while (!(lo & bit) && bit) { bit >>= 1; n++; }
+            if (n > 15)
+                *c = d1_shl(lo, n - 15);
+            else
+                *c = (s16)(*c + lo);
+        }
+    }
+    *e = (s16)n;
+}
+
+/* mantissa and exponent back to a number: too large clips, small ones lose their low bits */
+static s16 d1_denorm(s16 c, s16 e)
+{
+    if (e > 0)
+        return (s16)(c > 0 ? 32767 : c < 0 ? -32767 : 0);
+    if (e < 0)
+        return (s16)(e > -16 ? c >> -e : 0);
+    return c;
+}
+
+/* the projection's alignment shift, by a multiplication with the data ROM's powers of two as the chip does it:
+   7FFFh for no shift, and the wrong entry again (11 places shift as 15) */
+static s16 d1_align(s16 c, int e)
+{
+    if (e == 0)
+        return (s16)((c * 0x7FFF) >> 15);
+    if (e > 15)
+        return 0;
+    return (s16)(c >> (e == 11 ? 15 : e));
+}
+
+/* 1 / (c * 2^e) as a mantissa and an exponent: the seed for the normalised c, two Newton steps */
+static void d1_inverse(s16 c, s16 e, s16 *ic, s16 *ie)
+{
+    if (c == 0) {
+        *ic = 0x7FFF;
+        *ie = 0x002F;
+        return;
+    }
+    int neg = 0;
+    if (c < 0) {
+        if (c < -32767)
+            c = -32767;
+        c = (s16)-c;
+        neg = 1;
+    }
+    while (c < 0x4000) {
+        c = (s16)(c << 1);
+        e--;
+    }
+    if (c == 0x4000) {
+        if (!neg) {
+            *ic = 0x7FFF;
+        } else {
+            *ic = -0x4000;
+            e--;
+        }
+    } else {
+        s32 i = d1_inv_seed[(c - 0x4000) >> 7];
+        i = (s16)((i + ((-i * ((c * i) >> 15)) >> 15)) << 1);
+        i = (s16)((i + ((-i * ((c * i) >> 15)) >> 15)) << 1);
+        *ic = (s16)(neg ? -i : i);
+    }
+    *ie = (s16)(1 - e);
+}
+
+/* command 02h: the view (focus point, distances eye - focus and eye - screen, azimuth and zenith angles) */
+static void d1_parameter(const s16 *in, s16 *out)
+{
+    s16 fx = in[0], fy = in[1], fz = in[2], lfe = in[3], les = in[4], aas = in[5], azs = in[6];
+    s16 c, e, csec, max_azs, aux;
+    s16 azs_cl = azs;
+
+    D1.sin_aas = d1_sin(aas);
+    D1.cos_aas = d1_cos(aas);
+    D1.sin_azs = d1_sin(azs);
+    D1.cos_azs = d1_cos(azs);
+
+    D1.nx = (s16)((D1.sin_azs * -D1.sin_aas) >> 15);
+    D1.ny = (s16)((D1.sin_azs * D1.cos_aas) >> 15);
+    D1.nz = (s16)((D1.cos_azs * 0x7FFF) >> 15);
+
+    /* the centre of the projection */
+    D1.centre_x = (s16)(fx + ((lfe * D1.nx) >> 15));
+    D1.centre_y = (s16)(fy + ((lfe * D1.ny) >> 15));
+    s16 centre_z = (s16)(fz + ((lfe * D1.nz) >> 15));
+
+    D1.gx = (s16)(D1.centre_x - ((les * D1.nx) >> 15));
+    D1.gy = (s16)(D1.centre_y - ((les * D1.ny) >> 15));
+    D1.gz = (s16)(centre_z - ((les * D1.nz) >> 15));
+
+    D1.les_e = 0;
+    d1_norm(les, &D1.les_c, &D1.les_e);
+    D1.les = les;
+
+    e = 0;
+    d1_norm(centre_z, &c, &e);
+    D1.vplane_c = c;
+    D1.vplane_e = e;
+
+    /* the zenith angle is clipped to what the height allows */
+    max_azs = d1_max_azs[-e & 15];
+    if (azs_cl < 0) {
+        max_azs = (s16)-max_azs;
+        if (azs_cl < max_azs + 1)
+            azs_cl = (s16)(max_azs + 1);
+    } else if (azs_cl > max_azs) {
+        azs_cl = max_azs;
+    }
+    D1.sin_azs_cl = d1_sin(azs_cl);
+    D1.cos_azs_cl = d1_cos(azs_cl);
+
+    d1_inverse(D1.cos_azs_cl, 0, &D1.sec1_c, &D1.sec1_e);
+    d1_norm((s16)((c * D1.sec1_c) >> 15), &c, &e);
+    e = (s16)(e + D1.sec1_e);
+    c = (s16)((d1_denorm(c, e) * D1.sin_azs_cl) >> 15);
+
+    D1.centre_x = (s16)(D1.centre_x + ((c * D1.sin_aas) >> 15));
+    D1.centre_y = (s16)(D1.centre_y - ((c * D1.cos_aas) >> 15));
+    out[2] = D1.centre_x;
+    out[3] = D1.centre_y;
+
+    /* the raster line of the horizon; past the clip the tangent and the secant go on as short series */
+    s16 vof = 0;
+    if (azs != azs_cl || azs == max_azs) {
+        if (azs == -32768)
+            azs = -32767;
+        c = (s16)(azs - max_azs);
+        if (c >= 0)
+            c--;
+        aux = (s16)~(c << 2);
+        c = (s16)((aux * 0x14AC) >> 15);
+        c = (s16)(((c * aux) >> 15) + 0x6488);
+        vof = (s16)(vof - ((((c * aux) >> 15) * les) >> 15));
+        c = (s16)((aux * aux) >> 15);
+        aux = (s16)(((c * 0x0A26) >> 15) + 0x277A);
+        D1.cos_azs_cl = (s16)(D1.cos_azs_cl + ((((c * aux) >> 15) * D1.cos_azs_cl) >> 15));
+    }
+    out[0] = vof;
+
+    D1.v_offset = (s16)((les * D1.cos_azs_cl) >> 15);
+
+    d1_inverse(D1.sin_azs_cl, 0, &csec, &e);
+    d1_norm(D1.v_offset, &c, &e);
+    d1_norm((s16)((c * csec) >> 15), &c, &e);
+    if (c == -32768) {
+        c >>= 1;
+        e++;
+    }
+    out[1] = d1_denorm((s16)-c, e);
+
+    d1_inverse(D1.cos_azs_cl, 0, &D1.sec2_c, &D1.sec2_e);
+}
+
+/* command 0Ah: the Mode 7 matrix (A, B, C, D) of raster line vs */
+static void d1_raster(s16 vs, s16 *out)
+{
+    s16 c, e, c1, e1;
+
+    d1_inverse((s16)(((vs * D1.sin_azs) >> 15) + D1.v_offset), 7, &c, &e);
+    e = (s16)(e + D1.vplane_e);
+    c1 = (s16)((c * D1.vplane_c) >> 15);
+    e1 = (s16)(e + D1.sec2_e);
+
+    d1_norm(c1, &c, &e);
+    c = d1_denorm(c, e);
+    out[0] = (s16)((c * D1.cos_aas) >> 15);
+    out[2] = (s16)((c * D1.sin_aas) >> 15);
+
+    d1_norm((s16)((c1 * D1.sec2_c) >> 15), &c, &e1);
+    c = d1_denorm(c, e1);
+    out[1] = (s16)((c * -D1.sin_aas) >> 15);
+    out[3] = (s16)((c * D1.cos_aas) >> 15);
+}
+
+/* command 06h: a point of the world on the screen (H, V) and the size (M) of what stands there */
+static void d1_project(const s16 *in, s16 *out)
+{
+    s16 px, py, pz, ex, ey, ez, ref;
+    s16 c2, c4, c6, c10, c19, c25, e2, e4, e6, e7;
+
+    d1_norm32((s32)in[0] - D1.gx, &px, &ex);
+    d1_norm32((s32)in[1] - D1.gy, &py, &ey);
+    d1_norm32((s32)in[2] - D1.gz, &pz, &ez);
+    px >>= 1; ex--;                         /* (room for the scalar products) */
+    py >>= 1; ey--;
+    pz >>= 1; ez--;
+
+    ref = ey < ez ? ey : ez;
+    if (ex < ref)
+        ref = ex;
+    px = d1_align(px, ex - ref);            /* all three to one exponent */
+    py = d1_align(py, ey - ref);
+    pz = d1_align(pz, ez - ref);
+
+    /* the eye's distance from the point along the line of sight: the screen's distance less the point's part
+       along the screen's normal */
+    s32 along = -((px * D1.nx) >> 15) - ((py * D1.ny) >> 15) - ((pz * D1.nz) >> 15);
+    ref = (s16)(16 - ref);
+    if (ref >= 0)
+        along = (s32)((u32)along << ref);
+    else
+        along >>= -ref;
+    if (along == -1)
+        along = 0;
+    along >>= 1;
+    d1_norm32((s32)(u16)D1.les + along, &c10, &e2);
+    e2 = (s16)(15 - e2);
+
+    d1_inverse(c10, 0, &c4, &e4);
+    c2 = (s16)((c4 * D1.les_c) >> 15);      /* the scale */
+
+    /* H: the point's part along the screen's horizontal, scaled */
+    e7 = 0;
+    s16 h = (s16)(((px * ((D1.cos_aas * 0x7FFF) >> 15)) >> 15) + ((py * ((D1.sin_aas * 0x7FFF) >> 15)) >> 15));
+    d1_norm((s16)((h * c2) >> 15), &c19, &e7);
+    out[0] = d1_denorm(c19, (s16)(D1.les_e - e2 + ref + e7));
+
+    /* V: ... along the screen's vertical */
+    e6 = 0;
+    s16 v = (s16)(((px * ((D1.cos_azs * -D1.sin_aas) >> 15)) >> 15) +
+                  ((py * ((D1.cos_azs * D1.cos_aas) >> 15)) >> 15) +
+                  ((pz * ((-D1.sin_azs * 0x7FFF) >> 15)) >> 15));
+    d1_norm((s16)((v * c2) >> 15), &c25, &e6);
+    out[1] = d1_denorm(c25, (s16)(D1.les_e - e2 + ref + e6));
+
+    /* M: the scale / 128 */
+    d1_norm(c2, &c6, &e4);
+    out[2] = d1_denorm(c6, (s16)(e4 + D1.les_e - e2 - 7));
+}
+
+/* command 0Eh: the point of the ground that screen position (H, V) shows */
+static void d1_target(s16 h, s16 v, s16 *out)
+{
+    s16 c, e, c1, e1;
+
+    d1_inverse((s16)(((v * D1.sin_azs) >> 15) + D1.v_offset), 8, &c, &e);
+    e = (s16)(e + D1.vplane_e);
+    c1 = (s16)((c * D1.vplane_c) >> 15);
+    e1 = (s16)(e + D1.sec1_e);
+
+    h = d1_shl(h, 8);
+    d1_norm(c1, &c, &e);
+    c = (s16)((d1_denorm(c, e) * h) >> 15);
+    s16 x = (s16)(D1.centre_x + ((c * D1.cos_aas) >> 15));       /* (H along the screen's horizontal: the raster */
+    s16 y = (s16)(D1.centre_y + ((c * D1.sin_aas) >> 15));       /*  matrix's A and C) */
+
+    v = d1_shl(v, 8);
+    d1_norm((s16)((c1 * D1.sec1_c) >> 15), &c, &e1);
+    c = (s16)((d1_denorm(c, e1) * v) >> 15);
+    out[0] = (s16)(x + ((c * -D1.sin_aas) >> 15));
+    out[1] = (s16)(y + ((c * D1.cos_aas) >> 15));
+}
+
+/* commands 01h / 11h / 21h: an attitude matrix from a scale and three angles (z, y, x) */
+static void d1_attitude(s16 (*m)[3], const s16 *in)
+{
+    s16 s = (s16)(in[0] >> 1);
+    s16 sz = d1_sin(in[1]), cz = d1_cos(in[1]);
+    s16 sy = d1_sin(in[2]), cy = d1_cos(in[2]);
+    s16 sx = d1_sin(in[3]), cx = d1_cos(in[3]);
+    s32 scz = (s * cz) >> 15, ssz = (s * sz) >> 15;
+
+    m[0][0] = (s16)((scz * cy) >> 15);
+    m[0][1] = (s16)-((ssz * cy) >> 15);
+    m[0][2] = (s16)((s * sy) >> 15);
+    m[1][0] = (s16)(((ssz * cx) >> 15) + ((((scz * sx) >> 15) * sy) >> 15));
+    m[1][1] = (s16)(((scz * cx) >> 15) - ((((ssz * sx) >> 15) * sy) >> 15));
+    m[1][2] = (s16)-((((s * sx) >> 15) * cy) >> 15);
+    m[2][0] = (s16)(((ssz * sx) >> 15) - ((((scz * cx) >> 15) * sy) >> 15));
+    m[2][1] = (s16)(((scz * sx) >> 15) + ((((ssz * cx) >> 15) * sy) >> 15));
+    m[2][2] = (s16)((((s * cx) >> 15) * cy) >> 15);
+}
+
+/* command 14h: the new attitude angles after turning by (U, F, L) about the object's own axes */
+static void d1_gyrate(const s16 *in, s16 *out)
+{
+    s16 az = in[0], ax = in[1], ay = in[2], u = in[3], f = in[4], l = in[5];
+    s16 csec, esec, csin, ctan, c, e;
+    s16 say = d1_sin(ay), cay = d1_cos(ay);
+
+    d1_inverse(d1_cos(ax), 0, &csec, &esec);
+
+    d1_norm32(u * cay - f * say, &c, &e);
+    e = (s16)(esec - e);
+    d1_norm((s16)((c * csec) >> 15), &c, &e);
+    out[0] = (s16)(az + d1_denorm(c, e));
+
+    out[1] = (s16)(ax + ((u * say) >> 15) + ((f * cay) >> 15));
+
+    d1_norm32(u * cay + f * say, &c, &e);
+    e = (s16)(esec - e);
+    d1_norm(d1_sin(ax), &csin, &e);
+    ctan = (s16)((csec * csin) >> 15);
+    d1_norm((s16)-((c * ctan) >> 15), &c, &e);
+    out[2] = (s16)(ay + d1_denorm(c, e) + l);
+}
+
+static void __attribute__((noinline)) d1_exec(void)
+{
+    const s16 *in = D1.in;
+    s16 *out = D1.out;
+    u8 cmd = D1.cmd;
+    s16 (*m)[3] = D1.mat[(cmd >> 4) == 1 ? 1 : (cmd >> 4) == 2 ? 2 : 0];
+
+    switch (cmd & 0x0Fu) {
+    case 0x00:                              /* 00h, 20h multiply; 10h, 30h inverse */
+        if (cmd & 0x10u)
+            d1_inverse(in[0], in[1], &out[0], &out[1]);
+        else
+            out[0] = (s16)(((in[0] * in[1]) >> 15) + ((cmd & 0x20u) ? 1 : 0));
+        break;
+    case 0x01: case 0x05:                   /* attitude matrix A (01h, 31h), B (11h), C (21h) */
+        d1_attitude(m, in);
+        break;
+    case 0x02:                              /* the projection's parameters */
+        d1_parameter(in, out);
+        break;
+    case 0x03:                              /* subjective: (F, L, U) of the object's axes into the world's */
+        for (int k = 0; k < 3; k++)
+            out[k] = (s16)(((in[0] * m[0][k]) >> 15) + ((in[1] * m[1][k]) >> 15) + ((in[2] * m[2][k]) >> 15));
+        break;
+    case 0x04:                              /* 04h, 24h triangle: radius * sine and cosine */
+        if (cmd & 0x10u) {
+            d1_gyrate(in, out);             /* 14h, 34h */
+        } else {
+            out[0] = (s16)((d1_sin(in[0]) * in[1]) >> 15);
+            out[1] = (s16)((d1_cos(in[0]) * in[1]) >> 15);
+        }
+        break;
+    case 0x06:
+        d1_project(in, out);
+        break;
+    case 0x07: case 0x0F:                   /* memory test (0), memory size (27h, 2Fh), data ROM (17h..3Fh) */
+        out[0] = (s16)((cmd & 0x30u) == 0x20u ? 0x0100 : 0x0000);
+        break;
+    case 0x08: {                            /* 08h radius; 18h, 38h range; 28h distance */
+        s32 sq = in[0] * in[0] + in[1] * in[1] + in[2] * in[2];
+        if ((cmd & 0x30u) == 0x00u) {
+            sq = (s32)((u32)sq << 1);
+            out[0] = (s16)sq;
+            out[1] = (s16)(sq >> 16);
+        } else if ((cmd & 0x30u) == 0x20u) {
+            s16 r = 0;
+            if (sq) {
+                s16 c, e;
+                d1_norm32(sq, &c, &e);
+                if (e & 1)
+                    c = (s16)((c * 0x4000) >> 15);
+                int node = (c * 0x0040) >> 15;
+                s32 lo = d1_sqrt_tab[node & 63], hi = d1_sqrt_tab[(node & 63) + 1];
+                r = (s16)((((hi - lo) * (c & 0x1FF)) >> 9) + lo);
+                r = (s16)(r >> (e >> 1));
+            }
+            out[0] = r;
+        } else {
+            out[0] = (s16)(((sq - in[3] * in[3]) >> 15) + ((cmd & 0x20u) ? 1 : 0));
+        }
+        break;
+    }
+    case 0x09: case 0x0D:                   /* objective: a world vector along the object's axes */
+        for (int k = 0; k < 3; k++)
+            out[k] = (s16)(((in[0] * m[k][0]) >> 15) + ((in[1] * m[k][1]) >> 15) + ((in[2] * m[k][2]) >> 15));
+        break;
+    case 0x0A:
+        d1_raster(in[0], out);
+        break;
+    case 0x0B:                              /* scalar: the vector's part along the object's forward axis */
+        out[0] = (s16)((in[0] * m[0][0] + in[1] * m[0][1] + in[2] * m[0][2]) >> 15);
+        break;
+    case 0x0C:
+        if (cmd & 0x10u) {                  /* 1Ch, 3Ch polar: a vector turned about z, y, x in turn */
+            s16 x = in[3], y = in[4], z = in[5], t;
+            s16 s = d1_sin(in[0]), c = d1_cos(in[0]);
+            t = (s16)(((y * s) >> 15) + ((x * c) >> 15));
+            y = (s16)(((y * c) >> 15) - ((x * s) >> 15));
+            x = t;
+            s = d1_sin(in[1]); c = d1_cos(in[1]);
+            t = (s16)(((x * s) >> 15) + ((z * c) >> 15));
+            x = (s16)(((x * c) >> 15) - ((z * s) >> 15));
+            z = t;
+            out[0] = x;
+            s = d1_sin(in[2]); c = d1_cos(in[2]);
+            out[1] = (s16)(((z * s) >> 15) + ((y * c) >> 15));
+            out[2] = (s16)(((z * c) >> 15) - ((y * s) >> 15));
+        } else {                            /* 0Ch, 2Ch rotate in the plane */
+            s16 s = d1_sin(in[0]), c = d1_cos(in[0]);
+            out[0] = (s16)(((in[2] * s) >> 15) + ((in[1] * c) >> 15));
+            out[1] = (s16)(((in[2] * c) >> 15) - ((in[1] * s) >> 15));
+        }
+        break;
+    case 0x0E:
+        d1_target(in[0], in[1], out);
+        break;
+    }
+}
+
+static void d1_reset(void)
+{
+    D1.sr = (u16)(D1_RQM | D1_DRC);
+    D1.dr = 0x0080u;
+    D1.state = 0;
+    D1.pos = 0;
+}
+
+/* a byte to or from the data register: the port's steps */
+static void __attribute__((noinline)) d1_port_step(int rd, u8 *data)
+{
+    if (!(D1.sr & D1_RQM))
+        return;                             /* (stopped by command 1Ah, 2Ah or 3Ah) */
+    if (rd)
+        *data = (D1.sr & D1_DRS) ? (u8)(D1.dr >> 8) : (u8)D1.dr;
+    else if (D1.sr & D1_DRS)
+        D1.dr = (u16)((D1.dr & 0x00FFu) | ((u16)*data << 8));
+    else
+        D1.dr = (u16)((D1.dr & 0xFF00u) | *data);
+
+    u32 n_out = d1_words[D1.cmd & 63u] & 15u;
+    if (n_out == 15u)
+        n_out = 1024u;
+    switch (D1.state) {
+    case 0:                                 /* a command byte */
+        D1.cmd = (u8)D1.dr;
+        if (!(D1.cmd & 0xC0u)) {
+            if (d1_words[D1.cmd] == 0u) {
+                D1.sr &= (u16)~D1_RQM;
+            } else {
+                D1.pos = 0;
+                D1.state = 1;
+                D1.sr &= (u16)~D1_DRC;
+            }
+        }
+        break;
+    case 1:                                 /* its parameters, low byte first */
+        D1.sr ^= D1_DRS;
+        if (!(D1.sr & D1_DRS)) {
+            D1.in[D1.pos++ & 7u] = (s16)D1.dr;
+            if (D1.pos >= (u32)(d1_words[D1.cmd] >> 4)) {
+                d1_exec();
+                D1.pos = 0;
+                D1.dr = (u16)D1.out[0];
+                D1.state = 2;
+                if (n_out == 0u) {
+                    D1.dr = 0x0080u;
+                    D1.state = 0;
+                    D1.sr |= D1_DRC;
+                }
+            }
+        }
+        break;
+    case 2:                                 /* its results */
+        D1.sr ^= D1_DRS;
+        if (!(D1.sr & D1_DRS)) {
+            D1.pos++;
+            if (D1.pos >= n_out) {
+                if (D1.cmd == 0x0Au && D1.dr != 0x8000u) {
+                    D1.in[0]++;             /* the raster command goes on with the next line until 8000h */
+                    d1_exec();              /* is written instead of the last result being read */
+                    D1.pos = 0;
+                    D1.dr = (u16)D1.out[0];
+                } else {
+                    D1.dr = 0x0080u;
+                    D1.state = 0;
+                    D1.sr |= D1_DRC;
+                }
+            } else {
+                D1.dr = (u16)(n_out == 1024u ? 0 : D1.out[D1.pos & 3u]);
+            }
+        }
+        break;
+    }
+}
+
+/* is addr one of the chip's registers?  0 no, 1 data, 2 status */
+static int d1_port(u32 addr)
+{
+    u32 bank = (addr >> 16) & 0x7Fu, off = addr & 0xFFFFu;
+    if (D1.map == 1u)
+        return (bank < 0x20u && off >= 0x6000u && off < 0x8000u) ? (off < 0x7000u ? 1 : 2) : 0;
+    if (D1.map == 2u)
+        return (bank >= 0x20u && bank < 0x40u && off >= 0x8000u) ? (off < 0xC000u ? 1 : 2) : 0;
+    if (D1.map == 3u)
+        return (bank >= 0x60u && bank < 0x70u && off < 0x8000u) ? (off < 0x4000u ? 1 : 2) : 0;
+    return 0;
+}
+
 static int addr_is_sram(u32 addr)
 {
     if (!S.sram_size)
@@ -1598,6 +2243,8 @@ static void build_page_tables(void)
         }
         if (addr_is_sram(addr))
             continue;                       /* handled in slow path so sram_mask & sram_dirty apply */
+        if (D1.map && d1_port(addr))
+            continue;                       /* the DSP-1's registers (in ROM's place in LoROM cartridges) */
         if ((bank & 0x7Fu) < 0x40u && off < 0x8000u)
             continue;                       /* I/O ($2000..$7FFF) */
 
@@ -1623,6 +2270,16 @@ static inline u8 mem_rd8(u32 addr)
         return (S.mdr = p[addr & 0x1FFFu]);
     if (addr_is_sram(addr))
         return (S.mdr = M->sram[addr & S.sram_mask]);
+    if (D1.map) {
+        int reg = d1_port(addr);
+        if (reg == 1) {
+            u8 v = 0x80u;
+            d1_port_step(1, &v);
+            return (S.mdr = v);
+        }
+        if (reg == 2)
+            return (S.mdr = (u8)(D1.sr >> 8));
+    }
     u8 bank = (u8)(addr >> 16);
     u16 off = (u16)addr;
     if ((bank & 0x7Fu) < 0x40u && off < 0x8000u)
@@ -1649,6 +2306,14 @@ static inline void mem_wr8(u32 addr, u8 v)
             S.sram_dirty = 1;
         }
         return;
+    }
+    if (D1.map) {
+        int reg = d1_port(addr);
+        if (reg) {
+            if (reg == 1)
+                d1_port_step(0, &v);
+            return;
+        }
     }
     u8 bank = (u8)(addr >> 16);
     u16 off = (u16)addr;
@@ -2521,7 +3186,12 @@ static inline u32 flip_nibbles32(u32 v)
 }
 
 /* Compute window clip mask (1 = masked/disabled inside window) for layer (0..3=BG1..4, 4=OBJ, 5=COL) */
-static void build_window_mask(int layer, u8 *out_mask)
+/* A layer's window mask of the line (layers 0..3: BG1..BG4, 4: OBJ, 5: the colour window): 1 where the windows
+   cover the layer.  The two windows' edges cut the line into at most five runs, each of one value: returns 0
+   when no pixel is covered and 1 when all are (out_mask is not written then: most lines of most games), 2 with
+   out_mask filled.  (It was worked out pixel by pixel, up to three times a line: a tenth of Super Mario Kart's
+   frame for windows that were empty.) */
+static int build_window_mask(int layer, u8 *out_mask)
 {
     u8 sel, log_op;
     if (layer < 2)      { sel = (u8)(S.w12sel >> (layer * 4)); log_op = (u8)((S.wbglog >> (layer * 2)) & 3u); }
@@ -2531,15 +3201,30 @@ static void build_window_mask(int layer, u8 *out_mask)
 
     int w1_en = (sel & 0x02u) != 0, w1_inv = (sel & 0x01u) != 0;
     int w2_en = (sel & 0x08u) != 0, w2_inv = (sel & 0x04u) != 0;
-    if (!w1_en && !w2_en) {
-        for (int x = 0; x < SNES_W; x++) out_mask[x] = 0;
-        return;
+    if (!w1_en && !w2_en)
+        return 0;
+
+    int wh0 = S.wh0, wh1 = S.wh1, wh2 = S.wh2, wh3 = S.wh3;
+    int edge[6] = { 0, wh0, wh1 + 1, wh2, wh3 + 1, SNES_W };
+    for (int i = 2; i <= 4; i++) {                  /* (the four inner edges in order) */
+        int v = edge[i], j = i - 1;
+        while (j >= 1 && edge[j] > v) {
+            edge[j + 1] = edge[j];
+            j--;
+        }
+        edge[j + 1] = v;
     }
-    for (int x = 0; x < SNES_W; x++) {
-        int m1 = 0, m2 = 0;
-        if (w1_en) { m1 = (x >= S.wh0 && x <= S.wh1); if (w1_inv) m1 = !m1; }
-        if (w2_en) { m2 = (x >= S.wh2 && x <= S.wh3); if (w2_inv) m2 = !m2; }
-        int m;
+    u8 val[5];
+    int any = 0, all = 1;
+    for (int i = 0; i < 5; i++) {
+        int x = edge[i];
+        if (x >= edge[i + 1]) {
+            val[i] = 2u;                            /* (an empty run) */
+            continue;
+        }
+        int m1 = 0, m2 = 0, m;
+        if (w1_en) { m1 = (x >= wh0 && x <= wh1); if (w1_inv) m1 = !m1; }
+        if (w2_en) { m2 = (x >= wh2 && x <= wh3); if (w2_inv) m2 = !m2; }
         if (w1_en && !w2_en)      m = m1;
         else if (!w1_en && w2_en) m = m2;
         else {
@@ -2550,8 +3235,19 @@ static void build_window_mask(int layer, u8 *out_mask)
             default: m = !(m1 ^ m2); break; /* XNOR */
             }
         }
-        out_mask[x] = (u8)m;
+        val[i] = (u8)m;
+        any |= m;
+        all &= m;
     }
+    if (!any)
+        return 0;
+    if (all)
+        return 1;
+    for (int i = 0; i < 5; i++)
+        if (val[i] != 2u)
+            for (int x = edge[i]; x < edge[i + 1]; x++)
+                out_mask[x] = val[i];
+    return 2;
 }
 
 static inline u16 fetch_bg_map_entry(u8 sc_reg, int tx, int ty)
@@ -2578,24 +3274,53 @@ static inline u16 direct_color_15(u8 px, u8 pal3)
 }
 
 struct line_compositor {
-    u16 main_col[SNES_W], sub_col[SNES_W];
+    u16 *main_col;                      /* the main screen's colours: main_buf, or the picture's line itself when
+                                           the line has no colour maths, clipping or dimming to go through */
+    int use_sub;                        /* the sub screen is looked at (colour maths with it): else not drawn */
+    int need_src;                       /* main_src is looked at (colour maths somewhere on the line) */
+    u16 main_buf[SNES_W], sub_col[SNES_W];
     u8 main_z[SNES_W], sub_z[SNES_W];
     u8 main_src[SNES_W];                /* bitmask: 0x01..0x08=BG1..4, 0x10=OBJ(pal4..7), 0x20=Backdrop, 0x00=OBJ(pal0..3) */
-};
+} __attribute__((aligned(4)));          /* (render_snes_line fills its arrays a 32-bit word at a time) */
+typedef u32 __attribute__((may_alias)) u32_alias;
+
+/* where on the line a colour-window rule (CGWSEL's "clip to black" or "prevent the maths": 0 never, 1 outside the
+   window, 2 inside, 3 always) holds, given build_window_mask's answer for the colour window: 0 nowhere,
+   1 everywhere, 2 where the mask is 0, 3 where it is 1 */
+static inline int cw_region(int mode, int kind)
+{
+    if (mode == 0)
+        return 0;
+    if (mode == 3)
+        return 1;
+    if (mode == 1)
+        return kind == 0 ? 1 : kind == 1 ? 0 : 2;
+    return kind == 0 ? 0 : kind == 1 ? 1 : 3;
+}
 
 static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int line_y,
                             u8 z_lo, u8 z_hi, int opt_mode)
 {
     u8 bit = (u8)(1u << bg);
     int on_main = (S.tm & bit) != 0;
-    int on_sub  = (S.ts & bit) != 0;
+    int on_sub  = (S.ts & bit) != 0 && lc->use_sub;
     if (!on_main && !on_sub)
         return;
 
     u8 wmask[SNES_W];
-    int use_win = ((on_main && (S.tmw & bit)) || (on_sub && (S.tsw & bit)));
-    if (use_win)
-        build_window_mask(bg, wmask);
+    u8 m_win_on = (on_main && (S.tmw & bit)) ? 1 : 0;
+    u8 s_win_on = (on_sub  && (S.tsw & bit)) ? 1 : 0;
+    if (m_win_on || s_win_on) {
+        int kind = build_window_mask(bg, wmask);
+        if (kind == 1) {                            /* all covered: the layer is off where its window counts */
+            if (m_win_on) on_main = 0;
+            if (s_win_on) on_sub = 0;
+            if (!on_main && !on_sub)
+                return;
+        }
+        if (kind != 2)
+            m_win_on = s_win_on = 0;
+    }
 
     int mos_sz = (S.mosaic & bit) ? ((S.mosaic >> 4) + 1) : 1;
     int eff_y = (mos_sz > 1) ? (line_y - (line_y % mos_sz)) : line_y;
@@ -2622,14 +3347,34 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
         int sx = hofs;
         int x = 0;
         u16 chr_shift = (bpp == 2) ? (chr_base_w >> 3) : (chr_base_w >> 4);
-        u8 m_win_on = (on_main && (S.tmw & bit)) ? 1 : 0;
-        u8 s_win_on = (on_sub  && (S.tsw & bit)) ? 1 : 0;
+        /* where the line's row of the tile map lies in VRAM, for the left and the right screen (the entry of a
+           column is then one addition away: fetch_bg_map_entry's sum, split) */
+        u32 map_row[2];
+        {
+            u32 base_w = (u32)(sc_reg & 0xFCu) << 8, sy_scr = ((u32)ty >> 5) & 1u;
+            for (u32 sx_scr = 0; sx_scr < 2u; sx_scr++) {
+                u32 screen = 0;
+                switch (sc_reg & 3u) {
+                case 1: screen = sx_scr; break;
+                case 2: screen = sy_scr; break;
+                case 3: screen = sx_scr | (sy_scr << 1); break;
+                }
+                map_row[sx_scr] = base_w + (screen << 10) + (u32)((ty & 31) << 5);
+            }
+        }
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        u8 *mz = lc->main_z, *ms = lc->main_src, *sz = lc->sub_z;
+        u16 *mc = lc->main_col, *sc = lc->sub_col;
+        int plain = on_main && !on_sub && !m_win_on;    /* the usual layer: the main screen alone, no window */
         while (x < SNES_W) {
             int tx0 = sx & 7;
             int n = 8 - tx0;
             if (x + n > SNES_W)
                 n = SNES_W - x;
-            u16 ent = fetch_bg_map_entry(sc_reg, sx >> 3, ty);
+            u32 tx = (u32)(sx >> 3);
+            u32 waddr = (map_row[(tx >> 5) & 1u] + (tx & 31u)) & 0x7FFFu;
+            u32 ent = vram[waddr * 2u] | ((u32)vram[waddr * 2u + 1u] << 8);
             int py = (ent & 0x8000u) ? (7 - fy) : fy;
             u16 tid = (u16)(chr_shift + (ent & 0x03FFu));
             u32 row32 = (bpp == 2) ? get_tile2(tid)[py] : get_tile4(tid)[py];
@@ -2637,24 +3382,35 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
                 if (ent & 0x4000u)
                     row32 = flip_nibbles32(row32);
                 row32 >>= (tx0 << 2);
-                u8 pal = (u8)((ent >> 10) & 7u);
-                const u16 *pal_p = (bpp == 2) ? &M->cgram[(mode0_pal_off + pal * 4u) & 0xFFu]
-                                              : &M->cgram[(pal * 16u) & 0xFFu];
+                u32 pal = (ent >> 10) & 7u;
+                const u16 *pal_p = (bpp == 2) ? &cg[(mode0_pal_off + pal * 4u) & 0xFFu]
+                                              : &cg[(pal * 16u) & 0xFFu];
                 u8 z = (ent & 0x2000u) ? z_hi : z_lo;
-                for (int i = 0; i < n; i++, row32 >>= 4) {
-                    u8 px = (u8)(row32 & 0x0Fu);
-                    if (!px)
-                        continue;
-                    int dx = x + i;
-                    u16 col = pal_p[px];
-                    if (on_main && (!m_win_on || !wmask[dx]) && z > lc->main_z[dx]) {
-                        lc->main_z[dx] = z;
-                        lc->main_col[dx] = col;
-                        lc->main_src[dx] = bit;
+                if (plain) {
+                    for (int dx = x; row32 && dx < x + n; dx++, row32 >>= 4) {
+                        u32 px = row32 & 0x0Fu;
+                        if (px && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = pal_p[px];
+                            ms[dx] = bit;
+                        }
                     }
-                    if (on_sub && (!s_win_on || !wmask[dx]) && z > lc->sub_z[dx]) {
-                        lc->sub_z[dx] = z;
-                        lc->sub_col[dx] = col;
+                } else {
+                    for (int i = 0; i < n; i++, row32 >>= 4) {
+                        u32 px = row32 & 0x0Fu;
+                        if (!px)
+                            continue;
+                        int dx = x + i;
+                        u16 col = pal_p[px];
+                        if (on_main && (!m_win_on || !wmask[dx]) && z > mz[dx]) {
+                            mz[dx] = z;
+                            mc[dx] = col;
+                            ms[dx] = bit;
+                        }
+                        if (on_sub && (!s_win_on || !wmask[dx]) && z > sz[dx]) {
+                            sz[dx] = z;
+                            sc[dx] = col;
+                        }
                     }
                 }
             }
@@ -2671,19 +3427,56 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
         int sx = hofs;
         int x = 0;
         u16 chr_shift = chr_base_w >> 5;
-        u8 m_win_on = (on_main && (S.tmw & bit)) ? 1 : 0;
-        u8 s_win_on = (on_sub  && (S.tsw & bit)) ? 1 : 0;
+        u32 map_row[2];                             /* (as the 2- / 4-bit loop above has it) */
+        {
+            u32 base_w = (u32)(sc_reg & 0xFCu) << 8, sy_scr = ((u32)ty >> 5) & 1u;
+            for (u32 sx_scr = 0; sx_scr < 2u; sx_scr++) {
+                u32 screen = 0;
+                switch (sc_reg & 3u) {
+                case 1: screen = sx_scr; break;
+                case 2: screen = sy_scr; break;
+                case 3: screen = sx_scr | (sy_scr << 1); break;
+                }
+                map_row[sx_scr] = base_w + (screen << 10) + (u32)((ty & 31) << 5);
+            }
+        }
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        /* the usual layer: one screen alone, no window, colours from the palette -- its z, colour (and for the
+           main screen what it came from) straight through one pointer each */
+        int one_m = on_main && !on_sub && !m_win_on && !direct_col;
+        int one_s = on_sub && !on_main && !s_win_on && !direct_col;
+        u8 *one_z = one_m ? lc->main_z : lc->sub_z;
+        u16 *one_c = one_m ? lc->main_col : lc->sub_col;
         while (x < SNES_W) {
             int tx0 = sx & 7;
             int n = 8 - tx0;
             if (x + n > SNES_W)
                 n = SNES_W - x;
-            u16 ent = fetch_bg_map_entry(sc_reg, sx >> 3, ty);
+            u32 tx = (u32)(sx >> 3);
+            u32 waddr = (map_row[(tx >> 5) & 1u] + (tx & 31u)) & 0x7FFFu;
+            u32 ent = vram[waddr * 2u] | ((u32)vram[waddr * 2u + 1u] << 8);
             int py = (ent & 0x8000u) ? (7 - fy) : fy;
             const u8 *tr = get_tile8((u16)(chr_shift + (ent & 0x03FFu))) + py * 8;
             int hf = (ent & 0x4000u) != 0;
             u8 pal = (u8)((ent >> 10) & 7u);
             u8 z = (ent & 0x2000u) ? z_hi : z_lo;
+            if (one_m || one_s) {
+                const u8 *t = tr + (hf ? 7 - tx0 : tx0);
+                int step = hf ? -1 : 1;
+                for (int dx = x; dx < x + n; dx++, t += step) {
+                    u32 px = *t;
+                    if (px && z > one_z[dx]) {
+                        one_z[dx] = z;
+                        one_c[dx] = cg[px];
+                        if (one_m)
+                            lc->main_src[dx] = bit;
+                    }
+                }
+                x += n;
+                sx += n;
+                continue;
+            }
             for (int i = 0; i < n; i++) {
                 u8 px = tr[hf ? (7 - (tx0 + i)) : (tx0 + i)];
                 if (!px)
@@ -2770,8 +3563,8 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
         else               col = direct_col ? direct_color_15(px, pal) : M->cgram[px];
 
         u8 z = (ent & 0x2000u) ? z_hi : z_lo;
-        int m_ok = on_main && (!(S.tmw & bit) || !wmask[x]);
-        int s_ok = on_sub  && (!(S.tsw & bit) || !wmask[x]);
+        int m_ok = on_main && (!m_win_on || !wmask[x]);
+        int s_ok = on_sub  && (!s_win_on || !wmask[x]);
         if (m_ok && z > lc->main_z[x]) {
             lc->main_z[x] = z;
             lc->main_col[x] = col;
@@ -2787,14 +3580,35 @@ static void render_bg_layer(struct line_compositor *lc, int bg, int bpp, int lin
 static void render_mode7_line(struct line_compositor *lc, int line_y)
 {
     int extbg = (S.setini & 0x40u) != 0;
-    int m1 = (S.tm & 1u) != 0, s1 = (S.ts & 1u) != 0;
-    int m2 = extbg && (S.tm & 2u), s2 = extbg && (S.ts & 2u);
+    int m1 = (S.tm & 1u) != 0, s1 = (S.ts & 1u) != 0 && lc->use_sub;
+    int m2 = extbg && (S.tm & 2u), s2 = extbg && (S.ts & 2u) && lc->use_sub;
     if (!m1 && !s1 && !m2 && !s2)
         return;
 
+    /* each layer's window, where it counts: mw / sw say that wmask is to be looked at for the main / sub screen */
     u8 wmask1[SNES_W], wmask2[SNES_W];
-    if ((m1 && (S.tmw & 1u)) || (s1 && (S.tsw & 1u))) build_window_mask(0, wmask1);
-    if ((m2 && (S.tmw & 2u)) || (s2 && (S.tsw & 2u))) build_window_mask(1, wmask2);
+    int mw1 = m1 && (S.tmw & 1u), sw1 = s1 && (S.tsw & 1u);
+    int mw2 = m2 && (S.tmw & 2u), sw2 = s2 && (S.tsw & 2u);
+    if (mw1 || sw1) {
+        int kind = build_window_mask(0, wmask1);
+        if (kind == 1) {
+            if (mw1) m1 = 0;
+            if (sw1) s1 = 0;
+        }
+        if (kind != 2)
+            mw1 = sw1 = 0;
+    }
+    if (mw2 || sw2) {
+        int kind = build_window_mask(1, wmask2);
+        if (kind == 1) {
+            if (mw2) m2 = 0;
+            if (sw2) s2 = 0;
+        }
+        if (kind != 2)
+            mw2 = sw2 = 0;
+    }
+    if (!m1 && !s1 && !m2 && !s2)
+        return;
 
     int mos_sz = (S.mosaic & 1u) ? ((S.mosaic >> 4) + 1) : 1;
     int sy = (mos_sz > 1) ? (line_y - (line_y % mos_sz)) : line_y;
@@ -2810,6 +3624,72 @@ static void render_mode7_line(struct line_compositor *lc, int line_y)
     #undef CLIP10
 
     int direct_col = (S.cgwsel & 1u) != 0;
+
+    /* The plain case -- BG1 alone, no mosaic, palette colours: the map position steps by (A, C) a pixel, no
+       multiplication, and what the loop needs stays in registers.  This layer is the first drawn into the line,
+       so its priority 5 beats what is there (the backdrop's 0) without a look. */
+    if (mos_sz == 1 && !m2 && !s2 && !direct_col) {
+        s32 fx = base_x, fy = base_y, da = S.m7a, dc = S.m7c;
+        if (S.m7sel & 1u) {                         /* flipped left to right */
+            fx += da * 255;
+            fy += dc * 255;
+            da = -da;
+            dc = -dc;
+        }
+        int over = (S.m7sel & 0x80u) != 0, fill0 = (S.m7sel & 0x40u) != 0;
+        const u8 *vram = M->vram;
+        const u16 *cg = M->cgram;
+        u8 *mz = lc->main_z, *ms = lc->main_src, *sz = lc->sub_z;
+        u16 *mc = lc->main_col, *sc = lc->sub_col;
+        if (m1 && !mw1 && !s1) {
+            /* ... on the main screen alone, no window (a racing game's ground): no branch on the pixel -- a
+               transparent one (0) writes the backdrop's colour again, which is CGRAM's entry 0, with priority 0
+               (and source 20h, the backdrop's, when the line's colour maths will look at sources) */
+            int need_src = lc->need_src;
+            for (int x = 0; x < SNES_W; x++, fx += da, fy += dc) {
+                s32 rx = fx >> 8, ry = fy >> 8;
+                u32 px;
+                if (over && ((rx | ry) & ~1023)) {
+                    px = fill0 ? vram[(u32)(((ry & 7) << 3) | (rx & 7)) * 2u + 1u] : 0u;
+                } else {
+                    u32 tile = vram[((((u32)ry >> 3) & 127u) << 8) | ((((u32)rx >> 3) & 127u) << 1)];
+                    px = vram[((tile << 6) | (u32)((ry & 7) << 3) | (u32)(rx & 7)) * 2u + 1u];
+                }
+                u32 any = (0u - px) >> 26;              /* 3Fh for a pixel, 0 for none */
+                mc[x] = cg[px];
+                mz[x] = (u8)(any & 5u);
+                if (need_src)
+                    ms[x] = (u8)(0x20u ^ (any & 0x21u));
+            }
+            return;
+        }
+        for (int x = 0; x < SNES_W; x++, fx += da, fy += dc) {
+            s32 rx = fx >> 8, ry = fy >> 8;
+            u32 px;
+            if (over && ((rx | ry) & ~1023)) {      /* outside the 1024 x 1024 map */
+                if (!fill0)
+                    continue;
+                px = vram[(u32)(((ry & 7) << 3) | (rx & 7)) * 2u + 1u];
+            } else {
+                u32 tile = vram[((((u32)ry >> 3) & 127u) << 8) | ((((u32)rx >> 3) & 127u) << 1)];
+                px = vram[((tile << 6) | (u32)((ry & 7) << 3) | (u32)(rx & 7)) * 2u + 1u];
+            }
+            if (!px)
+                continue;
+            u16 col = cg[px];
+            if (m1 && !(mw1 && wmask1[x])) {
+                mz[x] = 5;
+                mc[x] = col;
+                ms[x] = 0x01u;
+            }
+            if (s1 && !(sw1 && wmask1[x])) {
+                sz[x] = 5;
+                sc[x] = col;
+            }
+        }
+        return;
+    }
+
     for (int x = 0; x < SNES_W; x++) {
         int sx = (mos_sz > 1) ? (x - (x % mos_sz)) : x;
         if (S.m7sel & 1u)
@@ -2833,10 +3713,10 @@ static void render_mode7_line(struct line_compositor *lc, int line_y)
 
         if (px) {
             u16 col = direct_col ? direct_color_15(px, 0) : M->cgram[px];
-            if (m1 && (!(S.tmw & 1u) || !wmask1[x]) && 5 > lc->main_z[x]) {
+            if (m1 && (!mw1 || !wmask1[x]) && 5 > lc->main_z[x]) {
                 lc->main_z[x] = 5; lc->main_col[x] = col; lc->main_src[x] = 0x01u;
             }
-            if (s1 && (!(S.tsw & 1u) || !wmask1[x]) && 5 > lc->sub_z[x]) {
+            if (s1 && (!sw1 || !wmask1[x]) && 5 > lc->sub_z[x]) {
                 lc->sub_z[x] = 5; lc->sub_col[x] = col;
             }
         }
@@ -2844,10 +3724,10 @@ static void render_mode7_line(struct line_compositor *lc, int line_y)
             u8 p7 = px & 0x7Fu;
             u8 z2 = (px & 0x80u) ? 7 : 2;
             u16 col2 = M->cgram[p7];
-            if (m2 && (!(S.tmw & 2u) || !wmask2[x]) && z2 > lc->main_z[x]) {
+            if (m2 && (!mw2 || !wmask2[x]) && z2 > lc->main_z[x]) {
                 lc->main_z[x] = z2; lc->main_col[x] = col2; lc->main_src[x] = 0x02u;
             }
-            if (s2 && (!(S.tsw & 2u) || !wmask2[x]) && z2 > lc->sub_z[x]) {
+            if (s2 && (!sw2 || !wmask2[x]) && z2 > lc->sub_z[x]) {
                 lc->sub_z[x] = z2; lc->sub_col[x] = col2;
             }
         }
@@ -2857,7 +3737,7 @@ static void render_mode7_line(struct line_compositor *lc, int line_y)
 static void render_sprites_line(struct line_compositor *lc, int line_y, const u8 obj_z[4])
 {
     int on_main = (S.tm & 0x10u) != 0;
-    int on_sub  = (S.ts & 0x10u) != 0;
+    int on_sub  = (S.ts & 0x10u) != 0 && lc->use_sub;
     if (!on_main && !on_sub)
         return;
 
@@ -2873,32 +3753,63 @@ static void render_sprites_line(struct line_compositor *lc, int line_y, const u8
     u16 gap_w  = (u16)(((S.obsel >> 3) & 3u) << 12);
     int first = S.oam_prio ? ((S.oam_addr >> 2) & 0x7F) : 0;
 
-    u8 sel[32];
-    int n_sel = 0;
-    for (int i = 0; i < 128 && n_sel < 32; i++) {
-        int idx = (first + i) & 0x7F;
-        u8 hi_bits = (u8)((M->oam[512 + (idx >> 2)] >> ((idx & 3) * 2)) & 3u);
-        int sx = M->oam[idx * 4 + 0] | ((hi_bits & 1u) ? -256 : 0);
-        int sy = (M->oam[idx * 4 + 1] + 1) & 0xFF;
-        int big = (hi_bits >> 1) & 1;
-        int w = spr_w_tab[sz_mode][big];
-        int h = spr_h_tab[sz_mode][big];
-        if (sx <= -w && sx != -256)
-            continue;
-        int dy = (line_y - sy) & 0xFF;
-        if (dy < h)
-            sel[n_sel++] = (u8)idx;
+    /* each sprite's first line and height (0 when it is off the left edge: on no line), kept until OAM or
+       OBSEL is written: the scan of all 128 for every line then looks at two bytes a sprite */
+    if (S.oam_dirty) {
+        for (int idx = 0; idx < 128; idx++) {
+            u8 hi_bits = (u8)((M->oam[512 + (idx >> 2)] >> ((idx & 3) * 2)) & 3u);
+            int sx = M->oam[idx * 4 + 0] | ((hi_bits & 1u) ? -256 : 0);
+            int big = (hi_bits >> 1) & 1;
+            int w = spr_w_tab[sz_mode][big];
+            M->spr_yh[idx][0] = (u8)((M->oam[idx * 4 + 1] + 1) & 0xFF);
+            M->spr_yh[idx][1] = (sx <= -w && sx != -256) ? 0u : spr_h_tab[sz_mode][big];
+        }
+        S.oam_dirty = 0;
+        S.spr_first = 0xFFu;                    /* (the lines' lists are to be made again) */
     }
+    /* the sprites of each line -- the first 32, in the scan's order from `first`, whose lines (wrapping at 256)
+       reach it: listed once here, where the scan of all 128 was done for every line (a game writes OAM once a
+       frame; 3% of a frame of Super Mario Kart went into the scan) */
+    if (S.spr_first != (u8)first) {
+        const u8 (*yh)[2] = M->spr_yh;
+        for (int l = 0; l < 240; l++)
+            M->spr_line_n[l] = 0;
+        for (int i = 0; i < 128; i++) {
+            int idx = (first + i) & 0x7F;
+            u32 y0 = yh[idx][0], h = yh[idx][1];
+            for (u32 dy = 0; dy < h; dy++) {
+                u32 l = (y0 + dy) & 0xFFu;
+                if (l < 240u && M->spr_line_n[l] < 32u)
+                    M->spr_line[l][M->spr_line_n[l]++] = (u8)idx;
+            }
+        }
+        S.spr_first = (u8)first;
+    }
+    if ((u32)line_y >= 240u)
+        return;
+    const u8 *sel = M->spr_line[line_y];
+    int n_sel = M->spr_line_n[line_y];
     if (!n_sel)
         return;
 
     u8 wmask[SNES_W];
-    if ((on_main && (S.tmw & 0x10u)) || (on_sub && (S.tsw & 0x10u)))
-        build_window_mask(4, wmask);
+    int mw = on_main && (S.tmw & 0x10u), sw = on_sub && (S.tsw & 0x10u);    /* the window counts, by wmask */
+    if (mw || sw) {
+        int kind = build_window_mask(4, wmask);
+        if (kind == 1) {
+            if (mw) on_main = 0;
+            if (sw) on_sub = 0;
+            if (!on_main && !on_sub)
+                return;
+        }
+        if (kind != 2)
+            mw = sw = 0;
+    }
 
-    u8 line_px[SNES_W], line_pal[SNES_W], line_pri[SNES_W];
-    for (int x = 0; x < SNES_W; x++)
-        line_px[x] = 0;
+    u8 line_px[SNES_W] __attribute__((aligned(4))), line_pal[SNES_W], line_pri[SNES_W];
+    for (int x = 0; x < SNES_W / 4; x++)
+        ((u32_alias *)line_px)[x] = 0u;
+    int lo = SNES_W, hi = 0;                    /* the columns the sprites' pixels reach */
 
     /* Draw selected sprites back-to-front so earlier OAM wins every non-zero pixel (including priority!) */
     for (int s = n_sel - 1; s >= 0; s--) {
@@ -2934,6 +3845,10 @@ static void render_sprites_line(struct line_compositor *lc, int line_y, const u8
                 continue;
             if (hflip)
                 row32 = flip_nibbles32(row32);
+            if (screen_x0 < lo)
+                lo = screen_x0;
+            if (screen_x0 + 8 > hi)
+                hi = screen_x0 + 8;
             for (int k = 0; k < 8; k++, row32 >>= 4) {
                 int dx = screen_x0 + k;
                 if ((unsigned)dx >= SNES_W)
@@ -2947,24 +3862,121 @@ static void render_sprites_line(struct line_compositor *lc, int line_y, const u8
             }
         }
     }
+    if (lo < 0)
+        lo = 0;
+    if (hi > SNES_W)
+        hi = SNES_W;
 
-    for (int x = 0; x < SNES_W; x++) {
-        u8 px = line_px[x];
+    const u16 *cg = M->cgram + 128;
+    u8 *mz = lc->main_z, *ms = lc->main_src, *sz = lc->sub_z;
+    u16 *mc = lc->main_col, *sc = lc->sub_col;
+    for (int x = lo; x < hi; x++) {
+        u32 px = line_px[x];
         if (!px)
             continue;
-        u8 pal = line_pal[x];
-        u16 col = M->cgram[128u + pal * 16u + px];
+        u32 pal = line_pal[x];
+        u16 col = cg[pal * 16u + px];
         u8 z = obj_z[line_pri[x]];
-        u8 src = (pal >= 4u) ? 0x10u : 0x00u;   /* Only OBJ palettes 4..7 participate in color math! */
-        if (on_main && (!(S.tmw & 0x10u) || !wmask[x]) && z > lc->main_z[x]) {
-            lc->main_z[x] = z;
-            lc->main_col[x] = col;
-            lc->main_src[x] = src;
+        if (on_main && !(mw && wmask[x]) && z > mz[x]) {
+            mz[x] = z;
+            mc[x] = col;
+            ms[x] = (pal >= 4u) ? 0x10u : 0x00u;    /* (only OBJ palettes 4..7 take part in colour maths) */
         }
-        if (on_sub && (!(S.tsw & 0x10u) || !wmask[x]) && z > lc->sub_z[x]) {
-            lc->sub_z[x] = z;
-            lc->sub_col[x] = col;
+        if (on_sub && !(sw && wmask[x]) && z > sz[x]) {
+            sz[x] = z;
+            sc[x] = col;
         }
+    }
+}
+
+/* The colour maths on whole 15-bit colours, a channel's five bits each with room above them (green moved up 16):
+   render_snes_line's sums channel by channel, their results exactly.  add / sub clamp at 31 / 0 (a bit above
+   each channel tells: it carries out of an addition, and stays set through a subtraction that does not borrow);
+   the halved ones cannot leave 0..31 -- (a + b) / 2 is (a & b) + (a ^ b) / 2 a channel, and a difference below
+   0 halves to below 0, clamped to 0 as before the halving. */
+static inline __attribute__((always_inline)) u32 cm_add(u32 a, u32 b)
+{
+    u32 A = (a & 0x7C1Fu) | ((a & 0x03E0u) << 16), B = (b & 0x7C1Fu) | ((b & 0x03E0u) << 16);
+    u32 S2 = A + B, O = S2 & 0x04008020u;
+    S2 |= O - (O >> 5);
+    return (S2 & 0x7C1Fu) | ((S2 >> 16) & 0x03E0u);
+}
+
+static inline __attribute__((always_inline)) u32 cm_sub(u32 a, u32 b)
+{
+    u32 A = (a & 0x7C1Fu) | ((a & 0x03E0u) << 16), B = (b & 0x7C1Fu) | ((b & 0x03E0u) << 16);
+    u32 D = (A | 0x04008020u) - B, K = D & 0x04008020u;
+    D &= K - (K >> 5);
+    return (D & 0x7C1Fu) | ((D >> 16) & 0x03E0u);
+}
+
+static inline __attribute__((always_inline)) u32 cm_add_half(u32 a, u32 b)
+{
+    a &= 0x7FFFu;
+    b &= 0x7FFFu;
+    return (a & b) + (((a ^ b) & 0x7BDEu) >> 1);
+}
+
+static inline __attribute__((always_inline)) u32 cm_sub_half(u32 a, u32 b)
+{
+    return (cm_sub(a, b) & 0x7BDEu) >> 1;
+}
+
+/* The colour maths of the pixels x0 .. x1 - 1 of a line, where the colour window neither clips the main screen
+   nor prevents the maths (most lines that have maths at all, whole): each pixel a layer of CGADSUB's came from
+   gets the sub screen's pixel -- the fixed colour where it has none, then not halved -- or the fixed colour
+   added to / subtracted from it.  SUB: subtract; HALF: CGADSUB's halving; SCR: the sub screen is the other
+   operand */
+static inline __attribute__((always_inline)) void cm_line(const struct line_compositor *lc, u16 *dst, int x0, int x1,
+                                                          u32 math_en, u32 fixed_col, int SUB, int HALF, int SCR)
+{
+    const u16 *mc = lc->main_col, *sc = lc->sub_col;
+    const u8 *src = lc->main_src, *sz = lc->sub_z;
+    for (int x = x0; x < x1; x++) {
+        u32 c = mc[x];
+        if (src[x] & math_en) {
+            u32 o = fixed_col;
+            int half = HALF;
+            if (SCR) {
+                if (sz[x])
+                    o = sc[x];
+                else
+                    half = 0;
+            }
+            if (SUB)
+                c = half ? cm_sub_half(c, o) : cm_sub(c, o);
+            else
+                c = half ? cm_add_half(c, o) : cm_add(c, o);
+        }
+        dst[x] = (u16)c;
+    }
+}
+
+static void __attribute__((noinline)) cm_line_any(const struct line_compositor *lc, u16 *dst, int x0, int x1,
+                                                  u32 math_en, u32 fixed_col, int subtract, int half, int scr)
+{
+    switch ((subtract ? 4 : 0) | (half ? 2 : 0) | (scr ? 1 : 0)) {
+    case 0: cm_line(lc, dst, x0, x1, math_en, fixed_col, 0, 0, 0); break;
+    case 1: cm_line(lc, dst, x0, x1, math_en, fixed_col, 0, 0, 1); break;
+    case 2: cm_line(lc, dst, x0, x1, math_en, fixed_col, 0, 1, 0); break;
+    case 3: cm_line(lc, dst, x0, x1, math_en, fixed_col, 0, 1, 1); break;
+    case 4: cm_line(lc, dst, x0, x1, math_en, fixed_col, 1, 0, 0); break;
+    case 5: cm_line(lc, dst, x0, x1, math_en, fixed_col, 1, 0, 1); break;
+    case 6: cm_line(lc, dst, x0, x1, math_en, fixed_col, 1, 1, 0); break;
+    default: cm_line(lc, dst, x0, x1, math_en, fixed_col, 1, 1, 1); break;
+    }
+}
+
+/* The same where the colour window clips the main screen to black: the maths' pixels are then 0 plus the other
+   operand, never halved -- the operand itself when adding, 0 when subtracting -- and the others black */
+static void __attribute__((noinline)) cm_line_clipped(const struct line_compositor *lc, u16 *dst, int x0, int x1,
+                                                      u32 math_en, u32 fixed_col, int subtract, int scr)
+{
+    for (int x = x0; x < x1; x++) {
+        u32 c = 0u;
+        if (!subtract && (lc->main_src[x] & math_en))
+            c = ((scr && lc->sub_z[x]) ? lc->sub_col[x] : fixed_col) & 0x7FFFu;
+        dst[x] = (u16)c;
     }
 }
 
@@ -2976,14 +3988,51 @@ static void render_snes_line(int y, u16 *dst)
         return;
     }
 
+    /* What the line's last stage will do, from the registers alone: the main screen is clipped to black, and
+       the colour maths is prevented, nowhere (0), everywhere (1), where the colour window's mask is 0 (2) or
+       where it is 1 (3).  With no clipping, no maths and full brightness the layers draw straight into the
+       picture's line; with no maths the sub screen is not drawn at all. */
+    u8 cw_mask[SNES_W];
+    int clip_mode = (S.cgwsel >> 6) & 3u;
+    int prev_mode = (S.cgwsel >> 4) & 3u;
+    u8 math_en     = S.cgadsub & 0x3Fu;
+    int cw_kind = 0;
+    if (clip_mode == 1 || clip_mode == 2 || (math_en && (prev_mode == 1 || prev_mode == 2)))
+        cw_kind = build_window_mask(5, cw_mask);
+    int clip_r = cw_region(clip_mode, cw_kind);
+    int prev_r = math_en ? cw_region(prev_mode, cw_kind) : 1;
+    int sub_scr_en = (S.cgwsel & 0x02u) != 0;
+    u8 bright      = S.inidisp & 0x0Fu;
+    int direct = clip_r == 0 && prev_r == 1 && bright == 15u;
+
     struct line_compositor lc;
-    u16 back = M->cgram[0];
-    for (int x = 0; x < SNES_W; x++) {
-        lc.main_col[x] = back;
-        lc.sub_col[x]  = S.fixed_col;
-        lc.main_z[x]   = 0;
-        lc.sub_z[x]    = 0;
-        lc.main_src[x] = 0x20u;         /* Backdrop */
+    lc.main_col = direct ? dst : lc.main_buf;
+    lc.use_sub = sub_scr_en && prev_r != 1;
+    lc.need_src = prev_r != 1;
+    {                                   /* the backdrop everywhere (main_src 20h), a word at a time */
+        u32 back2 = (u32)M->cgram[0] * 0x10001u;
+        u32_alias *mz = (u32_alias *)lc.main_z, *ms = (u32_alias *)lc.main_src;
+        if (((unsigned long)lc.main_col & 3ul) == 0ul) {
+            u32_alias *mc = (u32_alias *)lc.main_col;
+            for (int i = 0; i < SNES_W / 2; i++)
+                mc[i] = back2;
+        } else {
+            for (int i = 0; i < SNES_W; i++)
+                lc.main_col[i] = (u16)back2;
+        }
+        for (int i = 0; i < SNES_W / 4; i++)
+            mz[i] = 0u;
+        if (prev_r != 1)                /* (what a pixel came from is looked at by the colour maths only) */
+            for (int i = 0; i < SNES_W / 4; i++)
+                ms[i] = 0x20202020u;
+        if (lc.use_sub) {
+            u32 fix2 = (u32)S.fixed_col * 0x10001u;
+            u32_alias *sc = (u32_alias *)lc.sub_col, *sz = (u32_alias *)lc.sub_z;
+            for (int i = 0; i < SNES_W / 2; i++)
+                sc[i] = fix2;
+            for (int i = 0; i < SNES_W / 4; i++)
+                sz[i] = 0u;
+        }
     }
 
     int mode = S.bgmode & 7u;
@@ -3048,60 +4097,53 @@ static void render_snes_line(int y, u16 *dst)
     }
     }
 
-    /* Color Window + Add/Sub/Half Color Math + Master Brightness */
-    u8 cw_mask[SNES_W];
-    int clip_mode = (S.cgwsel >> 6) & 3u;
-    int prev_mode = (S.cgwsel >> 4) & 3u;
-    if (clip_mode || prev_mode)
-        build_window_mask(5, cw_mask);
-
-    int sub_scr_en = (S.cgwsel & 0x02u) != 0;
+    /* Colour window + add / subtract / half colour maths + master brightness */
+    if (direct)                         /* the main screen as it is, drawn into the picture: most lines of most games */
+        return;
     int subtract   = (S.cgadsub & 0x80u) != 0;
     int half_math  = (S.cgadsub & 0x40u) != 0;
-    u8 math_en     = S.cgadsub & 0x3Fu;
-    u8 bright      = S.inidisp & 0x0Fu;
+    u16 fixed_col  = S.fixed_col;
     const u8 *blut = M->bright_lut[bright];
 
-    if (!clip_mode && !prev_mode && !math_en) {
-        if (bright == 15u) {
-            for (int x = 0; x < SNES_W; x++)
-                dst[x] = lc.main_col[x];
-        } else {
-            for (int x = 0; x < SNES_W; x++) {
-                u16 mc = lc.main_col[x];
-                dst[x] = (u16)(blut[mc & 31u] | ((u16)blut[(mc >> 5) & 31u] << 5) | ((u16)blut[(mc >> 10) & 31u] << 10));
-            }
+    if (clip_r == 0 && prev_r == 1) {   /* ... dimmed */
+        for (int x = 0; x < SNES_W; x++) {
+            u16 mc = lc.main_col[x];
+            dst[x] = (u16)(blut[mc & 31u] | ((u16)blut[(mc >> 5) & 31u] << 5) | ((u16)blut[(mc >> 10) & 31u] << 10));
         }
         return;
     }
 
-    for (int x = 0; x < SNES_W; x++) {
-        int in_cw = (clip_mode || prev_mode) ? cw_mask[x] : 0;
-        int clip_blk = (clip_mode == 3) || (clip_mode == 1 && !in_cw) || (clip_mode == 2 && in_cw);
-        int prevent  = (prev_mode == 3) || (prev_mode == 1 && !in_cw) || (prev_mode == 2 && in_cw);
-
-        u16 mc = clip_blk ? 0 : lc.main_col[x];
-        if (!prevent && (lc.main_src[x] & math_en)) {
-            int has_sub_px = sub_scr_en && lc.sub_z[x] > 0;
-            u16 sc = sub_scr_en ? (has_sub_px ? lc.sub_col[x] : S.fixed_col) : S.fixed_col;
-            int do_half = half_math && !clip_blk && (!sub_scr_en || has_sub_px);
-
-            int mr = mc & 31, mg = (mc >> 5) & 31, mb = (mc >> 10) & 31;
-            int sr = sc & 31, sg = (sc >> 5) & 31, sb = (sc >> 10) & 31;
-            int r, g, b;
-            if (!subtract) { r = mr + sr; g = mg + sg; b = mb + sb; }
-            else           { r = mr - sr; g = mg - sg; b = mb - sb; }
-            if (do_half)   { r >>= 1; g >>= 1; b >>= 1; }
-            if (r < 0) r = 0; else if (r > 31) r = 31;
-            if (g < 0) g = 0; else if (g > 31) g = 31;
-            if (b < 0) b = 0; else if (b > 31) b = 31;
-            mc = (u16)(r | (g << 5) | (b << 10));
+    /* The line by the runs of the colour window's mask -- at most five, the whole line when the mask is not
+       looked at -- each with the main screen clipped to black or not and the maths prevented or not: black, the
+       main screen as it is, or the maths on whole colours (cm_line).  (It was decided, and summed channel by
+       channel with their clamps, at every pixel: half of the frame of a game with maths on every line.) */
+    int masked = clip_r >= 2 || prev_r >= 2;        /* (cw_region gives 2 / 3 only with a mask made) */
+    for (int x0 = 0; x0 < SNES_W;) {
+        int m = masked ? cw_mask[x0] : 0, x1 = SNES_W;
+        if (masked)
+            for (x1 = x0 + 1; x1 < SNES_W && cw_mask[x1] == m; x1++)
+                ;
+        int clip_blk = clip_r == 1 || (clip_r == 2 && !m) || (clip_r == 3 && m);
+        int prevent  = prev_r == 1 || (prev_r == 2 && !m) || (prev_r == 3 && m);
+        if (prevent) {
+            if (clip_blk)
+                for (int x = x0; x < x1; x++)
+                    dst[x] = 0;
+            else
+                for (int x = x0; x < x1; x++)
+                    dst[x] = lc.main_col[x];
+        } else if (clip_blk) {
+            cm_line_clipped(&lc, dst, x0, x1, math_en, fixed_col, subtract, sub_scr_en);
+        } else {
+            cm_line_any(&lc, dst, x0, x1, math_en, fixed_col, subtract, half_math, sub_scr_en);
         }
-
-        if (bright < 15u)
-            mc = (u16)(blut[mc & 31u] | ((u16)blut[(mc >> 5) & 31u] << 5) | ((u16)blut[(mc >> 10) & 31u] << 10));
-        dst[x] = mc;
+        x0 = x1;
     }
+    if (bright < 15u)
+        for (int x = 0; x < SNES_W; x++) {
+            u16 mc = dst[x];
+            dst[x] = (u16)(blut[mc & 31u] | ((u16)blut[(mc >> 5) & 31u] << 5) | ((u16)blut[(mc >> 10) & 31u] << 10));
+        }
 }
 
 /* =====================================================================
@@ -3326,6 +4368,25 @@ const char *snes_load(u8 *image, u32 size)
         S.sram_mask = sz - 1u;
     }
 
+    /* cartridge types 03h..05h have a DSP: the DSP-1, but for the three games with a DSP-2, -3 or -4 (not
+       emulated: their registers stay open bus, as every DSP's did before) */
+    if (hdr[0x16] >= 0x03u && hdr[0x16] <= 0x05u && (hdr[0x15] & 0x0Eu) == 0u) {
+        static const char *const other[] = { "DUNGEON MASTER", "SD GUNDAM GX", "TOP GEAR 3000", "PLANETS CHAMP TG3000" };
+        int is_other = 0;
+        for (u32 k = 0; k < sizeof(other) / sizeof(other[0]); k++) {
+            const char *t = other[k];
+            u32 i = 0;
+            while (t[i] && hdr[i] == (u8)t[i])
+                i++;
+            if (!t[i])
+                is_other = 1;
+        }
+        if (!is_other) {
+            D1.map = (u8)(mapper == MAP_HIROM ? 1u : size > 0x100000u ? 3u : 2u);
+            d1_reset();
+        }
+    }
+
     build_page_tables();
     snes_reset();
     fmt_snes_info(hdr);
@@ -3338,6 +4399,7 @@ void snes_reset(void)
     for (u32 i = 0; i < sizeof(M->vram); i++) M->vram[i] = 0;
     for (u32 i = 0; i < 256u; i++) M->cgram[i] = 0;
     for (u32 i = 0; i < sizeof(M->oam); i++) M->oam[i] = 0;
+    S.oam_dirty = 1;
     for (u32 i = 0; i < sizeof(M->apuram); i++) M->apuram[i] = 0;
     for (u32 i = 0; i < 4096u; i++) M->vram_dirty2[i] = 1;
     for (u32 i = 0; i < 2048u; i++) M->vram_dirty4[i] = 1;

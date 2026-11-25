@@ -211,7 +211,6 @@ static struct {
     u8 type_holding;
 
     int save_dirty;
-    int pals_ready;
     char info[128];
 } S;
 
@@ -254,11 +253,11 @@ static int ci_contains(const char *s, const char *sub)
     return 0;
 }
 
-/* ---- Authentic GTIA 256-color NTSC & PAL palette generation (0bbbbbgggggrrrrr) ---- */
+/* ---- Authentic GTIA 256-color NTSC & PAL palette generation (0bbbbbgggggrrrrr) ----
+   (built at every load: the tables are in the players' shared memory, which the next machine played writes
+   over -- built once, behind a flag kept here, they were that machine's bytes after it) */
 static void init_palettes(void)
 {
-    if (S.pals_ready)
-        return;
 
     /* Chroma (R-Y, G-Y, B-Y) vectors in Q8 calibrated to Altirra / Laoo GTIA colors:
        Hue 0 = greyscale; Hue 1 = gold; Hue 3..4 = red-orange/red; Hue 6..7 = violet;
@@ -312,7 +311,6 @@ static void init_palettes(void)
         M->ff_page[i] = 0xFFu;
         M->zero_page[i] = 0x00u;
     }
-    S.pals_ready = 1;
 }
 
 /* ---- 32 x 2 KB MMU / Cartridge page table builder ---- */

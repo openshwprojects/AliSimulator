@@ -58,7 +58,9 @@ def main() -> int:
     print(f"{args.app}: {len(image)} bytes, CRC-32 {zlib.crc32(image) & 0xFFFFFFFF:08x} -> {args.host}:{args.port}")
     t0 = time.monotonic()
     try:
-        answer = netload(args.host, image, args.port)
+        # (the box itself gives an image 10 s + 1 ms per 100 bytes -- 45 s for 3.5 MB; a fixed 15 s here gave up
+        #  on a slow link while the box was still receiving, and the box then started nothing)
+        answer = netload(args.host, image, args.port, timeout=15.0 + len(image) / 100000.0)
     except OSError as e:
         print(f"failed: {e}", file=sys.stderr)
         return 1

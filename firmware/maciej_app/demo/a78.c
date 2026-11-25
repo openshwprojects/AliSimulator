@@ -123,7 +123,6 @@ static struct {
     u8  dma_was_on;
 
     int save_dirty;
-    int pals_ready;
     char title[40];
     char info[128];
 } S;
@@ -135,11 +134,11 @@ static void mem_zero(void *dst, u32 n)
         p[i] = 0;
 }
 
-/* ---- Atari 7800 256-colour NTSC & PAL palette generation (BGR555) ---- */
+/* ---- Atari 7800 256-colour NTSC & PAL palette generation (BGR555) ----
+   (built at every load: the tables are in the players' shared memory, which the next machine played writes
+   over -- built once, behind a flag kept here, they were that machine's bytes after it) */
 static void init_palettes(void)
 {
-    if (S.pals_ready)
-        return;
 
     /* 16-entry hue phase unit vectors (cos, sin) in Q10 around the Atari colorburst wheel */
     static const s16 ntsc_i[16] = {
@@ -176,7 +175,6 @@ static void init_palettes(void)
             out[c] = (u16)(((r >> 3) & 31) | (((g >> 3) & 31) << 5) | (((b >> 3) & 31) << 10));
         }
     }
-    S.pals_ready = 1;
 }
 
 /* ---- Bank mapping ---- */

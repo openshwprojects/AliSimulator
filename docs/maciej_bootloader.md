@@ -20,7 +20,7 @@ for reproducing the first hardware validation.
 - [v4 manifest](../firmware/maciej_app/bin/elektroda_ali_m3801_maciej_v4.json):
   sizes, addresses, commands, and SHA-256 checksums.
 - [Portable v4 UART ZIP](../firmware/maciej_app/bin/maciej_uart_v4.zip):
-  standalone `maciej_uart.py`, payload, and ASCII Polish instructions
+  standalone `maciej_uart.py`, payload, and plain-ASCII English instructions
   ([README_UART_v4.txt](../firmware/maciej_app/bin/README_UART_v4.txt)).
 - The same four files exist for v3 (`..._v3.*`, `maciej_uart_v3.zip`).
 

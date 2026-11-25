@@ -207,7 +207,6 @@ static struct {
     u16 eep_read_addr;
     u8 eep_read_bit;
 
-    int luts_ready;
     char title[16];
     char code[8];
     char info[128];
@@ -280,11 +279,12 @@ static void mem_copy(void *dst, const void *src, u32 n)
         d[i] = s[i];
 }
 
-/* ---- Lookup tables (ARM conditions, BIOS sine) ---- */
+/* ---- Lookup tables (ARM conditions, BIOS sine) ----
+   Built at every load: they are in the players' shared memory (M), which the next machine played writes over.
+   Built once (a flag here said so), a Game Boy Advance game started after a game of another machine ran with
+   that machine's bytes for the ARM conditions -- Another World showed one still picture at half speed. */
 static void init_luts(void)
 {
-    if (S.luts_ready)
-        return;
     for (u32 f = 0; f < 16; f++) {
         int n = (f >> 3) & 1;
         int z = (f >> 2) & 1;
@@ -329,7 +329,6 @@ static void init_luts(void)
     M->sin_lut[128] = 0;
     for (int i = 1; i < 128; i++)
         M->sin_lut[128 + i] = (s16)(-M->sin_lut[i]);
-    S.luts_ready = 1;
 }
 
 /* ---- Waitstate table update (WAITCNT 0x04000204) ---- */
@@ -2531,12 +2530,27 @@ static s32 poll_skip_limit(u32 addr, s32 rem)
 
 static s32 arm_poll_skip(u32 target, u32 br_pc, s32 rem)
 {
-    if (br_pc - target != 8u || (target >> 24) != (br_pc >> 24))
+    if ((target >> 24) != (br_pc >> 24))
         return 0;
+    /* a C compiler's form of the wait has the polled place's address loaded first, every pass:
+       "ldr rX, [pc, #n]; ldrh rY, [rX]; cmp rZ, rY; b<cond> back" -- Another World's wait for a raster line
+       (VCOUNT), a tenth of the instructions it ran */
+    u32 lit_reg = 16u;
+    if (br_pc - target == 12u) {
+        u32 il = bus_read32_aligned(target);
+        if ((il & 0xFF7F0000u) != 0xE51F0000u)
+            return 0;
+        lit_reg = (il >> 12) & 15u;
+        target += 4u;
+    } else if (br_pc - target != 8u) {
+        return 0;
+    }
     u32 i0 = bus_read32_aligned(target);
     u32 i1 = bus_read32_aligned(target + 4u);
     if ((i0 >> 28) != 0xEu || (i1 >> 28) != 0xEu)
         return 0;
+    if (lit_reg != 16u && ((i0 >> 16) & 15u) != lit_reg)
+        return 0;                               /* (the load must go through the literal's register) */
     u32 rn, rd, addr;
     if ((i0 & 0x0F300000u) == 0x05100000u) {
         rn = (i0 >> 16) & 15u;
@@ -2588,11 +2602,90 @@ static s32 thumb_poll_skip(u32 target, u32 br_pc, s32 rem)
     return ok ? poll_skip_limit(addr, rem) : 0;
 }
 
+/* The loop a C compiler makes of "for (i ...) dst16[i] = src16[i]":
+       add   rC, rC, #1
+       ldrh  rT, [rS], #2
+       cmp   rC, rN
+       strh  rT, [rD], #2
+       bcc   back
+   Another World's GBA port copies its whole picture to the screen with it: three quarters of all the instructions
+   it runs.  Here as many passes are run in one go as end before the slice's end and the timers' next event,
+   with the interpreter's own bus functions and cycle counts, so nothing differs from the instructions run one
+   by one (the pointers stay in memory without side effects, and out of the region the loop itself is in).  The
+   last pass, whose branch falls through, and what does not fit go the usual way.
+   Returns the cycles of the passes run; 0: none, the instruction at inst_pc is still to be run. */
+static u32 __attribute__((noinline)) arm_copy16_loop(u32 inst_pc, u32 op, u32 base_cyc, s32 target_left)
+{
+    u32 i1 = fetch_arm(inst_pc + 4u), i2 = fetch_arm(inst_pc + 8u);
+    u32 i3 = fetch_arm(inst_pc + 12u), i4 = fetch_arm(inst_pc + 16u);
+    if ((i1 & 0xFFF00FFFu) != 0xE0D000B2u || (i2 & 0xFFF0FFF0u) != 0xE1500000u ||
+        (i3 & 0xFFF00FFFu) != 0xE0C000B2u || i4 != 0x3AFFFFFAu)
+        return 0;
+    u32 rc = (op >> 12) & 15u, rs = (i1 >> 16) & 15u, rt = (i1 >> 12) & 15u, rn = i2 & 15u, rd = (i3 >> 16) & 15u;
+    if (((i2 >> 16) & 15u) != rc || ((i3 >> 12) & 15u) != rt)
+        return 0;
+    u32 used = (1u << rc) | (1u << rs) | (1u << rt) | (1u << rn) | (1u << rd);
+    if ((used & 0x8000u) || (used & (used - 1u)) == 0u)
+        return 0;
+    {                                           /* five different registers */
+        u32 bits = 0;
+        for (u32 m = used; m; m &= m - 1u)
+            bits++;
+        if (bits != 5u)
+            return 0;
+    }
+    u32 cnt = S.r[rc], lim = S.r[rn], src = S.r[rs], dst = S.r[rd];
+    if (cnt + 1u < cnt || cnt + 1u >= lim)
+        return 0;                               /* (no pass whose branch is taken) */
+    u32 n = lim - cnt - 1u;
+    u32 sreg = src >> 24, dreg = dst >> 24;
+    /* from RAM, palette, VRAM, OAM or the cartridge's ROM; to RAM, palette, VRAM or OAM */
+    if (sreg > 12u || !((0x1FECu >> sreg) & 1u) || dreg > 7u || !((0x00ECu >> dreg) & 1u) ||
+        dreg == (inst_pc >> 24))
+        return 0;
+    u32 room = (0x01000000u - (src & 0x00FFFFFFu) + 1u) >> 1;   /* passes with the pointer still in its region */
+    if (n > room)
+        n = room;
+    room = (0x01000000u - (dst & 0x00FFFFFFu) + 1u) >> 1;
+    if (n > room)
+        n = room;
+    u32 pass = 5u * base_cyc + 1u + S.ws_n16[sreg] + S.ws_n16[dreg] + 2u;
+    s32 floor = target_left;
+    if (S.active_timers && S.tmr_next_cyc > floor)
+        floor = S.tmr_next_cyc;
+    s32 fit = (S.cyc_left - floor - 1) / (s32)pass;     /* passes after which the slice still has cycles left */
+    if (fit <= 0)
+        return 0;
+    if (n > (u32)fit)
+        n = (u32)fit;
+    u32 val = S.r[rt];
+    for (u32 i = 0; i < n; i++) {
+        u32 h = bus_read16_aligned(src);
+        val = (src & 1u) ? ror32(h, 8u) : h;
+        bus_write16_aligned(dst, (u16)val);
+        src += 2u;
+        dst += 2u;
+    }
+    S.r[rc] = cnt + n;
+    S.r[rs] = src;
+    S.r[rd] = dst;
+    S.r[rt] = val;
+    (void)alu_sub(cnt + n, lim, 1);             /* the flags of the last pass's cmp */
+    S.r[15] = inst_pc;                          /* the next pass starts at the loop's head again */
+    return n * pass;
+}
+
 static u32 step_arm(u32 inst_pc, s32 target_left)
 {
     inst_pc &= ~3u;
     u32 op = fetch_arm(inst_pc);
     u32 cyc = S.ws_s32[(inst_pc >> 24) & 15u];
+
+    if ((op & 0xFFF00FFFu) == 0xE2800001u && ((op >> 16) & 15u) == ((op >> 12) & 15u)) {
+        u32 run = arm_copy16_loop(inst_pc, op, cyc, target_left);   /* add rC, rC, #1: a copy loop's head? */
+        if (run)
+            return run;
+    }
 
     /* Unconditional idle branch `b .` (0xEAFFFFFE) fast-forward */
     if (op == 0xEAFFFFFEu) {
@@ -3604,8 +3697,10 @@ static void render_bitmap_bg2(u32 mode, u16 dispcnt, u16 *line_col, u8 *line_hit
     }
 }
 
-static void render_objs(int y, u16 dispcnt, u16 *obj_col, u8 *obj_prio, u8 *obj_semi, u8 *obj_win)
+/* (returns what the line's sprite pixels are: bit p set -- one of priority p; bit 4 -- a semi-transparent one) */
+static u32 render_objs(int y, u16 dispcnt, u16 *obj_col, u8 *obj_prio, u8 *obj_semi, u8 *obj_win)
 {
+    u32 flags = 0;
     u32 mode = dispcnt & 7u;
     u32 min_tile = (mode >= 3u) ? 512u : 0u;
     int map_1d   = (dispcnt >> 6) & 1;
@@ -3729,9 +3824,11 @@ static void render_objs(int y, u16 dispcnt, u16 *obj_col, u8 *obj_prio, u8 *obj_
                 obj_prio[sx] = prio;
                 obj_semi[sx] = (gfx_mode == 1u) ? 1 : 0;
                 obj_col[sx]  = M->pal[col256 ? (0x100u + px) : (pal_base + px)];
+                flags |= (1u << prio) | ((gfx_mode == 1u) ? 0x10u : 0u);
             }
         }
     }
+    return flags;
 }
 
 static int in_win_v(int y, u16 wv)
@@ -3741,6 +3838,93 @@ static int in_win_v(int y, u16 wv)
     if (y1 <= y2)
         return y >= y1 && y < y2;
     return y >= y1 || y < y2;
+}
+
+typedef u32 __attribute__((may_alias)) u32_words;      /* (a line's u8 / u16 arrays a 32-bit word at a time) */
+
+/* A 4-bit text BG's line (no mosaic) painted over `out`: render_text_bg's tiles, the opaque pixels alone written
+   -- for a line whose pixels are each their top layer's colour, painted from the back */
+static void paint_text_bg4(int bg, int y, u16 *out)
+{
+    u16 cnt = io16(0x008u + (u32)bg * 2u);
+    u32 char_base = ((cnt >> 2) & 3u) * 0x4000u;
+    u32 scr_base  = ((cnt >> 8) & 31u) * 0x800u;
+    u32 sz        = (cnt >> 14) & 3u;
+    u32 hofs = io16(0x010u + (u32)bg * 4u) & 0x1FFu;
+    u32 vofs = io16(0x012u + (u32)bg * 4u) & 0x1FFu;
+    u32 sy   = (u32)y + vofs;
+    u32 ty   = (sy >> 3) & 31u;
+    u32 py   = sy & 7u;
+    u32 map_y_blk = ((sz & 2u) && (sy & 256u)) ? ((sz == 3u) ? 0x1000u : 0x800u) : 0u;
+    int x = 0;
+    u32 sx = hofs;
+    while (x < GBA_W) {
+        u32 tx = (sx >> 3) & 31u;
+        u32 map_x_blk = ((sz & 1u) && (sx & 256u)) ? 0x800u : 0u;
+        u32 map_off = (scr_base + map_y_blk + map_x_blk + ((ty * 32u + tx) << 1)) & 0xFFFFu;
+        u16 entry = rd16le(M->vram + map_off);
+        u32 tid = entry & 0x3FFu;
+        u32 fy  = (entry & 0x0800u) ? (7u - py) : py;
+        u32 toff = char_base + tid * 32u + fy * 4u;
+        u32 row32 = (toff < 0x10000u) ? rd32le(M->vram + toff) : 0u;
+        u32 start_k = sx & 7u;
+        u32 span = 8u - start_k;
+        if (x + (int)span > GBA_W)
+            span = (u32)(GBA_W - x);
+        if (row32 != 0u) {
+            const u16 *pal = M->pal + ((entry >> 12) << 4);
+            u16 *o = out + x;
+            if (!(entry & 0x0400u)) {
+                u32 w = row32 >> (start_k * 4u);
+                for (u32 i = 0; w && i < span; i++, w >>= 4) {
+                    u32 px = w & 15u;
+                    if (px)
+                        o[i] = pal[px];
+                }
+            } else {
+                for (u32 i = 0; i < span; i++) {
+                    u32 px = (row32 >> ((7u - (start_k + i)) * 4u)) & 15u;
+                    if (px)
+                        o[i] = pal[px];
+                }
+            }
+        }
+        x += (int)span;
+        sx += span;
+    }
+}
+
+/* A layer's pixels laid on the line's two top layers -- top[x], bot[x]: a colour with its layer's number << 16
+   -- where sel[x] == want (a BG's hit flags: 1; the sprites' priorities: the one being laid) and, with windows,
+   where win[x] has the layer's bit: what was on top goes below (BOT: only kept when the line's effects look at
+   it) */
+static inline __attribute__((always_inline)) void lay_line(u32 *top, u32 *bot, const u16 *col, const u8 *sel,
+                                                           u32 want, const u8 *win, u32 bit, u32 tag, int BOT,
+                                                           int WIN)
+{
+    for (int x = 0; x < GBA_W; x++) {
+        if (sel[x] == want && (!WIN || (win[x] & bit))) {
+            if (BOT)
+                bot[x] = top[x];
+            top[x] = (u32)col[x] | tag;
+        }
+    }
+}
+
+static void __attribute__((noinline)) lay_any(u32 *top, u32 *bot, const u16 *col, const u8 *sel, u32 want,
+                                              const u8 *win, u32 bit, u32 tag)
+{
+    if (!win) {
+        if (!bot)
+            lay_line(top, bot, col, sel, want, win, bit, tag, 0, 0);
+        else
+            lay_line(top, bot, col, sel, want, win, bit, tag, 1, 0);
+    } else {
+        if (!bot)
+            lay_line(top, bot, col, sel, want, win, bit, tag, 0, 1);
+        else
+            lay_line(top, bot, col, sel, want, win, bit, tag, 1, 1);
+    }
 }
 
 static void render_scanline(int y, u16 *out)
@@ -3755,20 +3939,67 @@ static void render_scanline(int y, u16 *out)
 
     u32 mode = dispcnt & 7u;
 
-    /* Evaluate OBJs first (needed for OBJWIN too) */
-    u16 obj_col[GBA_W];
-    u8  obj_prio[GBA_W], obj_semi[GBA_W], obj_win[GBA_W];
-    for (int x = 0; x < GBA_W; x++) {
-        obj_prio[x] = 4u;
-        obj_semi[x] = 0u;
-        obj_win[x]  = 0u;
+    /* A bitmap picture alone -- modes 3 to 5 with BG2 unscaled, no sprites, windows or colour effects: every pixel
+       is one look-up, no layers to sort or mix (the pictures a program draws itself: Another World's port, all of
+       it).  The same pixels as the general way below gives. */
+    if (mode >= 3u && mode <= 5u && (dispcnt & 0xF400u) == 0x0400u && ((io16(0x050) >> 6) & 3u) == 0u &&
+        io16(0x020u) == 0x0100u && io16(0x024u) == 0u) {
+        u32 frame_base = ((dispcnt & 0x0010u) && mode >= 4u) ? 0xA000u : 0u;
+        s32 bw = (mode == 5u) ? 160 : 240;
+        u32 bh = (mode == 5u) ? 128u : 160u;
+        u16 bd = M->pal[0] & 0x7FFFu;
+        s32 ix = S.bgx[0] >> 8, iy = S.bgy[0] >> 8;     /* (a step of 100h: the next column each pixel) */
+        int x = 0, x0 = GBA_W, x1 = GBA_W;              /* the picture's columns: x0 .. x1 - 1 */
+        if ((u32)iy < bh) {
+            x0 = ix < 0 ? -ix : 0;
+            if (x0 > GBA_W)
+                x0 = GBA_W;
+            x1 = bw - ix;
+            if (x1 > GBA_W)
+                x1 = GBA_W;
+            if (x1 < x0)
+                x1 = x0;
+        }
+        for (; x < x0; x++)
+            out[x] = bd;
+        if (mode == 4u) {
+            const u8 *row = M->vram + frame_base + (u32)iy * 240u + ix;
+            const u16 *pal = M->pal;
+            for (; x < x1; x++) {
+                u32 px = row[x];
+                out[x] = px ? (u16)(pal[px] & 0x7FFFu) : bd;
+            }
+        } else {
+            const u8 *row = M->vram + frame_base + ((u32)iy * (u32)bw + ix) * 2u;
+            for (; x < x1; x++)
+                out[x] = rd16le(row + x * 2) & 0x7FFFu;
+        }
+        for (; x < GBA_W; x++)
+            out[x] = bd;
+        S.bgx[0] += (s16)io16(0x022u);
+        S.bgy[0] += (s16)io16(0x026u);
+        S.bgx[1] += (s16)io16(0x032u);
+        S.bgy[1] += (s16)io16(0x036u);
+        return;
     }
-    if (dispcnt & 0x1000u)
-        render_objs(y, dispcnt, obj_col, obj_prio, obj_semi, obj_win);
 
-    /* Per-pixel window enable mask (bits 0..3=BG0..3, bit 4=OBJ, bit 5=SFX) */
+    /* Evaluate OBJs first (needed for OBJWIN too) */
+    u16 obj_col[GBA_W] __attribute__((aligned(4)));
+    u8  obj_prio[GBA_W] __attribute__((aligned(4))), obj_semi[GBA_W] __attribute__((aligned(4)));
+    u8  obj_win[GBA_W] __attribute__((aligned(4)));
+    for (int w = 0; w < GBA_W / 4; w++) {
+        ((u32_words *)obj_prio)[w] = 0x04040404u;
+        ((u32_words *)obj_semi)[w] = 0u;
+        ((u32_words *)obj_win)[w]  = 0u;
+    }
+    u32 obj_flags = 0;
+    if (dispcnt & 0x1000u)
+        obj_flags = render_objs(y, dispcnt, obj_col, obj_prio, obj_semi, obj_win);
+
+    /* Per-pixel window enable mask (bits 0..3=BG0..3, bit 4=OBJ, bit 5=SFX): made when a window is on */
     u8 win_en[GBA_W];
-    if (dispcnt & 0xE000u) {
+    int any_win = (dispcnt & 0xE000u) != 0;
+    if (any_win) {
         u16 winin  = io16(0x048);
         u16 winout = io16(0x04A);
         u8 out_m   = (u8)(winout & 0x3Fu);
@@ -3795,117 +4026,73 @@ static void render_scanline(int y, u16 *out)
                     win_en[x] = w0_m;
             }
         }
-    } else {
-        for (int x = 0; x < GBA_W; x++)
-            win_en[x] = 0x3Fu;
     }
 
-    /* Render active BG layers for the current video mode */
-    u16 bg_col[4][GBA_W] __attribute__((aligned(4)));
-    u8  bg_hit[4][GBA_W] __attribute__((aligned(4)));
-    u8  bg_act = 0;
-
-    if (mode == 0u) {
-        for (int b = 0; b < 4; b++) {
-            if (dispcnt & (0x0100u << b)) {
-                render_text_bg(b, y, bg_col[b], bg_hit[b]);
-                bg_act |= (u8)(1u << b);
-            }
-        }
-    } else if (mode == 1u) {
-        for (int b = 0; b < 2; b++) {
-            if (dispcnt & (0x0100u << b)) {
-                render_text_bg(b, y, bg_col[b], bg_hit[b]);
-                bg_act |= (u8)(1u << b);
-            }
-        }
-        if (dispcnt & 0x0400u) {
-            render_affine_bg(2, bg_col[2], bg_hit[2]);
-            bg_act |= 4u;
-        }
-    } else if (mode == 2u) {
-        for (int b = 2; b < 4; b++) {
-            if (dispcnt & (0x0100u << b)) {
-                render_affine_bg(b, bg_col[b], bg_hit[b]);
-                bg_act |= (u8)(1u << b);
-            }
-        }
-    } else if (mode <= 5u) {
-        if (dispcnt & 0x0400u) {
-            render_bitmap_bg2(mode, dispcnt, bg_col[2], bg_hit[2]);
-            bg_act |= 4u;
-        }
-    }
-
-    /* Sort BGs by priority (0..3), tie-broken by BG index (0 < 1 < 2 < 3) */
-    int bg_order[4], n_bg = 0;
-    u8 bg_prio[4] = { 0, 0, 0, 0 };
+    /* The BGs the mode has and that are switched on: 1 a text BG, 2 an affine one, 3 the bitmap */
+    u8 bg_kind[4] = { 0, 0, 0, 0 }, bg_prio[4];
     for (int b = 0; b < 4; b++)
         bg_prio[b] = (u8)(io16(0x008u + (u32)b * 2u) & 3u);
-    for (u32 pr = 0; pr < 4u; pr++) {
-        for (int b = 0; b < 4; b++) {
-            if ((bg_act & (1u << b)) && bg_prio[b] == pr)
-                bg_order[n_bg++] = b;
-        }
+    if (mode == 0u) {
+        for (int b = 0; b < 4; b++)
+            if (dispcnt & (0x0100u << b))
+                bg_kind[b] = 1;
+    } else if (mode == 1u) {
+        for (int b = 0; b < 2; b++)
+            if (dispcnt & (0x0100u << b))
+                bg_kind[b] = 1;
+        if (dispcnt & 0x0400u)
+            bg_kind[2] = 2;
+    } else if (mode == 2u) {
+        for (int b = 2; b < 4; b++)
+            if (dispcnt & (0x0100u << b))
+                bg_kind[b] = 2;
+    } else if (mode <= 5u) {
+        if (dispcnt & 0x0400u)
+            bg_kind[2] = 3;
     }
 
     u16 bd_col   = M->pal[0] & 0x7FFFu;
     u16 bldcnt   = io16(0x050);
     u32 sfx_mode = (bldcnt >> 6) & 3u;
+    /* The layers are painted from the back: the backdrop, then by priority 3 to 0 the BGs of that priority from
+       BG3 to BG0 and the sprite pixels of that priority over them -- each pixel ends with its top layer, as
+       sorting the layers at every pixel gave it (what that took: ~200 cycles a pixel on a line with a colour
+       effect).  A line needs the layer below as well for alpha blending and under a semi-transparent sprite. */
+    int need_bot = sfx_mode == 1u || (obj_flags & 0x10u) != 0u;
 
-    /* Fast path: no windowing and no special color effects -> pick single top pixel */
-    if (!(dispcnt & 0xE000u) && sfx_mode == 0u) {
-        u32 eva_s = io16(0x052) & 0x1Fu;
-        u32 evb_s = (io16(0x052) >> 8) & 0x1Fu;
-        if (eva_s > 16u) eva_s = 16u;
-        if (evb_s > 16u) evb_s = 16u;
-        for (int x = 0; x < GBA_W; x++) {
-            u8 op = obj_prio[x];
-            if (op == 4u || !obj_semi[x]) {
-                u16 c = bd_col;
-                u8 best_p = op;
-                if (op < 4u)
-                    c = obj_col[x];
-                for (int bi = 0; bi < n_bg; bi++) {
-                    int b = bg_order[bi];
-                    if (bg_prio[b] >= best_p)
-                        break;
-                    if (bg_hit[b][x]) {
-                        c = bg_col[b][x];
-                        break;
-                    }
+    if (sfx_mode == 0u && !need_bot && !any_win) {
+        /* A line of top layers alone, no effect and no window: the colours straight into the picture's line --
+           a 4-bit text BG's tiles painted over it as they are read (most BGs of most games), the other kinds
+           from a line of their own */
+        u16 tmp_col[GBA_W] __attribute__((aligned(4)));
+        u8  tmp_hit[GBA_W] __attribute__((aligned(4)));
+        for (int x = 0; x < GBA_W; x++)
+            out[x] = bd_col;
+        for (int pr = 3; pr >= 0; pr--) {
+            for (int b = 3; b >= 0; b--) {
+                if (!bg_kind[b] || bg_prio[b] != (u32)pr)
+                    continue;
+                if (bg_kind[b] == 1 && !(io16(0x008u + (u32)b * 2u) & 0x00C0u)) {
+                    paint_text_bg4(b, y, out);
+                    continue;
                 }
-                out[x] = c & 0x7FFFu;
-                continue;
+                if (bg_kind[b] == 1)
+                    render_text_bg(b, y, tmp_col, tmp_hit);
+                else if (bg_kind[b] == 2)
+                    render_affine_bg(b, tmp_col, tmp_hit);
+                else
+                    render_bitmap_bg2(mode, dispcnt, tmp_col, tmp_hit);
+                for (int x = 0; x < GBA_W; x++)
+                    if (tmp_hit[x])
+                        out[x] = tmp_col[x];
             }
-            /* Semi-transparent OBJ at pixel x: fall back to 2-layer lookup */
-            u16 top_c = bd_col, bot_c = bd_col;
-            u8 top_l = LYR_BD, bot_l = LYR_BD;
-            int have_top = 0, have_bot = 0, bi = 0;
-            for (u8 pr = 0; pr < 4u && !have_bot; pr++) {
-                if (op == pr) {
-                    if (!have_top) { top_c = obj_col[x]; top_l = LYR_OBJ; have_top = 1; }
-                    else           { bot_c = obj_col[x]; bot_l = LYR_OBJ; have_bot = 1; break; }
-                }
-                while (bi < n_bg && bg_prio[bg_order[bi]] == pr) {
-                    int b = bg_order[bi++];
-                    if (bg_hit[b][x]) {
-                        if (!have_top) { top_c = bg_col[b][x]; top_l = (u8)b; have_top = 1; }
-                        else           { bot_c = bg_col[b][x]; bot_l = (u8)b; have_bot = 1; break; }
-                    }
-                }
-            }
-            if (top_l == LYR_OBJ && ((bldcnt >> (8u + bot_l)) & 1u)) {
-                u32 r = (((top_c & 31u) * eva_s) + ((bot_c & 31u) * evb_s)) >> 4;
-                u32 g = ((((top_c >> 5) & 31u) * eva_s) + (((bot_c >> 5) & 31u) * evb_s)) >> 4;
-                u32 b = ((((top_c >> 10) & 31u) * eva_s) + (((bot_c >> 10) & 31u) * evb_s)) >> 4;
-                if (r > 31u) r = 31u;
-                if (g > 31u) g = 31u;
-                if (b > 31u) b = 31u;
-                top_c = (u16)(r | (g << 5) | (b << 10));
-            }
-            out[x] = top_c & 0x7FFFu;
+            if (obj_flags & (1u << pr))
+                for (int x = 0; x < GBA_W; x++)
+                    if (obj_prio[x] == (u32)pr)
+                        out[x] = obj_col[x];
         }
+        for (int x = 0; x < GBA_W; x++)
+            out[x] &= 0x7FFFu;
         S.bgx[0] += (s16)io16(0x022u);
         S.bgy[0] += (s16)io16(0x026u);
         S.bgx[1] += (s16)io16(0x032u);
@@ -3913,80 +4100,77 @@ static void render_scanline(int y, u16 *out)
         return;
     }
 
-    u32 eva      = io16(0x052) & 0x1Fu;
-    u32 evb      = (io16(0x052) >> 8) & 0x1Fu;
-    u32 evy      = io16(0x054) & 0x1Fu;
+    /* The other lines: each BG into a line of its own, then laid on the two top layers */
+    u16 bg_col[4][GBA_W] __attribute__((aligned(4)));
+    u8  bg_hit[4][GBA_W] __attribute__((aligned(4)));
+    for (int b = 0; b < 4; b++) {
+        if (bg_kind[b] == 1)
+            render_text_bg(b, y, bg_col[b], bg_hit[b]);
+        else if (bg_kind[b] == 2)
+            render_affine_bg(b, bg_col[b], bg_hit[b]);
+        else if (bg_kind[b] == 3)
+            render_bitmap_bg2(mode, dispcnt, bg_col[b], bg_hit[b]);
+    }
+    u32 top[GBA_W], bot[GBA_W];
+    {
+        u32 bd = (u32)bd_col | ((u32)LYR_BD << 16);
+        for (int x = 0; x < GBA_W; x++)
+            top[x] = bd;
+        if (need_bot)
+            for (int x = 0; x < GBA_W; x++)
+                bot[x] = bd;
+    }
+    for (int pr = 3; pr >= 0; pr--) {
+        for (int b = 3; b >= 0; b--)
+            if (bg_kind[b] && bg_prio[b] == (u32)pr)
+                lay_any(top, need_bot ? bot : 0, bg_col[b], bg_hit[b], 1u, any_win ? win_en : 0, 1u << b,
+                        (u32)b << 16);
+        if (obj_flags & (1u << pr))
+            lay_any(top, need_bot ? bot : 0, obj_col, obj_prio, (u32)pr, any_win ? win_en : 0, 0x10u,
+                    (u32)LYR_OBJ << 16);
+    }
+
+    /* the colour effects on what is on top (BLDCNT's first targets) and below (its second ones) */
+    u32 eva = io16(0x052) & 0x1Fu;
+    u32 evb = (io16(0x052) >> 8) & 0x1Fu;
+    u32 evy = io16(0x054) & 0x1Fu;
     if (eva > 16u) eva = 16u;
     if (evb > 16u) evb = 16u;
     if (evy > 16u) evy = 16u;
-
+    u8 fade[32];                        /* a channel made brighter / darker by BLDY */
+    if (sfx_mode == 2u) {
+        for (u32 c = 0; c < 32u; c++)
+            fade[c] = (u8)(c + (((31u - c) * evy) >> 4));
+    } else if (sfx_mode == 3u) {
+        for (u32 c = 0; c < 32u; c++)
+            fade[c] = (u8)(c - ((c * evy) >> 4));
+    }
     for (int x = 0; x < GBA_W; x++) {
-        u8 wm = win_en[x];
-        u16 top_c = bd_col, bot_c = bd_col;
-        u8  top_l = LYR_BD, bot_l = LYR_BD;
-        int have_top = 0, have_bot = 0;
-
-        /* Walk priorities 0..3: OBJs beat BGs of equal priority! */
-        int bi = 0;
-        for (u8 pr = 0; pr < 4u && !have_bot; pr++) {
-            if ((wm & 0x10u) && obj_prio[x] == pr) {
-                if (!have_top) {
-                    top_c = obj_col[x]; top_l = LYR_OBJ; have_top = 1;
-                } else {
-                    bot_c = obj_col[x]; bot_l = LYR_OBJ; have_bot = 1; break;
-                }
+        u32 t = top[x], top_c = t & 0xFFFFu, top_l = t >> 16;
+        u32 wm = any_win ? win_en[x] : 0x3Fu;
+        int semi_hit = top_l == LYR_OBJ && obj_semi[x];
+        int first = (wm & 0x20u) && sfx_mode != 0u && ((bldcnt >> top_l) & 1u);
+        if (semi_hit || first) {
+            u32 bot_c = bd_col, bot_l = LYR_BD;
+            if (need_bot) {
+                bot_c = bot[x] & 0xFFFFu;
+                bot_l = bot[x] >> 16;
             }
-            while (bi < n_bg) {
-                int b = bg_order[bi];
-                if (bg_prio[b] != pr)
-                    break;
-                bi++;
-                if ((wm & (1u << b)) && bg_hit[b][x]) {
-                    if (!have_top) {
-                        top_c = bg_col[b][x]; top_l = (u8)b; have_top = 1;
-                    } else if (!have_bot) {
-                        bot_c = bg_col[b][x]; bot_l = (u8)b; have_bot = 1; break;
-                    }
-                }
-            }
-        }
-
-        u16 final_c = top_c;
-        int semi_hit = (top_l == LYR_OBJ && obj_semi[x]);
-        int t2_ok = (bldcnt >> (8u + bot_l)) & 1;
-
-        if (semi_hit && t2_ok) {
-            u32 r = (((top_c & 31u) * eva) + ((bot_c & 31u) * evb)) >> 4;
-            u32 g = ((((top_c >> 5) & 31u) * eva) + (((bot_c >> 5) & 31u) * evb)) >> 4;
-            u32 b = ((((top_c >> 10) & 31u) * eva) + (((bot_c >> 10) & 31u) * evb)) >> 4;
-            if (r > 31u) r = 31u;
-            if (g > 31u) g = 31u;
-            if (b > 31u) b = 31u;
-            final_c = (u16)(r | (g << 5) | (b << 10));
-        } else if ((wm & 0x20u) && sfx_mode != 0u && ((bldcnt >> top_l) & 1u)) {
-            if (sfx_mode == 1u && t2_ok) {
+            int t2_ok = (bldcnt >> (8u + bot_l)) & 1;
+            if ((semi_hit && t2_ok) || (!(semi_hit && t2_ok) && first && sfx_mode == 1u && t2_ok)) {
                 u32 r = (((top_c & 31u) * eva) + ((bot_c & 31u) * evb)) >> 4;
                 u32 g = ((((top_c >> 5) & 31u) * eva) + (((bot_c >> 5) & 31u) * evb)) >> 4;
                 u32 b = ((((top_c >> 10) & 31u) * eva) + (((bot_c >> 10) & 31u) * evb)) >> 4;
                 if (r > 31u) r = 31u;
                 if (g > 31u) g = 31u;
                 if (b > 31u) b = 31u;
-                final_c = (u16)(r | (g << 5) | (b << 10));
-            } else if (sfx_mode == 2u && !semi_hit) {
-                u32 r = top_c & 31u, g = (top_c >> 5) & 31u, b = (top_c >> 10) & 31u;
-                r += ((31u - r) * evy) >> 4;
-                g += ((31u - g) * evy) >> 4;
-                b += ((31u - b) * evy) >> 4;
-                final_c = (u16)(r | (g << 5) | (b << 10));
-            } else if (sfx_mode == 3u && !semi_hit) {
-                u32 r = top_c & 31u, g = (top_c >> 5) & 31u, b = (top_c >> 10) & 31u;
-                r -= (r * evy) >> 4;
-                g -= (g * evy) >> 4;
-                b -= (b * evy) >> 4;
-                final_c = (u16)(r | (g << 5) | (b << 10));
+                top_c = r | (g << 5) | (b << 10);
+            } else if (first && sfx_mode >= 2u && !semi_hit) {
+                top_c = (u32)fade[top_c & 31u] | ((u32)fade[(top_c >> 5) & 31u] << 5) |
+                        ((u32)fade[(top_c >> 10) & 31u] << 10);
             }
         }
-        out[x] = final_c & 0x7FFFu;
+        out[x] = (u16)(top_c & 0x7FFFu);
     }
 
     /* Advance internal affine reference registers by dmx (PB) and dmy (PD) */

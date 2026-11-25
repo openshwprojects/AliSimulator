@@ -156,7 +156,8 @@ COMMANDS = {
         "ws": "[-f frames] [-k script] <file.ws|file.wsc>: a Bandai WonderSwan or WonderSwan Color game on the TV "
               "(224 x 144 five times as large, or 144 x 224 rotated) with 4-channel sound and SRAM / EEPROM (.sav)",
         "snes": "[-f frames] [-k script] <file.sfc|file.smc>: a Super Nintendo / Super Famicom game on the TV "
-                "(LoROM, HiROM, ExHiROM, Modes 0-7) with SPC700 / S-DSP BRR sound and SRAM (.sav)",
+                "(LoROM, HiROM, ExHiROM, Modes 0-7, the DSP-1 maths chip of Super Mario Kart) with SPC700 / "
+                "S-DSP BRR sound and SRAM (.sav)",
         "neogeo": "[-f frames] [-k script] <file.neo>: an SNK Neo Geo AES / MVS cartridge on the TV (320 x 224, "
                   "three times as large; uni-bios.rom in neogeo/ or built-in BIOS) with Z80 + YM2610 sound and .sav",
         "gba": "[-f frames] [-k script] <file.gba>: a Game Boy Advance game on the TV (240 x 160, four times as "
@@ -318,11 +319,12 @@ COMMANDS = {
                  "(init [opticum|comsat] [rev0|rev1]); the demo runs this board's at start, before USB",
         "reboot": "restart through the original bootloader", "restart": "the same as reboot",
         "bootloader": "restart into the original bootloader; hold 'c' (or run the updater) to stay in it",
-        "prof": "[-f frame] [-c address length] [-e event0 event1] <command ...>: run the command with the sampling "
-                "profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code it was found "
-                "in, most first (-f: a game's samples from that frame on; -c: samples inside that code counted for "
-                "its caller; -e: the CPU's two performance counters count those events, from the -f frame for 100 "
-                "frames)",
+        "prof": "[-f frame] [-c address length | -s event] [-e event0 event1] <command ...>: run the command with "
+                "the sampling profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code "
+                "it was found in, most first (-f: a game's samples from that frame on; -c: samples inside that code "
+                "counted for its caller; -s: a sample every 10,000 of that event of performance counter 0 instead of "
+                "the timer, e.g. 37 I-cache miss stall cycles; -e: the CPU's two performance counters count those "
+                "events, from the -f frame for 100 frames)",
         "ccc": "three 'c' on an empty line: restart for the UART updater's boot capture",
         "/": "every command may also be written with '/' in front (/restart)",
     },

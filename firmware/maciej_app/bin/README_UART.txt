@@ -1,44 +1,45 @@
 ELEKTRODA ALI M3801 TEST FOR MACIEJ - v2
 
-Paczka do aktualizacji UART dla bootloadera z dump_maciej.bin.
-Wymagania: Python 3.10 lub nowszy, pyserial, adapter UART 3,3 V.
-Nie trzeba pobierac repozytorium ani kompilowac aplikacji.
+UART update package for the bootloader of dump_maciej.bin.
+Requirements: Python 3.10 or newer, pyserial, a 3.3 V UART adapter.
+There is no need to download the repository or to build the application.
 
-1. Rozpakuj caly ZIP do jednego katalogu i otworz w nim terminal.
-2. Podlacz TX adaptera do RX tunera, RX adaptera do TX tunera i wspolna mase.
-   Zamknij inne programy korzystajace z tego portu COM.
-3. Zainstaluj pyserial:
+1. Unpack the whole ZIP into one directory and open a terminal in it.
+2. Connect the adapter's TX to the tuner's RX, the adapter's RX to the
+   tuner's TX, and a common ground.
+   Close other programs using this COM port.
+3. Install pyserial:
 
 python -m pip install pyserial
 
-4. Uruchom ponizsza komende, zmieniajac COM3 na swoj port:
+4. Run the command below, replacing COM3 with your port:
 
 python maciej_uart.py --port COM3 --capture-boot 60 flash elektroda_ali_m3801_maciej_v2.maincode.bin --backup before-maciej-v2.bin
 
-5. Gdy pojawi sie "Power-cycle the device now", od razu wylacz i wlacz
-   zasilanie tunera. Skrypt przez 60 sekund przechwytuje bootloader
-   i sam ustawia UART na 115200, 8E1.
-6. Poczekaj na koniec. Skrypt odczyta backup, sprawdzi bootloader, wgra
-   maincode, odczyta cala pamiec dla weryfikacji i zrestartuje tuner.
-   Same dwa odczyty flash zajmuja lacznie okolo 14 minut.
-   Zachowaj plik backupu. Nie przerywaj zasilania podczas zapisu flash.
-7. Po zakonczeniu otworz terminal szeregowy 115200, 8E1.
-   Wyslij "v" bez Enter - oczekiwane:
+5. When "Power-cycle the device now" appears, switch the tuner's power off
+   and on at once. The script captures the bootloader for 60 seconds
+   and sets the UART to 115200, 8E1 by itself.
+6. Wait for the end. The script reads a backup, checks the bootloader, writes
+   the maincode, reads the whole memory back to verify it and restarts the
+   tuner. The two flash reads alone take about 14 minutes in total.
+   Keep the backup file. Do not cut the power while the flash is written.
+7. When it has finished, open a serial terminal at 115200, 8E1.
+   Send "v" without Enter - expected:
 
 ELEKTRODA ALI M3801 TEST FOR MACIEJ
 Version: v2
 
-   Wyslij "p" bez Enter - oczekiwane: "pong v2".
+   Send "p" without Enter - expected: "pong v2".
 
-Kolejne aktualizacje wykonuje sie tak samo. Uzyj nowej nazwy backupu,
-np. before-maciej-v2-repeat.bin. Skrypt odmawia nadpisania starego backupu.
+Later updates are done the same way. Use a new backup name,
+e.g. before-maciej-v2-repeat.bin. The script refuses to overwrite an old backup.
 
-Do UART sluzy plik .maincode.bin (64 KiB). Pelny obraz 4 MiB jest
-przeznaczony do symulatora lub programatora i nie jest dolaczony do tego ZIP-a.
-Podmieniany jest maincode od 0x50000; oryginalny bootloader zostaje.
-Nie jest potrzebne szyfrowanie - obraz uzywa kompresji LZMA i sum CRC.
+The UART update uses the .maincode.bin file (64 KiB). The full 4 MiB image is
+meant for the simulator or a programmer and is not included in this ZIP.
+The maincode from 0x50000 is replaced; the original bootloader stays.
+No encryption is needed - the image uses LZMA compression and CRC sums.
 
-W symulatorze sprawdzono dwie kolejne aktualizacje: oryginal -> v1 -> v2,
-restart i zimny start kazdej wersji, odpowiedzi "v" i "p" oraz weryfikacje
-flash. Sprawdzono tez ponowienie pakietu z blednym CRC.
-Test na fizycznym tunerze pozostaje do wykonania.
+Tested in the simulator: two updates in a row (original -> v1 -> v2),
+a restart and a cold start of each version, the "v" and "p" answers and the
+flash verification. A packet retry after a bad CRC was tested as well.
+A test on a physical tuner is still to be done.

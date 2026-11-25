@@ -350,6 +350,8 @@ static u32 crc32(const u8 *p, u32 n)
 }
 
 static struct machine psx_machine;
+static struct machine snes_machine;         /* (play() asks whether it runs one of these two: they can skip a */
+static const struct machine gba_machine;    /*  frame's picture) */
 static const struct machine astro_machine;
 static const struct machine arcadia_machine;
 static const struct machine vc4000_machine;
@@ -451,6 +453,78 @@ static void __attribute__((optimize("O3"))) fb_put_row_x2(u32 off, const u32 *s3
             l[7] = o[7];
             /* (the line before written back: the first time a line just left of the picture, or before the frame
                buffer -- written back only if it is in the cache, nothing lost either way) */
+            __asm__ volatile("cache 0x15, -32(%0)" : : "r"(l) : "memory");
+        }
+    }
+    for (int r = 0; r < rows; r++, line += SCREEN_W / 2)
+        __asm__ volatile("cache 0x15, -32(%0)" : : "r"(line) : "memory");
+}
+
+/* the same three times as wide (320- / 256-wide pictures: Gran Turismo, ...): a word of two pixels p, q -> (p, p),
+   (p, q), (q, q) -- the middle one is PSX_PAIR's converted pair itself; 8 words (16 pixels) a turn = 3 whole lines.
+   `wn` a multiple of 8, `off` 32-byte aligned.  Before: the row converted into a buffer by GCC's code and written
+   `rows` times by fb_put_row (6.7% of Gran Turismo's time on the box) */
+static void __attribute__((optimize("O3"))) fb_put_row_x3(u32 off, const u32 *s32, int wn, int rows, u32 *keep)
+{
+    u32 *line = (u32 *)(0x80000000u | (FB_PHYS + off));
+    for (int w = 0; w < wn; w += 8, line += 24) {
+        __asm__ volatile("pref 0, 64(%0)" : : "r"(s32 + w));
+        u32 o[24], p_, t_;
+        for (int k = 0; k < 8; k++) {
+            u32 c = s32[w + k];
+            if (keep)
+                keep[w + k] = c;
+            PSX_PAIR(c, o[3 * k], o[3 * k + 2]);
+            o[3 * k + 1] = p_;
+        }
+        u32 *l = line;
+        for (int r = 0; r < rows; r++, l += SCREEN_W / 2) {
+            for (int q = 0; q < 3; q++) {
+                u32 *ll = l + q * 8;
+                __asm__ volatile("pref 30, 0(%0)" : : "r"(ll) : "memory");
+                ll[0] = o[q * 8];
+                ll[1] = o[q * 8 + 1];
+                ll[2] = o[q * 8 + 2];
+                ll[3] = o[q * 8 + 3];
+                ll[4] = o[q * 8 + 4];
+                ll[5] = o[q * 8 + 5];
+                ll[6] = o[q * 8 + 6];
+                ll[7] = o[q * 8 + 7];
+                __asm__ volatile("cache 0x15, -32(%0)" : : "r"(ll) : "memory");
+            }
+        }
+    }
+    for (int r = 0; r < rows; r++, line += SCREEN_W / 2)
+        __asm__ volatile("cache 0x15, -32(%0)" : : "r"(line) : "memory");
+}
+
+/* four times as wide (the Game Boy Advance's 240 pixels over 960): a word of two pixels p, q -> (p, p), (p, p),
+   (q, q), (q, q); two words (4 pixels) a turn = one whole line.  `wn` a multiple of 2, `off` 32-byte aligned.
+   Before: the row converted into a buffer and written `rows` times by fb_put_row */
+static void __attribute__((optimize("O3"))) fb_put_row_x4(u32 off, const u32 *s32, int wn, int rows, u32 *keep)
+{
+    u32 *line = (u32 *)(0x80000000u | (FB_PHYS + off));
+    for (int w = 0; w < wn; w += 2, line += 8) {
+        __asm__ volatile("pref 0, 64(%0)" : : "r"(s32 + w));
+        u32 c0 = s32[w], c1 = s32[w + 1];
+        if (keep) {
+            keep[w] = c0;
+            keep[w + 1] = c1;
+        }
+        u32 o[4], p_, t_;
+        PSX_PAIR(c0, o[0], o[1]);
+        PSX_PAIR(c1, o[2], o[3]);
+        u32 *l = line;
+        for (int r = 0; r < rows; r++, l += SCREEN_W / 2) {
+            __asm__ volatile("pref 30, 0(%0)" : : "r"(l) : "memory");
+            l[0] = o[0];
+            l[1] = o[0];
+            l[2] = o[1];
+            l[3] = o[1];
+            l[4] = o[2];
+            l[5] = o[2];
+            l[6] = o[3];
+            l[7] = o[3];
             __asm__ volatile("cache 0x15, -32(%0)" : : "r"(l) : "memory");
         }
     }
@@ -584,6 +658,7 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all, int kee
     }
     if (xs == 3 && !(pw & 1) && pw * 3 <= SCREEN_W) {
         int wn = pw >> 1;
+        int fused = !((out_x * 2) & 31) && !(wn & 7);      /* (whole lines: fb_put_row_x3) */
         for (int y = 0; y < ph && out_y + y * ys < SCREEN_H; y++) {
             const u32 *s32 = (const u32 *)(vbase + y * vstride);
             u32 *o32 = (u32 *)(before + y * pw);
@@ -594,6 +669,12 @@ static int __attribute__((optimize("O3"))) show_psx_vram_direct(int all, int kee
                 }
                 if (!diff)
                     continue;
+            }
+            if (fused) {
+                int rows = SCREEN_H - (out_y + y * ys);
+                fb_put_row_x3(((u32)(out_y + y * ys) * SCREEN_W + (u32)out_x) * 2u, s32, wn, rows < ys ? rows : ys,
+                              keep ? o32 : 0);
+                continue;
             }
             for (int w = 0; w < wn; w++) {
                 u32 c01 = s32[w];
@@ -648,6 +729,22 @@ static void __attribute__((optimize("O3"))) show(int all)
             }
             if (same)
                 continue;
+            if (xs == 3 && !(pw & 15) && pw * 3 <= SCREEN_W && !((out_x * 2) & 31)) {
+                /* three times as wide, whole cache lines (the Super Nintendo's 256, the Neo Geo's 320 ...): the
+                   PlayStation's writer -- converted in registers and written straight to the rows, `before`
+                   kept on the way; the same pixels as the general way below makes */
+                int rows = SCREEN_H - (out_y + y * ys);
+                fb_put_row_x3(((u32)(out_y + y * ys) * SCREEN_W + (u32)out_x) * 2u, (const u32 *)line, pw >> 1,
+                              rows < ys ? rows : ys, (u32 *)old);
+                continue;
+            }
+            if (xs == 4 && !(pw & 3) && pw * 4 <= SCREEN_W && !((out_x * 2) & 31)) {
+                /* four times as wide, whole cache lines (the Game Boy Advance): the same way */
+                int rows = SCREEN_H - (out_y + y * ys);
+                fb_put_row_x4(((u32)(out_y + y * ys) * SCREEN_W + (u32)out_x) * 2u, (const u32 *)line, pw >> 1,
+                              rows < ys ? rows : ys, (u32 *)old);
+                continue;
+            }
             if (xs == 2 && pw * 2 <= SCREEN_W) {
                 for (int x = 0, w = 0; x < pw; x++) {
                     u32 c = old[x] = line[x];
@@ -1080,6 +1177,12 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
                                                                        together; frames longer than their time) */
     u16 pad = 0;
     int first = 1, by_script = *script != 0;    /* (a test's buttons: the script's alone) */
+    /* The Super Nintendo's and the Game Boy Advance's frame() run without a picture (0) too, the machine going
+       on the same: in live play a frame that starts more than a frame late is then not drawn (never two in a
+       row) -- the game keeps its speed and its sound, the picture loses that frame */
+    int can_skip = (m == &snes_machine || m == &gba_machine);
+    int skipped = 0;                            /* (the frame before was not drawn: this one is) */
+    u32 n_skipped = 0;
     int psx_live = (m == &psx_machine && !frames), psx_pending = 0, psx_flip = 0;
     int psx_before_ok = 0;                      /* (`before` holds what the TV shows: diffs work) */
     u32 psx_held = 0, psx_flips = 0;            /* (pictures shown: the game's frames that reached the TV; flips) */
@@ -1106,8 +1209,11 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
            at the game's display flip; that frame is then never shown: the picture before it stays) */
         if (psx_live)
             psx_set_skip_render(n > 30 && !first && now_ticks() > next + frame_ticks ? 2 : 1);
+        int skip = can_skip && !frames && !first && !skipped && now_ticks() > next + frame_ticks;
+        skipped = skip;
+        n_skipped += (u32)skip;
         u64 t0 = now_ticks();
-        m->frame(pad, picture);
+        m->frame(pad, skip ? 0 : picture);
         u64 ts = now_ticks();
         if (sound) {
             int k = m->audio(samples, (int)(sizeof(samples) / sizeof(samples[0]))), room = snd_room();
@@ -1152,7 +1258,7 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
                 psx_flip = 0;
                 first = 0;
             }
-        } else {
+        } else if (!skip) {
             show(first);
             first = 0;
         }
@@ -1191,6 +1297,8 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
             uprintf("psx: %u pictures shown (%u at a flip); %u game frames not drawn (the run was late)\n",
                     psx_held, psx_flips, psx_frames_skipped());
     }
+    if (n_skipped)
+        uprintf("%u of the frames were not drawn (they started more than a frame late)\n", n_skipped);
     if (sound) {
         uprintf("sound: %u us a frame of the run handing it over\n", n ? sound_us / n : 0);
         m->audio_rate(0);

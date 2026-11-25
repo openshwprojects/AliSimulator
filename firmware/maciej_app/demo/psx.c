@@ -6,7 +6,7 @@
    - MDEC macroblock RLE + IDCT decoder (4bpp, 8bpp, 15bpp, 24bpp)
    - SPU 24-voice XA-ADPCM synthesizer + ADSR mixed to 48 kHz mono
    - Digital Joypad + 128 KB Memory Card (.sav) + CD-ROM XA/ISO9660 controller (.cue/.bin/.iso streaming + PS-X EXE)
-   - Clean-room built-in HLE BIOS (A0/B0/C0 kernel, events, pad polling, ISO9660 SYSTEM.CNF boot) + optional scph1001.bin */
+   - Clean-room built-in HLE BIOS (A0/B0/C0 kernel, events, pad polling, Memory Card calls and "bu00:" files, ISO9660 SYSTEM.CNF boot) + optional scph1001.bin */
 #pragma GCC optimize("O3")
 
 #ifdef __mips__
@@ -36,6 +36,15 @@ typedef unsigned long long u64;
 #define PSX_BIOS_SIZE  0x080000u   /* 512 KB BIOS */
 #define PSX_SPU_SIZE   0x080000u   /* 512 KB SPU RAM */
 #define PSX_MCD_SIZE   0x020000u   /* 128 KB Memory Card (.sav) */
+#define PSX_BU_FILES   8u          /* its files open at a time (the built-in BIOS's file calls) */
+#define PSX_MDEC_IN    65536u      /* words of MDEC input kept: the most a command can announce (its bits 0-15) */
+/* SIO0's timing in psx_advance_periph's units (4 an instruction, ~1.9 a CPU cycle), counted from the write of a
+   byte: its 8 bits at 250 kHz are through after ~1088 cycles (the answer can be read), the pad or card pulls
+   /ACK low ~1500 cycles in (IRQ7), for ~100 cycles.  The /ACK used to come after 512 units (~270 cycles): Duke
+   Nukem's own pad routine clears IRQ7 ~300 cycles after its write and only then waits for it -- no pad. */
+#define SIO_RX_UNITS   2072
+#define SIO_ACK_UNITS  2856
+#define SIO_LOW_UNITS  190
 #define PSX_AUD_MAX    2048
 #define PSX_LINES_NTSC 263
 #define PSX_VBL_LINE   240
@@ -53,10 +62,10 @@ struct psx_work {
     s16 aud_buf[PSX_AUD_MAX];      /* 4 KB 48 kHz mono output */
     u8 cd_buf[2352];               /* Current CD sector raw buffer */
     u8 cd_fifo[2352];              /* Active CD data FIFO */
-    u32 mdec_in[16384];            /* MDEC input buffer (up to 64 KB frame VLC output) */
     u8 mdec_out[24576];            /* MDEC decoded macroblock output FIFO */
 
-    /* Main memories in EMU_RAM_PHYS (total ~4.69 MB + 4.00 MB MIPS32 JIT = ~8.73 MB of 9.50 MB available) */
+    /* Main memories in EMU_RAM_PHYS (4.93 MB with the MDEC input at the end + 4.09 MB of the MIPS32 recompiler's
+       = 9.03 MB of the 9.50 MB available) */
     u8 ram[PSX_RAM_SIZE];
     u16 vram[VRAM_STRIDE * 512];
     u8 spu_ram[PSX_SPU_SIZE];
@@ -79,6 +88,9 @@ struct psx_work {
                                                    Hawk's keeps a variable just after a function's last instructions,
                                                    written every other frame: ~90 whole resets a run without this) */
 #endif
+    u32 mdec_in[PSX_MDEC_IN];      /* MDEC input: a command's parameter words (a 640 x 240 picture of Duke Nukem's
+                                      logo videos is ~90 KB of them; it was 64 KB here and the pictures' right
+                                      quarter stayed black) */
 };
 
 #ifdef __mips__
@@ -187,6 +199,7 @@ static struct psx_state_s {
     u32 fs_skipped;
     u32 vram_gen;
     u32 clut4_gen[4], clut4_klo[4], clut4_khi[4];
+    u16 clut4_cx[4], clut4_cy[4];           /* where each baked CLUT is in VRAM (gpu_clut4_touch) */
     s32 clut4_cache[4][16];
     u8  clut4_slot;
 
@@ -207,6 +220,7 @@ static struct psx_state_s {
     u8 cd_mode;            /* bit7=2x, bit5=2340B */
     u8 cd_pend_cmd;
     u8 cd_xa_streak, cd_xa_file, cd_xa_ch, cd_xa_sub, cd_xa_cod, cd_flt_file, cd_flt_ch;
+    u8 cd_hdr_valid;       /* cd_buf holds the header of a sector read since the last seek (GetlocL) */
     int cd_req_delay;
     int cd_cmd_delay;
     int cd_read_delay;
@@ -256,6 +270,26 @@ static struct psx_state_s {
     u16 pad;
     int scan_y;
     char info_str[96];
+
+    /* the built-in BIOS's Memory Card calls (hle_card_call) */
+    struct {
+        u8 used, blk;          /* an open file of the card: its first block (1..15) */
+        u16 mode;              /* open()'s mode (8000h: do not wait) */
+        u32 pos, size;
+    } bu_fd[PSX_BU_FILES];
+    u16 card_sw, card_hw;      /* the SwCARD / HwCARD event of the call under way (0: none) */
+    u8 card_wait;              /* VBlank interrupts until they are delivered (0: no call under way) */
+    u8 card_stat;              /* _card_status: 2 reading, 4 writing, 8 asking; then 1 ready, 11h no card */
+    u8 card_chan;              /* the port of the last call (_card_chan) */
+    u8 bu_next;                /* firstfile / nextfile: the directory frame to go on at (0: no search, 16: over) */
+    u8 bu_del;                 /* ... of the deleted files (C0(1Ah)) */
+    u8 bu_err_set;             /* a file call of the card has set ... */
+    u8 bu_errno;               /* ... _get_errno's answer */
+    char bu_pat[21];           /* firstfile's pattern */
+    u32 hle_strtok;            /* the built-in BIOS's strtok: where its next call goes on */
+    int sio_rx_wait;           /* SIO0: units until the byte under way is through (its answer can be read) */
+    int sio_ack_low;           /* ... until its /ACK pulse is over (0: the line is high) */
+    u32 sio_busy;              /* ... one of these or sio_irq_delay runs (psx_advance_periph, the JIT's budget) */
 } S;
 
 /* ---- Interrupt & MIPS32 JIT Invalidation Helpers ---- */
@@ -423,13 +457,13 @@ static u8 sio0_txrx(u8 tx)
         if (tx == 0x01u) {
             S.sio_dev = 1u;
             S.sio_step = 1u;
-            S.sio_irq_delay = 512;
+            S.sio_irq_delay = SIO_ACK_UNITS;
             return 0xFFu;
         }
         if (tx == 0x81u) {
             S.sio_dev = 2u;
             S.sio_step = 1u;
-            S.sio_irq_delay = 512;
+            S.sio_irq_delay = SIO_ACK_UNITS;
             return 0xFFu;
         }
         S.sio_dev = 0xFFu;
@@ -441,18 +475,18 @@ static u8 sio0_txrx(u8 tx)
         u8 step = S.sio_step++;
         if (step == 1u) {
             if (tx != 0x42u) { S.sio_dev = 0xFFu; return 0xFFu; }
-            S.sio_irq_delay = 512;
+            S.sio_irq_delay = SIO_ACK_UNITS;
             return 0x41u; /* Digital Pad ID low */
         }
-        if (step == 2u) { S.sio_irq_delay = 512; return 0x5Au; }
-        if (step == 3u) { S.sio_irq_delay = 512; return (u8)(btns & 0xFFu); }
+        if (step == 2u) { S.sio_irq_delay = SIO_ACK_UNITS; return 0x5Au; }
+        if (step == 3u) { S.sio_irq_delay = SIO_ACK_UNITS; return (u8)(btns & 0xFFu); }
         if (step == 4u) { S.sio_dev = 0xFFu; return (u8)(btns >> 8); }
         return 0xFFu;
     }
 
     if (S.sio_dev == 2u) { /* Memory Card 128 KB (1024 frames x 128 B) */
         u8 step = S.sio_step++;
-        S.sio_irq_delay = 512;
+        S.sio_irq_delay = SIO_ACK_UNITS;
         if (step == 1u) {
             S.mcd_cmd = tx;
             u8 fl = S.mcd_flag;
@@ -512,6 +546,12 @@ static u8 sio0_txrx(u8 tx)
 }
 
 /* ---- CD-ROM Controller ($1F801800..$1F801803) ---- */
+/* a sector's time in cd_step's units (4 a recompiled / interpreted instruction): the drive's real 75 / 150
+   sectors a second against psx_frame's 1024 instructions a line, 263 lines, 59.94 Hz (16.14 M a second) --
+   225000 / 450000 (real CPU cycles counted as these units) made the drive ~1.9 times too fast, and Gran
+   Turismo's streaming loader, whose sector ring filled faster than it decompressed, gave up and re-read
+   its file forever */
+#define CD_SECTOR_UNITS(mode) (((mode) & 0x80u) ? 430480 : 860960)
 static void cd_push_resp(u8 v)
 {
     if (S.cd_resp_n < 16u)
@@ -552,6 +592,7 @@ static void cd_exec_cmd(u8 cmd)
         break;
     case 0x03u: /* CdlPlay */
         S.cd_xa_streak = 0u;
+        S.cd_hdr_valid = 0u;
         S.cd_cur_lba = S.cd_set_lba;
         S.cd_stat = 0x82u;
         cd_push_resp(S.cd_stat);
@@ -562,9 +603,11 @@ static void cd_exec_cmd(u8 cmd)
         S.cd_xa_streak = 0u;
         S.cd_xa_sub = 0u;
         S.cd_fifo_pos = 0u;
+        if (S.cd_cur_lba != S.cd_set_lba)               /* (a seek: no sector under the head is known yet) */
+            S.cd_hdr_valid = 0u;
         S.cd_cur_lba = S.cd_set_lba;
         S.cd_stat = 0x22u;
-        S.cd_read_delay = (S.cd_mode & 0x80u) ? 225000 : 450000;
+        S.cd_read_delay = CD_SECTOR_UNITS(S.cd_mode);
         cd_push_resp(S.cd_stat);
         cd_fire_irq(3u);
         break;
@@ -610,6 +653,14 @@ static void cd_exec_cmd(u8 cmd)
         cd_fire_irq(3u);
         break;
     case 0x10u: { /* CdlGetlocL */
+        /* right after a seek the head is on the sector the read goes to (this drive seeks at once): its header,
+           not the last one read before the seek -- Gran Turismo's music player compares it with the place it
+           asked for and restarted its XA read on every stale one, ~25 times a frame */
+        if (!S.cd_hdr_valid && (S.cd_stat & 0x20u) && S.has_disc && S.cd_cur_lba < S.disc_sectors) {
+            u32 d_w[512];
+            if (read_disc_sector2048(S.cd_cur_lba, (u8 *)d_w, W.cd_buf) == 0)
+                S.cd_hdr_valid = 1u;
+        }
         for (int i = 0; i < 8; i++)
             cd_push_resp(W.cd_buf[12 + i]);
         cd_fire_irq(3u);
@@ -647,6 +698,7 @@ static void cd_exec_cmd(u8 cmd)
     case 0x15u: /* CdlSeekL */
     case 0x16u: /* CdlSeekP */
         S.cd_xa_streak = 0u;
+        S.cd_hdr_valid = 0u;
         S.cd_cur_lba = S.cd_set_lba;
         S.cd_stat = 0x02u;
         S.cd_read_delay = 0;
@@ -726,7 +778,7 @@ static void cd_step(int cycles)
     if ((S.cd_stat & 0x20u) && S.cd_read_delay > 0 && !(S.cd_irq_flag & 0x07u)) {
         S.cd_read_delay -= cycles;
         if (S.cd_read_delay <= 0) {
-            S.cd_read_delay = (S.cd_mode & 0x80u) ? 225000 : 450000;
+            S.cd_read_delay = CD_SECTOR_UNITS(S.cd_mode);
             if ((S.cd_mode & 0x42u) == 0x40u && S.cd_xa_streak >= 16u && S.cd_xa_sub &&
                 S.has_disc && S.cd_cur_lba < S.disc_sectors) {
                 /* Real PS1 CD-XA hardware behavior: when Setmode.6 (0x40) routes Real-Time XA-ADPCM sectors
@@ -740,12 +792,14 @@ static void cd_step(int cycles)
                 W.cd_buf[15] = 2u;
                 W.cd_buf[16] = S.cd_xa_file; W.cd_buf[17] = ch; W.cd_buf[18] = S.cd_xa_sub; W.cd_buf[19] = S.cd_xa_cod;
                 W.cd_buf[20] = S.cd_xa_file; W.cd_buf[21] = ch; W.cd_buf[22] = S.cd_xa_sub; W.cd_buf[23] = S.cd_xa_cod;
+                S.cd_hdr_valid = 1u;
                 S.cd_cur_lba++;
                 return;
             }
             u32 u2048_w[512];
             u8 *u2048 = (u8 *)u2048_w;
             if (read_disc_sector2048(S.cd_cur_lba, u2048, W.cd_buf) == 0) {
+                S.cd_hdr_valid = 1u;
                 u8 sm = W.cd_buf[18];
                 if ((S.cd_mode & 0x40u) && S.disc_sec_size == 2352u && W.cd_buf[15] == 2u && !(sm & 0x08u) &&
                     (((sm & 0x44u) == 0x44u) || ((S.cd_mode & 0x08u) && (sm & 0x0Eu) == 0u))) {
@@ -1095,11 +1149,13 @@ static void spu_key_off(u32 mask)
 
 static void spu_step_lines(u32 n_lines)
 {
-    if (!S.sample_rate)
-        return;
+    /* The voices run whether or not anyone listens (a test's -f run has no sound output: sample_rate 0): games
+       wait for a voice to end -- Duke Nukem's level loader for its "entering" sound, for ever without this, and
+       its logos took other numbers of frames than in live play */
+    u32 rate = S.sample_rate ? S.sample_rate : 48000u;
     /* Generate ~801 samples/frame @ 59.94 Hz NTSC or 960 samples/frame @ 50 Hz PAL */
     int eff_pal = (S.region_override == 'E') ? 1 : (S.region_override ? 0 : (int)S.is_pal);
-    u32 target_per_frame = eff_pal ? (S.sample_rate / 50u) : ((S.sample_rate * 1001u) / 60000u);
+    u32 target_per_frame = eff_pal ? (rate / 50u) : ((rate * 1001u) / 60000u);
     u32 total = S.aud_frac + target_per_frame * n_lines;
     u32 rem = total / PSX_LINES_NTSC;
     S.aud_frac = total % PSX_LINES_NTSC;
@@ -1217,18 +1273,32 @@ static inline __attribute__((always_inline)) u8 clamp5(int v)
     return v < 0 ? 0u : 31u;
 }
 
+/* gpu_blend's four modes on whole BGR555 colours (a: what is there, its bit 15 ignored; b: 15 bits), its results
+   exactly -- every pair of colours checked against it on the PC: 0 averages per channel ((a & b) plus half of a ^ b,
+   each channel's low bit kept out of the shift); 1 adds, 3 adds b / 4, saturating at 31; 2 subtracts, saturating at
+   0 -- the three channels apart in a word with a guard bit above each (green moved up 16) */
+static inline __attribute__((always_inline)) u32 blend_swar(u32 a, u32 b, u32 abr)
+{
+    a &= 0x7FFFu;
+    if (abr == 0u)
+        return (a & b) + (((a ^ b) & 0x7BDEu) >> 1);
+    if (abr == 3u)
+        b = (b >> 2) & 0x1CE7u;
+    u32 A = (a & 0x7C1Fu) | ((a & 0x03E0u) << 16), B = (b & 0x7C1Fu) | ((b & 0x03E0u) << 16), S;
+    if (abr == 2u) {
+        u32 D = (A | 0x04008020u) - B, M = D & 0x04008020u;  /* (guard set: the channel did not go below 0) */
+        S = D & (M - (M >> 5));
+    } else {
+        S = A + B;
+        u32 O = S & 0x04008020u;                            /* (guard set: the channel went above 31) */
+        S |= O - (O >> 5);
+    }
+    return (S & 0x7C1Fu) | ((S >> 16) & 0x03E0u);
+}
+
 static inline __attribute__((always_inline)) u16 gpu_blend(u16 bg, u16 fg, u32 abr)
 {
-    int br = bg & 31, bgc = (bg >> 5) & 31, bb = (bg >> 10) & 31;
-    int fr = fg & 31, fgc = (fg >> 5) & 31, fb = (fg >> 10) & 31;
-    int r, g, b;
-    switch (abr & 3u) {
-    case 0u: r = (br + fr) >> 1; g = (bgc + fgc) >> 1; b = (bb + fb) >> 1; break;
-    case 1u: r = br + fr;        g = bgc + fgc;        b = bb + fb;        break;
-    case 2u: r = br - fr;        g = bgc - fgc;        b = bb - fb;        break;
-    default: r = br + (fr >> 2); g = bgc + (fgc >> 2); b = bb + (fb >> 2); break;
-    }
-    return (u16)(((u16)clamp5(b) << 10) | ((u16)clamp5(g) << 5) | clamp5(r));
+    return (u16)blend_swar(bg, fg, abr);          /* (b's bit 15 is outside every mask it uses) */
 }
 
 static inline u16 gpu_fetch_texel(u32 u, u32 v, u32 tpage, u32 clut_word)
@@ -1294,7 +1364,11 @@ static u16 clamp5_b[96];
    plus the dither d, clamp(((t * c >> 4) + d) >> 3) = clamp((t * c + 16 d) >> 7). */
 #define SPAN_CL_OFS 64                  /* the clamp table takes (x >> 7) from -64 to 447 */
 static u16 span_cl[2][3 * 512];         /* clamp(i - 64, 0, 31): red as it is, green << 5 (+512), blue << 10 (+1024);
-                                           [1]: the same with red | 0x8000 (the mask bit set: span_mod_body) */
+                                           [1]: the same with red | 0x8000 (the mask bit set) */
+/* span_mod_loop's clamp tables behind one base register (span_tab[mask_or != 0]): clamp(i - 64, 0, 31) for red as
+   u16 with the mask bit, for green and blue as bytes, inserted at their places */
+static struct span_tab { u16 red[512]; u8 cb[512]; } span_tab[2];
+#define SPAN_TAB_CB (1024 - (SPAN_CL_OFS - 1))  /* the bytes from the base, red + SPAN_CL_OFS - 1 */
 
 struct gpu_span {
     const u8 *tex8;                     /* T 0 / 1 / 3: the texture page as bytes (2 * VRAM_STRIDE a row), from the
@@ -1309,29 +1383,42 @@ struct gpu_span {
     u32 dw;                             /* the same as bytes d16 + 128, the first pixel's in the low byte (rotated
                                            right 8 a pixel): (t * c + d16 + 128) >> 7 is one more than the
                                            value wanted, so the clamp table is read one entry lower */
-    const u8 *clb;                      /* span_mod_body's tables as bytes: span_cl[mask_or != 0] + SPAN_CL_OFS - 1
-                                           (a pointer read from here, not a constant: one base register for the
-                                           three tables, the mask bit in the red one -- the loop's values fit in
-                                           registers, none read from the stack a pixel) */
+    const u8 *cb;                       /* span_mod_loop's tables: span_tab[mask_or != 0].red + SPAN_CL_OFS - 1 as bytes
+                                           (a pointer read from here, not a constant: one base register) */
+    const u16 *tab4;                    /* semi-transparent, modulated, 4-bit, flat: semi4_table's colours (or 0) */
 };
 
-/* dither words for span_mod_body: [y & 3] = bytes d16 + 128 for x & 3 = 0..3; [4]: no dither */
+/* dither words for span_mod_loop: [y & 3] = bytes d16 + 128 for x & 3 = 0..3; [4]: no dither */
 static u32 span_dw[5];
+
+/* the texture page's row v as an offset, v * VRAM_STRIDE * size bytes, from vm = v << 12 (the masked coordinate,
+   low 12 bits clear): (vm >> (12 - log2(size * 16))) * 65 as a shift and an add -- no register held for the constant
+   through a span loop (the empty asm keeps GCC from making it a multiply again) */
+typedef char span_row_shifts[VRAM_STRIDE == 65u * 16u ? 1 : -1];
+static inline __attribute__((always_inline)) u32 span_row(u32 vm, int bytes)
+{
+    u32 a = vm >> (bytes ? 7 : 8);
+    u32 t = a << 6;
+#ifdef __mips__
+    __asm__("" : "+r"(t));
+#endif
+    return t + a;
+}
 
 static inline __attribute__((always_inline)) u32 span_texel(const struct gpu_span *sp, int T, u32 u_c, u32 v_c)
 {
     /* (the window's ou / ov are in tex8 / tex16 already: bits the masks clear, so | is +; ou even, as T 0 needs) */
     u32 uu = (u_c & sp->au12) >> 12;
-    u32 vv = (v_c & sp->av12) >> 12;
+    u32 vm = v_c & sp->av12;
     if (T == 0) {
-        u32 b = sp->tex8[vv * (2u * VRAM_STRIDE) + (uu >> 1)];
+        u32 b = sp->tex8[span_row(vm, 1) + (uu >> 1)];
         return sp->clut[(b >> ((uu & 1u) << 2)) & 15u];
     }
     if (T == 1)
-        return sp->clut[sp->tex8[vv * (2u * VRAM_STRIDE) + uu]];
+        return sp->clut[sp->tex8[span_row(vm, 1) + uu]];
     if (T == 3)
-        return sp->clut[(sp->cx + sp->tex8[vv * (2u * VRAM_STRIDE) + uu]) & 1023u];
-    return sp->tex16[vv * VRAM_STRIDE + uu];
+        return sp->clut[(sp->cx + sp->tex8[span_row(vm, 1) + uu]) & 1023u];
+    return sp->tex16[span_row(vm, 0) + uu];
 }
 
 static inline __attribute__((always_inline)) u32 span_mod(u32 t, s32 r_c, s32 g_c, s32 b_c, s32 d16, u32 mask_or)
@@ -1356,14 +1443,12 @@ static inline __attribute__((always_inline)) void span_raw_body(const struct gpu
     }
 }
 
-/* modulated (sp->dw: the dither word for the first pixel) */
-static inline __attribute__((always_inline)) void span_mod_body(const struct gpu_span *sp, int T, u16 *dst, int x0,
-                                                                  int n, u32 u_c, u32 v_c, s32 du, s32 dv,
-                                                                  s32 r_c, s32 g_c, s32 b_c, s32 dr, s32 dg, s32 db)
+/* modulated (dw: the dither word for the first pixel) */
+static inline __attribute__((always_inline)) void span_mod_loop(const struct gpu_span *sp, int T, u16 *dst, int n,
+                                                                  u32 u_c, u32 v_c, s32 du, s32 dv, s32 r_c, s32 g_c,
+                                                                  s32 b_c, s32 dr, s32 dg, s32 db, u32 dw)
 {
-    (void)x0;
-    u32 dw = sp->dw;
-    const u8 *cl = sp->clb;                             /* (bytes: the tables' offsets fold) */
+    const u8 *cb = sp->cb;
     for (u16 *end = dst + n; dst < end; dst++) {
         u32 t = span_texel(sp, T, u_c, v_c);
         if (t) {
@@ -1371,8 +1456,18 @@ static inline __attribute__((always_inline)) void span_mod_body(const struct gpu
             s32 r = (s32)((t & 31u) * (u32)(r_c >> 12)) + d;
             s32 g = (s32)(((t >> 5) & 31u) * (u32)(g_c >> 12)) + d;
             s32 b = (s32)(((t >> 10) & 31u) * (u32)(b_c >> 12)) + d;
-            *dst = (u16)(*(const u16 *)(cl + ((r >> 7) << 1)) | *(const u16 *)(cl + 1024 + ((g >> 7) << 1)) |
-                         *(const u16 *)(cl + 2048 + ((b >> 7) << 1)) | (t & 0x8000u));
+            u32 px = *(const u16 *)(cb + ((r >> 7) << 1)), m;
+            u32 c5 = cb[SPAN_TAB_CB + (g >> 7)], c10 = cb[SPAN_TAB_CB + (b >> 7)];
+#ifdef __mips__
+            __asm__("andi %0, %1, 0x8000" : "=r"(m) : "r"(t));          /* (GCC: a move and an ins) */
+            __asm__(".set push\n\t.set mips32r2\n\tins %0, %1, 5, 5\n\tins %0, %2, 10, 5\n\t.set pop"
+                    : "+r"(px) : "r"(c5), "r"(c10));
+            px |= m;
+#else
+            m = t & 0x8000u;
+            px |= (c5 << 5) | (c10 << 10) | m;
+#endif
+            *dst = (u16)px;
         }
         dw = (dw >> 8) | (dw << 24);
         u_c += (u32)du; v_c += (u32)dv; r_c += dr; g_c += dg; b_c += db;
@@ -1387,16 +1482,37 @@ static inline __attribute__((always_inline)) void span_semi_body(const struct gp
                                                                    u32 abr)
 {
     u32 mask_or = sp->mask_or;
-    const s32 *d16 = sp->d16;
-    u32 x = (u32)x0;
-    for (u16 *end = dst + n; dst < end; dst++, x++) {
+    /* the dither as span_mod_loop takes it: bytes d16 + 128, the first pixel's low, rotated a pixel; the bytes of
+       the clamp table (clamp((t * c + d16) >> 7) = cbb[(t * c + d16 + 128) >> 7]) */
+    u32 dw = 0u;
+    for (int k = 3; k >= 0; k--)
+        dw = (dw << 8) | (u32)(sp->d16[((u32)x0 + (u32)k) & 3u] + 128);
+    const u8 *cbb = sp->cb + SPAN_TAB_CB;
+    for (u16 *end = dst + n; dst < end; dst++) {
         u32 t = span_texel(sp, T, u_c, v_c);
         if (t) {
-            u32 fg = MOD ? (span_mod(t, r_c, g_c, b_c, d16[x & 3u], 0u) & 0x7FFFu) : (t & 0x7FFFu);
+            u32 fg;
+            if (MOD) {
+                s32 d = (s32)(dw & 0xFFu);
+                s32 r = (s32)((t & 31u) * (u32)(r_c >> 12)) + d;
+                s32 g = (s32)(((t >> 5) & 31u) * (u32)(g_c >> 12)) + d;
+                s32 b = (s32)(((t >> 10) & 31u) * (u32)(b_c >> 12)) + d;
+                u32 c5 = cbb[g >> 7], c10 = cbb[b >> 7];
+                fg = cbb[r >> 7];
+#ifdef __mips__
+                __asm__(".set push\n\t.set mips32r2\n\tins %0, %1, 5, 5\n\tins %0, %2, 10, 5\n\t.set pop"
+                        : "+r"(fg) : "r"(c5), "r"(c10));
+#else
+                fg |= (c5 << 5) | (c10 << 10);
+#endif
+            } else {
+                fg = t & 0x7FFFu;
+            }
             if (t & 0x8000u)
-                fg = gpu_blend(*dst, (u16)fg, abr);
+                fg = blend_swar(*dst, fg, abr);
             *dst = (u16)(fg | (t & 0x8000u) | mask_or);
         }
+        dw = (dw >> 8) | (dw << 24);
         u_c += (u32)du; v_c += (u32)dv;
         if (MOD) { r_c += dr; g_c += dg; b_c += db; }
     }
@@ -1414,6 +1530,72 @@ SPAN_SEMI(span_semi_mod4, 0, 1)
 SPAN_SEMI(span_semi_mod8, 1, 1)
 SPAN_SEMI(span_semi_mod8w, 3, 1)
 SPAN_SEMI(span_semi_mod15, 2, 1)
+
+/* semi-transparent, modulated, 4-bit, flat: span_semi_body's colour for each CLUT entry (16) at each dither value
+   (8, by d16 / 16 + 4; without dither only row 4 is read), worked out once for the CLUT's colours and the polygon's
+   colour, then looked up a pixel (no multiplies, clamps or colour steps) -- Gran Turismo: ~110 such triangles a
+   frame, ~96% with the CLUT and colour of the one before.  Keyed by the CLUT's colours themselves, not its place in
+   VRAM: no write can leave a table stale */
+static struct {
+    u32 key[4];                         /* r | g << 8 | b << 16 | dither << 24 | 1 << 25 (0: empty) */
+    u16 clut[4][16];
+    u16 tab[4][8 * 16];
+    u32 next;
+} semi4;
+
+static const u16 *semi4_table(const u16 *clut, int r, int g, int b, int dith, const u8 *cbb)
+{
+    u32 key = (u32)r | ((u32)g << 8) | ((u32)b << 16) | ((dith ? 1u : 0u) << 24) | (1u << 25);
+    for (int s = 0; s < 4; s++) {
+        if (semi4.key[s] != key)
+            continue;
+        int i = 0;
+        while (i < 16 && semi4.clut[s][i] == clut[i])
+            i++;
+        if (i == 16)
+            return semi4.tab[s];
+    }
+    u32 s = semi4.next++ & 3u;
+    u16 *tab = semi4.tab[s];
+    for (u32 i = 0; i < 16u; i++)
+        semi4.clut[s][i] = clut[i];
+    for (u32 di = 0; di < 8u; di++) {
+        s32 d = (s32)(di * 16u + 64u);                  /* d16 + 128, as span_semi_body's d */
+        for (u32 i = 0; i < 16u; i++) {
+            u32 t = clut[i];
+            s32 rr = (s32)((t & 31u) * (u32)r) + d;
+            s32 gg = (s32)(((t >> 5) & 31u) * (u32)g) + d;
+            s32 bb = (s32)(((t >> 10) & 31u) * (u32)b) + d;
+            tab[di * 16u + i] = (u16)((u32)cbb[rr >> 7] | ((u32)cbb[gg >> 7] << 5) | ((u32)cbb[bb >> 7] << 10));
+        }
+    }
+    semi4.key[s] = key;
+    return tab;
+}
+
+/* span_semi_mod4's pixels with semi4_table's colours (dw: bytes d16 + 64 = the table row's index, the first
+   pixel's low, rotated a pixel) */
+static void __attribute__((noinline)) span_semi_tab4(const struct gpu_span *sp, u16 *dst, int n, u32 u_c, u32 v_c,
+                                                     s32 du, s32 dv, u32 dw, u32 abr)
+{
+    const u16 *tab = sp->tab4, *clut = sp->clut;
+    const u8 *tex8 = sp->tex8;
+    u32 au12 = sp->au12, av12 = sp->av12, mask_or = sp->mask_or;
+    for (u16 *end = dst + n; dst < end; dst++) {
+        u32 uu = (u_c & au12) >> 12;
+        u32 b = tex8[span_row(v_c & av12, 1) + (uu >> 1)];
+        u32 ix = (b >> ((uu & 1u) << 2)) & 15u;
+        u32 t = clut[ix];
+        if (t) {
+            u32 fg = tab[(dw & 0xFFu) + ix];
+            if (t & 0x8000u)
+                fg = blend_swar(*dst, fg, abr);
+            *dst = (u16)(fg | (t & 0x8000u) | mask_or);
+        }
+        dw = (dw >> 8) | (dw << 24);
+        u_c += (u32)du; v_c += (u32)dv;
+    }
+}
 
 /* untextured, semi-transparent: the colour (8.12, flat = steps 0) plus the dither d (d4: by x & 3, zeros: none),
    clamp((c + d) >> 3), blended */
@@ -1438,24 +1620,101 @@ static void __attribute__((noinline)) span_raw8w(const struct gpu_span *sp, u16 
 { span_raw_body(sp, 3, dst, n, u, v, du, dv); }
 static void __attribute__((noinline)) span_raw15(const struct gpu_span *sp, u16 *dst, int n, u32 u, u32 v, s32 du, s32 dv)
 { span_raw_body(sp, 2, dst, n, u, v, du, dv); }
-static void __attribute__((noinline)) span_mod4(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
-                                               s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
-{ span_mod_body(sp, 0, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
-static void __attribute__((noinline)) span_mod8(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
-                                               s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
-{ span_mod_body(sp, 1, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
-static void __attribute__((noinline)) span_mod8w(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
-                                                s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
-{ span_mod_body(sp, 3, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
-static void __attribute__((noinline)) span_mod15(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,
-                                                s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)
-{ span_mod_body(sp, 2, dst, x0, n, u, v, du, dv, r, g, b, dr, dg, db); }
+/* modulated, a span (sp->dw: its dither word) */
+#define SPAN_MOD(name, T)                                                                                           \
+static void __attribute__((noinline)) name(const struct gpu_span *sp, u16 *dst, int x0, int n, u32 u, u32 v,     \
+                                           s32 du, s32 dv, s32 r, s32 g, s32 b, s32 dr, s32 dg, s32 db)           \
+{ (void)x0; span_mod_loop(sp, T, dst, n, u, v, du, dv, r, g, b, dr, dg, db, sp->dw); }
+SPAN_MOD(span_mod4, 0)
+SPAN_MOD(span_mod8, 1)
+SPAN_MOD(span_mod8w, 3)
+SPAN_MOD(span_mod15, 2)
 
-static void __attribute__((noinline)) gpu_span_tex4_flat_notw(u16 *dst, int count, int lace2,
-                                                              const u8 *tpage_u8, const s32 *clut_baked,
-                                                              u32 u24, u32 v24, u32 du24, u32 dv24)
+/* modulated, the rows of a triangle as gpu_tri_span_rows found them, drawn in their order by one call (the same
+   texels read and pixels written in the same order as a call a row): the loop's values stay in registers from
+   row to row, no call and no arguments on the stack a row */
+struct span_rec {
+    u16 *dst;
+    u32 n, u, v;
+    s32 r, g, b;
+    u32 dw;
+};
+#define SPAN_RECS 32u
+#define SPAN_MOD_ROWS(name, T)                                                                                     \
+static void __attribute__((noinline)) name(const struct gpu_span *sp, const struct span_rec *rec, u32 count,     \
+                                           s32 du, s32 dv, s32 dr, s32 dg, s32 db)                                \
+{                                                                                                                 \
+    for (const struct span_rec *end = rec + count; rec < end; rec++)                                              \
+        span_mod_loop(sp, T, rec->dst, (int)rec->n, rec->u, rec->v, du, dv, rec->r, rec->g, rec->b, dr, dg, db,  \
+                      rec->dw);                                                                                   \
+}
+SPAN_MOD_ROWS(span_mod4_rows, 0)
+SPAN_MOD_ROWS(span_mod8_rows, 1)
+SPAN_MOD_ROWS(span_mod8w_rows, 3)
+SPAN_MOD_ROWS(span_mod15_rows, 2)
+
+static void span_mod_rows(u32 t, const struct gpu_span *sp, const struct span_rec *rec, u32 count, s32 du, s32 dv,
+                          s32 dr, s32 dg, s32 db)
 {
-    if (lace2) {
+    switch (t) {
+    case 0: span_mod4_rows(sp, rec, count, du, dv, dr, dg, db); break;
+    case 1: span_mod8_rows(sp, rec, count, du, dv, dr, dg, db); break;
+    case 2: span_mod15_rows(sp, rec, count, du, dv, dr, dg, db); break;
+    default: span_mod8w_rows(sp, rec, count, du, dv, dr, dg, db); break;
+    }
+}
+
+/* 4-bit texture, flat (the CLUT baked with the colour), no texture window: one row */
+static inline __attribute__((always_inline)) void span_tex4_flat_row(u16 *dst, int count, const u8 *tpage_u8,
+                                                                     const s32 *clut_baked, u32 u24, u32 v24,
+                                                                     u32 du24, u32 dv24)
+{
+    int i = 0;
+    for (; i + 1 < count; i += 2, dst += 2) {
+        u32 u0 = u24, v0 = v24;
+        u32 u1 = u0 + du24, v1 = v0 + dv24;
+        u24 = u1 + du24; v24 = v1 + dv24;
+        u8 b0 = tpage_u8[(v0 >> 24) * (2u * VRAM_STRIDE) + (u0 >> 25)];
+        u8 b1 = tpage_u8[(v1 >> 24) * (2u * VRAM_STRIDE) + (u1 >> 25)];
+        s32 p0 = clut_baked[(b0 >> ((u0 >> 22) & 4u)) & 0x0Fu];
+        s32 p1 = clut_baked[(b1 >> ((u1 >> 22) & 4u)) & 0x0Fu];
+        if (p0 >= 0) dst[0] = (u16)p0;
+        if (p1 >= 0) dst[1] = (u16)p1;
+    }
+    if (i < count) {
+        u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
+        s32 px = clut_baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
+        if (px >= 0)
+            dst[0] = (u16)px;
+    }
+}
+
+/* the rows of a triangle as gpu_tri_tex4_flat found them, drawn in their order by one call (Gran Turismo: ~600
+   triangles a frame of ~9 rows of ~11 pixels; a call a row with five arguments on the stack cost about as much
+   as its pixels).  lace: the interlace copy, a row also into the one below while that is inside the clip */
+struct span4_rec {
+    u16 *dst;
+    u32 n, u24, v24;
+};
+
+static void __attribute__((noinline)) gpu_span_tex4_flat_rows(const struct span4_rec *rec, u32 nrec, int lace,
+                                                              int clip_y2, const u8 *tpage_u8,
+                                                              const s32 *clut_baked, u32 du24, u32 dv24)
+{
+    const struct span4_rec *end = rec + nrec;
+    if (!lace) {
+        for (; rec < end; rec++)
+            span_tex4_flat_row(rec->dst, (int)rec->n, tpage_u8, clut_baked, rec->u24, rec->v24, du24, dv24);
+        return;
+    }
+    for (; rec < end; rec++) {
+        u16 *dst = rec->dst;
+        int count = (int)rec->n;
+        u32 u24 = rec->u24, v24 = rec->v24;
+        if ((int)((u32)(dst - W.vram) / VRAM_STRIDE) + 1 > clip_y2) {
+            span_tex4_flat_row(dst, count, tpage_u8, clut_baked, u24, v24, du24, dv24);
+            continue;
+        }
         for (int i = 0; i < count; i++, dst++, u24 += du24, v24 += dv24) {
             u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
             s32 px = clut_baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
@@ -1464,21 +1723,20 @@ static void __attribute__((noinline)) gpu_span_tex4_flat_notw(u16 *dst, int coun
                 dst[VRAM_STRIDE] = (u16)px;
             }
         }
-    } else {
-        int i = 0;
-        for (; i + 1 < count; i += 2, dst += 2) {
-            u32 u0 = u24, v0 = v24;
-            u32 u1 = u0 + du24, v1 = v0 + dv24;
-            u24 = u1 + du24; v24 = v1 + dv24;
-            u8 b0 = tpage_u8[(v0 >> 24) * (2u * VRAM_STRIDE) + (u0 >> 25)];
-            u8 b1 = tpage_u8[(v1 >> 24) * (2u * VRAM_STRIDE) + (u1 >> 25)];
-            s32 p0 = clut_baked[(b0 >> ((u0 >> 22) & 4u)) & 0x0Fu];
-            s32 p1 = clut_baked[(b1 >> ((u1 >> 22) & 4u)) & 0x0Fu];
-            if (p0 >= 0) dst[0] = (u16)p0;
-            if (p1 >= 0) dst[1] = (u16)p1;
-        }
-        if (i < count) {
-            u8 b8 = tpage_u8[(v24 >> 24) * (2u * VRAM_STRIDE) + (u24 >> 25)];
+    }
+}
+
+/* the same through a texture window (no interlace copy): the window's masks on the coordinates (au24, av24: its
+   AND masks << 24; its offsets are in tex8's address), otherwise span_tex4_flat_row's pixels */
+static void __attribute__((noinline)) gpu_span_tex4_flat_tw_rows(const struct span4_rec *rec, u32 nrec,
+                                                                 const u8 *tex8, const s32 *clut_baked, u32 du24,
+                                                                 u32 dv24, u32 au24, u32 av24)
+{
+    for (const struct span4_rec *end = rec + nrec; rec < end; rec++) {
+        u16 *dst = rec->dst;
+        u32 u24 = rec->u24, v24 = rec->v24;
+        for (u16 *de = dst + rec->n; dst < de; dst++, u24 += du24, v24 += dv24) {
+            u8 b8 = tex8[((v24 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u24 & au24) >> 25)];
             s32 px = clut_baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
             if (px >= 0)
                 dst[0] = (u16)px;
@@ -1613,6 +1871,8 @@ static void __attribute__((noinline)) gpu_tri_span_rows(const struct tri_rows *t
     }
     s32 e0 = tr->e0_row, e1 = tr->e1_row, e2 = tr->e2_row, a12 = tr->a12, a20 = tr->a20, a01 = tr->a01;
     u32 u_row = tr->u_row, v_row = tr->v_row, r_row = tr->r_row, g_row = tr->g_row, b_row = tr->b_row;
+    struct span_rec rec[SPAN_RECS];
+    u32 nrec = 0;
     for (; y <= tr->maxy; y += y_step) {
         if (!in_bot && y >= y1) {
             in_bot = 1;
@@ -1662,20 +1922,31 @@ static void __attribute__((noinline)) gpu_tri_span_rows(const struct tri_rows *t
                     g_c = tr->fg;
                     b_c = tr->fb;
                 }
-                if (kind == 2) {
+                if (kind == 2) {                /* (drawn by span_mod_rows, a batch of rows at a time) */
                     u32 w = span_dw[tr->dither ? (y & 3) : 4], s = ((u32)xl & 3u) * 8u;
-                    sp->dw = s ? (w >> s) | (w << (32u - s)) : w;
-                    switch (tr->t) {
-                    case 0: span_mod4(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
-                    case 1: span_mod8(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
-                    case 2: span_mod15(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
-                    default: span_mod8w(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb); break;
+                    struct span_rec *rc = &rec[nrec];
+                    rc->dst = d;
+                    rc->n = (u32)n;
+                    rc->u = uc;
+                    rc->v = vc;
+                    rc->r = r_c;
+                    rc->g = g_c;
+                    rc->b = b_c;
+                    rc->dw = s ? (w >> s) | (w << (32u - s)) : w;
+                    if (++nrec == SPAN_RECS) {
+                        span_mod_rows((u32)tr->t, sp, rec, nrec, du, dv, sdr, sdg, sdb);
+                        nrec = 0;
                     }
                 } else {                        /* 4: semi-transparent modulated */
                     const s8 *drow = gpu_dither[y & 3];
                     for (int k = 0; k < 4; k++)
                         sp->d16[k] = tr->dither ? (s32)drow[k] * 16 : 0;
-                    switch (tr->t) {
+                    if (sp->tab4) {             /* (4-bit, flat: the colours from semi4_table) */
+                        u32 w = 0u;
+                        for (int k = 3; k >= 0; k--)
+                            w = (w << 8) | (u32)(sp->d16[((u32)xl + (u32)k) & 3u] + 64);
+                        span_semi_tab4(sp, d, n, uc, vc, du, dv, w, tr->abr);
+                    } else switch (tr->t) {
                     case 0: span_semi_mod4(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
                     case 1: span_semi_mod8(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
                     case 2: span_semi_mod15(sp, d, xl, n, uc, vc, du, dv, r_c, g_c, b_c, sdr, sdg, sdb, tr->abr); break;
@@ -1697,6 +1968,9 @@ static void __attribute__((noinline)) gpu_tri_span_rows(const struct tri_rows *t
             b_row += (u32)tr->db_dy;
         }
     }
+    if (nrec)
+        span_mod_rows((u32)tr->t, sp, rec, nrec, tr->du_dx, tr->dv_dx, gouraud ? tr->dr_dx : 0,
+                      gouraud ? tr->dg_dx : 0, gouraud ? tr->db_dx : 0);
 }
 
 static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struct gpu_vtx v1, struct gpu_vtx v2,
@@ -1725,9 +1999,9 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
     int a01 = v0.y - v1.y, b01 = v1.x - v0.x;
     int a12 = v1.y - v2.y, b12 = v2.x - v1.x;
     int a20 = v2.y - v0.y, b20 = v0.x - v2.x;
-    int bias0 = (a12 < 0 || (a12 == 0 && b12 < 0)) ? 0 : -1;
-    int bias1 = (a20 < 0 || (a20 == 0 && b20 < 0)) ? 0 : -1;
-    int bias2 = (a01 < 0 || (a01 == 0 && b01 < 0)) ? 0 : -1;
+    int bias0 = (a12 > 0 || (a12 == 0 && b12 > 0)) ? 0 : -1;
+    int bias1 = (a20 > 0 || (a20 == 0 && b20 > 0)) ? 0 : -1;
+    int bias2 = (a01 > 0 || (a01 == 0 && b01 > 0)) ? 0 : -1;
 
     s32 e0_row = (v2.x - v1.x) * (miny - v1.y) - (v2.y - v1.y) * (minx - v1.x) + bias0;
     s32 e1_row = (v0.x - v2.x) * (miny - v2.y) - (v0.y - v2.y) * (minx - v2.x) + bias1;
@@ -1807,13 +2081,15 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
         sp.au12 = tw_and_u << 12;
         sp.av12 = tw_and_v << 12;
         sp.mask_or = mask_or;
-        sp.clb = (const u8 *)(span_cl[mask_or ? 1 : 0] + (SPAN_CL_OFS - 1));
+        sp.cb = (const u8 *)(span_tab[mask_or ? 1 : 0].red + (SPAN_CL_OFS - 1));
         if (is_raw) {
             span_kind = is_semi ? 3 : 1;
         } else {
             span_kind = is_semi ? 4 : 2;
             span_dither = !is_semi && (span_t == 1u || span_t == 3u) ? (is_gouraud ? use_dither : 0)
                                                                      : (S.dither != 0u);
+            sp.tab4 = (is_semi && span_t == 0u && !is_gouraud)
+                          ? semi4_table(clut4_raw, v0.r, v0.g, v0.b, span_dither, sp.cb + SPAN_TAB_CB) : 0;
         }
     }
 
@@ -2023,6 +2299,81 @@ static void __attribute__((noinline)) gpu_draw_tri_slow(struct gpu_vtx v0, struc
     }
 }
 
+/* a draw that writes inside x1..x2, y1..y2: the baked 4-bit CLUTs it covers are stale (only those -- the old rule,
+   any draw outside 0..disp_w, 0..disp_h, threw them all away on every triangle a double-buffered game drew into its
+   second buffer at y 256: Gran Turismo baked a CLUT a triangle) */
+static inline __attribute__((always_inline)) void gpu_clut4_touch(int x1, int y1, int x2, int y2)
+{
+    for (int s = 0; s < 4; s++)
+        if ((int)S.clut4_cy[s] >= y1 && (int)S.clut4_cy[s] <= y2 && (int)S.clut4_cx[s] + 15 >= x1 &&
+            (int)S.clut4_cx[s] <= x2)
+            S.clut4_gen[s] = 0u;                        /* (vram_gen starts at 1) */
+}
+
+/* A 4-bit CLUT's 16 colours as flat textured pixels come out, kept for the triangles and rectangles after this one
+   (four of them, each as long as nothing was drawn over its CLUT: vram_gen, gpu_clut4_touch): -1 for the
+   transparent entry 0000h, else the texel times the colour r, g, b -- clamp(t * c >> 7) a channel, the texel
+   itself for a raw primitive or the colour 80h 80h 80h -- with the texel's bit 15 and the mask bit */
+static const s32 *__attribute__((noinline)) clut4_baked(u32 clut, int is_raw, int r, int g, int b, u32 mask_or)
+{
+    u32 cy = (clut >> 6) & 0x1FFu, cx = (clut & 0x3Fu) * 16u;
+    int raw_or_neutral = is_raw || (r == 128 && g == 128 && b == 128);
+    u32 klo = (clut & 0x7FFFu) | (mask_or ? 0x8000u : 0u) | (raw_or_neutral ? 0x10000u : 0u);
+    u32 khi = raw_or_neutral ? 0u : ((u32)r | ((u32)g << 8) | ((u32)b << 16));
+    for (int s = 0; s < 4; s++)
+        if (S.clut4_gen[s] == S.vram_gen && S.clut4_klo[s] == klo && S.clut4_khi[s] == khi)
+            return S.clut4_cache[s];
+    u32 slot = (S.clut4_slot++) & 3u;
+    s32 *dst_c = S.clut4_cache[slot];
+    const u16 *crow = W.vram + cy * VRAM_STRIDE;
+    if (raw_or_neutral) {
+        for (u32 i = 0; i < 16u; i++) {
+            u16 t = crow[(cx + i) & 1023u];
+            dst_c[i] = (t == 0u) ? -1 : (s32)(u32)(t | mask_or);
+        }
+    } else {
+        for (u32 i = 0; i < 16u; i++) {
+            u16 t = crow[(cx + i) & 1023u];
+            if (t == 0u) {
+                dst_c[i] = -1;
+            } else {
+                int mr = ((int)(t & 31u) * r) >> 4;
+                int mg = ((int)((t >> 5) & 31u) * g) >> 4;
+                int mb = ((int)((t >> 10) & 31u) * b) >> 4;
+                dst_c[i] = (s32)(u32)(clamp5_b[(mb >> 3) + 16] |
+                                      clamp5_g[(mg >> 3) + 16] |
+                                      clamp5_tab[(mr >> 3) + 16] | (t & 0x8000u) | mask_or);
+            }
+        }
+    }
+    S.clut4_gen[slot] = S.vram_gen;
+    S.clut4_klo[slot] = klo;
+    S.clut4_khi[slot] = khi;
+    S.clut4_cx[slot] = (u16)cx;
+    S.clut4_cy[slot] = (u16)cy;
+    return dst_c;
+}
+
+/* the rows k = 0, 1, ... of a column on which an edge function, e at row 0 and stepping by `step` a row, is not
+   negative: from a row on (it grows), up to one (it falls) or all / none -- [*lo, *hi] narrowed to them */
+static inline __attribute__((always_inline)) void tri_col_rows(s32 e, s32 step, int *lo, int *hi)
+{
+    if (step > 0) {
+        if (e < 0) {
+            int k = (int)(((u32)-e + (u32)step - 1u) / (u32)step);
+            if (k > *lo)
+                *lo = k;
+        }
+    } else if (e < 0) {
+        *hi = -1;
+    } else if (step < 0) {
+        int k = (int)((u32)e / (u32)-step);
+        if (k < *hi)
+            *hi = k;
+    }
+}
+#define TRI_COL_ROWS 16                 /* (from this many rows on, the divisions cost less than the tests) */
+
 static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struct gpu_vtx v1, struct gpu_vtx v2,
                                                         int minx, int maxx, int miny, int maxy, s32 area,
                                                         int lace, int is_raw, u32 tpage, u32 clut)
@@ -2042,9 +2393,9 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     int a01 = v0.y - v1.y, b01 = v1.x - v0.x;
     int a12 = v1.y - v2.y, b12 = v2.x - v1.x;
     int a20 = v2.y - v0.y, b20 = v0.x - v2.x;
-    int bias0 = (a12 < 0 || (a12 == 0 && b12 < 0)) ? 0 : -1;
-    int bias1 = (a20 < 0 || (a20 == 0 && b20 < 0)) ? 0 : -1;
-    int bias2 = (a01 < 0 || (a01 == 0 && b01 < 0)) ? 0 : -1;
+    int bias0 = (a12 > 0 || (a12 == 0 && b12 > 0)) ? 0 : -1;
+    int bias1 = (a20 > 0 || (a20 == 0 && b20 > 0)) ? 0 : -1;
+    int bias2 = (a01 > 0 || (a01 == 0 && b01 > 0)) ? 0 : -1;
 
     s32 e0_row = (v2.x - v1.x) * (miny - v1.y) - (v2.y - v1.y) * (minx - v1.x) + bias0;
     s32 e1_row = (v0.x - v2.x) * (miny - v2.y) - (v0.y - v2.y) * (minx - v2.x) + bias1;
@@ -2063,46 +2414,91 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
 
     u32 tx_base = (tpage & 0x0Fu) * 64u, ty_base = ((tpage >> 4) & 1u) * 256u;
     const u8 *tpage_u8 = (const u8 *)(W.vram + ty_base * VRAM_STRIDE + tx_base);
-    u32 cy = (clut >> 6) & 0x1FFu, cx = (clut & 0x3Fu) * 16u;
+    /* the texture window (gpu_draw_tri sends one here only without the interlace copy): u = (u & ~(mx << 3)) |
+       ((ox & mx) << 3) -- the AND as a mask on the coordinate, the OR (bits the mask clears, a multiple of 8)
+       added to the texture's address; v the same */
+    int tw = (S.tw_mx | S.tw_my) != 0u;
+    u32 au24 = (0xFFu & ~((u32)S.tw_mx << 3)) << 24, av24 = (0xFFu & ~((u32)S.tw_my << 3)) << 24;
+    const u8 *tex8 = tpage_u8 + ((u32)(S.tw_oy & S.tw_my) << 3) * (2u * VRAM_STRIDE) + ((u32)(S.tw_ox & S.tw_mx) << 2);
 
-    int raw_or_neutral = is_raw || (v0.r == 128 && v0.g == 128 && v0.b == 128);
-    u32 klo = (clut & 0x7FFFu) | (mask_or ? 0x8000u : 0u) | (raw_or_neutral ? 0x10000u : 0u);
-    u32 khi = raw_or_neutral ? 0u : ((u32)v0.r | ((u32)v0.g << 8) | ((u32)v0.b << 16));
-    const s32 *baked = 0;
-    for (int s = 0; s < 4; s++) {
-        if (S.clut4_gen[s] == S.vram_gen && S.clut4_klo[s] == klo && S.clut4_khi[s] == khi) {
-            baked = S.clut4_cache[s];
-            break;
-        }
-    }
-    if (!baked) {
-        u32 slot = (S.clut4_slot++) & 3u;
-        s32 *dst_c = S.clut4_cache[slot];
-        const u16 *crow = W.vram + cy * VRAM_STRIDE;
-        if (raw_or_neutral) {
-            for (u32 i = 0; i < 16u; i++) {
-                u16 t = crow[(cx + i) & 1023u];
-                dst_c[i] = (t == 0u) ? -1 : (s32)(u32)(t | mask_or);
+    const s32 *baked = clut4_baked(clut, is_raw, v0.r, v0.g, v0.b, mask_or);
+
+    if (maxx - minx <= 1 && !dup_odd) {
+        /* A triangle one or two columns wide: Duke Nukem draws its walls as textured triangles one pixel wide and
+           ~90 rows high, a screen column each -- nine in ten of its ~440 triangles a frame, 42000 rows of one
+           pixel.  Each row's one or two pixels are put to the edge functions themselves -- the pixels the span
+           search below finds: it narrows a range that holds them to the first and the last one inside -- without
+           the edges' stepping, the search's loops and a record a row */
+        int two = maxx > minx, rows = (maxy - miny) / y_step + 1;
+        u32 u24 = u_row << 12, v24 = v_row << 12, du_dy24 = (u32)du_dy << 12, dv_dy24 = (u32)dv_dy << 12;
+        u16 *dst = W.vram + miny * VRAM_STRIDE + minx;
+        if (rows >= TRI_COL_ROWS) {
+            /* A high one: an edge function is linear down a column, so the rows on which a column is inside are
+               one run -- found with a division an edge instead of three tests a row.  With one of the two columns
+               inside at all (a wall's column) that run is all there is to draw: a loop of the texel and the pixel
+               -- and where u does not change down the column (a wall's: one column of the texture), with the
+               texture's column and the pixel's half of its bytes worked out once */
+            int lo0 = 0, hi0 = rows - 1, lo1 = 0, hi1 = two ? rows - 1 : -1;
+            tri_col_rows(e0_row, step_e0, &lo0, &hi0);
+            tri_col_rows(e1_row, step_e1, &lo0, &hi0);
+            tri_col_rows(e2_row, step_e2, &lo0, &hi0);
+            if (two) {
+                tri_col_rows(e0_row + a12, step_e0, &lo1, &hi1);
+                tri_col_rows(e1_row + a20, step_e1, &lo1, &hi1);
+                tri_col_rows(e2_row + a01, step_e2, &lo1, &hi1);
             }
-        } else {
-            for (u32 i = 0; i < 16u; i++) {
-                u16 t = crow[(cx + i) & 1023u];
-                if (t == 0u) {
-                    dst_c[i] = -1;
-                } else {
-                    int mr = ((int)(t & 31u) * v0.r) >> 4;
-                    int mg = ((int)((t >> 5) & 31u) * v0.g) >> 4;
-                    int mb = ((int)((t >> 10) & 31u) * v0.b) >> 4;
-                    dst_c[i] = (s32)(u32)(clamp5_b[(mb >> 3) + 16] |
-                                          clamp5_g[(mg >> 3) + 16] |
-                                          clamp5_tab[(mr >> 3) + 16] | (t & 0x8000u) | mask_or);
+            if (lo0 > hi0 || lo1 > hi1) {
+                int lo = lo0, n = hi0 - lo0 + 1;
+                if (lo0 > hi0) {
+                    lo = lo1;
+                    n = hi1 - lo1 + 1;
+                    u24 += du24;
+                    v24 += dv24;
+                    dst++;
                 }
+                if (n <= 0)
+                    return;
+                u32 pitch = VRAM_STRIDE * (u32)y_step;
+                u24 += du_dy24 * (u32)lo;
+                v24 += dv_dy24 * (u32)lo;
+                dst += pitch * (u32)lo;
+                if (!du_dy24) {
+                    const u8 *tcol = tex8 + ((u24 & au24) >> 25);
+                    u32 half = (u24 >> 22) & 4u;
+                    for (; n > 0; n--, dst += pitch, v24 += dv_dy24) {
+                        s32 px = baked[(tcol[((v24 & av24) >> 24) * (2u * VRAM_STRIDE)] >> half) & 0x0Fu];
+                        if (px >= 0)
+                            dst[0] = (u16)px;
+                    }
+                } else {
+                    for (; n > 0; n--, dst += pitch, u24 += du_dy24, v24 += dv_dy24) {
+                        u8 b8 = tex8[((v24 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u24 & au24) >> 25)];
+                        s32 px = baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
+                        if (px >= 0)
+                            dst[0] = (u16)px;
+                    }
+                }
+                return;
             }
         }
-        S.clut4_gen[slot] = S.vram_gen;
-        S.clut4_klo[slot] = klo;
-        S.clut4_khi[slot] = khi;
-        baked = dst_c;
+        for (int y = miny; y <= maxy; y += y_step, dst += VRAM_STRIDE * (u32)y_step) {
+            if ((e0_row | e1_row | e2_row) >= 0) {
+                u8 b8 = tex8[((v24 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u24 & au24) >> 25)];
+                s32 px = baked[(b8 >> ((u24 >> 22) & 4u)) & 0x0Fu];
+                if (px >= 0)
+                    dst[0] = (u16)px;
+            }
+            if (two && ((e0_row + a12) | (e1_row + a20) | (e2_row + a01)) >= 0) {
+                u32 u1 = u24 + du24, v1 = v24 + dv24;
+                u8 b8 = tex8[((v1 & av24) >> 24) * (2u * VRAM_STRIDE) + ((u1 & au24) >> 25)];
+                s32 px = baked[(b8 >> ((u1 >> 22) & 4u)) & 0x0Fu];
+                if (px >= 0)
+                    dst[1] = (u16)px;
+            }
+            e0_row += step_e0; e1_row += step_e1; e2_row += step_e2;
+            u24 += du_dy24; v24 += dv_dy24;
+        }
+        return;
     }
 
     int clip_y2 = S.clip_y2;
@@ -2111,6 +2507,8 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
     s32 xb = in_bot ? ((x1 << 16) + s12 * (miny - y1)) : ((x0 << 16) + s01 * (miny - y0));
     s32 step_xb = (in_bot ? s12 : s01) * y_step;
 
+    struct span4_rec rec[SPAN_RECS];
+    u32 nrec = 0;
     for (int y = miny; y <= maxy; y += y_step) {
         if (!in_bot && y >= y1) {
             in_bot = 1;
@@ -2131,14 +2529,29 @@ static void __attribute__((noinline)) gpu_tri_tex4_flat(struct gpu_vtx v0, struc
         }
         if (xl <= xr) {
             u32 dx = (u32)(xl - minx);
-            gpu_span_tex4_flat_notw(W.vram + y * VRAM_STRIDE + xl, xr - xl + 1, dup_odd && (y + 1 <= clip_y2),
-                                    tpage_u8, baked, (u_row + (u32)du_dx * dx) << 12,
-                                    (v_row + (u32)dv_dx * dx) << 12, du24, dv24);
+            struct span4_rec *rc = &rec[nrec];
+            rc->dst = W.vram + y * VRAM_STRIDE + xl;
+            rc->n = (u32)(xr - xl + 1);
+            rc->u24 = (u_row + (u32)du_dx * dx) << 12;
+            rc->v24 = (v_row + (u32)dv_dx * dx) << 12;
+            if (++nrec == SPAN_RECS) {
+                if (tw)
+                    gpu_span_tex4_flat_tw_rows(rec, nrec, tex8, baked, du24, dv24, au24, av24);
+                else
+                    gpu_span_tex4_flat_rows(rec, nrec, dup_odd, clip_y2, tpage_u8, baked, du24, dv24);
+                nrec = 0;
+            }
         }
         xa += step_xa; xb += step_xb;
         e0_row += step_e0; e1_row += step_e1; e2_row += step_e2;
         u_row += (u32)du_dy; v_row += (u32)dv_dy;
     }
+    if (!nrec)
+        return;
+    if (tw)
+        gpu_span_tex4_flat_tw_rows(rec, nrec, tex8, baked, du24, dv24, au24, av24);
+    else
+        gpu_span_tex4_flat_rows(rec, nrec, dup_odd, clip_y2, tpage_u8, baked, du24, dv24);
 }
 
 static void __attribute__((noinline)) gpu_tri_tex4_gour(struct gpu_vtx v0, struct gpu_vtx v1, struct gpu_vtx v2,
@@ -2161,9 +2574,9 @@ static void __attribute__((noinline)) gpu_tri_tex4_gour(struct gpu_vtx v0, struc
     int a01 = v0.y - v1.y, b01 = v1.x - v0.x;
     int a12 = v1.y - v2.y, b12 = v2.x - v1.x;
     int a20 = v2.y - v0.y, b20 = v0.x - v2.x;
-    int bias0 = (a12 < 0 || (a12 == 0 && b12 < 0)) ? 0 : -1;
-    int bias1 = (a20 < 0 || (a20 == 0 && b20 < 0)) ? 0 : -1;
-    int bias2 = (a01 < 0 || (a01 == 0 && b01 < 0)) ? 0 : -1;
+    int bias0 = (a12 > 0 || (a12 == 0 && b12 > 0)) ? 0 : -1;
+    int bias1 = (a20 > 0 || (a20 == 0 && b20 > 0)) ? 0 : -1;
+    int bias2 = (a01 > 0 || (a01 == 0 && b01 > 0)) ? 0 : -1;
 
     s32 e0_row = (v2.x - v1.x) * (miny - v1.y) - (v2.y - v1.y) * (minx - v1.x) + bias0;
     s32 e1_row = (v0.x - v2.x) * (miny - v2.y) - (v0.y - v2.y) * (minx - v2.x) + bias1;
@@ -2258,8 +2671,7 @@ static void __attribute__((noinline)) gpu_draw_tri(const struct gpu_vtx *pv0, co
         miny++;
     if (minx > maxx || miny > maxy)
         return;
-    if (maxx >= S.disp_w || maxy >= S.disp_h)
-        S.vram_gen++;
+    gpu_clut4_touch(minx, miny, maxx, maxy + 1);         /* (+1: an interlaced picture's doubled row) */
 
     s32 area = (pv1->x - pv0->x) * (pv2->y - pv0->y) - (pv1->y - pv0->y) * (pv2->x - pv0->x);
     if (area == 0)
@@ -2278,13 +2690,21 @@ static void __attribute__((noinline)) gpu_draw_tri(const struct gpu_vtx *pv0, co
     u32 tx_base    = (tpage & 0x0Fu) * 64u;
     u32 ty_base    = ((tpage >> 4) & 1u) * 256u;
 
+    /* (through a texture window: the flat ones that gpu_draw_tri_slow would not dither -- gpu_tri_tex4_flat's
+       baked colours are then its pixels -- on a picture without the interlace copy) */
     if (is_tex && depth == 0u && !is_semi && !S.check_mask &&
-        ((S.tw_mx | S.tw_my) == 0u) && !(is_gouraud && is_raw) &&
-        tx_base + 64u <= 1024u && ty_base + 256u <= 512u) {
-        if (!is_gouraud)
+        ((S.tw_mx | S.tw_my) == 0u || (!is_gouraud && !lace && (is_raw || !S.dither))) &&
+        !(is_gouraud && is_raw) && tx_base + 64u <= 1024u && ty_base + 256u <= 512u) {
+        if (!is_gouraud) {
             gpu_tri_tex4_flat(v0, v1, v2, minx, maxx, miny, maxy, area, lace, is_raw, tpage, clut);
-        else
+            /* (once more after it: a triangle drawn over its own CLUT bakes the CLUT as it was before -- right
+               for itself, as gpu_draw_tri_slow's copy of the CLUT is -- and must not leave that table for the
+               next one: a quad's second triangle took the first one's.  Found by drawing at random against the
+               slow path) */
+            gpu_clut4_touch(minx, miny, maxx, maxy + 1);
+        } else {
             gpu_tri_tex4_gour(v0, v1, v2, minx, maxx, miny, maxy, area, lace, tpage, clut);
+        }
         return;
     }
 
@@ -2302,9 +2722,9 @@ static void __attribute__((noinline)) gpu_draw_tri(const struct gpu_vtx *pv0, co
         int a01 = v0.y - v1.y, b01 = v1.x - v0.x;
         int a12 = v1.y - v2.y, b12 = v2.x - v1.x;
         int a20 = v2.y - v0.y, b20 = v0.x - v2.x;
-        int bias0 = (a12 < 0 || (a12 == 0 && b12 < 0)) ? 0 : -1;
-        int bias1 = (a20 < 0 || (a20 == 0 && b20 < 0)) ? 0 : -1;
-        int bias2 = (a01 < 0 || (a01 == 0 && b01 < 0)) ? 0 : -1;
+        int bias0 = (a12 > 0 || (a12 == 0 && b12 > 0)) ? 0 : -1;
+        int bias1 = (a20 > 0 || (a20 == 0 && b20 > 0)) ? 0 : -1;
+        int bias2 = (a01 > 0 || (a01 == 0 && b01 > 0)) ? 0 : -1;
         s32 e0_row = (v2.x - v1.x) * (miny - v1.y) - (v2.y - v1.y) * (minx - v1.x) + bias0;
         s32 e1_row = (v0.x - v2.x) * (miny - v2.y) - (v0.y - v2.y) * (minx - v2.x) + bias1;
         s32 e2_row = (v1.x - v0.x) * (miny - v0.y) - (v1.y - v0.y) * (minx - v0.x) + bias2;
@@ -2358,6 +2778,7 @@ static void gpu_draw_line(int x0, int y0, u32 c0, int x1, int y1, u32 c1, int is
     int dy = (y1 > y0) ? (y1 - y0) : (y0 - y1);
     if (dx >= 1024 || dy >= 512)
         return;
+    gpu_clut4_touch(x0 < x1 ? x0 : x1, y0 < y1 ? y0 : y1, x0 > x1 ? x0 : x1, y0 > y1 ? y0 : y1);
     int steps = dx > dy ? dx : dy;
     u32 abr = (S.gpustat >> 5) & 3u;
     if (steps == 0) {
@@ -2376,6 +2797,168 @@ static void gpu_draw_line(int x0, int y0, u32 c0, int x1, int y1, u32 c1, int is
             int g = is_gouraud ? (g0 + ((g1 - g0) * i) / steps) : g0;
             int b = is_gouraud ? (b0 + ((b1 - b0) * i) / steps) : b0;
             gpu_plot_pixel(x, y, r, g, b, S.dither, is_semi, abr, 0u);
+        }
+    }
+}
+
+/* A rectangle's pixels, row by row and left to right as gpu_draw_rect's general loop below goes -- each texel
+   and CLUT entry read from VRAM at its pixel's turn and each pixel written at once, so a rectangle drawn over its
+   own texture or CLUT comes out the same -- with everything that does not change from pixel to pixel worked out
+   before: the clipped range instead of a test a pixel, the texture window as two masks, the page's row once a
+   row.  A game of sprites spent four fifths of its frame in the general loop's ~70 instructions a pixel.
+   T: 0 a 4-bit texture, 1 8-bit, 2 15-bit.  No mask test (the general loop has it). */
+struct rect_run {
+    int x, y, w, h;                     /* the clipped part: columns x .. x + w - 1; h rows from y, every ystep-th */
+    int ystep;                          /* 1; 2 when only the even rows of an interlaced picture are drawn */
+    u32 u, v;                           /* the texture coordinates of its first pixel */
+    int du, dv;                         /* a column's step (+1, or -1 flipped); a drawn row's (+-1 or +-2) */
+    int r, g, b;
+    u32 tpage, clut, abr, mask_or;
+    int raw, semi;
+};
+
+static inline __attribute__((always_inline)) void rect_tex_body(const struct rect_run *q, int T)
+{
+    u32 tx_base = (q->tpage & 0x0Fu) * 64u, ty_base = ((q->tpage >> 4) & 1u) * 256u;
+    u32 and_u = 0xFFu & ~((u32)S.tw_mx << 3), or_u = (u32)(S.tw_ox & S.tw_mx) << 3;
+    u32 and_v = 0xFFu & ~((u32)S.tw_my << 3), or_v = (u32)(S.tw_oy & S.tw_my) << 3;
+    const u16 *crow = W.vram + ((q->clut >> 6) & 0x1FFu) * VRAM_STRIDE;
+    u32 cx = (q->clut & 0x3Fu) * 16u, mask_or = q->mask_or, abr = q->abr;
+    int raw = q->raw, semi = q->semi, r = q->r, g = q->g, b = q->b;
+    u32 v = q->v;
+    for (int j = 0; j < q->h; j++, v += (u32)q->dv) {
+        u32 vv = ((v & 0xFFu) & and_v) | or_v;
+        const u16 *trow = W.vram + ((ty_base + vv) & 511u) * VRAM_STRIDE;
+        u16 *dst = W.vram + (q->y + j * q->ystep) * VRAM_STRIDE + q->x;
+        u32 u = q->u;
+        for (u16 *end = dst + q->w; dst < end; dst++, u += (u32)q->du) {
+            u32 uu = ((u & 0xFFu) & and_u) | or_u, tex;
+            if (T == 0) {
+                u32 w16 = trow[(tx_base + (uu >> 2)) & 1023u];
+                tex = crow[(cx + ((w16 >> ((uu & 3u) * 4u)) & 0x0Fu)) & 1023u];
+            } else if (T == 1) {
+                u32 w16 = trow[(tx_base + (uu >> 1)) & 1023u];
+                tex = crow[(cx + ((w16 >> ((uu & 1u) * 8u)) & 0xFFu)) & 1023u];
+            } else {
+                tex = trow[(tx_base + uu) & 1023u];
+            }
+            if (!tex)
+                continue;
+            u32 fg;
+            if (raw) {
+                fg = tex & 0x7FFFu;
+            } else {                    /* (gpu_plot_pixel's clamp(((t << 3) * c >> 7) >> 3) = clamp(t * c >> 7)) */
+                fg = (u32)clamp5_tab[(((tex & 31u) * (u32)r) >> 7) + 16u] |
+                     clamp5_g[((((tex >> 5) & 31u) * (u32)g) >> 7) + 16u] |
+                     clamp5_b[((((tex >> 10) & 31u) * (u32)b) >> 7) + 16u];
+            }
+            if (semi && (tex & 0x8000u))
+                fg = gpu_blend(*dst, (u16)fg, abr);
+            *dst = (u16)(fg | (tex & 0x8000u) | mask_or);
+        }
+    }
+}
+
+static void __attribute__((noinline)) rect_tex4(const struct rect_run *q) { rect_tex_body(q, 0); }
+static void __attribute__((noinline)) rect_tex8(const struct rect_run *q) { rect_tex_body(q, 1); }
+static void __attribute__((noinline)) rect_tex15(const struct rect_run *q) { rect_tex_body(q, 2); }
+
+/* 8- and 15-bit, raw and not semi-transparent (a game of sprites' whole screen: Tetrade draws 120000 such pixels
+   a frame): the texel, or the CLUT's entry for it, as it is with the mask bit -- rect_tex_body's pixels for
+   raw && !semi, without its tests for them at every pixel */
+static void __attribute__((noinline)) rect_tex8_raw(const struct rect_run *q)
+{
+    u32 tx_base = (q->tpage & 0x0Fu) * 64u, ty_base = ((q->tpage >> 4) & 1u) * 256u;
+    u32 and_u = 0xFFu & ~((u32)S.tw_mx << 3), or_u = (u32)(S.tw_ox & S.tw_mx) << 3;
+    u32 and_v = 0xFFu & ~((u32)S.tw_my << 3), or_v = (u32)(S.tw_oy & S.tw_my) << 3;
+    const u16 *crow = W.vram + ((q->clut >> 6) & 0x1FFu) * VRAM_STRIDE;
+    u32 cx = (q->clut & 0x3Fu) * 16u, mask_or = q->mask_or;
+    int nowrap = tx_base + 128u <= 1024u && cx + 256u <= 1024u;    /* (the page and the CLUT end inside VRAM) */
+    u32 v = q->v;
+    for (int j = 0; j < q->h; j++, v += (u32)q->dv) {
+        u32 vv = ((v & 0xFFu) & and_v) | or_v;
+        const u16 *trow = W.vram + ((ty_base + vv) & 511u) * VRAM_STRIDE;
+        u16 *dst = W.vram + (q->y + j * q->ystep) * VRAM_STRIDE + q->x;
+        u32 u = q->u;
+        if (nowrap) {
+            const u8 *t8 = (const u8 *)(trow + tx_base);            /* the page's row, a texel a byte */
+            const u16 *c16 = crow + cx;
+            for (u16 *end = dst + q->w; dst < end; dst++, u += (u32)q->du) {
+                u32 tex = c16[t8[((u & 0xFFu) & and_u) | or_u]];
+                if (tex)
+                    *dst = (u16)(tex | mask_or);
+            }
+        } else {
+            for (u16 *end = dst + q->w; dst < end; dst++, u += (u32)q->du) {
+                u32 uu = ((u & 0xFFu) & and_u) | or_u;
+                u32 w16 = trow[(tx_base + (uu >> 1)) & 1023u];
+                u32 tex = crow[(cx + ((w16 >> ((uu & 1u) * 8u)) & 0xFFu)) & 1023u];
+                if (tex)
+                    *dst = (u16)(tex | mask_or);
+            }
+        }
+    }
+}
+
+static void __attribute__((noinline)) rect_tex15_raw(const struct rect_run *q)
+{
+    u32 tx_base = (q->tpage & 0x0Fu) * 64u, ty_base = ((q->tpage >> 4) & 1u) * 256u;
+    u32 and_u = 0xFFu & ~((u32)S.tw_mx << 3), or_u = (u32)(S.tw_ox & S.tw_mx) << 3;
+    u32 and_v = 0xFFu & ~((u32)S.tw_my << 3), or_v = (u32)(S.tw_oy & S.tw_my) << 3;
+    u32 mask_or = q->mask_or;
+    u32 v = q->v;
+    for (int j = 0; j < q->h; j++, v += (u32)q->dv) {
+        u32 vv = ((v & 0xFFu) & and_v) | or_v;
+        const u16 *trow = W.vram + ((ty_base + vv) & 511u) * VRAM_STRIDE;
+        u16 *dst = W.vram + (q->y + j * q->ystep) * VRAM_STRIDE + q->x;
+        u32 u = q->u;
+        for (u16 *end = dst + q->w; dst < end; dst++, u += (u32)q->du) {
+            u32 tex = trow[(tx_base + (((u & 0xFFu) & and_u) | or_u)) & 1023u];
+            if (tex)
+                *dst = (u16)(tex | mask_or);
+        }
+    }
+}
+
+/* 4-bit, not semi-transparent: the pixels are clut4_baked's (the texel times the rectangle's colour, as
+   gpu_draw_rect makes it) -- for a rectangle that does not cover its own CLUT, whose entries the general loop
+   reads again at every pixel */
+static void __attribute__((noinline)) rect_tex4_baked(const struct rect_run *q)
+{
+    const s32 *baked = clut4_baked(q->clut, q->raw, q->r, q->g, q->b, q->mask_or);
+    u32 tx_base = (q->tpage & 0x0Fu) * 64u, ty_base = ((q->tpage >> 4) & 1u) * 256u;
+    u32 and_u = 0xFFu & ~((u32)S.tw_mx << 3), or_u = (u32)(S.tw_ox & S.tw_mx) << 3;
+    u32 and_v = 0xFFu & ~((u32)S.tw_my << 3), or_v = (u32)(S.tw_oy & S.tw_my) << 3;
+    u32 v = q->v;
+    for (int j = 0; j < q->h; j++, v += (u32)q->dv) {
+        u32 vv = ((v & 0xFFu) & and_v) | or_v;
+        const u16 *trow = W.vram + ((ty_base + vv) & 511u) * VRAM_STRIDE + tx_base;    /* (+ 63 at most: no wrap) */
+        u16 *dst = W.vram + (q->y + j * q->ystep) * VRAM_STRIDE + q->x;
+        u32 u = q->u;
+        for (u16 *end = dst + q->w; dst < end; dst++, u += (u32)q->du) {
+            u32 uu = ((u & 0xFFu) & and_u) | or_u;
+            s32 px = baked[(trow[uu >> 2] >> ((uu & 3u) * 4u)) & 0x0Fu];
+            if (px >= 0)
+                *dst = (u16)px;
+        }
+    }
+}
+
+/* no texture: the colour, or its blend with what is there */
+static void __attribute__((noinline)) rect_plain(const struct rect_run *q)
+{
+    u32 fg = (u32)clamp5(q->r >> 3) | ((u32)clamp5(q->g >> 3) << 5) | ((u32)clamp5(q->b >> 3) << 10);
+    u32 mask_or = q->mask_or, abr = q->abr;
+    for (int j = 0; j < q->h; j++) {
+        u16 *dst = W.vram + (q->y + j * q->ystep) * VRAM_STRIDE + q->x;
+        u16 *end = dst + q->w;
+        if (q->semi) {
+            for (; dst < end; dst++)
+                *dst = (u16)(gpu_blend(*dst, (u16)fg, abr) | mask_or);
+        } else {
+            u16 px = (u16)(fg | mask_or);
+            for (; dst < end; dst++)
+                *dst = px;
         }
     }
 }
@@ -2408,8 +2991,67 @@ static void gpu_draw_rect(u8 op)
     int yflip = (S.gpustat >> 13) & 1;
 
     int lace_even = (S.skip_render != 0u && S.disp_h > 240 && S.clip_y2 >= 240 && x0 + w <= S.disp_w);
-    if (x0 + w > S.disp_w || y0 + h > S.disp_h)
-        S.vram_gen++;
+    gpu_clut4_touch(x0, y0 - 1, x0 + w - 1, y0 + h);    /* (-1: lace_even's rows moved up) */
+    if (!S.check_mask) {
+        /* the loops above: the part of the rectangle inside the drawing area, its first pixel's texture
+           coordinates stepped there from the corner's.  lace_even (live play of an interlaced picture): of a
+           rectangle of several rows the even ones alone, as the general loop below leaves the odd ones out; a
+           rectangle of one row is drawn on the even row at or above its own */
+        struct rect_run q;
+        int xa = x0 < S.clip_x1 ? S.clip_x1 : x0, xb = x0 + w - 1 > S.clip_x2 ? S.clip_x2 : x0 + w - 1;
+        int ya = y0 < S.clip_y1 ? S.clip_y1 : y0, yb = y0 + h - 1 > S.clip_y2 ? S.clip_y2 : y0 + h - 1;
+        if (xa > xb || ya > yb)
+            return;
+        int vstep = yflip ? -1 : 1;
+        q.x = xa; q.y = ya; q.w = xb - xa + 1; q.h = yb - ya + 1;
+        q.ystep = 1;
+        q.du = xflip ? -1 : 1;
+        q.dv = vstep;
+        q.u = u0 + (u32)(q.du * (xa - x0));
+        q.v = v0 + (u32)(vstep * (ya - y0));
+        if (lace_even) {
+            if (h > 1) {
+                int ye = ya + (ya & 1);         /* the first even row inside */
+                if (ye > yb)
+                    return;
+                q.y = ye;
+                q.h = (yb - ye) / 2 + 1;
+                q.ystep = 2;
+                q.dv = vstep * 2;
+                q.v = v0 + (u32)(vstep * (ye - y0));
+            } else {
+                q.y = ya & ~1;
+            }
+        }
+        q.r = r; q.g = g; q.b = b;
+        q.tpage = tpage; q.clut = clut; q.abr = abr;
+        q.mask_or = S.set_mask ? 0x8000u : 0u;
+        /* (the neutral colour: clamp(t * 80h >> 7) is t -- the pixels of a raw one) */
+        q.raw = is_raw || (r == 128 && g == 128 && b == 128);
+        q.semi = is_semi;
+        if (!is_tex) {
+            rect_plain(&q);
+        } else {
+            u32 depth = (tpage >> 7) & 3u;
+            int ccx = (int)((clut & 0x3Fu) * 16u), ccy = (int)((clut >> 6) & 0x1FFu);
+            if (depth == 0u && !is_semi && !(ccy >= q.y && ccy <= yb && ccx + 15 >= xa && ccx <= xb))
+                rect_tex4_baked(&q);
+            else if (depth == 0u)
+                rect_tex4(&q);
+            else if (depth == 1u) {
+                if (q.raw && !is_semi)
+                    rect_tex8_raw(&q);
+                else
+                    rect_tex8(&q);
+            } else {
+                if (q.raw && !is_semi)
+                    rect_tex15_raw(&q);
+                else
+                    rect_tex15(&q);
+            }
+        }
+        return;
+    }
     for (int dy = 0; dy < h; dy++) {
         int y = y0 + dy;
         if (y < S.clip_y1 || y > S.clip_y2) continue;
@@ -2652,6 +3294,39 @@ static void gp0_exec_packet(void)
             return;                     /* (onto itself: nothing changes -- Tony Hawk's 2 x 1 at 0,0 most frames) */
         if (dx + cw > 1024u || dy + ch > 512u || gpu_rect_shown((int)dx, (int)dy, (int)(dx + cw - 1u), (int)(dy + ch - 1u)))
             S.disp_dirty = 1u;
+        if (!S.check_mask && sx + cw <= 1024u && dx + cw <= 1024u && sy + ch <= 512u && dy + ch <= 512u &&
+            (dy + ch <= sy || sy + ch <= dy || dx + cw <= sx || sx + cw <= dx)) {
+            /* Nothing wraps, no mask test and the two rectangles apart (so the order of the pixels does not
+               matter): row by row, two pixels a word where both rows start alike in their words -- Duke Nukem
+               draws its 3D view beside the screen and copies its 320 x 200 here every game frame, 26000 pixels
+               a frame through the loop below with its two wrapped addresses a pixel */
+            typedef u32 __attribute__((may_alias)) vram_pair;
+            for (u32 y = 0; y < ch; y++) {
+                const u16 *sp = W.vram + (sy + y) * VRAM_STRIDE + sx;
+                u16 *dp = W.vram + (dy + y) * VRAM_STRIDE + dx;
+                u32 x = 0;
+                if (!mask_or && !((sx ^ dx) & 1u)) {
+                    if (((unsigned long)sp & 2ul) && cw) {
+                        dp[0] = sp[0];
+                        x = 1;
+                    }
+                    if (!(((unsigned long)(sp + x) | (unsigned long)(dp + x)) & 3ul)) {
+                        for (; x + 8u <= cw; x += 8u) {
+                            const vram_pair *s4 = (const vram_pair *)(sp + x);
+                            vram_pair *d4 = (vram_pair *)(dp + x);
+                            u32 p0 = s4[0], p1 = s4[1], p2 = s4[2], p3 = s4[3];
+                            d4[0] = p0;
+                            d4[1] = p1;
+                            d4[2] = p2;
+                            d4[3] = p3;
+                        }
+                    }
+                }
+                for (; x < cw; x++)
+                    dp[x] = (u16)(sp[x] | mask_or);
+            }
+            return;
+        }
         for (u32 y = 0; y < ch; y++) {
             for (u32 x = 0; x < cw; x++) {
                 u16 sv = W.vram[((sy + y) & 511u) * VRAM_STRIDE + ((sx + x) & 1023u)];
@@ -3171,7 +3846,7 @@ static void dma_run(int ch)
                 S.mdec_in_cnt = 0;
                 S.mdec_stat |= (1u << 29);
             } else {
-                if (S.mdec_in_cnt < 16384u)
+                if (S.mdec_in_cnt < PSX_MDEC_IN)
                     W.mdec_in[S.mdec_in_cnt++] = w;
                 if (--S.mdec_words_rem == 0u)
                     mdec_execute();
@@ -3264,14 +3939,12 @@ static u8 io_read8(u32 off)
     if (off == 0x040u) {
         int had = (S.sio_pos < S.sio_len);
         u8 v = had ? S.sio_fifo[S.sio_pos++] : 0xFFu;
-        if (had && S.sio_irq_delay > 32)
-            S.sio_irq_delay = 32; /* /ACK pulse begins right after 8-bit RX byte is read */
         return v;
     }
     if (off == 0x044u) {
         u8 st = 0x05u; /* TX ready 1 & 2 */
-        if (S.sio_pos < S.sio_len) st |= 0x02u; /* RX FIFO not empty */
-        if (S.sio_irq_delay > 0 && S.sio_irq_delay <= 48) st |= 0x80u; /* /ACK (DSR) pulse */
+        if (S.sio_pos < S.sio_len && S.sio_rx_wait <= 0) st |= 0x02u; /* RX FIFO not empty */
+        if (S.sio_ack_low > 0) st |= 0x80u; /* /ACK (DSR) pulse */
         return st;
     }
     if (off == 0x045u)
@@ -3306,8 +3979,8 @@ static u16 io_read16(u32 off)
 {
     if (off == 0x044u) {
         u16 st = 0x0005u;
-        if (S.sio_pos < S.sio_len) st |= 0x0002u;
-        if (S.sio_irq_delay > 0 && S.sio_irq_delay <= 48) st |= 0x0080u;
+        if (S.sio_pos < S.sio_len && S.sio_rx_wait <= 0) st |= 0x0002u;
+        if (S.sio_ack_low > 0)     st |= 0x0080u;
         if (S.sio_irq_delay < 0)   st |= 0x0200u;
         return st;
     }
@@ -3400,6 +4073,10 @@ static void io_write8(u32 off, u8 val)
         S.sio_fifo[0] = sio0_txrx(val);
         S.sio_pos = 0;
         S.sio_len = 1;
+        S.sio_rx_wait = SIO_RX_UNITS;
+        S.sio_busy = 1u;
+        S.jit_stop |= 2u;       /* recompiled code leaves at this block's end: it may have a scanline of budget
+                                   left, and the game's waits for the answer and the /ACK count loop passes */
         return;
     }
     if (off == 0x800u) { S.cd_index = val & 3u; return; }
@@ -3481,6 +4158,7 @@ static void io_write16(u32 off, u16 val)
     if (off == 0x04Au) {
         if (val & 0x0040u) { /* Reset */
             S.sio_ctrl = 0; S.sio_step = 0; S.sio_dev = 0; S.sio_len = S.sio_pos = 0; S.sio_irq_delay = 0;
+            S.sio_rx_wait = S.sio_ack_low = 0;
             return;
         }
         if (val & 0x0010u) { /* Ack IRQ */
@@ -3575,7 +4253,7 @@ static void io_write32(u32 off, u32 val)
             S.mdec_in_cnt = 0;
             S.mdec_stat |= (1u << 29);
         } else {
-            if (S.mdec_in_cnt < 16384u)
+            if (S.mdec_in_cnt < PSX_MDEC_IN)
                 W.mdec_in[S.mdec_in_cnt++] = val;
             if (--S.mdec_words_rem == 0u)
                 mdec_execute();
@@ -3888,6 +4566,13 @@ static inline __attribute__((always_inline)) void gte_rtps_one(int v_idx, int sf
     }
 }
 
+/* RTPS / RTPT a vertex: one copy for both and for gte_exec (inlined in each they were 5.5 + 2.2 KB plus 7 KB in
+   gte_exec, and Gran Turismo's ~1000 RTPS and ~640 RTPT a frame missed the I-cache in them) */
+static void __attribute__((noinline)) gte_rtps_v(int v_idx, int sf, int lm, int last)
+{
+    gte_rtps_one(v_idx, sf, lm, last);
+}
+
 static void gte_ncd_one(int v_idx, int sf, int lm, int with_col, int with_dp)
 {
     s16 vx = (s16)S.gte_d[v_idx * 2];
@@ -3932,11 +4617,42 @@ static void gte_ncd_one(int v_idx, int sf, int lm, int with_col, int with_dp)
     gte_push_rgb_from_mac();
 }
 
+static inline __attribute__((always_inline)) void gte_dcpl_body(int sf, int lm)
+{
+    s64 mr = (s64)((S.gte_d[6] & 0xFFu) << 4) * (s16)S.gte_d[9];
+    s64 mg = (s64)(((S.gte_d[6] >> 8) & 0xFFu) << 4) * (s16)S.gte_d[10];
+    s64 mb = (s64)(((S.gte_d[6] >> 16) & 0xFFu) << 4) * (s16)S.gte_d[11];
+    s16 ir0 = (s16)S.gte_d[8];
+    s32 dr = gte_ir_set(1, (s32)((((s64)(s32)S.gte_c[21] << 12) - mr) >> (sf ? 12 : 0)), 0);
+    s32 dg = gte_ir_set(2, (s32)((((s64)(s32)S.gte_c[22] << 12) - mg) >> (sf ? 12 : 0)), 0);
+    s32 db = gte_ir_set(3, (s32)((((s64)(s32)S.gte_c[23] << 12) - mb) >> (sf ? 12 : 0)), 0);
+    gte_ir_set(1, gte_mac_set(1, mr + (s64)dr * ir0, sf), lm);
+    gte_ir_set(2, gte_mac_set(2, mg + (s64)dg * ir0, sf), lm);
+    gte_ir_set(3, gte_mac_set(3, mb + (s64)db * ir0, sf), lm);
+    gte_push_rgb_from_mac();
+}
+
 #ifdef __mips__
+/* NCCS and DCPL (Tony Hawk's: ~370 each a frame) called by the recompiled code straight, as RTPS, MVMVA and GPF
+   are: gte_exec is an 11 KB switch, and its lines missed the I-cache on most calls */
+static void gte_op_nccs(u32 cmd)
+{
+    S.gte_c[31] = 0;
+    gte_ncd_one(0, (cmd >> 19) & 1, (cmd >> 10) & 1, 1, 0);
+    gte_finalize_flag();
+}
+
+static void gte_op_dcpl(u32 cmd)
+{
+    S.gte_c[31] = 0;
+    gte_dcpl_body((cmd >> 19) & 1, (cmd >> 10) & 1);
+    gte_finalize_flag();
+}
+
 static void gte_op_rtps(u32 cmd)
 {
     S.gte_c[31] = 0;
-    gte_rtps_one(0, (cmd >> 19) & 1, (cmd >> 10) & 1, 1);
+    gte_rtps_v(0, (cmd >> 19) & 1, (cmd >> 10) & 1, 1);
     gte_finalize_flag();
 }
 
@@ -3944,9 +4660,9 @@ static void gte_op_rtpt(u32 cmd)
 {
     int sf = (cmd >> 19) & 1, lm = (cmd >> 10) & 1;
     S.gte_c[31] = 0;
-    gte_rtps_one(0, sf, lm, 0);
-    gte_rtps_one(1, sf, lm, 0);
-    gte_rtps_one(2, sf, lm, 1);
+    gte_rtps_v(0, sf, lm, 0);
+    gte_rtps_v(1, sf, lm, 0);
+    gte_rtps_v(2, sf, lm, 1);
     gte_finalize_flag();
 }
 
@@ -4020,12 +4736,12 @@ static void gte_exec(u32 cmd)
 
     switch (cmd & 0x3Fu) {
     case 0x01u: /* RTPS */
-        gte_rtps_one(0, sf, lm, 1);
+        gte_rtps_v(0, sf, lm, 1);
         break;
     case 0x30u: /* RTPT */
-        gte_rtps_one(0, sf, lm, 0);
-        gte_rtps_one(1, sf, lm, 0);
-        gte_rtps_one(2, sf, lm, 1);
+        gte_rtps_v(0, sf, lm, 0);
+        gte_rtps_v(1, sf, lm, 0);
+        gte_rtps_v(2, sf, lm, 1);
         break;
     case 0x06u: { /* NCLIP */
         s32 x0 = (s16)S.gte_d[12], y0 = (s16)(S.gte_d[12] >> 16);
@@ -4130,20 +4846,9 @@ static void gte_exec(u32 cmd)
         gte_ir_set(3, (s32)S.gte_d[27], lm);
         break;
     }
-    case 0x29u: { /* DCPL */
-        s64 mr = (s64)((S.gte_d[6] & 0xFFu) << 4) * (s16)S.gte_d[9];
-        s64 mg = (s64)(((S.gte_d[6] >> 8) & 0xFFu) << 4) * (s16)S.gte_d[10];
-        s64 mb = (s64)(((S.gte_d[6] >> 16) & 0xFFu) << 4) * (s16)S.gte_d[11];
-        s16 ir0 = (s16)S.gte_d[8];
-        s32 dr = gte_ir_set(1, (s32)((((s64)(s32)S.gte_c[21] << 12) - mr) >> (sf ? 12 : 0)), 0);
-        s32 dg = gte_ir_set(2, (s32)((((s64)(s32)S.gte_c[22] << 12) - mg) >> (sf ? 12 : 0)), 0);
-        s32 db = gte_ir_set(3, (s32)((((s64)(s32)S.gte_c[23] << 12) - mb) >> (sf ? 12 : 0)), 0);
-        gte_ir_set(1, gte_mac_set(1, mr + (s64)dr * ir0, sf), lm);
-        gte_ir_set(2, gte_mac_set(2, mg + (s64)dg * ir0, sf), lm);
-        gte_ir_set(3, gte_mac_set(3, mb + (s64)db * ir0, sf), lm);
-        gte_push_rgb_from_mac();
+    case 0x29u: /* DCPL */
+        gte_dcpl_body(sf, lm);
         break;
-    }
     case 0x2Du: { /* AVSZ3 */
         s64 sum = (s64)(s16)S.gte_c[29] * ((s64)(u16)S.gte_d[17] + (u16)S.gte_d[18] + (u16)S.gte_d[19]);
         gte_mac0_set(sum);
@@ -4329,6 +5034,22 @@ static void install_ram_vectors(void)
         put_insn(W.ram, 0x0600u + i * 4u, 0xBFC01800u + i * 16u);
     }
     put_insn(W.ram, 0x0500u + 6u * 4u, 0xBFC00400u);
+    /* The kernel's table of devices, whose address and size it keeps at $150 / $154: one entry of 50h bytes, the
+       Memory Card's (+0 its name "bu", +4 flags, +8 its block size, +0Ch what it is, +10h.. its 16 functions:
+       returns).  PsyQ's firstfile() looks its path's device up in there, to wrap the function at +34h, and
+       without it tells "no file" and never calls the BIOS (hle_card_call). */
+    put_insn(W.ram, 0x0150u, 0x8000B9B0u);
+    put_insn(W.ram, 0x0154u, 0x00000050u);
+    put_insn(W.ram, 0xB9B0u, 0x8000BA00u);
+    put_insn(W.ram, 0xB9B4u, 0x00000014u);
+    put_insn(W.ram, 0xB9B8u, 0x00000080u);
+    put_insn(W.ram, 0xB9BCu, 0x8000BA04u);
+    for (u32 off = 0x10u; off < 0x50u; off += 4u)
+        put_insn(W.ram, 0xB9B0u + off, 0xBFC00010u);
+    put_insn(W.ram, 0xBA00u, 0x00007562u);              /* "bu" */
+    put_insn(W.ram, 0xBA04u, 0x4F4D454Du);              /* "MEMORY CARD" */
+    put_insn(W.ram, 0xBA08u, 0x43205952u);
+    put_insn(W.ram, 0xBA0Cu, 0x00445241u);
 }
 
 static void build_clean_bios(void)
@@ -4422,6 +5143,472 @@ static void hle_update_pad_buffers(void)
         bus_write8(S.pad_buf2 + 0u, 0xFFu); /* disconnected */
         bus_write8(S.pad_buf2 + 1u, 0xFFu);
     }
+}
+
+/* ---- The built-in BIOS's Memory Card calls ----
+   What a game's card library asks of the BIOS, answered from the card's image (W.mcd: slot 1's; slot 2 is
+   empty): _card_info, _card_load, _card_read, _card_write, _card_status, _card_wait, _card_chan and the files
+   of "bu00:" (open, lseek, read, write, close, firstfile, nextfile, rename, erase, undelete, format).  The real
+   BIOS does each in the background, a 128-byte frame every other VBlank, and tells with an event -- HwCARD
+   (F0000011h) from every frame's transfer, SwCARD (F4000001h) from _card_info, _card_load and the files opened
+   with "do not wait" (8000h): 0004h done, 0100h no card, 2000h a new card (one not written to since it was put
+   in, which _card_info tells until a write -- _card_clear's -- clears the card's flag) or no format, 8000h
+   error.  Here the data moves at once and the events come with the second VBlank interrupt after the call: a
+   game that clears them after its call still gets them.  A call made while the last one's events are still to
+   come is not refused as busy (the BIOS would): they are delivered first. */
+#define EV_HWCARD 0xF0000011u
+#define EV_SWCARD 0xF4000001u
+
+static void init_blank_memcard(void);
+
+static u8 __attribute__((noinline)) hle_peek(u32 a) { return bus_read8(a); }
+static void __attribute__((noinline)) hle_poke(u32 a, u8 v) { bus_write8(a, v); }
+
+static void hle_poke32(u32 a, u32 v)
+{
+    for (u32 i = 0; i < 4u; i++)
+        hle_poke(a + i, (u8)(v >> (8u * i)));
+}
+
+static void hle_deliver(u32 cls, u32 spec)
+{
+    for (int i = 0; i < 32; i++)
+        if (S.events[i].used && S.events[i].enabled && S.events[i].cls == cls && S.events[i].spec == spec)
+            S.events[i].status = 2u;
+}
+
+/* the call under way is over: its events */
+static void card_finish(void)
+{
+    if (!S.card_wait)
+        return;
+    S.card_wait = 0u;
+    S.card_stat = (S.card_hw == 0x0100u) ? 0x11u : 0x01u;
+    if (S.card_sw)
+        hle_deliver(EV_SWCARD, S.card_sw);
+    if (S.card_hw)
+        hle_deliver(EV_HWCARD, S.card_hw);
+}
+
+/* a VBlank interrupt (hle_bios_exception_entry) with a call under way */
+static void __attribute__((noinline)) card_vblank(void)
+{
+    if (S.card_wait > 1u)
+        S.card_wait--;
+    else
+        card_finish();
+}
+
+/* a call to `port` (00h: slot 1; anything else has no card) starts: _card_status says `stat` until its events,
+   HwCARD `hw` and SwCARD `sw` (0: none), come */
+static void card_begin(u32 port, u32 stat, u32 hw, u32 sw)
+{
+    card_finish();
+    for (int i = 0; i < 32; i++)                        /* (the BIOS's VBlank handler, before a transfer starts) */
+        if (S.events[i].used && S.events[i].cls == EV_HWCARD && S.events[i].status == 2u)
+            S.events[i].status = 1u;
+    S.card_chan = (u8)port;
+    S.card_stat = (u8)stat;
+    S.card_hw = (u16)hw;
+    S.card_sw = (u16)sw;
+    S.card_wait = 2u;
+}
+
+static void bu_error(u32 e)
+{
+    S.bu_errno = (u8)e;
+    S.bu_err_set = 1u;
+}
+
+/* a file call that comes back when the card has answered (all but the reads and writes of a file opened with "do
+   not wait") leaves the HwCARD event of the BIOS's last frame transfer behind: a game waits for it after format() */
+static void bu_waited(int dev)
+{
+    hle_deliver(EV_HWCARD, dev > 0 ? 0x0004u : 0x0100u);
+}
+
+/* The card's directory: frame n (1..15) is block n's -- +0 its state (51h a file's first block, 52h a middle
+   one, 53h its last, A0h free, A1h..A3h those of a deleted file), +4 the file's size (first block), +8 the next
+   block less one (FFFFh: none), +0Ah the name (20 characters and a 0), +7Fh the frame's checksum. */
+static void bu_dir_put(u32 n)                           /* frame n was changed */
+{
+    u8 *d = W.mcd + n * 128u, x = 0u;
+    for (int i = 0; i < 127; i++)
+        x ^= d[i];
+    d[127] = x;
+    S.sav_dirty = 1;
+}
+
+/* a call's file name ("bu00:NAME" at `a`) as a pattern -- '?' is any one character, '*' the rest, no name at all
+   every file -- and, with `raw`, as it stands (21 bytes each).  1: slot 1's card; -1: a card that is not there
+   (slot 2, a multitap's); 0: not a card's name */
+static int bu_pattern(u32 a, char *pat, char *raw)
+{
+    u32 port = 0u, i = 2u, n = 0u;
+    u8 c = 0u;
+    if (hle_peek(a) != 'b' || hle_peek(a + 1u) != 'u')
+        return 0;
+    for (; (c = hle_peek(a + i)) != ':'; i++) {
+        if (i >= 4u || c < '0' || c > '9')
+            return 0;
+        port = port * 16u + (u32)(c - '0');
+    }
+    for (i++; n < 20u && (c = hle_peek(a + i + n)) != 0u && c != '*'; n++) {
+        if (raw)
+            raw[n] = (char)c;
+        pat[n] = (char)c;
+    }
+    if (raw)
+        raw[n] = 0;
+    if (n == 0u || c == '*')
+        for (; n < 20u; n++)
+            pat[n] = '?';
+    pat[n] = 0;
+    return port ? -1 : 1;
+}
+
+static int bu_match(const u8 *name, const char *pat)
+{
+    u32 i = 0u;
+    for (; i < 20u && name[i]; i++)
+        if (pat[i] != '?' && (u8)pat[i] != name[i])
+            return 0;
+    for (; i < 20u && pat[i]; i++)
+        if (pat[i] != '?')
+            return 0;
+    return 1;
+}
+
+/* the first directory frame from `from` on, in state `state`, whose name matches (0: none) */
+static u32 bu_find(const char *pat, u32 from, u32 state)
+{
+    for (u32 n = from; n <= 15u; n++) {
+        const u8 *d = W.mcd + n * 128u;
+        if (d[0] == state && d[10] && bu_match(d + 10, pat))
+            return n;
+    }
+    return 0u;
+}
+
+static u32 bu_link(u32 n)                               /* the block after block n of a file (0: none) */
+{
+    const u8 *d = W.mcd + n * 128u;
+    u32 nx = (u32)d[8] | ((u32)d[9] << 8);
+    return nx <= 14u ? nx + 1u : 0u;
+}
+
+/* a file's size from its first block's directory frame (nonsense there: by its chain of blocks) */
+static u32 bu_size(u32 n)
+{
+    const u8 *d = W.mcd + n * 128u;
+    u32 size = (u32)d[4] | ((u32)d[5] << 8) | ((u32)d[6] << 16) | ((u32)d[7] << 24);
+    if (size == 0u || size > 0x1E000u)
+        for (size = 0u; n && size < 0x1E000u; n = bu_link(n))
+            size += 0x2000u;
+    return size;
+}
+
+/* the frame of position `pos` of the file whose first block is `blk` (0: its chain ends before) */
+static u32 bu_frame(u32 blk, u32 pos)
+{
+    for (u32 k = pos >> 13; k && blk; k--)
+        blk = bu_link(blk);
+    return blk ? blk * 64u + ((pos >> 7) & 63u) : 0u;
+}
+
+/* A0 / B0 / C0 call `fn` of `table`, if it is one of the card's: 1 with its answer in $v0, 0 for any other
+   call (and for a file call that is not about a card: hle_bios_call answers those as before) */
+static int __attribute__((noinline)) hle_card_call(u32 table, u32 fn)
+{
+    u32 a0 = S.r[4], a1 = S.r[5], a2 = S.r[6];
+    u32 op = (table << 8) | fn;
+    char pat[21], raw[21];
+    int dev;
+
+    if (table == 0xA0u && fn <= 0x04u)                  /* open, lseek, read, write, close: B0(32h..36h) too */
+        op = 0xB032u + fn;
+    switch (op) {
+    case 0xA0ABu:                                       /* _card_info(port): is a card there, a new one? */
+    case 0xB04Du: {                                     /* (its inside: no SwCARD event) */
+        u32 ev = (a0 & 0xFFu) ? 0x0100u : (S.mcd_flag & 0x08u) ? 0x2000u : 0x0004u;
+        card_begin(a0, 0x08u, ev, op == 0xA0ABu ? ev : 0u);
+        S.r[2] = 1u;
+        return 1;
+    }
+    case 0xA0ACu:                                       /* _card_load(port): the BIOS reads the directory */
+        if (a0 & 0xFFu)
+            card_begin(a0, 0x02u, 0x0100u, 0x0100u);
+        else
+            card_begin(a0, 0x02u, 0x0004u, (W.mcd[0] == 'M' && W.mcd[1] == 'C') ? 0x0004u : 0x2000u);
+        S.r[2] = 1u;
+        return 1;
+    case 0xA0AFu:                                       /* _card_clear(port): a write, for the card's flag */
+        if (!(a0 & 0xFFu))
+            S.mcd_flag &= (u8)~0x08u;
+        card_begin(a0, 0x04u, (a0 & 0xFFu) ? 0x0100u : 0x0004u, 0u);
+        S.r[2] = 1u;
+        return 1;
+    case 0xB04Eu:                                       /* _card_write(port, frame, from) */
+    case 0xB04Fu:                                       /* _card_read(port, frame, to) */
+        if (a1 > 0x3FFu) {
+            S.r[2] = 0u;
+            return 1;
+        }
+        if (!(a0 & 0xFFu)) {
+            u8 *f = W.mcd + a1 * 128u;
+            for (u32 i = 0; i < 128u; i++) {
+                if (op == 0xB04Fu) {
+                    hle_poke(a2 + i, f[i]);
+                } else {
+                    u8 b = hle_peek(a2 + i);
+                    if (f[i] != b) {                    /* (frame 63 is there to be written to, _card_clear's */
+                        f[i] = b;                       /*  way to clear the flag: no reason to save the card) */
+                        if (a1 != 0x3Fu)
+                            S.sav_dirty = 1;
+                    }
+                }
+            }
+            if (op == 0xB04Eu)
+                S.mcd_flag &= (u8)~0x08u;
+        }
+        card_begin(a0, op == 0xB04Fu ? 0x02u : 0x04u, (a0 & 0xFFu) ? 0x0100u : 0x0004u, 0u);
+        S.r[2] = 1u;
+        return 1;
+    case 0xB058u:                                       /* _card_chan(): the port of the last call */
+        S.r[2] = S.card_chan;
+        return 1;
+    case 0xB05Du:                                       /* _card_wait(slot): _card_status when the call is over */
+        card_finish();
+        /* fall through */
+    case 0xB05Cu:                                       /* _card_status(slot) */
+        S.r[2] = ((((a0 >> 4) | a0) ^ (S.card_chan >> 4)) & 1u) || !S.card_stat ? 1u : S.card_stat;
+        return 1;
+
+    case 0xB032u: {                                     /* open(name, mode) */
+        dev = bu_pattern(a0, pat, raw);
+        if (!dev)
+            return 0;
+        S.r[2] = 0xFFFFFFFFu;
+        if (!(a1 & 0x8000u) || (a1 & 0x200u))
+            bu_waited(dev);
+        if (dev < 0) {
+            bu_error(0x10u);
+            return 1;
+        }
+        u32 n = bu_find(pat, 1u, 0x51u);
+        if (a1 & 0x200u) {                              /* a new file of (mode >> 16) blocks */
+            u32 want = (a1 >> 16) ? (a1 >> 16) : 1u, have = 0u, got = 0u, prev = 0u;
+            if (n || !raw[0]) {
+                bu_error(0x11u);                        /* it is there already */
+                return 1;
+            }
+            for (u32 k = 1u; k <= 15u; k++)
+                have += (W.mcd[k * 128u] & 0xF0u) == 0xA0u;
+            if (want > have) {
+                bu_error(0x1Cu);                        /* too few free blocks */
+                return 1;
+            }
+            for (u32 k = 1u; got < want; k++) {
+                u8 *d = W.mcd + k * 128u;
+                if ((d[0] & 0xF0u) != 0xA0u)
+                    continue;
+                for (u32 i = 0; i < 127u; i++)
+                    d[i] = 0u;
+                got++;
+                d[0] = got == 1u ? 0x51u : got == want ? 0x53u : 0x52u;
+                d[8] = d[9] = 0xFFu;
+                if (got == 1u) {
+                    n = k;
+                    d[5] = (u8)(want << 5);             /* its size: 2000h bytes a block */
+                    d[6] = (u8)(want >> 3);
+                    for (u32 i = 0; raw[i]; i++)
+                        d[10 + i] = (u8)raw[i];
+                } else {
+                    W.mcd[prev * 128u + 8u] = (u8)(k - 1u);
+                    W.mcd[prev * 128u + 9u] = 0u;
+                    bu_dir_put(prev);
+                }
+                prev = k;
+            }
+            bu_dir_put(prev);
+        } else if (!n) {
+            bu_error(0x02u);                            /* no such file */
+            return 1;
+        }
+        for (u32 i = 0; i < PSX_BU_FILES; i++)
+            if (!S.bu_fd[i].used) {
+                S.bu_fd[i].used = 1u;
+                S.bu_fd[i].blk = (u8)n;
+                S.bu_fd[i].mode = (u16)a1;
+                S.bu_fd[i].pos = 0u;
+                S.bu_fd[i].size = bu_size(n);
+                bu_error(0u);
+                S.r[2] = 2u + i;                        /* (0 and 1 are the BIOS's own, the TTY) */
+                return 1;
+            }
+        bu_error(0x18u);                                /* too many open files */
+        return 1;
+    }
+    case 0xB033u:                                       /* lseek(fd, offset, from: 0 the start, 1 here) */
+    case 0xB034u:                                       /* read(fd, to, bytes) */
+    case 0xB035u:                                       /* write(fd, from, bytes) */
+    case 0xB036u:                                       /* close(fd) */
+    case 0xB055u: {                                     /* _get_error(fd) */
+        u32 fi = a0 - 2u;
+        if (fi >= PSX_BU_FILES || !S.bu_fd[fi].used)
+            return 0;
+        u32 pos = S.bu_fd[fi].pos, done = 0u;
+        if (op == 0xB055u) {
+            S.r[2] = 0u;
+        } else if (op == 0xB036u) {
+            S.bu_fd[fi].used = 0u;
+            S.r[2] = a0;
+        } else if (op == 0xB033u) {
+            if (a2 > 1u) {
+                bu_error(0x16u);
+                S.r[2] = 0xFFFFFFFFu;
+                return 1;
+            }
+            S.r[2] = S.bu_fd[fi].pos = a2 ? pos + a1 : a1;
+        } else if ((pos & 0x7Fu) || pos >= S.bu_fd[fi].size) {
+            bu_error(0x16u);                            /* not at a frame's start, or past the end */
+            S.r[2] = 0xFFFFFFFFu;
+        } else {                                        /* whole 128-byte frames */
+            for (; done + 128u <= a2 && pos + done < S.bu_fd[fi].size; done += 128u) {
+                u32 fr = bu_frame(S.bu_fd[fi].blk, pos + done);
+                if (!fr)
+                    break;
+                u8 *f = W.mcd + fr * 128u;
+                for (u32 i = 0; i < 128u; i++) {
+                    if (op == 0xB034u) {
+                        hle_poke(a1 + done + i, f[i]);
+                    } else {
+                        u8 b = hle_peek(a1 + done + i);
+                        if (f[i] != b) {
+                            f[i] = b;
+                            S.sav_dirty = 1;
+                        }
+                    }
+                }
+            }
+            if (op == 0xB035u)
+                S.mcd_flag &= (u8)~0x08u;
+            S.bu_fd[fi].pos = pos + done;
+            bu_error(0u);
+            if (S.bu_fd[fi].mode & 0x8000u) {           /* "do not wait": the SwCARD event tells */
+                card_begin(0u, op == 0xB034u ? 0x02u : 0x04u, 0x0004u, 0x0004u);
+                S.r[2] = 0u;
+            } else {
+                bu_waited(1);
+                S.r[2] = done == (a2 & ~0x7Fu) ? a2 : done;
+            }
+        }
+        return 1;
+    }
+    case 0xB041u:                                       /* format(name) */
+        dev = bu_pattern(a0, pat, 0);
+        if (!dev)
+            return 0;
+        if (dev > 0) {
+            init_blank_memcard();
+            S.sav_dirty = 1;
+            for (u32 i = 0; i < PSX_BU_FILES; i++)
+                S.bu_fd[i].used = 0u;
+        }
+        bu_waited(dev);
+        bu_error(dev > 0 ? 0u : 0x10u);
+        S.r[2] = dev > 0;
+        return 1;
+    case 0xB042u:                                       /* firstfile(name, entry) */
+        dev = bu_pattern(a0, pat, 0);
+        S.bu_next = dev > 0 ? 1u : dev ? 16u : 0u;
+        if (!dev)
+            return 0;
+        for (u32 i = 0; i < 21u; i++)
+            S.bu_pat[i] = pat[i];
+        a0 = a1;
+        /* fall through */
+    case 0xB043u: {                                     /* nextfile(entry) */
+        if (!S.bu_next)
+            return 0;                                   /* (no search of a card under way) */
+        u32 n = S.bu_next <= 15u ? bu_find(S.bu_pat, S.bu_next, S.bu_del ? 0xA1u : 0x51u) : 0u;
+        S.bu_next = n ? (u8)(n + 1u) : 16u;
+        S.r[2] = n ? a0 : 0u;
+        if (!n) {
+            bu_error(0x02u);
+            return 1;
+        }
+        const u8 *d = W.mcd + n * 128u;
+        hle_poke32(a0 + 0x14u, d[0] & 0xF0u);           /* its attribute: 50h, A0h deleted */
+        hle_poke32(a0 + 0x18u, bu_size(n));
+        hle_poke32(a0 + 0x20u, n * 64u);                /* its first frame */
+        for (u32 i = 0; i <= 20u; i++) {                /* the name: the BIOS's strcpy -- the 0 after 20 */
+            u8 c = i < 20u ? d[10 + i] : 0u;            /* characters lands on the attribute */
+            hle_poke(a0 + i, c);
+            if (!c)
+                break;
+        }
+        return 1;
+    }
+    case 0xB044u: {                                     /* rename(old name, new name) */
+        dev = bu_pattern(a0, pat, 0);
+        if (!dev)
+            return 0;
+        u32 n = dev > 0 ? bu_find(pat, 1u, 0x51u) : 0u;
+        S.r[2] = 0u;
+        if (bu_pattern(a1, pat, raw) <= 0 || !raw[0])
+            bu_error(0x12u);                            /* (onto another device) */
+        else if (bu_find(pat, 1u, 0x51u))
+            bu_error(0x11u);
+        else if (!n)
+            bu_error(dev > 0 ? 0x02u : 0x10u);
+        else {
+            u8 *d = W.mcd + n * 128u;
+            for (u32 i = 0; i < 21u; i++)
+                d[10 + i] = 0u;
+            for (u32 i = 0; raw[i]; i++)
+                d[10 + i] = (u8)raw[i];
+            bu_dir_put(n);
+            bu_waited(1);
+            bu_error(0u);
+            S.r[2] = 1u;
+        }
+        return 1;
+    }
+    case 0xB045u:                                       /* erase(name) */
+    case 0xB046u: {                                     /* undelete(name) */
+        dev = bu_pattern(a0, pat, 0);
+        if (!dev)
+            return 0;
+        u32 from = op == 0xB045u ? 0x50u : 0xA0u;       /* the upper half of its blocks' states so far */
+        u32 n = dev > 0 ? bu_find(pat, 1u, from | 1u) : 0u, ok = n;
+        for (u32 k = n ? bu_link(n) : 0u, i = 0; k && i < 15u; k = bu_link(k), i++)
+            if ((u32)(W.mcd[k * 128u] & 0xF0u) != from)
+                ok = 0u;                                /* (deleted, and a block has a new owner since) */
+        S.r[2] = ok != 0u;
+        if (ok || dev < 0)
+            bu_waited(dev);
+        bu_error(ok ? 0u : dev > 0 ? 0x02u : 0x10u);
+        for (u32 i = 0; ok && n && i < 15u; n = bu_link(n), i++) {
+            W.mcd[n * 128u] ^= 0xF0u;                   /* 5xh <-> Axh */
+            bu_dir_put(n);
+        }
+        return 1;
+    }
+    case 0xB054u:                                       /* _get_errno() */
+        if (!S.bu_err_set)
+            return 0;
+        S.r[2] = S.bu_errno;
+        return 1;
+    case 0xC01Au:                                       /* set_card_find_mode(1: firstfile finds deleted files) */
+        S.bu_del = (u8)(a0 & 1u);
+        S.r[2] = 0u;
+        return 1;
+    case 0xC01Du:                                       /* get_card_find_mode() */
+        S.r[2] = S.bu_del;
+        return 1;
+    }
+    return 0;
 }
 
 static u16 hle_exc_active;
@@ -4595,8 +5782,11 @@ static void hle_bios_exception_entry(void)
     S.exc_epc = S.cop0[14];
 
     hle_exc_active = S.i_stat & S.i_mask;
-    if (hle_exc_active & 1u)
+    if (hle_exc_active & 1u) {
         hle_update_pad_buffers();
+        if (S.card_wait)
+            card_vblank();
+    }
 
     hle_rp_n = 0u;
     hle_rp_idx = 0u;
@@ -4620,6 +5810,118 @@ static void hle_bios_exception_entry(void)
 }
 
 static u32 hle_rand_seed = 1u;
+
+/* ---- The built-in BIOS's string and memory functions A0:1Ch..2Eh that hle_bios_call's own switch does not hold;
+   numbers, argument order and answers are the real BIOS's (Duke Nukem builds its level files' names with strchr:
+   without it the name came out as "E1L9.PMP.PMP", was not found, and the game read at 00:00:00 for ever) ---- */
+static int hle_in_list(u32 list, u8 c)          /* is c one of the string's characters? */
+{
+    for (;;) {
+        u8 l = hle_peek(list++);
+        if (!l)
+            return 0;
+        if (l == c)
+            return 1;
+    }
+}
+
+static void __attribute__((noinline)) hle_libc_call(u32 fn)
+{
+    u32 a0 = S.r[4], a1 = S.r[5], a2 = S.r[6];
+    u32 v = 0u;
+    switch (fn) {
+    case 0x1Cu: case 0x1Eu:             /* index, strchr: the first c of the string (its end counts) */
+        if (a0)
+            for (u32 p = a0;; p++) {
+                u8 c = hle_peek(p);
+                if (c == (u8)a1) { v = p; break; }
+                if (!c) break;
+            }
+        break;
+    case 0x1Du: case 0x1Fu:             /* rindex, strrchr: the last */
+        if (a0)
+            for (u32 p = a0;; p++) {
+                u8 c = hle_peek(p);
+                if (c == (u8)a1) v = p;
+                if (!c) break;
+            }
+        break;
+    case 0x20u:                         /* strpbrk: the first character that is in the list */
+        if (a0 && a1)
+            for (u32 p = a0;; p++) {
+                u8 c = hle_peek(p);
+                if (!c) break;
+                if (hle_in_list(a1, c)) { v = p; break; }
+            }
+        break;
+    case 0x21u:                         /* strspn: how many characters at the start are in the list */
+    case 0x22u:                         /* strcspn: ... are not */
+        if (a0 && a1)
+            for (;; v++) {
+                u8 c = hle_peek(a0 + v);
+                if (!c || hle_in_list(a1, c) != (fn == 0x21u)) break;
+            }
+        break;
+    case 0x23u: {                       /* strtok */
+        u32 p = a0 ? a0 : S.hle_strtok;
+        if (p && a1) {
+            while (hle_peek(p) && hle_in_list(a1, hle_peek(p))) p++;
+            if (hle_peek(p)) {
+                v = p;
+                while (hle_peek(p) && !hle_in_list(a1, hle_peek(p))) p++;
+                if (hle_peek(p)) { hle_poke(p, 0u); p++; }
+            }
+            S.hle_strtok = p;
+        }
+        break;
+    }
+    case 0x24u:                         /* strstr */
+        if (a0 && a1)
+            for (u32 p = a0;; p++) {
+                u32 i = 0u;
+                while (hle_peek(a1 + i) && hle_peek(p + i) == hle_peek(a1 + i)) i++;
+                if (!hle_peek(a1 + i)) { v = p; break; }
+                if (!hle_peek(p)) break;
+            }
+        break;
+    case 0x25u:                         /* toupper */
+        v = (a0 >= 'a' && a0 <= 'z') ? a0 - 0x20u : a0;
+        break;
+    case 0x26u:                         /* tolower */
+        v = (a0 >= 'A' && a0 <= 'Z') ? a0 + 0x20u : a0;
+        break;
+    case 0x27u:                         /* bcopy(src, dst, len) */
+        if (a0 && (s32)a2 > 0)
+            for (u32 i = 0; i < a2; i++) hle_poke(a1 + i, hle_peek(a0 + i));
+        v = a0;
+        break;
+    case 0x29u:                         /* bcmp: 0 when the same */
+        if (a0 && a1 && (s32)a2 > 0)
+            for (u32 i = 0; i < a2; i++)
+                if (hle_peek(a0 + i) != hle_peek(a1 + i)) { v = 1u; break; }
+        break;
+    case 0x2Cu:                         /* memmove(dst, src, len) */
+        if (a0 && (s32)a2 > 0) {
+            if (a0 > a1) { for (u32 i = a2; i-- > 0u;) hle_poke(a0 + i, hle_peek(a1 + i)); }
+            else         { for (u32 i = 0; i < a2; i++) hle_poke(a0 + i, hle_peek(a1 + i)); }
+        }
+        v = a0;
+        break;
+    case 0x2Du:                         /* memcmp */
+        if (a0 && a1 && (s32)a2 > 0)
+            for (u32 i = 0; i < a2; i++) {
+                u8 c1 = hle_peek(a0 + i), c2 = hle_peek(a1 + i);
+                if (c1 != c2) { v = (u32)((int)c1 - (int)c2); break; }
+            }
+        break;
+    case 0x2Eu:                         /* memchr */
+        if (a0 && (s32)a2 > 0)
+            for (u32 i = 0; i < a2; i++)
+                if (hle_peek(a0 + i) == (u8)a1) { v = a0 + i; break; }
+        break;
+    }
+    S.r[2] = v;
+}
 
 static int hle_bios_call(u32 table, u32 fn)
 {
@@ -4689,28 +5991,33 @@ static int hle_bios_call(u32 table, u32 fn)
             u32 n = 0; if (a0) while (bus_read8(a0 + n)) n++;
             S.r[2] = n; break;
         }
+        case 0x1Cu: /* index */
+        case 0x1Eu: /* strchr */
+        case 0x1Du: /* rindex */
+        case 0x1Fu: /* strrchr */
+        case 0x20u: /* strpbrk */
+        case 0x21u: /* strspn */
+        case 0x22u: /* strcspn */
+        case 0x23u: /* strtok */
+        case 0x24u: /* strstr */
+        case 0x25u: /* toupper */
+        case 0x26u: /* tolower */
+        case 0x27u: /* bcopy */
+        case 0x29u: /* bcmp */
+        case 0x2Cu: /* memmove */
+        case 0x2Du: /* memcmp */
+        case 0x2Eu: /* memchr */
+            hle_libc_call(fn);
+            break;
         case 0x2Au: /* memcpy */
             for (u32 i = 0; i < a2; i++) bus_write8(a0 + i, bus_read8(a1 + i));
             S.r[2] = a0; break;
         case 0x2Bu: /* memset */
             for (u32 i = 0; i < a2; i++) bus_write8(a0 + i, (u8)a1);
             S.r[2] = a0; break;
-        case 0x2Cu: /* bcopy */
-            if (a1 < a0) { for (u32 i = a2; i-- > 0;) bus_write8(a1 + i, bus_read8(a0 + i)); }
-            else         { for (u32 i = 0; i < a2; i++) bus_write8(a1 + i, bus_read8(a0 + i)); }
-            S.r[2] = a1; break;
         case 0x28u: /* bzero */
-        case 0x2Du:
             for (u32 i = 0; i < a1; i++) bus_write8(a0 + i, 0u);
             break;
-        case 0x2Eu: { /* memcmp */
-            int res = 0;
-            for (u32 i = 0; i < a2; i++) {
-                u8 c1 = bus_read8(a0 + i), c2 = bus_read8(a1 + i);
-                if (c1 != c2) { res = (int)c1 - (int)c2; break; }
-            }
-            S.r[2] = (u32)res; break;
-        }
         case 0x2Fu: /* rand */
             hle_rand_seed = hle_rand_seed * 1103515245u + 12345u;
             S.r[2] = (hle_rand_seed >> 16) & 0x7FFFu;
@@ -4830,7 +6137,8 @@ static int hle_bios_call(u32 table, u32 fn)
             S.r[2] = a0;
             break;
         default:
-            S.r[2] = 0u;
+            if (!hle_card_call(table, fn))
+                S.r[2] = 0u;
             break;
         }
         S.pc = S.r[31];
@@ -5032,7 +6340,8 @@ static int hle_bios_call(u32 table, u32 fn)
             S.r[2] = 1u;
             break;
         default:
-            S.r[2] = 1u;
+            if (!hle_card_call(table, fn))
+                S.r[2] = 1u;
             break;
         }
         S.pc = S.r[31];
@@ -5080,7 +6389,8 @@ static int hle_bios_call(u32 table, u32 fn)
         case 0x1Cu: /* AdjustA0Table */
             break;
         default:
-            S.r[2] = 0u;
+            if (!hle_card_call(table, fn))
+                S.r[2] = 0u;
             break;
         }
         S.pc = S.r[31];
@@ -6506,6 +7816,8 @@ static void __attribute__((noinline, optimize("Os"))) jit_emit_nonbranch(u32 **p
                           : (gop == 0x30u) ? (void *)gte_op_rtpt
                           : (gop == 0x12u) ? (void *)gte_op_mvmva
                           : (gop == 0x3Du) ? (void *)gte_op_gpf
+                          : (gop == 0x1Bu) ? (void *)gte_op_nccs
+                          : (gop == 0x29u) ? (void *)gte_op_dcpl
                           : (void *)gte_exec;
                 j_emit_li32(pp, 4u, op);
                 j_emit_call_hlp(pp, gfn);
@@ -6661,6 +7973,44 @@ static int jit_wait_loop_at(u32 off)
            rp0[6] == 0x1443000Bu && rp0[22] == 0x1440FFE9u;
 }
 
+/* a 5-instruction RAM poll at S.pc (`lw/lh/lhu/lb/lbu rx, off(rb) ; nop ; slt/sltu rx, rx, ry (or ry, rx) ; bne/beq
+   rx, $0, -4 ; nop`: Tony Hawk's VSync wait) that psx_frame is about to run recompiled with `budget`: nothing changes
+   the polled word during that run (no IRQ is taken, no peripheral steps), so when the loop goes on now it goes on
+   for the whole run -- 5 instructions a turn while the budget is above 0 -- and ends as the recompiled run would: rx
+   = the comparison, the same pc.  Returns that run's instructions (0: not such a loop, or it ends: run it) */
+static int jit_wait_poll(int budget)
+{
+    if ((S.pc & 0x1FFFFCu) + 20u > PSX_RAM_SIZE)
+        return 0;
+    const u32 *rp = (const u32 *)(W.ram + (S.pc & 0x1FFFFCu));
+    if (rp[1] != 0u || rp[4] != 0u)
+        return 0;
+    u32 op0 = rp[0], opc = op0 >> 26, rx = (op0 >> 16) & 31u, rb = (op0 >> 21) & 31u;
+    if (!(opc == 0x20u || opc == 0x21u || opc == 0x23u || opc == 0x24u || opc == 0x25u) || rx == 0u || rb == rx)
+        return 0;
+    u32 op3 = rp[3];
+    if ((op3 & 0xFBFFFFFFu) != (0x1000FFFCu | (rx << 21)))         /* beq / bne rx, $0, back to S.pc */
+        return 0;
+    u32 op2 = rp[2], fn = op2 & 0x3Fu, rs2 = (op2 >> 21) & 31u, rt2 = (op2 >> 16) & 31u;
+    if ((op2 >> 26) != 0u || ((op2 >> 6) & 0x3FFu) != (rx << 5) || (fn != 0x2Au && fn != 0x2Bu) ||
+        (rs2 == rx) == (rt2 == rx))                                 /* slt / sltu rx: the loaded value and another */
+        return 0;
+    u32 addr = S.r[rb] + (u32)(s32)(s16)op0;
+    u32 align = opc == 0x23u ? 3u : (opc == 0x21u || opc == 0x25u) ? 1u : 0u;
+    if (addr & (0x7F800000u | align))                               /* (the thunks' quick RAM path) */
+        return 0;
+    const u8 *m = W.ram + (addr & 0x1FFFFFu);
+    u32 val = opc == 0x23u ? *(const u32 *)m : opc == 0x21u ? (u32)(s32)*(const s16 *)m :
+              opc == 0x25u ? (u32)*(const u16 *)m : opc == 0x20u ? (u32)(s32)*(const s8 *)m : (u32)*m;
+    u32 a = rs2 == rx ? val : S.r[rs2], b = rt2 == rx ? val : S.r[rt2];
+    u32 c = fn == 0x2Bu ? (u32)(a < b) : (u32)((s32)a < (s32)b);
+    if (((op3 >> 26) == 0x05u) != (c != 0u))                        /* bne goes on with c != 0, beq with c == 0 */
+        return 0;
+    S.r[rx] = c;
+    S.next_pc = S.pc + 4u;
+    return (budget + 4) / 5 * 5;
+}
+
 static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start_pc)
 {
     if (S.jit_used + JIT_BLOCK_MAX > JIT_BUF_WORDS) {
@@ -6678,11 +8028,12 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
 
     u32 *block_start = &W.jit_buf[S.jit_used];
     u32 *p = block_start;
-    /* the prologue: the budget (blocks run on while $s4 > 0; a helper that raised jit_stop zeroed it) */
-    *p++ = J_I(0x07u, 20u, 0u, 3);                      /* bgtz  $s4, body */
-    *p++ = J_I(0x0Fu, 0u, 4u, start_pc >> 16);          /* [delay] lui $a0, hi(start_pc) */
-    *p++ = J_J(0x02u, (void *)psx_jit_exit);            /* j     psx_jit_exit */
-    *p++ = J_I(0x0Du, 4u, 4u, start_pc);                /* [delay] ori $a0, $a0, lo(start_pc) */
+    /* the prologue: the budget (blocks run on while $s4 > 0; a helper that raised jit_stop zeroed it) -- "blez
+       $s4, out; nop", the way out (pc into $a0, psx_jit_exit) after the block's end: two words in the cache lines
+       a block runs through instead of four (the recompiled code's time goes mostly to I-cache misses) */
+    u32 *prologue = p;
+    *p++ = 0u;                                          /* blez  $s4, out (set at the end) */
+    *p++ = 0u;                                          /* [delay] nop */
     struct jit_rc rc;
     rc_init(&rc);
     int cost = 0;
@@ -6961,6 +8312,11 @@ static u32 __attribute__((noinline, optimize("Os"))) jit_compile_block(u32 start
             *p++ = J_I(0x09u, 20u, 20u, -cost);
         }
     }
+    /* out: the budget is spent -- leave with $a0 = start_pc */
+    *prologue = J_I(0x06u, 20u, 0u, (u32)(p - (prologue + 1)));   /* blez $s4, out */
+    *p++ = J_I(0x0Fu, 0u, 4u, start_pc >> 16);          /* lui   $a0, hi(start_pc) */
+    *p++ = J_J(0x02u, (void *)psx_jit_exit);            /* j     psx_jit_exit */
+    *p++ = J_I(0x0Du, 4u, 4u, start_pc);                /* [delay] ori $a0, $a0, lo(start_pc) */
 
     S.jit_used = (u32)(p - W.jit_buf);
     for (u32 c = (start_off >> 6); c <= (last_off >> 6); c++)
@@ -7263,12 +8619,16 @@ const char *psx_load(const u8 *data, u32 size, const char *path)
         int v = i - SPAN_CL_OFS;
         u16 c = (u16)(v < 0 ? 0 : v > 31 ? 31 : v);
         for (int k = 0; k < 2; k++) {
+            span_tab[k].red[i] = (u16)(c | (k ? 0x8000u : 0u));
+            span_tab[k].cb[i] = (u8)c;
             span_cl[k][i] = (u16)(c | (k ? 0x8000u : 0u));
             span_cl[k][512 + i] = (u16)(c << 5);
             span_cl[k][1024 + i] = (u16)(c << 10);
         }
     }
     S.vram_gen = 1u;
+    for (int s = 0; s < 4; s++)
+        semi4.key[s] = 0u;                              /* (semi4_table: no table) */
     jit_reset_all();
 
     build_clean_bios();
@@ -7476,21 +8836,228 @@ int psx_audio(s16 *out, int max)
     return n;
 }
 
-static inline void psx_advance_periph(int units, int in_vbl)
+/* SIO0 while a byte is under way (S.sio_busy): the answer's arrival, the /ACK with IRQ7, the end of its pulse */
+static void __attribute__((noinline)) sio_advance(int d)
 {
-    if (units <= 0)
-        return;
+    if (S.sio_rx_wait > 0)
+        S.sio_rx_wait -= d;
+    if (S.sio_ack_low > 0)
+        S.sio_ack_low -= d;
     if (S.sio_irq_delay > 0) {
-        S.sio_irq_delay -= units * 4;
+        S.sio_irq_delay -= d;
         if (S.sio_irq_delay <= 0) {
             S.sio_irq_delay = -1;
+            S.sio_ack_low = SIO_LOW_UNITS;
             if (S.sio_ctrl & 0x1D00u)
                 raise_irq(1u << 7); /* IRQ7 SIO0 (/ACK DSR, RX, or TX IRQ) */
         }
     }
+    if (S.sio_rx_wait <= 0 && S.sio_ack_low <= 0 && S.sio_irq_delay <= 0)
+        S.sio_busy = 0u;
+}
+
+/* ... and how many instructions may run before its next step: a game's routine polls the port's registers with
+   timeouts counted in loop passes, so recompiled code must not run on to the end of the line past it */
+static int __attribute__((noinline)) sio_budget(int budget)
+{
+    int t = S.sio_rx_wait > 0 ? S.sio_rx_wait : 0x7FFFFFFF;
+    if (S.sio_irq_delay > 0 && S.sio_irq_delay < t)
+        t = S.sio_irq_delay;
+    if (S.sio_ack_low > 0 && S.sio_ack_low < t)
+        t = S.sio_ack_low;
+    t = (t + 3) >> 2;
+    return t < budget ? t : budget;
+}
+
+static inline void psx_advance_periph(int units, int in_vbl)
+{
+    if (units <= 0)
+        return;
+    if (S.sio_busy)
+        sio_advance(units * 4);
     if (S.cd_req_valid || S.cd_pend_cmd || (S.cd_stat & 0x20u))
         cd_step(units * 4);
     rcnt_step(units * 2, 0, in_vbl);
+}
+
+/* psx_frame's idle-loop fast-forwards, tried when one of them can match (psx_frame's pre-filter): 1 when one
+   did (*pran advanced, or *pran = PSX_INSN_PER_LINE: the line is over), 0 when none did.  Kept out of the line
+   loop: their ~4 KB of tests were walked through on every pass, ~9 I-cache misses a pass with the recompiled
+   code run in between (Gran Turismo: ~300 passes a frame) */
+#define PSX_INSN_PER_LINE 1024
+static int __attribute__((noinline)) psx_idle_skip(u32 p, const u32 *rp, int *pran, int in_vbl)
+{
+    const int insn_per_line = PSX_INSN_PER_LINE;
+    int ran = *pran;
+    u32 op0 = rp[0];
+    /* 1. Unconditional self-branch (`b . ; nop` or `j . ; nop`) */
+    if ((op0 == 0x1000FFFFu ||
+         ((op0 >> 26) == 0x02u && ((S.pc & 0xF0000000u) | ((op0 & 0x03FFFFFFu) << 2)) == S.pc)) &&
+        rp[1] == 0x00000000u) {
+        psx_advance_periph(insn_per_line - ran, in_vbl);
+        *pran = insn_per_line;
+        return 1;
+    }
+    /* 2. 4-insn RAM poll (`lw/lh/lhu/lb/lbu rx, off(rb) ; nop ; beq/bne rx, ry, -3 ; <alu/nop>`) */
+    u32 opc0 = op0 >> 26;
+    if ((opc0 == 0x20u || opc0 == 0x21u || opc0 == 0x23u || opc0 == 0x24u || opc0 == 0x25u) &&
+        rp[1] == 0x00000000u &&
+        (((rp[2] >> 26) == 0x04u || (rp[2] >> 26) == 0x05u) && (rp[2] & 0xFFFFu) == 0xFFFDu) &&
+        (rp[3] >> 26) == 0x00u && (rp[3] & 0x3Fu) != 0x08u && (rp[3] & 0x3Fu) != 0x09u) {
+        u32 base_r = (op0 >> 21) & 31u;
+        u32 poll_p = mask_phys(S.r[base_r] + (u32)(s32)(s16)op0);
+        if (poll_p < 0x800000u) {
+            u32 before_pc = S.pc;
+            (void)r3000_run_batch(4);
+            psx_advance_periph(4, in_vbl);
+            ran += 4;
+            if (S.pc == before_pc) {
+                psx_advance_periph(insn_per_line - ran, in_vbl);
+                *pran = insn_per_line;
+                return 1;
+            }
+            *pran = ran;
+            return 1;
+        }
+    }
+    /* 3. 5-insn lui + RAM poll (`lui rat, hi ; lw/lh/lb rx, lo(rat) ; nop ; beq/bne rx, ry, -4 ; <alu/nop>`) */
+    if (opc0 == 0x0Fu && rp[2] == 0x00000000u &&
+        (((rp[3] >> 26) == 0x04u || (rp[3] >> 26) == 0x05u) && (rp[3] & 0xFFFFu) == 0xFFFCu)) {
+        u32 opc1 = rp[1] >> 26;
+        if (opc1 == 0x20u || opc1 == 0x21u || opc1 == 0x23u || opc1 == 0x24u || opc1 == 0x25u) {
+            u32 hi_p = mask_phys((op0 & 0xFFFFu) << 16);
+            if (hi_p < 0x800000u) {
+                u32 before_pc = S.pc;
+                (void)r3000_run_batch(5);
+                psx_advance_periph(5, in_vbl);
+                ran += 5;
+                if (S.pc == before_pc) {
+                    psx_advance_periph(insn_per_line - ran, in_vbl);
+                    *pran = insn_per_line;
+                    return 1;
+                }
+                *pran = ran;
+                return 1;
+            }
+        }
+    }
+    /* 4. 2-insn delay-slot countdown (`bnez rx, -1 ; addiu rx, rx, -1`, e.g. PeterLemon PlaySong) */
+    if ((op0 & 0xFC1FFFFFu) == 0x1400FFFFu) {
+        u32 rx = (op0 >> 21) & 31u;
+        if (rx && rp[1] == (0x2400FFFFu | (rx << 21) | (rx << 16)) && S.r[rx] > 2u) {
+            u32 max_it = (u32)((insn_per_line - ran) >> 1);
+            if (max_it >= 1u) {
+                u32 rem_it = S.r[rx] - 1u;
+                u32 do_it = (rem_it < max_it) ? rem_it : max_it;
+                S.r[rx] -= do_it;
+                psx_advance_periph((int)(do_it * 2u), in_vbl);
+                ran += (int)(do_it * 2u);
+                *pran = ran;
+                return 1;
+            }
+        }
+    }
+    /* 5. PsyQ 9-insn v_wait (`beqz rtmo,+N; nop; lw rcur,off(rb); nop; bne rold,rcur,+M; nop; addiu rtmo,-1; b -8; nop`) */
+    if ((op0 >> 26) == 0x04u && ((op0 >> 16) & 31u) == 0u &&
+        rp[1] == 0x00000000u && (rp[2] >> 26) == 0x23u && rp[3] == 0x00000000u &&
+        (rp[4] >> 26) == 0x05u && rp[5] == 0x00000000u &&
+        rp[7] == 0x1000FFF8u && rp[8] == 0x00000000u) {
+        u32 rtmo = (op0 >> 21) & 31u;
+        u32 rb   = (rp[2] >> 21) & 31u;
+        u32 rcur = (rp[2] >> 16) & 31u;
+        if (rtmo && rcur && rtmo != rcur && rtmo != rb &&
+            rp[6] == (0x2400FFFFu | (rtmo << 21) | (rtmo << 16))) {
+            u32 poll_p = mask_phys(S.r[rb] + (u32)(s32)(s16)rp[2]);
+            if (poll_p < 0x800000u && S.r[rtmo] > 256u) {
+                u32 before_pc = S.pc;
+                (void)r3000_run_batch(9);
+                psx_advance_periph(9, in_vbl);
+                ran += 9;
+                if (S.pc == before_pc) {
+                    int rem = insn_per_line - ran;
+                    int rem_it = rem / 9;
+                    if (rem_it > 0 && S.r[rtmo] > (u32)(rem_it + 16))
+                        S.r[rtmo] -= (u32)rem_it;
+                    psx_advance_periph(rem, in_vbl);
+                    *pran = insn_per_line;
+                    return 1;
+                }
+                *pran = ran;
+                return 1;
+            }
+        }
+    }
+    /* 6. Counted busy-wait (`addiu rx, rx, 1 ; slti ry, rx, imm ; bne ry, $0, -3 ; nop`) */
+    if ((op0 & 0xFC00FFFFu) == 0x24000001u && ((op0 >> 21) & 31u) == ((op0 >> 16) & 31u) &&
+        (rp[1] >> 26) == 0x0Au && rp[3] == 0x00000000u) {
+        u32 rx = (op0 >> 16) & 31u;
+        u32 ry = (rp[1] >> 16) & 31u;
+        if (rx && ry && rx != ry && ((rp[1] >> 21) & 31u) == rx &&
+            rp[2] == (0x1400FFFDu | (ry << 21))) {
+            s32 cur = (s32)S.r[rx];
+            s32 lim = (s32)(s16)rp[1];
+            if (cur < lim) {
+                int max_it = (insn_per_line - ran) >> 2;
+                s32 rem_it = lim - cur;
+                if (max_it >= 1) {
+                    int do_it = (rem_it < max_it) ? (int)rem_it : max_it;
+                    S.r[rx] = (u32)(cur + do_it);
+                    psx_advance_periph(do_it * 4, in_vbl);
+                    ran += do_it * 4;
+                    if ((s32)S.r[rx] >= lim) {
+                        S.r[ry] = 0u;
+                        S.pc += 16u;
+                        S.next_pc = S.pc + 4u;
+                    } else {
+                        S.r[ry] = 1u;
+                    }
+                    *pran = ran;
+                    return 1;
+                }
+            }
+        }
+    }
+    /* 7. Namco / PsyQ VBlank PRNG-churn wait (`jal leaf_prng; nop; lw; lw rflag,...; ...; beqz rflag, -16; sw`) */
+    if (!in_vbl && (p & 0x1FFFFCu) + 68u <= PSX_RAM_SIZE &&
+        (op0 >> 26) == 0x03u && rp[1] == 0x00000000u && (rp[15] & 0xFC1FFFFFu) == 0x1000FFF0u &&
+        insn_per_line - ran >= 25) {
+        u32 before_pc = S.pc;
+        int d25 = r3000_run_batch(25);
+        psx_advance_periph(d25, in_vbl);
+        ran += d25;
+        if (S.pc == before_pc && ran < insn_per_line) {
+            psx_advance_periph(insn_per_line - ran, in_vbl);
+            *pran = insn_per_line;
+            return 1;
+        }
+        *pran = ran;
+        return 1;
+    }
+    /* 8. PsyQ 4.6 14-insn stack-timeout v_wait (`lw v0,16(sp); nop; addiu v0,-1; sw v0,16(sp); ...; bnez v0,-23; nop`) */
+    if ((p & 0x1FFFFCu) + 96u <= PSX_RAM_SIZE &&
+        op0 == 0x8FA20010u && rp[2] == 0x2442FFFFu && rp[3] == 0xAFA20010u &&
+        rp[6] == 0x1443000Bu && rp[22] == 0x1440FFE9u && insn_per_line - ran >= 16) {
+        u32 tmo = bus_read32(S.r[29] + 16u);
+        if (tmo > 256u && S.r[3] == 0xFFFFFFFFu) {
+            u32 before_pc = S.pc;
+            int d14 = r3000_run_batch(14);
+            psx_advance_periph(d14, in_vbl);
+            ran += d14;
+            if (S.pc == before_pc && ran < insn_per_line) {
+                int rem = insn_per_line - ran;
+                u32 rem_it = (u32)(rem / 14);
+                tmo = bus_read32(S.r[29] + 16u);
+                if (rem_it > 0u && tmo > rem_it + 16u)
+                    bus_write32(S.r[29] + 16u, tmo - rem_it);
+                psx_advance_periph(rem, in_vbl);
+                *pran = insn_per_line;
+                return 1;
+            }
+            *pran = ran;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void psx_frame(u16 pad, u16 *picture)
@@ -7499,7 +9066,7 @@ void psx_frame(u16 pad, u16 *picture)
     S.aud_count = 0;
 
     /* Run up to 1024 R3000A instructions per scanline (~269K insns/frame, with idle VSync-spin fast-forward) */
-    const int insn_per_line = 1024;
+    const int insn_per_line = PSX_INSN_PER_LINE;
 
     for (int y = 0; y < PSX_LINES_NTSC; y++) {
         int in_vbl = (y >= PSX_VBL_LINE);
@@ -7526,166 +9093,12 @@ void psx_frame(u16 pad, u16 *picture)
                 !(S.cop0[12] & S.cop0[13] & 0xFF00u)) {
                 const u32 *rp = (const u32 *)(W.ram + (p & 0x1FFFFCu));
                 u32 op0 = rp[0];
-                /* 1. Unconditional self-branch (`b . ; nop` or `j . ; nop`) */
-                if ((op0 == 0x1000FFFFu ||
-                     ((op0 >> 26) == 0x02u && ((S.pc & 0xF0000000u) | ((op0 & 0x03FFFFFFu) << 2)) == S.pc)) &&
-                    rp[1] == 0x00000000u) {
-                    psx_advance_periph(insn_per_line - ran, in_vbl);
-                    ran = insn_per_line;
-                    break;
-                }
-                /* 2. 4-insn RAM poll (`lw/lh/lhu/lb/lbu rx, off(rb) ; nop ; beq/bne rx, ry, -3 ; <alu/nop>`) */
-                u32 opc0 = op0 >> 26;
-                if ((opc0 == 0x20u || opc0 == 0x21u || opc0 == 0x23u || opc0 == 0x24u || opc0 == 0x25u) &&
-                    rp[1] == 0x00000000u &&
-                    (((rp[2] >> 26) == 0x04u || (rp[2] >> 26) == 0x05u) && (rp[2] & 0xFFFFu) == 0xFFFDu) &&
-                    (rp[3] >> 26) == 0x00u && (rp[3] & 0x3Fu) != 0x08u && (rp[3] & 0x3Fu) != 0x09u) {
-                    u32 base_r = (op0 >> 21) & 31u;
-                    u32 poll_p = mask_phys(S.r[base_r] + (u32)(s32)(s16)op0);
-                    if (poll_p < 0x800000u) {
-                        u32 before_pc = S.pc;
-                        (void)r3000_run_batch(4);
-                        psx_advance_periph(4, in_vbl);
-                        ran += 4;
-                        if (S.pc == before_pc) {
-                            psx_advance_periph(insn_per_line - ran, in_vbl);
-                            ran = insn_per_line;
-                            break;
-                        }
-                        continue;
-                    }
-                }
-                /* 3. 5-insn lui + RAM poll (`lui rat, hi ; lw/lh/lb rx, lo(rat) ; nop ; beq/bne rx, ry, -4 ; <alu/nop>`) */
-                if (opc0 == 0x0Fu && rp[2] == 0x00000000u &&
-                    (((rp[3] >> 26) == 0x04u || (rp[3] >> 26) == 0x05u) && (rp[3] & 0xFFFFu) == 0xFFFCu)) {
-                    u32 opc1 = rp[1] >> 26;
-                    if (opc1 == 0x20u || opc1 == 0x21u || opc1 == 0x23u || opc1 == 0x24u || opc1 == 0x25u) {
-                        u32 hi_p = mask_phys((op0 & 0xFFFFu) << 16);
-                        if (hi_p < 0x800000u) {
-                            u32 before_pc = S.pc;
-                            (void)r3000_run_batch(5);
-                            psx_advance_periph(5, in_vbl);
-                            ran += 5;
-                            if (S.pc == before_pc) {
-                                psx_advance_periph(insn_per_line - ran, in_vbl);
-                                ran = insn_per_line;
-                                break;
-                            }
-                            continue;
-                        }
-                    }
-                }
-                /* 4. 2-insn delay-slot countdown (`bnez rx, -1 ; addiu rx, rx, -1`, e.g. PeterLemon PlaySong) */
-                if ((op0 & 0xFC1FFFFFu) == 0x1400FFFFu) {
-                    u32 rx = (op0 >> 21) & 31u;
-                    if (rx && rp[1] == (0x2400FFFFu | (rx << 21) | (rx << 16)) && S.r[rx] > 2u) {
-                        u32 max_it = (u32)((insn_per_line - ran) >> 1);
-                        if (max_it >= 1u) {
-                            u32 rem_it = S.r[rx] - 1u;
-                            u32 do_it = (rem_it < max_it) ? rem_it : max_it;
-                            S.r[rx] -= do_it;
-                            psx_advance_periph((int)(do_it * 2u), in_vbl);
-                            ran += (int)(do_it * 2u);
-                            continue;
-                        }
-                    }
-                }
-                /* 5. PsyQ 9-insn v_wait (`beqz rtmo,+N; nop; lw rcur,off(rb); nop; bne rold,rcur,+M; nop; addiu rtmo,-1; b -8; nop`) */
-                if ((op0 >> 26) == 0x04u && ((op0 >> 16) & 31u) == 0u &&
-                    rp[1] == 0x00000000u && (rp[2] >> 26) == 0x23u && rp[3] == 0x00000000u &&
-                    (rp[4] >> 26) == 0x05u && rp[5] == 0x00000000u &&
-                    rp[7] == 0x1000FFF8u && rp[8] == 0x00000000u) {
-                    u32 rtmo = (op0 >> 21) & 31u;
-                    u32 rb   = (rp[2] >> 21) & 31u;
-                    u32 rcur = (rp[2] >> 16) & 31u;
-                    if (rtmo && rcur && rtmo != rcur && rtmo != rb &&
-                        rp[6] == (0x2400FFFFu | (rtmo << 21) | (rtmo << 16))) {
-                        u32 poll_p = mask_phys(S.r[rb] + (u32)(s32)(s16)rp[2]);
-                        if (poll_p < 0x800000u && S.r[rtmo] > 256u) {
-                            u32 before_pc = S.pc;
-                            (void)r3000_run_batch(9);
-                            psx_advance_periph(9, in_vbl);
-                            ran += 9;
-                            if (S.pc == before_pc) {
-                                int rem = insn_per_line - ran;
-                                int rem_it = rem / 9;
-                                if (rem_it > 0 && S.r[rtmo] > (u32)(rem_it + 16))
-                                    S.r[rtmo] -= (u32)rem_it;
-                                psx_advance_periph(rem, in_vbl);
-                                ran = insn_per_line;
-                                break;
-                            }
-                            continue;
-                        }
-                    }
-                }
-                /* 6. Counted busy-wait (`addiu rx, rx, 1 ; slti ry, rx, imm ; bne ry, $0, -3 ; nop`) */
-                if ((op0 & 0xFC00FFFFu) == 0x24000001u && ((op0 >> 21) & 31u) == ((op0 >> 16) & 31u) &&
-                    (rp[1] >> 26) == 0x0Au && rp[3] == 0x00000000u) {
-                    u32 rx = (op0 >> 16) & 31u;
-                    u32 ry = (rp[1] >> 16) & 31u;
-                    if (rx && ry && rx != ry && ((rp[1] >> 21) & 31u) == rx &&
-                        rp[2] == (0x1400FFFDu | (ry << 21))) {
-                        s32 cur = (s32)S.r[rx];
-                        s32 lim = (s32)(s16)rp[1];
-                        if (cur < lim) {
-                            int max_it = (insn_per_line - ran) >> 2;
-                            s32 rem_it = lim - cur;
-                            if (max_it >= 1) {
-                                int do_it = (rem_it < max_it) ? (int)rem_it : max_it;
-                                S.r[rx] = (u32)(cur + do_it);
-                                psx_advance_periph(do_it * 4, in_vbl);
-                                ran += do_it * 4;
-                                if ((s32)S.r[rx] >= lim) {
-                                    S.r[ry] = 0u;
-                                    S.pc += 16u;
-                                    S.next_pc = S.pc + 4u;
-                                } else {
-                                    S.r[ry] = 1u;
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                }
-                /* 7. Namco / PsyQ VBlank PRNG-churn wait (`jal leaf_prng; nop; lw; lw rflag,...; ...; beqz rflag, -16; sw`) */
-                if (!in_vbl && (p & 0x1FFFFCu) + 68u <= PSX_RAM_SIZE &&
-                    (op0 >> 26) == 0x03u && rp[1] == 0x00000000u && (rp[15] & 0xFC1FFFFFu) == 0x1000FFF0u &&
-                    insn_per_line - ran >= 25) {
-                    u32 before_pc = S.pc;
-                    int d25 = r3000_run_batch(25);
-                    psx_advance_periph(d25, in_vbl);
-                    ran += d25;
-                    if (S.pc == before_pc && ran < insn_per_line) {
-                        psx_advance_periph(insn_per_line - ran, in_vbl);
-                        ran = insn_per_line;
-                        break;
-                    }
+                /* every pattern of psx_idle_skip needs one of these: a nop second (1, 2, 5, 7), a lui with a nop
+                   third (3) or its own first instruction (4, 6, 8) -- most passes go straight on */
+                if (((op0 & 0xFC1FFFFFu) == 0x1400FFFFu || (op0 & 0xFC00FFFFu) == 0x24000001u ||
+                     op0 == 0x8FA20010u || ((op0 >> 26) == 0x0Fu && rp[2] == 0u) || rp[1] == 0u) &&
+                    psx_idle_skip(p, rp, &ran, in_vbl))
                     continue;
-                }
-                /* 8. PsyQ 4.6 14-insn stack-timeout v_wait (`lw v0,16(sp); nop; addiu v0,-1; sw v0,16(sp); ...; bnez v0,-23; nop`) */
-                if ((p & 0x1FFFFCu) + 96u <= PSX_RAM_SIZE &&
-                    op0 == 0x8FA20010u && rp[2] == 0x2442FFFFu && rp[3] == 0xAFA20010u &&
-                    rp[6] == 0x1443000Bu && rp[22] == 0x1440FFE9u && insn_per_line - ran >= 16) {
-                    u32 tmo = bus_read32(S.r[29] + 16u);
-                    if (tmo > 256u && S.r[3] == 0xFFFFFFFFu) {
-                        u32 before_pc = S.pc;
-                        int d14 = r3000_run_batch(14);
-                        psx_advance_periph(d14, in_vbl);
-                        ran += d14;
-                        if (S.pc == before_pc && ran < insn_per_line) {
-                            int rem = insn_per_line - ran;
-                            u32 rem_it = (u32)(rem / 14);
-                            tmo = bus_read32(S.r[29] + 16u);
-                            if (rem_it > 0u && tmo > rem_it + 16u)
-                                bus_write32(S.r[29] + 16u, tmo - rem_it);
-                            psx_advance_periph(rem, in_vbl);
-                            ran = insn_per_line;
-                            break;
-                        }
-                        continue;
-                    }
-                }
             }
 
 #ifdef __mips__
@@ -7697,7 +9110,11 @@ void psx_frame(u16 pad, u16 *picture)
                     jent = jit_compile_block(S.pc);
                 if (jent >= 2u) {
                     int jbudget = insn_per_line - ran;
-                    int jdone = psx_jit_enter(jbudget, &S, W.ram, W.jit_entry);
+                    if (S.sio_busy)
+                        jbudget = sio_budget(jbudget);
+                    int jdone = jit_wait_poll(jbudget);
+                    if (!jdone)
+                        jdone = psx_jit_enter(jbudget, &S, W.ram, W.jit_entry);
                     st_jit_enters++;
                     st_jit_insns += (u32)jdone;
                     if (jdone > 0) {

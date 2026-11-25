@@ -126,6 +126,47 @@ static const u32 handler[] = {
     0x00000000u,                       /* nop */
 };
 
+/* `prof -s EV`: the samples taken every PROF_EV_PERIOD events EV of performance counter 0 instead of the timer --
+   where e.g. the I-cache miss stall cycles (37) go.  The counter's overflow (its bit 31 set) interrupts on the line
+   IntCtl.IPPCI names (IP7 on the S3811, the timer's); the handler sets the counter back, pushes the timer's Compare
+   far ahead (acking it, if it was the timer) and counts EPC as above (no -c) */
+#define PROF_EV_PERIOD 10000u
+static u32 ev_on, ev_num;
+
+void prof_sample(u32 ev)
+{
+    ev_on = 1;
+    ev_num = ev & 127u;
+}
+
+static const u32 handler_ev[] = {
+    0x401a4800u,                       /* mfc0  $k0, $9          Count */
+    0x3c1b4000u,                       /* lui   $k1, 0x4000 */
+    0x035bd021u,                       /* addu  $k0, $k0, $k1 */
+    0x409a5800u,                       /* mtc0  $k0, $11         Compare: far ahead (a timer interrupt acked) */
+    0x3c1a8000u,                       /* lui   $k0, 0x8000 */
+    0x275a0000u | ((0u - PROF_EV_PERIOD) & 0xFFFFu),   /* addiu $k0, $k0, -PERIOD */
+    0x409ac801u,                       /* mtc0  $k0, $25, 1      PerfCnt0: PERIOD events to the next */
+    0x000000c0u,                       /* ehb */
+    0x401a7000u,                       /* mfc0  $k0, $14         EPC */
+    0x3c1b8000u,                       /* lui   $k1, 0x8000 */
+    0x035bd023u,                       /* subu  $k0, $k0, $k1 */
+    0x001ad182u,                       /* srl   $k0, $k0, 6 */
+    0x3c1b0010u,                       /* lui   $k1, 0x0010      PROF_PIECES */
+    0x035bd82bu,                       /* sltu  $k1, $k0, $k1 */
+    0x001bd00au,                       /* movz  $k0, $0, $k1     outside: piece 0 */
+    0x001ad080u,                       /* sll   $k0, $k0, 2 */
+    0x3c1b8500u,                       /* lui   $k1, 0x8500      the histogram (KSEG0 PROF_PHYS) */
+    0x035bd021u,                       /* addu  $k0, $k0, $k1 */
+    0x8f5b0000u,                       /* lw    $k1, 0($k0) */
+    0x00000000u,                       /* nop */
+    0x277b0001u,                       /* addiu $k1, $k1, 1 */
+    0xaf5b0000u,                       /* sw    $k1, 0($k0) */
+    0x42000018u,                       /* eret */
+    0x00000000u,                       /* nop */
+};
+typedef char prof_handler_ev_fits[sizeof(handler_ev) <= 0x70u ? 1 : -1];   /* (below CALLER_WORD) */
+
 static inline u32 cp0_status(void) { u32 v; __asm__ volatile("mfc0 %0, $12" : "=r"(v)); return v; }
 static inline u32 cp0_cause(void) { u32 v; __asm__ volatile("mfc0 %0, $13" : "=r"(v)); return v; }
 static inline u32 cp0_ebase(void) { u32 v; __asm__ volatile("mfc0 %0, $15, 1" : "=r"(v)); return v; }
@@ -143,12 +184,29 @@ int prof_start(void)
         uprintf("prof: EBase is 0x%08x, not 0x80000000: not started\n", cp0_ebase());
         return -1;
     }
+    u32 ippci = 7u;
+    if (ev_on) {
+        u32 intctl;
+        __asm__ volatile("mfc0 %0, $12, 1" : "=r"(intctl));
+        ippci = (intctl >> 26) & 7u;
+        if (ippci < 2u) {
+            uprintf("prof: IntCtl %08x names no line for the counters' interrupt: not started\n", intctl);
+            ev_on = 0;
+            return -1;
+        }
+    }
     clear();
     volatile u32 *vec = (volatile u32 *)0x80000180u;
-    for (u32 i = 0; i < sizeof(handler) / sizeof(handler[0]); i++)
-        vec[i] = handler[i];
-    vec[8] = handler[8] | caller_len;                       /* the sltiu's LEN */
-    *(volatile u32 *)CALLER_WORD = caller_len ? caller_lo : 0u;
+    if (ev_on) {
+        for (u32 i = 0; i < sizeof(handler_ev) / sizeof(handler_ev[0]); i++)
+            vec[i] = handler_ev[i];
+        *(volatile u32 *)CALLER_WORD = 0u;
+    } else {
+        for (u32 i = 0; i < sizeof(handler) / sizeof(handler[0]); i++)
+            vec[i] = handler[i];
+        vec[8] = handler[8] | caller_len;                   /* the sltiu's LEN */
+        *(volatile u32 *)CALLER_WORD = caller_len ? caller_lo : 0u;
+    }
     for (u32 a = 0x80000180u; a < 0x80000200u; a += 16)
         __asm__ volatile("cache 0x15, 0(%0)\n\tcache 0x10, 0(%0)" : : "r"(a) : "memory");
     __asm__ volatile("sync\n\tsll $0, $0, 3" : : : "memory");
@@ -156,9 +214,16 @@ int prof_start(void)
     saved_cause = cp0_cause();
     set_status(saved_status & ~1u);                         /* interrupts off while it is set up */
     set_cause(saved_cause & ~(1u << 23));                   /* Cause.IV off: the vector at +0x180 */
-    set_compare(cp0_count() + PROF_INTERVAL);
+    if (ev_on) {                                            /* counter 0: EV, interrupting (IE), kernel mode */
+        u32 z = 0, ctl = (ev_num << 5) | 0x10u | 0x2u, cnt = 0x80000000u - PROF_EV_PERIOD;
+        __asm__ volatile("mtc0 %0, $25, 0\n\tsll $0, $0, 3\n\tmtc0 %1, $25, 1\n\tmtc0 %2, $25, 0\n\tsll $0, $0, 3"
+                         : : "r"(z), "r"(cnt), "r"(ctl));
+        set_compare(cp0_count() + 0x40000000u);
+    } else {
+        set_compare(cp0_count() + PROF_INTERVAL);
+    }
     u32 st = saved_status & ~((1u << 22) | 0xFF00u | 0x1Fu);   /* BEV, IM7..0, KSU / ERL / EXL / IE off */
-    set_status(st | (1u << 15) | 1u);                       /* IM7 (the timer) and IE */
+    set_status(st | (1u << 15) | (1u << (8u + ippci)) | 1u);   /* IM7 (the timer), the counters' line, IE */
     running = 1;
     pc_done = 0;
     if (pc_on && !from_frame)
@@ -170,6 +235,11 @@ void prof_stop(void)
 {
     if (!running)
         return;
+    if (ev_on) {
+        u32 z = 0;
+        __asm__ volatile("mtc0 %0, $25, 0\n\tsll $0, $0, 3" : : "r"(z));
+        ev_on = 0;
+    }
     if (pc_on && !pc_done)
         pc_stop();
     set_status(cp0_status() & ~1u);

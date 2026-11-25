@@ -740,7 +740,8 @@ static const struct command commands[] = {
      "horizontal and rotated vertical games) on the TV with its 4-channel sound: arrows or W A S D, X = A, Z = B, "
      "Enter = Start, C/V/Q/E = Y1..Y4; cartridge SRAM / EEPROM kept in a .sav file; the options of nes", cmd_ws},
     {"snes", "[-f frames] [-k script] <file>", "play a Super Nintendo / Super Famicom cartridge (.sfc, .smc: LoROM, "
-     "HiROM, ExHiROM, Modes 0-7) on the TV with SPC700 BRR sound: arrows or W A S D, X = A, Z = B, C = X, V = Y, "
+     "HiROM, ExHiROM, Modes 0-7, the DSP-1 maths chip of Super Mario Kart) on the TV with SPC700 BRR "
+     "sound: arrows or W A S D, X = A, Z = B, C = X, V = Y, "
      "Q = L, E = R, Enter = Start, Tab = Select; SRAM kept in a .sav file; the options of nes", cmd_snes},
     {"neogeo", "[-f frames] [-k script] <file>", "play an SNK Neo Geo AES / MVS cartridge (.neo) on the TV with its "
      "Z80 + YM2610 FM/SSG/ADPCM sound (uni-bios.rom or neogeo.rom in neogeo/ if present, else built-in BIOS): "
@@ -982,11 +983,13 @@ static const struct command commands[] = {
     {"reboot", "", "restart through the original bootloader", cmd_reboot},
     {"restart", "", "the same as reboot", cmd_reboot},
     {"bootloader", "", "restart into the original bootloader: hold 'c' (or run maciej_uart.py) to stay", cmd_bootloader},
-    {"prof", "[-f frame] [-c address length] [-e event0 event1] <command ...>", "run the command with the sampling "
-     "profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code it was found in, most "
-     "first (-f: a game's samples from that frame on; -c: samples inside that code counted for its caller, as $ra "
-     "says; -e: the CPU's two performance counters count those events, from the -f frame for 100 frames: 0 cycles, "
-     "1 instructions, 9 I-cache accesses / misses, 10 D-cache accesses / writebacks, 11 D-cache misses)", cmd_prof},
+    {"prof", "[-f frame] [-c address length | -s event] [-e event0 event1] <command ...>", "run the command with the "
+     "sampling profiler (the CPU timer, ~10,000 samples a second) and list the 64-byte pieces of code it was found "
+     "in, most first (-f: a game's samples from that frame on; -c: samples inside that code counted for its caller, "
+     "as $ra says; -s: a sample every 10,000 of that event of performance counter 0 instead of the timer, e.g. 37 "
+     "I-cache miss stall cycles; -e: the CPU's two performance counters count those events, from the -f frame for "
+     "100 frames: 0 cycles, 1 instructions, 9 I-cache accesses / misses, 10 D-cache accesses / writebacks, 11 "
+     "D-cache misses, 37 I-cache / D-cache miss stall cycles)", cmd_prof},
     {0, 0, 0, 0},
 };
 
@@ -997,11 +1000,12 @@ void prof_report(void);
 void prof_from(u32 frame);
 void prof_caller(u32 lo, u32 len);
 void prof_events(u32 e0, u32 e1);
+void prof_sample(u32 ev);
 
 static void cmd_prof(int argc, char **argv)
 {
-    u32 from = 0, lo = 0, len = 0, e0 = 0, e1 = 0;
-    int events = 0;
+    u32 from = 0, lo = 0, len = 0, e0 = 0, e1 = 0, sev = 0;
+    int events = 0, sample = 0;
     for (;;) {
         if (argc > 3 && str_eq(argv[1], "-f") && parse_u32(argv[2], &from)) {
             argc -= 2;
@@ -1013,16 +1017,23 @@ static void cmd_prof(int argc, char **argv)
             events = 1;
             argc -= 3;
             argv += 3;
+        } else if (argc > 3 && str_eq(argv[1], "-s") && parse_u32(argv[2], &sev)) {
+            sample = 1;
+            argc -= 2;
+            argv += 2;
         } else {
             break;
         }
     }
-    if (argc < 2) {
-        uprintf("usage: prof [-f frame] [-c address length] [-e event0 event1] <command ...>\n");
+    if (argc < 2 || (sample && (events || len))) {
+        uprintf("usage: prof [-f frame] [-c address length | -s event] [-e event0 event1 (not with -s)] "
+                "<command ...>\n");
         return;
     }
     if (events)
         prof_events(e0, e1);
+    if (sample)
+        prof_sample(sev);
     prof_from(from);
     prof_caller(lo, len);
     const struct command *c = commands;

@@ -19,3 +19,8 @@ ge_m36f_capture.png
 
 # board photos that came with the Cabletech dump download (2.5 MB, not used)
 dumps/CABLETECH URZ0083Q/**/*.jpg
+
+# PC test harnesses and box tools of the v4 demo's players (A/B runs against an older copy of a core,
+# random-state tests, benchmark / profile / frame-buffer scripts for the real box, their builds and results):
+# kept beside the sources, not part of the repository
+/firmware/maciej_app/hosttest/
