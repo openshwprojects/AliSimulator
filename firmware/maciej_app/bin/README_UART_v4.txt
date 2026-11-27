@@ -223,13 +223,15 @@ A command may also start with '/' (e.g. /restart, /lsusb).
                        the remote), left mouse button: Page Up / Page Down
                        or 0 on the remote; MENU = Return, INFO = space; no
                        sound; Esc ends
-  dos [-f frames] <file.exe>
-                       a PC with DOS (286 AT with a VGA card: text modes,
-                       CGA, EGA, 256 colours) on the TV (320 x 200, 3 times
-                       as large) running a DOS program (.exe, .com); BIOS
-                       and DOS are built in, no sound. The USB keyboard is
-                       the PC's keyboard (Esc ends); remote: arrows, OK =
-                       up, 0 = space, MENU = Enter, INFO = Esc
+  dos / pc386 [-f frames] <file.exe|.zip>
+                       a 386 DOS PC (real mode + 386 32-bit protected mode /
+                       DOS/4GW, 8 MB XMS, VGA Mode 13h / Mode X, AdLib YM3812
+                       OPL2 + Sound Blaster 2.0 DMA + PC speaker at 48 kHz) on
+                       the TV (320 x 200 x3) running a DOS program (.exe,
+                       .com, or a multi-file .zip such as DOOM). The USB
+                       keyboard is the PC's keyboard (Esc ends); remote:
+                       arrows, OK = Fire/Up, 0 = space, MENU = Enter, INFO =
+                       Esc
   pce [-f frames] <file.pce>
                        PC Engine / TurboGrafx-16 on the TV with 6-channel
                        PSG sound and 2 KB of save memory (.sav)
@@ -493,6 +495,80 @@ A command may also start with '/' (e.g. /restart, /lsusb).
                        / Ms. Pac-Man WSG, Namco Galaxian, Konami Frogger /
                        Scramble 2xZ80 + AY-3-8910, Nintendo Donkey Kong DMA
                        + DAC; without a file: a game)
+  x68k [-f frames] <file.dim|.xdf|.hdf|.x>
+                       Sharp X68000 on the TV (256 x 256 / 512 x 512 / 768 x
+                       512, 55.45 Hz, 68000 10 MHz, 2 MB RAM, 16/256/65536
+                       colours GVRAM, Text VRAM, Cynthia 128 sprites + BG0/1,
+                       YM2151 OPM + MSM6258 ADPCM 48 kHz, 16 KB SRAM .sav;
+                       built-in IPL/IOCS + CGROM or iplrom.dat/cgrom.dat)
+  a1200 [-f frames] [file.adf|.adz|.zip]
+                       Commodore Amiga 1200 PAL on the TV (68EC020 14.18 MHz,
+                       2 MB AGA Chip RAM, 256 colours / HAM8 / Dual Playfield
+                       + 2 MB Blitter + Copper, Paula 4-ch 48 kHz; uses
+                       a1200.rom / kick.rom / a1200.zip in a1200/ or amiga/,
+                       else built-in AGA boot)
+  3do [-f frames] [file.iso|.cue]
+                       3DO Interactive Multiplayer on the TV (320 x 240 x3,
+                       59.94 Hz, 32-bit ARM60 12.5 MHz, 2 MB DRAM + 1 MB
+                       VRAM, Madam CEL Quad Projector 1..16-bpp Packed /
+                       Unpacked CELs + PIXC + SPORT, Clio, DSPP + Redbook
+                       CD-DA 48 kHz, 32 KB NVRAM .sav; built-in Portfolio OS
+                       2.5 HLE or panafz10.bin in 3do/; no file: 3D showcase)
+  neocd [-f frames] [file.cue|.iso]
+                       SNK Neo Geo CD on the TV (320 x 224 x3, 59.60 Hz,
+                       68000 12 MHz + Z80, 7.3 MB RAM, LSPC2, YM2610 + Redbook
+                       CD-DA 48 kHz, 8 KB BRAM .sav; built-in ISO9660/IPL.TXT
+                       HLE BIOS or neocd.bin in neocd/; no file: showcase)
+  pc98 [-f frames] [file.fdi|.hdi|.d88|.hdm|.zip]
+                       NEC PC-9801VM / VX on the TV (640 x 400 x2, 56.42 Hz,
+                       V30/286/386 10 MHz, dual uPD7220 GDC 16-colour GVRAM +
+                       80x25 Text/KCG, GRCG + EGC, YM2203/YM2608 OPN FM/SSG +
+                       PIT 48 kHz; built-in IPL + DOS HLE; no file: showcase)
+  konami [-f frames] [file.zip]
+                       Konami classic arcade games on the TV (TMNT, Turtles
+                       in Time, Sunset Riders, X-Men, Nemesis / Gradius,
+                       Contra; 68000 / MC6809E + Z80, K052109 + K051960 /
+                       K053245 zoomed sprites + GX400 + K007121, YM2151 +
+                       K053260/K007232 48 kHz; without a file: Viper Strike)
+  williams / midway [-f frames] [file.zip]
+                       Williams and Midway arcade games on the TV (Defender,
+                       Robotron: 2084, Joust, Sinistar; Midway Y/T-Unit Smash
+                       TV, Mortal Kombat, NBA Jam; dual MC6809E + SC1/SC2
+                       Blitter + DAC, or 32-bit TMS34010 GSP + DMA2 + YM2151
+                       + OKI6295 48 kHz, .sav CMOS; no file: Cybertron: 2084)
+  irem [-f frames] [file.zip]
+                       Irem M72 / M92 arcade games on the TV (R-Type, R-Type
+                       II, Ninja Spirit, In the Hunt, Undercover Cops,
+                       GunForce II; NEC V30/V33 + Z80, rowscroll tilemaps +
+                       DMA sprites, YM2151 + GA20 4-ch PCM / DAC 48 kHz,
+                       55 Hz; without a file: R-Force: Bydo Assault)
+  taito [-f frames] [file.zip]
+                       Taito Classic and F2 / B-System arcade games on the TV
+                       (Bubble Bobble, Rainbow Islands, The NewZealand Story,
+                       Rastan, Puzzle Bobble, Liquid Kids; 68000 / Z80,
+                       TC0100SCN + TC0200OBJ zoomed sprites, YM2151 / YM2203 /
+                       YM2610 ADPCM 48 kHz; without a file: Bubble Dragons F2)
+  pico8 [-f frames] [file.p8|.p8.png]
+                       PICO-8 128 x 128 16-colour fantasy console on the TV
+                       (640 x 640, 60 Hz; .p8 text or .p8.png steganography
+                       cartridge, in .zip too; 16.16 fixed-point PICO-8 Lua
+                       VM + 4-ch 48 kHz synth, 256 B .sav; no file: Celeste)
+  jaguar [-f frames] [file.j64|.jag|.rom]
+                       Atari Jaguar 64-bit console on the TV (68000 13.3 MHz
+                       + Tom GPU 32-bit RISC 26.6 MHz + 64-bit Object
+                       Processor + 64-bit Blitter + 16-bit Atari CRY + Jerry
+                       DSP 48 kHz, 128 B EEPROM .sav; no file: Tempest 64)
+  pcfx [-f frames] [file.cue|.iso]
+                       NEC PC-FX 32-bit console on the TV (NEC V810 21.5 MHz
+                       + FPU, HuC6272 KING BG0..BG3 affine/YUV + SCSI DMA +
+                       ADPCM, dual HuC6270 VDC, HuC6273 RAINBOW, HuC6230 PSG
+                       + Redbook CD-DA 48 kHz, 32 KB .sav; no file: a game)
+  n64 [-f frames] [file.z64|.n64|.v64]
+                       Nintendo 64 64-bit 3D console on the TV (VR4300
+                       93.75 MHz + COP1 FPU, 8 MB RDRAM, carts up to 16 MB,
+                       HLE Fast3D / F3DEX / F3DEX2 + Z-buffered RDP 3D
+                       rasterizer + AI 48 kHz sound, 32 KB .sav; no file:
+                       Star Wing 64)
   snd <command>        sound (prototype): snd init, snd beep [Hz] [ms] (a
                        test tone), snd vol 0..100, snd status, snd stop -
                        48 kHz on HDMI (after "video init") and on SCART (L/R)
@@ -719,11 +795,17 @@ files (moof). Upload the files over FTP. Earlier v4 releases could corrupt a
 file uploaded over FTP to a USB disk (a few dozen bytes in a few places; a bug
 in the handling of the USB controller's DMA, fixed) - files uploaded before
 are worth comparing with the original.
-A PC with DOS: "dos file.exe" or Enter in the explorer (.exe, .com); one
-program without data files next to it (Magicland Dizzy from 1993 needs none:
+A PC with DOS: "dos file.exe" or Enter in the explorer (.exe, .com, or a
+multi-file .zip such as DOOM: 386 32-bit protected mode / DOS/4GW, 8 MB XMS,
+VGA Mode 13h and Mode X, AdLib YM3812 OPL2 + Sound Blaster 2.0 DMA + PC
+speaker sound at 48 kHz; Magicland Dizzy from 1993 needs no extra files:
 space on the settings screen, Z / X or the arrows - walk, K or up - jump,
-space or Enter - pick up / use). A frame takes about 2.5-4 ms + 2-2.5 ms of
-drawing (of 14.3 ms). Tested on the Comsat: Magicland Dizzy (DOS).
+space or Enter - pick up / use). Tested on the S3811 box:
+Magicland Dizzy (5.7 + 1.4 ms/frame), Fantasy World Dizzy (3.4 + 0.9 ms/frame),
+and Shareware DOOM v1.9 (E1M1 3D 9.2-10.2 ms/VGA frame, live 48 kHz sound play
+11.5 ms/VGA frame, DEMO1/DEMO2 13.6-13.9 ms/VGA frame, inside the 14.3 ms 70 Hz
+budget with 15,520 B run_pm32 in 16 KB I-cache, TryRunTics idle-skip, Mode X
+wall/span/plane/sprite/patch/BSP/trig fusion, 4.80x 486DX2-66 clock, OPL2/SB).
 Amiga 500: "amiga file.adf" or Enter in the explorer; a Kickstart (kick.rom)
 or the free AROS replacement (aros-rom.bin and aros-ext.bin from
 aros.sourceforge.io) in amiga/ is needed. The disk is read as a real drive

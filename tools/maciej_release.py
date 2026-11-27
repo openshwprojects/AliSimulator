@@ -134,9 +134,11 @@ COMMANDS = {
         "snd": "<init|beep|status|stop|vol>: the sound (a prototype): the S3811's sound engine set up as dump.bin "
                "does, 48 kHz on HDMI and the SCART's analog out; beep [Hz] [ms] plays a test tone; NES games play "
                "their sound through it",
-        "dos": "[-f frames] [-k script] <file.exe>: a DOS PC (a 286 AT with a VGA: text, CGA, EGA and 256-colour "
-               "modes) on the TV (320 x 200, three times as large) running a DOS program (.exe, .com); the BIOS and "
-               "DOS are built in; no sound. The USB keyboard is the PC's (Esc ends the player)",
+        "dos": "[-f frames] [-k script] <file.exe|.zip>: a 386 DOS PC (real mode + 386 32-bit protected mode / DOS/4GW, "
+               "8 MB XMS, VGA Mode 13h / Mode X, 48 kHz AdLib YM3812 OPL2 + Sound Blaster 2.0 DMA + PC Speaker) on the TV "
+               "(320 x 200, three times as large) running a DOS program (.exe, .com, or multi-file .zip such as DOOM). "
+               "The USB keyboard is the PC's (Esc ends the player)",
+        "pc386": "the same as dos",
         "megadrive": "[-r j|u|e] [-f frames] [-k script] <file>: a Sega Mega Drive / Genesis game on the TV "
                      "(320 x 224 or 256 x 224, three times as large; .md, .gen, .bin, .smd; NTSC or PAL from the "
                      "header's region or -r) with its sound (YM2612 and PSG): X = B, Z = A, Tab / Space = C, Enter = "
@@ -293,6 +295,49 @@ COMMANDS = {
         "arcade": "[-f frames] [-k script] [file.zip]: a Golden-Age Z80 arcade game on the TV (Namco Pac-Man / Ms. "
                   "Pac-Man WSG, Namco Galaxian starfield, Konami Frogger / Scramble dual-Z80 + AY-3-8910, Nintendo Donkey "
                   "Kong DMA + DAC; no file: built-in Maze Chomp)",
+        "x68k": "[-f frames] [-k script] <file.dim|.xdf|.hdf|.x>: a Sharp X68000 on the TV (256 x 256 / 512 x 512 / 768 x "
+                "512, 55.45 Hz; 10 MHz 68000, 2 MB RAM, 16/256/65536-colour GVRAM, Text VRAM, Cynthia 128 sprites + "
+                "BG0/BG1, 4 MHz YM2151 OPM + MSM6258 ADPCM @ 48 kHz, 16 KB .sav SRAM; built-in IPL/IOCS + CGROM or "
+                "iplrom.dat/cgrom.dat in x68k/)",
+        "a1200": "[-f frames] [-k script] [file.adf|.adz|.zip]: a Commodore Amiga 1200 (PAL, 14.18 MHz 68EC020, 2 MB AGA "
+                 "Chip RAM, 256-colour / HAM8 / Dual Playfield + 2 MB Blitter + Copper, 4-ch Paula @ 48 kHz; uses "
+                 "a1200.rom / kick.rom / a1200.zip in a1200/ or amiga/, else built-in AGA boot)",
+        "3do": "[-f frames] [-k script] [file.iso|.cue]: a 3DO Interactive Multiplayer on the TV (320 x 240 x3, 59.94 Hz; "
+               "12.5 MHz ARM60, 2 MB DRAM + 1 MB VRAM, Madam CEL Quad Projector with 1..16-bpp Packed/Unpacked CELs + PIXC "
+               "shading + SPORT, Clio, DSPP + Redbook CD-DA @ 48 kHz, 32 KB .sav NVRAM; built-in Opera FS / Portfolio OS "
+               "2.5 HLE or panafz10.bin in 3do/; no file: built-in 3D CEL showcase)",
+        "neocd": "[-f frames] [-k script] [file.cue|.iso]: an SNK Neo Geo CD on the TV (320 x 224 x3, 59.60 Hz; 12 MHz "
+                 "68000 + Z80, 2 MB PRG + 4 MB SPR + 1 MB PCM + 128 KB FIX + 64 KB Z80 RAM, LSPC2, YM2610 + Redbook CD-DA "
+                 "@ 48 kHz, 8 KB .sav BRAM; built-in ISO9660/IPL.TXT HLE BIOS or neocd.bin in neocd/; no file: showcase)",
+        "pc98": "[-f frames] [-k script] [file.fdi|.hdi|.d88|.hdm|.zip]: an NEC PC-9801VM / VX on the TV (640 x 400 x2, "
+                "56.42 Hz; 10 MHz V30/286/386, dual uPD7220 GDC 16-colour GVRAM + 80x25 Text/KCG, GRCG + EGC, YM2203/YM2608 "
+                "OPN FM/SSG + PIT beep @ 48 kHz; built-in IPL/BIOS + PC-98 DOS HLE; no file: built-in showcase)",
+        "konami": "[-f frames] [-k script] [file.zip]: a Konami classic arcade game on the TV (TMNT, Turtles in Time, "
+                  "Sunset Riders, X-Men, Nemesis / Gradius, Contra; 68000 / MC6809E + Z80, K052109 + K051960/K053245 "
+                  "zoomed sprites + GX400 + K007121, YM2151 + K053260/K007232 @ 48 kHz; no file: Viper Strike GX)",
+        "williams": "[-f frames] [-k script] [file.zip]: a Williams or Midway classic arcade game on the TV (Defender, "
+                    "Robotron: 2084, Joust, Sinistar; Midway Y/T-Unit Smash TV, Mortal Kombat, NBA Jam; dual MC6809E + "
+                    "SC1/SC2 Blitter + DAC, or 32-bit TMS34010 GSP + DMA2 + YM2151 + OKI6295 @ 48 kHz, 1 KB .sav CMOS; "
+                    "no file: Cybertron: 2084)",
+        "midway": "the same as williams",
+        "irem": "[-f frames] [-k script] [file.zip]: an Irem M72 or M92 classic arcade game on the TV (R-Type, R-Type II, "
+                "Ninja Spirit, In the Hunt, Undercover Cops, GunForce II; NEC V30/V33 + Z80, rowscroll tilemaps + DMA "
+                "sprites, YM2151 + Irem GA20 4-ch PCM / DAC @ 48 kHz; no file: R-Force: Bydo Assault)",
+        "taito": "[-f frames] [-k script] [file.zip]: a Taito Classic or F2 / B-System arcade game on the TV (Bubble "
+                 "Bobble, Rainbow Islands, The NewZealand Story, Rastan, Puzzle Bobble, Liquid Kids; 68000 / Z80, "
+                 "TC0100SCN + TC0200OBJ zoomed sprites, YM2151 / YM2203 / YM2610 ADPCM @ 48 kHz; no file: Bubble Dragons F2)",
+        "pico8": "[-f frames] [-k script] [file.p8|.p8.png]: a PICO-8 128 x 128 16-colour fantasy console cartridge (.p8 "
+                 "text or .p8.png steganography cart, inside a .zip too) on the TV (640 x 640, 60 Hz; 16.16 fixed-point "
+                 "PICO-8 Lua VM + 4-ch 48 kHz waveform synth, 256 B .sav cartdata; no file: CelestePeak-8)",
+        "jaguar": "[-f frames] [-k script] [file.j64|.jag|.rom]: an Atari Jaguar 64-bit cartridge or homebrew on the TV "
+                  "(13.3 MHz 68000 + 26.6 MHz Tom GPU 32-bit RISC + 64-bit Object Processor + 64-bit Blitter + 16-bit "
+                  "Atari CRY + Jerry DSP 48 kHz sound, 128 B .sav EEPROM; no file: Tempest Jaguar 64)",
+        "pcfx": "[-f frames] [-k script] [file.cue|.iso]: an NEC PC-FX 32-bit multimedia CD-ROM disc on the TV (21.5 MHz "
+                "V810 + FPU + KING BG0..BG3 affine/YUV + dual HuC6270 VDC + RAINBOW + HuC6230 PSG / ADPCM / Redbook CD-DA "
+                "@ 48 kHz, 32 KB .sav SRAM, clean-room IPL or pcfx.rom in pcfx/; no file: Star Soldier FX-32)",
+        "n64": "[-f frames] [-k script] [file.z64|.n64|.v64]: a Nintendo 64 64-bit 3D cartridge (up to 16 MB) on the TV "
+               "(93.75 MHz VR4300 + COP1 FPU + 8 MB RDRAM + HLE Fast3D / F3DEX / F3DEX2 + Z-buffered RDP 3D rasterizer + "
+               "AI 48 kHz sound, 32 KB .sav MemPak/EEPROM; no file: Star Wing 64)",
         "rf": "the aerial input: the MxL603 tuner (I2C 0x60) and the S3811's DVB-T demodulator as dump.bin drives "
               "them -- init, tune <MHz|channel> [6|7|8], status (lock, level, quality, errors, the stream's "
               "parameters), scan, services (the multiplex's channel names), ts <s> [file] (the PIDs, or a .ts "

@@ -24,6 +24,9 @@ typedef signed char s8;
 #define X0          0x71
 #define Y0          0x24
 #define SND_RING    4096
+#define TRACK_WORDS 6334
+#define WORD_CYCLES 454                 /* 32 us per MFM word at 14.18 MHz */
+#define DISK_TURBO  56                  /* 8x turbo MFM DMA transfer */
 
 struct cd32_sprite {
     u32 pt, x, vstart, vstop, state;
@@ -44,17 +47,33 @@ struct cd32_paula_ch {
 struct cd32_cia {
     u8  pra, prb, ddra, ddrb, sdr, icr, mask, cra, crb;
     u16 ta, tb, la, lb;
-    u32 tod;
+    u32 tod, alarm, latch;
+    u8  latched, tod_run;
+    s32 last;
+};
+
+struct cd32_disk {
+    const u8 *adf;
+    u32 size;
+    int cyl, side, motor, sel, changed;
+    int track_cyl, track_side;
+    u16 len_was;
+    u32 pt;
+    int dma;
+    s32 end;
 };
 
 struct cd32_state {
     const struct cdrom_toc *cd;
     u16 pad;
+    u8  is_a1200;
     u8  ext_roms;
+    u8  has_ext_rom;
     u8  overlay;
     u8  nvram_dirty;
+    u8  lof;
     s32 now_t, line_limit;
-    u32 cur_line, frames;
+    u32 cur_line, frames, cycles_hi;
 
     /* Custom chip registers ($DFF000..$DFF1FE) */
     u16 reg[256];
@@ -80,6 +99,16 @@ struct cd32_state {
     struct cd32_sprite spr[8];
     struct cd32_paula_ch aud[4];
     struct cd32_cia cia[2];
+    struct cd32_disk disk;
+
+    /* Amiga 1200 Gayle ID, keyboard serial queue & mouse */
+    u8  gayle_id;
+    u8  kq[64], held_was[16];
+    int kq_head, kq_tail, kb_wait;
+    s32 kb_time;
+    char tq[256];
+    int tq_head, tq_tail, tq_frame;
+    u8  mouse_x, mouse_y, mouse_btn;
 
     /* Akiko ASIC ($B80000..$B8003F) */
     u32 ak_intena, ak_intreq;
@@ -103,6 +132,7 @@ struct cd32_state {
 
 static void cd32_idle_branch(u32 at);
 #define M68K_BRANCH(at) cd32_idle_branch(at)
+#define M68K_CPU_020
 
 #define M68K_EXTERNAL_STATE                                                     \
     struct cd32_mem {                                                           \
@@ -112,8 +142,10 @@ static void cd32_idle_branch(u32 at);
         u8 *m_wmap[256];                                                        \
         u8  m_optab[65536];                                                     \
         u16 chip[0x100000];         /* 2 MB Chip RAM (host u16 words) */        \
-        u16 kick[0x40000];          /* 512 KB Kickstart 3.1 ROM */              \
-        u16 ext[0x40000];           /* 512 KB CD32 Extended ROM */              \
+        u16 kick[0x40000];          /* 512 KB Kickstart 3.0/3.1 ROM */          \
+        u16 ext[0x40000];           /* 512 KB Extended ROM */                   \
+        u16 disk_track[TRACK_WORDS];/* MFM encoded floppy track */              \
+        u8  disk_sync[TRACK_WORDS];                                             \
         u8  nvram[1024];            /* 1 KB Akiko NVRAM (.sav) */               \
         u16 planes[8][64];          /* Fetched scanline bitplane words */       \
         u32 chunky[64 * 4];         /* Unpacked 8-bit chunky pixels */          \
@@ -149,12 +181,13 @@ _Static_assert(sizeof(struct cd32_mem) <= EMU_RAM_SIZE, "cd32_mem exceeds EMU_RA
 
 enum {
     DMACONR = 0x002, VPOSR = 0x004, VHPOSR = 0x006, JOY0DAT = 0x00A, JOY1DAT = 0x00C, CLXDAT = 0x00E,
-    ADKCONR = 0x010, POTGOR = 0x016, SERDATR = 0x018, INTENAR = 0x01C, INTREQR = 0x01E,
-    VPOSW = 0x02A, COPCON = 0x02E, POTGO = 0x034, BLTCON0 = 0x040, BLTCON1 = 0x042,
+    ADKCONR = 0x010, POTGOR = 0x016, SERDATR = 0x018, DSKBYTR = 0x01A, INTENAR = 0x01C, INTREQR = 0x01E,
+    DSKPTH = 0x020, DSKPTL = 0x022, DSKLEN = 0x024, VPOSW = 0x02A, COPCON = 0x02E, POTGO = 0x034,
+    JOYTEST = 0x036, BLTCON0 = 0x040, BLTCON1 = 0x042,
     BLTAFWM = 0x044, BLTALWM = 0x046, BLTCPTH = 0x048, BLTBPTH = 0x04C, BLTAPTH = 0x050, BLTDPTH = 0x054,
     BLTSIZE = 0x058, BLTCON0L = 0x05A, BLTSIZV = 0x05C, BLTSIZH = 0x05E,
     BLTCMOD = 0x060, BLTBMOD = 0x062, BLTAMOD = 0x064, BLTDMOD = 0x066,
-    BLTCDAT = 0x070, BLTBDAT = 0x072, BLTADAT = 0x074, LISAID = 0x07C,
+    BLTCDAT = 0x070, BLTBDAT = 0x072, BLTADAT = 0x074, DSKSYNC = 0x07E, LISAID = 0x07C,
     COP1LCH = 0x080, COP2LCH = 0x084, COPJMP1 = 0x088, COPJMP2 = 0x08A,
     DIWSTRT = 0x08E, DIWSTOP = 0x090, DDFSTRT = 0x092, DDFSTOP = 0x094,
     DMACON = 0x096, INTENA = 0x09A, INTREQ = 0x09C, ADKCON = 0x09E,
@@ -185,10 +218,12 @@ static void cd32_map_memory(void)
     /* $000000..$1FFFFF: 2 MB Chip RAM (32 x 64 KB pages) */
     for (int i = 0; i < 0x20; i++)
         rmap[i] = wmap[i] = (u8 *)M->chip + ((u32)i << 16);
-    /* $E00000..$E7FFFF: 512 KB CD32 Extended ROM */
-    for (int i = 0; i < 8; i++)
-        rmap[0xE0 + i] = (u8 *)M->ext + ((u32)i << 16);
-    /* $F80000..$FFFFFF: 512 KB Kickstart 3.1 ROM */
+    /* $E00000..$E7FFFF: 512 KB Extended ROM (CD32 ext or AROS ext when present) */
+    if (!S.is_a1200 || S.has_ext_rom) {
+        for (int i = 0; i < 8; i++)
+            rmap[0xE0 + i] = (u8 *)M->ext + ((u32)i << 16);
+    }
+    /* $F80000..$FFFFFF: 512 KB Kickstart 3.0 / 3.1 ROM */
     for (int i = 0; i < 8; i++)
         rmap[0xF8 + i] = (u8 *)M->kick + ((u32)i << 16);
     if (S.overlay) {
@@ -208,9 +243,9 @@ static void cd32_idle_branch(u32 at)
     const u8 *p = rmap[(t >> 16) & 0xFF];
     if (!p) return;
     u16 op = *(const u16 *)(p + (t & 0xFFFF));
-    /* Tight TST / CMPI loop on Chip RAM or VPOSR/INTREQR ($DFF004/$DFF01E) while copper & blitter are idle */
+    /* Tight TST / CMPI loop on Chip RAM or VPOSR/INTREQR ($DFF004/$DFF01E) while copper, blitter & floppy are idle */
     if (((op & 0xFF00u) == 0x4A00u || (op & 0xFF00u) == 0x0C00u || op == 0x2039u || op == 0x3039u) &&
-        !S.blit_busy && S.cop_t > S.line_limit) {
+        !S.blit_busy && !S.disk.dma && S.cop_t > S.line_limit) {
         if (m.clock < S.line_limit)
             m.clock = S.line_limit;
     }
@@ -354,120 +389,144 @@ static void akiko_write16(u32 off, u16 v)
 
 /* ---- 2 MB Blitter (Area & Line Modes) ---- */
 
-static u16 blit_minterm(u32 mt, u16 a, u16 b, u16 c)
+static u32 blit_minterm(u32 lf, u32 a, u32 b, u32 c)
 {
-    u16 res = 0;
-    if (mt & 0x80u) res |=  a &  b &  c;
-    if (mt & 0x40u) res |=  a &  b & ~c;
-    if (mt & 0x20u) res |=  a & ~b &  c;
-    if (mt & 0x10u) res |=  a & ~b & ~c;
-    if (mt & 0x08u) res |= ~a &  b &  c;
-    if (mt & 0x04u) res |= ~a &  b & ~c;
-    if (mt & 0x02u) res |= ~a & ~b &  c;
-    if (mt & 0x01u) res |= ~a & ~b & ~c;
-    return res;
+    switch (lf) {
+    case 0xF0: return a;
+    case 0xCC: return b;
+    case 0xAA: return c;
+    case 0x00: return 0;
+    case 0xFF: return 0xFFFFu;
+    case 0xCA: return (a & b) | (~a & c);
+    case 0xFA: return a | c;
+    case 0xEA: return (a & b) | c;
+    case 0x0A: return ~a & c;
+    case 0x5A: return a ^ c;
+    case 0xFC: return a | b;
+    case 0x3C: return a ^ b;
+    default: {
+        u32 d = 0;
+        if (lf & 0x01u) d |= ~a & ~b & ~c;
+        if (lf & 0x02u) d |= ~a & ~b &  c;
+        if (lf & 0x04u) d |= ~a &  b & ~c;
+        if (lf & 0x08u) d |= ~a &  b &  c;
+        if (lf & 0x10u) d |=  a & ~b & ~c;
+        if (lf & 0x20u) d |=  a & ~b &  c;
+        if (lf & 0x40u) d |=  a &  b & ~c;
+        if (lf & 0x80u) d |=  a &  b &  c;
+        return d;
+    }
+    }
+}
+
+static u32 blit_fill_word(u32 d, u32 *carry, u32 inclusive)
+{
+    u32 out = 0, c = *carry;
+    for (int i = 0; i < 16; i++) {
+        u32 bit = (d >> i) & 1u;
+        if (inclusive) {
+            out |= (bit | c) << i;
+            c ^= bit;
+        } else {
+            c ^= bit;
+            out |= c << i;
+        }
+    }
+    *carry = c;
+    return out;
 }
 
 static void blit_start(u32 w, u32 h)
 {
     if (!w) w = 64;
     if (!h) h = 1024;
-    u16 con0 = R(BLTCON0), con1 = R(BLTCON1);
-    u32 ash = con0 >> 12, bsh = con1 >> 12, mt = con0 & 0xFFu;
-    int desc = (con1 & 2u) != 0;
-    int step = desc ? -2 : 2;
-    s32 amod = (s16)R(BLTAMOD), bmod = (s16)R(BLTBMOD), cmod = (s16)R(BLTCMOD), dmod = (s16)R(BLTDMOD);
-    u16 afwm = R(BLTAFWM), alwm = R(BLTALWM);
-    u32 zero_acc = 0;
+    u32 con0 = R(BLTCON0), con1 = R(BLTCON1);
 
-    if (con1 & 1u) {                                    /* Line draw mode */
-        s32 dx_s = (con1 & 0x10u) ? ((con1 & 0x04u) ? -1 : 1) : ((con1 & 0x08u) ? -1 : 1);
-        s32 dy_s = (con1 & 0x10u) ? ((con1 & 0x08u) ? -1 : 1) : ((con1 & 0x04u) ? -1 : 1);
-        int oct_steep = !(con1 & 0x10u);
-        s32 acc = (s16)S.bltapt;
-        u32 bit = 15u - ash;
-        u32 c_pt = S.bltcpt & CHIP_MASK, d_pt = S.bltdpt & CHIP_MASK;
-        u16 bdat = R(BLTBDAT);
+    if (con1 & 1u) {                                    /* Line draw mode (UAE / HRM exact octant & SING) */
+        u32 lf = con0 & 0xFFu, ash = con0 >> 12, bsh = con1 >> 12;
+        u32 b = R(BLTBDAT), tex = ((b >> bsh) | (b << (16u - bsh))) & 0xFFFFu;
+        u32 a = R(BLTADAT) & R(BLTAFWM);
+        u32 cmod = (u32)(s32)(s16)R(BLTCMOD), amod = (u32)(s32)(s16)R(BLTAMOD), bmod = (u32)(s32)(s16)R(BLTBMOD);
+        int sign = (con1 >> 6) & 1, onedot = 0;
+        u32 nz = 0;
         for (u32 i = 0; i < h; i++) {
-            u16 mask = (u16)(1u << bit);
-            u16 cw = CHIPW(c_pt);
-            u16 b_px = ((bdat >> bsh) & 1u) ? 0xFFFFu : 0u;
-            bsh = (bsh - 1u) & 15u;
-            u16 dw = blit_minterm(mt, mask, b_px, cw);
-            if (con0 & 0x100u) CHIPW(d_pt) = dw;
-            zero_acc |= dw;
-            if (acc < 0) {
-                acc += amod;
-                if (oct_steep) { c_pt += (u32)(dy_s * cmod); d_pt = c_pt; }
-                else {
-                    if (dx_s > 0) { if (bit == 0) { bit = 15; c_pt += 2; } else bit--; }
-                    else          { if (bit == 15) { bit = 0; c_pt -= 2; } else bit++; }
-                    d_pt = c_pt;
+            u32 c = CHIPW(S.bltcpt);
+            u32 ad = a >> ash;
+            if ((con1 & 2u) && onedot)
+                ad = 0;
+            onedot = 1;
+            u32 d = blit_minterm(lf, ad, (tex & 1u) ? 0xFFFFu : 0u, c) & 0xFFFFu;
+            nz |= d;
+            if (con0 & 0x800u)
+                S.bltapt += sign ? bmod : amod;
+            if (!sign) {
+                if (con1 & 0x10u) {
+                    S.bltcpt += (con1 & 8u) ? (0u - cmod) : cmod;
+                    onedot = 0;
+                } else if (con1 & 8u) {
+                    if (ash-- == 0u) { ash = 15u; S.bltcpt -= 2u; }
+                } else if (++ash == 16u) {
+                    ash = 0u; S.bltcpt += 2u;
+                }
+            }
+            if (con1 & 0x10u) {
+                if (con1 & 4u) {
+                    if (ash-- == 0u) { ash = 15u; S.bltcpt -= 2u; }
+                } else if (++ash == 16u) {
+                    ash = 0u; S.bltcpt += 2u;
                 }
             } else {
-                acc += bmod;
-                if (dx_s > 0) { if (bit == 0) { bit = 15; c_pt += 2; } else bit--; }
-                else          { if (bit == 15) { bit = 0; c_pt -= 2; } else bit++; }
-                c_pt += (u32)(dy_s * cmod);
-                d_pt = c_pt;
+                S.bltcpt += (con1 & 4u) ? (0u - cmod) : cmod;
+                onedot = 0;
             }
+            sign = (s16)S.bltapt < 0;
+            tex = ((tex << 1) | (tex >> 15)) & 0xFFFFu;
+            if (con0 & 0x100u)
+                CHIPW(S.bltdpt) = (u16)d;
+            S.bltdpt = S.bltcpt;
         }
-        S.bzero = (zero_acc == 0);
+        R(BLTCON0) = (u16)((con0 & 0x0FFFu) | (ash << 12));
+        R(BLTCON1) = (u16)((con1 & ~0x40u) | ((u32)sign << 6));
+        S.bzero = !nz;
         S.blit_busy = 1;
-        S.blit_end = S.now_t + (s32)(h * 8) + 8;
+        S.blit_end = S.now_t + (s32)(h * 8u) + 8;
         return;
     }
 
-    u16 prev_a = 0, prev_b = 0;
-    int fe = (con1 & 0x18u) != 0, excl = (con1 & 0x10u) != 0;
-    for (u32 r = 0; r < h; r++) {
-        u32 fc = (con1 & 4u) ? 1u : 0u;
-        for (u32 c = 0; c < w; c++) {
-            u16 aw = (con0 & 0x800u) ? CHIPW(S.bltapt) : R(BLTADAT);
-            u16 bw = (con0 & 0x400u) ? CHIPW(S.bltbpt) : R(BLTBDAT);
-            u16 cw = (con0 & 0x200u) ? CHIPW(S.bltcpt) : R(BLTCDAT);
-            if (con0 & 0x800u) S.bltapt += step;
-            if (con0 & 0x400u) S.bltbpt += step;
-            if (con0 & 0x200u) S.bltcpt += step;
-
-            if (c == 0)     aw &= afwm;
-            if (c == w - 1) aw &= alwm;
-
-            u16 sa, sb;
-            if (!desc) {
-                sa = ash ? (u16)((prev_a << (16 - ash)) | (aw >> ash)) : aw;
-                sb = bsh ? (u16)((prev_b << (16 - bsh)) | (bw >> bsh)) : bw;
-            } else {
-                sa = ash ? (u16)((prev_a >> (16 - ash)) | (aw << ash)) : aw;
-                sb = bsh ? (u16)((prev_b >> (16 - bsh)) | (bw << bsh)) : bw;
-            }
-            prev_a = aw; prev_b = bw;
-
-            u16 dw = blit_minterm(mt, sa, sb, cw);
-            if (fe) {
-                u16 filled = 0;
-                for (int b = 0; b < 16; b++) {
-                    u32 bit = (dw >> b) & 1u;
-                    u32 out_b = excl ? (fc ^ bit) : (fc | bit);
-                    fc ^= bit;
-                    filled |= (u16)(out_b << b);
-                }
-                dw = filled;
-            }
-            if (con0 & 0x100u) {
-                CHIPW(S.bltdpt) = dw;
-                S.bltdpt += step;
-            }
-            zero_acc |= dw;
+    u32 use = con0 >> 8, lf = con0 & 0xFFu;
+    u32 ash = con0 >> 12, bsh = con1 >> 12, desc = con1 & 2u, fill = con1 & 0x18u, nz = 0;
+    u32 fwm = R(BLTAFWM), lwm = R(BLTALWM), aold = 0, bold = 0;
+    u32 adat = R(BLTADAT), bdat = R(BLTBDAT), cdat = R(BLTCDAT);
+    s32 inc = desc ? -2 : 2;
+    s32 amod = (s16)R(BLTAMOD), bmod = (s16)R(BLTBMOD), cmod = (s16)R(BLTCMOD), dmod = (s16)R(BLTDMOD);
+    if (desc) { amod = -amod; bmod = -bmod; cmod = -cmod; dmod = -dmod; }
+    for (u32 y = 0; y < h; y++) {
+        u32 carry = (con1 >> 2) & 1u;
+        for (u32 x = 0; x < w; x++) {
+            if (use & 8u) { adat = CHIPW(S.bltapt); S.bltapt += (u32)inc; }
+            if (use & 4u) { bdat = CHIPW(S.bltbpt); S.bltbpt += (u32)inc; }
+            if (use & 2u) { cdat = CHIPW(S.bltcpt); S.bltcpt += (u32)inc; }
+            u32 a = adat;
+            if (x == 0u)     a &= fwm;
+            if (x == w - 1u) a &= lwm;
+            u32 as = desc ? ((a << 16 | aold) >> (16u - ash)) : ((aold << 16 | a) >> ash);
+            u32 bs = desc ? ((bdat << 16 | bold) >> (16u - bsh)) : ((bold << 16 | bdat) >> bsh);
+            aold = a; bold = bdat;
+            u32 d = blit_minterm(lf, as & 0xFFFFu, bs & 0xFFFFu, cdat) & 0xFFFFu;
+            if (fill)
+                d = blit_fill_word(d, &carry, con1 & 8u);
+            nz |= d;
+            if (use & 1u) { CHIPW(S.bltdpt) = (u16)d; S.bltdpt += (u32)inc; }
         }
-        if (con0 & 0x800u) S.bltapt += desc ? -amod : amod;
-        if (con0 & 0x400u) S.bltbpt += desc ? -bmod : bmod;
-        if (con0 & 0x200u) S.bltcpt += desc ? -cmod : cmod;
-        if (con0 & 0x100u) S.bltdpt += desc ? -dmod : dmod;
+        if (use & 8u) S.bltapt += (u32)amod;
+        if (use & 4u) S.bltbpt += (u32)bmod;
+        if (use & 2u) S.bltcpt += (u32)cmod;
+        if (use & 1u) S.bltdpt += (u32)dmod;
     }
-    S.bzero = (zero_acc == 0);
+    R(BLTADAT) = (u16)adat; R(BLTBDAT) = (u16)bdat; R(BLTCDAT) = (u16)cdat;
+    S.bzero = !nz;
     S.blit_busy = 1;
-    S.blit_end = S.now_t + (s32)(w * h * 4) + 8;
+    S.blit_end = S.now_t + (s32)(w * h * 4u) + 8;
 }
 
 /* ---- Copper ---- */
@@ -665,8 +724,9 @@ static void render_aga_line(u32 line, u16 *pic)
     if (pr > dr) pr = dr;
     if (!words || pl > pr) pl = pr = 0;
 
-    int is_ehb = (bpu == 6u && !(con0 & 0x400u) && (R(BPLCON2) & 0x0200u) == 0u && S.line_pal15[63] == 0u);
-    if (!S.nchg && !ham && !hires && !is_ehb) {
+    int dpf = (con0 & 0x0400u) != 0 && !ham;
+    int is_ehb = (bpu == 6u && !dpf && (R(BPLCON2) & 0x0200u) == 0u && S.line_pal15[63] == 0u);
+    if (!S.nchg && !ham && !hires && !is_ehb && !dpf) {
         const u16 *pal = S.line_pal15;
         u16 pal0 = pal[0];
         u32 l0 = pl < X0 ? X0 : (pl > X0 + CD32_W ? X0 + CD32_W : pl);
@@ -681,6 +741,10 @@ static void render_aga_line(u32 line, u16 *pic)
     } else {
         int chg_i = 0;
         u32 hold24 = S.aga_rgb24[0];
+        u32 pf2pri = (R(BPLCON2) & 0x0040u) != 0;
+        u32 pf2of_code = (R(BPLCON3) >> 10) & 7u;
+        u32 pf2_base = pf2of_code ? (1u << pf2of_code) : 0u;
+        if (!pf2of_code && bpu <= 6u) pf2_base = 8u;        /* OCS/ECS default PF2 offset */
         for (u32 x = X0; x < X0 + CD32_W; x++) {
             while (chg_i < S.nchg && S.chg[chg_i].x <= x) {
                 S.line_pal15[S.chg[chg_i].idx & 0xFFu] = S.chg[chg_i].val15;
@@ -711,6 +775,14 @@ static void render_aga_line(u32 line, u16 *pic)
                 case 3: hold24 = (hold24 & 0xFF00FFu) | (v4 << 8); break;
                 }
                 out[x - X0] = rgb24_to_15(hold24);
+            } else if (dpf) {                               /* AGA/OCS Dual Playfield */
+                u32 raw = hires ? ch[2u * (x - xs)] : ch[x - xs];
+                u32 p1 = (raw & 1u) | ((raw >> 1) & 2u) | ((raw >> 2) & 4u) | ((raw >> 3) & 8u);
+                u32 p2 = ((raw >> 1) & 1u) | ((raw >> 2) & 2u) | ((raw >> 3) & 4u) | ((raw >> 4) & 8u);
+                u32 idx = 0;
+                if (pf2pri) idx = p2 ? (pf2_base + p2) : p1;
+                else        idx = p1 ? p1 : (p2 ? (pf2_base + p2) : 0u);
+                out[x - X0] = S.line_pal15[(idx ^ bpl_xor) & 0xFFu];
             } else if (hires) {
                 u8 c0 = ch[2u * (x - xs)] ^ bpl_xor;
                 u8 c1 = ch[2u * (x - xs) + 1u] ^ bpl_xor;
@@ -780,42 +852,169 @@ static u8 cd32_button_bits(void)
     return b;
 }
 
+static void put_long_mfm(u16 *w, u32 v)
+{
+    w[0] = (u16)(v >> 16);
+    w[1] = (u16)v;
+}
+
+static void a1200_build_track(void)
+{
+    u16 *t = M->disk_track;
+    u8  *sync_at = M->disk_sync;
+    u32 n = 0, trk = (u32)(S.disk.cyl * 2 + S.disk.side);
+    for (u32 i = 0; i < TRACK_WORDS; i++) {
+        t[i] = 0;
+        sync_at[i] = 0;
+    }
+    for (u32 sec = 0; sec < 11u; sec++) {
+        const u8 *data = (S.disk.adf && trk < 160u && (trk * 11u + sec + 1u) * 512u <= S.disk.size)
+                             ? (S.disk.adf + (trk * 11u + sec) * 512u) : 0;
+        t[n++] = 0; t[n++] = 0;
+        t[n] = 0x4489u; sync_at[n++] = 1;
+        t[n] = 0x4489u; sync_at[n++] = 1;
+        u32 hdr[5], sum = 0;
+        hdr[0] = 0xFF000000u | (trk << 16) | (sec << 8) | (11u - sec);
+        for (int i = 1; i < 5; i++) hdr[i] = 0;
+        u16 *h = t + n;
+        for (int i = 0; i < 5; i++) {
+            u32 odd = (hdr[i] >> 1) & 0x55555555u, even = hdr[i] & 0x55555555u;
+            int at = i == 0 ? 0 : 4 + (i - 1) * 2, at_even = i == 0 ? 2 : 4 + 8 + (i - 1) * 2;
+            put_long_mfm(h + at, odd);
+            put_long_mfm(h + at_even, even);
+            sum ^= odd ^ even;
+        }
+        n += 20u;
+        put_long_mfm(t + n, (sum >> 1) & 0x55555555u);
+        put_long_mfm(t + n + 2u, sum & 0x55555555u);
+        n += 4u;
+        u32 dsum = 0;
+        u16 *d = t + n + 4u;
+        for (u32 i = 0; i < 128u; i++) {
+            u32 v = data ? ((u32)data[4u * i] << 24 | (u32)data[4u * i + 1u] << 16 |
+                            (u32)data[4u * i + 2u] << 8 | data[4u * i + 3u]) : 0u;
+            u32 odd = (v >> 1) & 0x55555555u, even = v & 0x55555555u;
+            put_long_mfm(d + 2u * i, odd);
+            put_long_mfm(d + 256u + 2u * i, even);
+            dsum ^= odd ^ even;
+        }
+        dsum &= 0x55555555u;
+        put_long_mfm(t + n, (dsum >> 1) & 0x55555555u);
+        put_long_mfm(t + n + 2u, dsum & 0x55555555u);
+        n += 4u + 512u;
+    }
+    u32 prev = 0;
+    for (u32 i = 0; i < TRACK_WORDS; i++) {
+        if (sync_at[i]) { prev = 1; continue; }
+        u32 d = t[i] & 0x5555u;
+        u32 clk = ~((d << 1) | (d >> 1) | (prev << 15)) & 0xAAAAu;
+        t[i] = (u16)(d | clk);
+        prev = d & 1u;
+    }
+    S.disk.track_cyl = S.disk.cyl;
+    S.disk.track_side = S.disk.side;
+}
+
+static u32 a1200_disk_pos(s32 t)
+{
+    return ((S.cycles_hi + (u32)t) / WORD_CYCLES) % TRACK_WORDS;
+}
+
+static void a1200_disk_start(u32 len)
+{
+    if (S.disk.track_cyl != S.disk.cyl || S.disk.track_side != S.disk.side)
+        a1200_build_track();
+    u32 n = len & 0x3FFFu, at = a1200_disk_pos(S.now_t), wait = 0;
+    S.disk.pt = ((u32)R(DSKPTH) << 16) | R(DSKPTL);
+    if (!(len & 0x4000u) && S.disk.adf && S.disk.sel) {
+        if (S.adkcon & 0x0400u) {
+            u16 sync = R(DSKSYNC);
+            for (wait = 0; wait < TRACK_WORDS; wait++)
+                if (M->disk_track[(at + wait) % TRACK_WORDS] == sync)
+                    break;
+            if (wait == TRACK_WORDS) {
+                S.disk.dma = 1;
+                S.disk.end = NEVER;
+                return;
+            }
+            at += wait + 1u;
+            raise_irq(0x1000u);
+        }
+        for (u32 i = 0; i < n; i++, S.disk.pt += 2u)
+            CHIPW(S.disk.pt) = M->disk_track[(at + i) % TRACK_WORDS];
+    } else {
+        S.disk.pt += n * 2u;
+    }
+    S.disk.dma = 1;
+    S.disk.end = S.now_t + (s32)((wait + n) * DISK_TURBO) + 64;
+}
+
+static void a1200_drive_control(u32 v, u32 old)
+{
+    int sel = !(v & 0x08u);
+    if (sel && (old & 0x08u))
+        S.disk.motor = !(v & 0x80u);
+    if (sel && (old & 0x01u) && !(v & 0x01u)) {
+        if (v & 0x02u) {
+            if (S.disk.cyl > 0) S.disk.cyl--;
+        } else if (S.disk.cyl < 83) {
+            S.disk.cyl++;
+        }
+        if (S.disk.adf)
+            S.disk.changed = 0;
+    }
+    S.disk.side = (v & 0x04u) ? 0 : 1;
+    S.disk.sel = sel;
+}
+
 static u32 custom_read(u32 r, s32 now)
 {
     switch (r) {
     case DMACONR: return S.dmacon | (S.blit_busy ? 0x4000u : 0u) | (S.bzero ? 0x2000u : 0u);
-    case VPOSR:   return 0xA300u | (((u32)now / LINE_CYCLES) >> 8); /* $23 = PAL Alice AGA */
+    case VPOSR:   return ((u32)S.lof << 15) | 0x2300u | (((u32)now / LINE_CYCLES) >> 8);
     case VHPOSR:  return ((((u32)now / LINE_CYCLES) & 0xFFu) << 8) | ((((u32)now % LINE_CYCLES) >> 2) & 0xFFu);
+    case JOY0DAT: return S.is_a1200 ? (((u32)S.mouse_y << 8) | S.mouse_x) : 0u;
     case JOY1DAT: {
         u32 v = 0;
-        if (S.pad & 0x80u) v |= 0x0002u;                /* Right */
-        if (S.pad & 0x40u) v |= 0x0200u;                /* Left */
-        if (((S.pad & 0x20u) != 0) ^ ((v & 2u) != 0))     v |= 0x0001u; /* Down */
-        if (((S.pad & 0x10u) != 0) ^ ((v & 0x200u) != 0)) v |= 0x0100u; /* Up */
+        if (S.pad & 0x80u) v |= 0x0002u;
+        if (S.pad & 0x40u) v |= 0x0200u;
+        if (((S.pad & 0x20u) != 0) ^ ((v & 2u) != 0))     v |= 0x0001u;
+        if (((S.pad & 0x10u) != 0) ^ ((v & 2u) != 0)) v |= 0x0100u;
         return v;
     }
     case POTGOR: {
         u16 p = 0xFF00u;
+        if (S.is_a1200) {
+            if ((S.mouse_btn & 2u) || (S.pad & 0x0100u)) p &= (u16)~0x0400u;
+            if (S.pad & 0x0200u) p &= (u16)~0x4000u;
+            return p;
+        }
         if (S.pad_shift_mode) {
-            /* Shift out 7 buttons + ID marker (bit 7=1, bit 8=0) on bit 14 (DATRY) */
             u8 btns = cd32_button_bits();
             u8 idx = S.pad_shift_idx;
             int pressed = 0;
             if (idx < 7u) pressed = ((btns >> (6u - idx)) & 1u) != 0;
-            else if (idx == 7u) pressed = 0;            /* ID bit 1 = high (not pressed) */
-            else                pressed = 1;            /* ID bit 2+ = low (0) */
+            else if (idx == 7u) pressed = 0;
+            else                pressed = 1;
             if (pressed) p &= (u16)~0x4000u;
         } else {
-            /* Standard 2nd button (Blue = X = 0x01) on bit 14 active-low */
             if (S.pad & 0x01u) p &= (u16)~0x4000u;
         }
         return p;
+    }
+    case SERDATR: return 0x3000u;
+    case DSKBYTR: {
+        if (!S.is_a1200) return 0x8000u;
+        if (S.disk.track_cyl != S.disk.cyl || S.disk.track_side != S.disk.side)
+            a1200_build_track();
+        u32 at = a1200_disk_pos(now), w = M->disk_track[at];
+        return 0x8000u | (S.disk.dma ? 0x4000u : 0u) | (w == R(DSKSYNC) ? 0x1000u : 0u) | (w & 0xFFu);
     }
     case CLXDAT:  return 0x8000u;
     case ADKCONR: return S.adkcon;
     case INTENAR: return S.intena;
     case INTREQR: return S.intreq;
-    case LISAID:  return 0x00F8u;                       /* AGA Lisa Revision ID! */
+    case LISAID:  return 0x00F8u;
     }
     return 0;
 }
@@ -901,14 +1100,37 @@ static void custom_write(u32 r, u32 v)
         case 4: ac->len = (u16)v; break;
         case 6: ac->per = (u16)v; break;
         case 8: ac->vol = (u16)((v & 0x7Fu) > 64u ? 64u : (v & 0x7Fu)); break;
+        case 10:
+            if (!ac->on)
+                ac->next_irq = S.now_t + (s32)((ac->per < 124u ? 124u : ac->per) * 8u);
+            break;
         }
         return;
     }
 
     switch (r) {
+    case DSKLEN:
+        if (S.is_a1200) {
+            if (v & 0x8000u) {
+                if ((S.disk.len_was & 0x8000u) && (S.dmacon & 0x210u) == 0x210u)
+                    a1200_disk_start(v);
+            } else {
+                S.disk.dma = 0;
+                S.disk.end = NEVER;
+            }
+            S.disk.len_was = (u16)v;
+        }
+        break;
+    case JOYTEST:
+        S.mouse_x = (u8)((S.mouse_x & 3u) | (v & 0xFCu));
+        S.mouse_y = (u8)((S.mouse_y & 3u) | ((v >> 8) & 0xFCu));
+        break;
+    case VPOSW:
+        S.lof = (u8)(v >> 15);
+        break;
     case POTGO:
         /* CD32 7-button pad latch/clock on OUTRY (b15) / DATRY (b14) / OUTRX (b13) / DATRX (b12) */
-        if ((v & 0x3000u) == 0x3000u) {
+        if (!S.is_a1200 && (v & 0x3000u) == 0x3000u) {
             S.pad_shift_mode = 1;
             if ((S.potgo_latch & 0x1000u) && !(v & 0x1000u)) {
                 if (S.pad_shift_idx < 10u) S.pad_shift_idx++;
@@ -927,6 +1149,7 @@ static void custom_write(u32 r, u32 v)
     case BLTAPTH + 2: S.bltapt = (S.bltapt & 0xFFFF0000u) | (v & 0xFFFEu); break;
     case BLTDPTH:     S.bltdpt = (S.bltdpt & 0xFFFFu) | (v << 16); break;
     case BLTDPTH + 2: S.bltdpt = (S.bltdpt & 0xFFFF0000u) | (v & 0xFFFEu); break;
+    case BLTCON0L:    R(BLTCON0) = (u16)((R(BLTCON0) & 0xFF00u) | (v & 0xFFu)); break;
     case BLTSIZE:     blit_start(v & 0x3Fu, v >> 6); break;
     case BLTSIZH:     blit_start(v & 0x7FFu, R(BLTSIZV) & 0x7FFFu); break;
     case COP1LCH:     S.cop_lc1 = (S.cop_lc1 & 0xFFFFu) | (v << 16); break;
@@ -945,30 +1168,137 @@ static void custom_write(u32 r, u32 v)
         break;
     }
     case INTENA: set_clr(&S.intena, v); update_ipl(); break;
-    case INTREQ: set_clr(&S.intreq, v); update_ipl(); break;
+    case INTREQ:
+        set_clr(&S.intreq, v);
+        if (S.cia[0].icr & 0x80u) S.intreq |= 0x0008u;
+        if (S.cia[1].icr & 0x80u) S.intreq |= 0x2000u;
+        update_ipl();
+        break;
     case ADKCON: set_clr(&S.adkcon, v); break;
     }
+}
+
+/* ---- 8520 CIA Timers & Keyboard Serial Handshake ---- */
+
+static u32 cia_timer_step(u16 *t, u16 latch, u32 n, u8 *cr)
+{
+    if (n <= *t) {
+        *t = (u16)(*t - n);
+        return 0;
+    }
+    n -= (u32)*t + 1u;
+    if (*cr & 8u) {
+        *t = latch;
+        *cr &= (u8)~1u;
+        return 1u;
+    }
+    u32 period = (u32)latch + 1u;
+    *t = (u16)(latch - (n % period));
+    return 1u + (n / period);
+}
+
+static void cia_check_irq(int n)
+{
+    struct cd32_cia *c = &S.cia[n];
+    if ((c->icr & c->mask & 0x1Fu) && !(c->icr & 0x80u)) {
+        c->icr |= 0x80u;
+        raise_irq(n ? 0x2000u : 0x0008u);
+    }
+}
+
+static void cia_update(int n, s32 now)
+{
+    struct cd32_cia *c = &S.cia[n];
+    if (now <= c->last)
+        return;
+    u32 el = (u32)(now - c->last) / 20u, ua = 0;
+    c->last += (s32)(el * 20u);
+    if (!el)
+        return;
+    if ((c->cra & 0x21u) == 0x01u) {
+        ua = cia_timer_step(&c->ta, c->la, el, &c->cra);
+        if (ua) c->icr |= 1u;
+    }
+    if (c->crb & 1u) {
+        u32 in_mode = (c->crb >> 5) & 3u;
+        u32 nb = (in_mode == 0u) ? el : (in_mode >= 2u ? ua : 0u);
+        if (nb && cia_timer_step(&c->tb, c->lb, nb, &c->crb))
+            c->icr |= 2u;
+    }
+    cia_check_irq(n);
+}
+
+static void cia_tod_tick(int n)
+{
+    struct cd32_cia *c = &S.cia[n];
+    if (!c->tod_run)
+        return;
+    c->tod = (c->tod + 1u) & 0xFFFFFFu;
+    if (c->tod == c->alarm) {
+        c->icr |= 4u;
+        cia_check_irq(n);
+    }
+}
+
+static void a1200_key_push(u32 code)
+{
+    int next = (S.kq_tail + 1) & 63;
+    if (next != S.kq_head) {
+        S.kq[S.kq_tail] = (u8)code;
+        S.kq_tail = next;
+    }
+}
+
+static void a1200_keyboard_poll(s32 now)
+{
+    if (S.kb_wait && now - S.kb_time > 2000000)
+        S.kb_wait = 0;
+    if (S.kb_wait || S.kq_head == S.kq_tail || now < S.kb_time)
+        return;
+    u32 code = S.kq[S.kq_head];
+    S.kq_head = (S.kq_head + 1) & 63;
+    S.cia[0].sdr = (u8)~((code << 1) | (code >> 7));
+    S.cia[0].icr |= 8u;
+    cia_check_irq(0);
+    S.kb_wait = 1;
+    S.kb_time = now;
 }
 
 static u8 cia_read(int n, u32 r)
 {
     struct cd32_cia *c = &S.cia[n];
+    cia_update(n, m.clock);
     switch (r & 15u) {
     case 0: {
-        u8 v = (u8)((c->pra & c->ddra) | (~c->ddra & 0xFFu));
         if (n == 0) {
-            /* Port 2 Red / Fire button (Z = B = 0x02 or X = A = 0x01) active-low on bit 7! */
-            if (S.pad & 0x03u)
-                v &= (u8)~0x80u;
+            u8 in = 0xFFu;
+            if (S.is_a1200) {
+                if (S.pad & 0x01u) in &= (u8)~0x80u;
+                if ((S.pad & 0x02u) || (S.mouse_btn & 1u)) in &= (u8)~0x40u;
+                if (S.disk.sel) {
+                    if (S.disk.changed || !S.disk.adf) in &= (u8)~0x04u;
+                    in &= (u8)~0x08u;
+                    if (S.disk.cyl == 0) in &= (u8)~0x10u;
+                    if (S.disk.adf) in &= (u8)~0x20u;
+                }
+            } else {
+                if (S.pad & 0x03u) in &= (u8)~0x80u;
+            }
+            return (u8)((c->pra & c->ddra) | (in & ~c->ddra));
         }
-        return v;
+        return (u8)((c->pra & c->ddra) | (~c->ddra & 0xFFu));
     }
     case 1:  return (u8)((c->prb & c->ddrb) | (~c->ddrb & 0xFFu));
     case 2:  return c->ddra;
     case 3:  return c->ddrb;
-    case 8:  return (u8)(c->tod & 0xFFu);
-    case 9:  return (u8)((c->tod >> 8) & 0xFFu);
-    case 10: return (u8)((c->tod >> 16) & 0xFFu);
+    case 4:  return (u8)(c->ta & 0xFFu);
+    case 5:  return (u8)(c->ta >> 8);
+    case 6:  return (u8)(c->tb & 0xFFu);
+    case 7:  return (u8)(c->tb >> 8);
+    case 8:  { u8 v = (u8)((c->latched ? c->latch : c->tod) & 0xFFu); c->latched = 0; return v; }
+    case 9:  return (u8)(((c->latched ? c->latch : c->tod) >> 8) & 0xFFu);
+    case 10: c->latch = c->tod; c->latched = 1; return (u8)((c->latch >> 16) & 0xFFu);
+    case 12: return c->sdr;
     case 13: { u8 ic = c->icr; c->icr = 0; return ic; }
     case 14: return c->cra;
     case 15: return c->crb;
@@ -979,19 +1309,25 @@ static u8 cia_read(int n, u32 r)
 static void cia_write(int n, u32 r, u8 v)
 {
     struct cd32_cia *c = &S.cia[n];
+    cia_update(n, m.clock);
     switch (r & 15u) {
     case 0:
         c->pra = v;
         if (n == 0) {
             u8 ov = !(c->ddra & 1u) || (c->pra & 1u);
             if (ov != S.overlay) { S.overlay = ov; cd32_map_memory(); }
-            if (c->ddra & 0x80u) {
-                /* CD32 pad serial clock via CIA-A FIR1 */
+            if (!S.is_a1200 && (c->ddra & 0x80u)) {
                 if (!(v & 0x80u) && S.pad_shift_idx < 10u) S.pad_shift_idx++;
             }
         }
         break;
-    case 1: c->prb = v; break;
+    case 1: {
+        u32 old = c->prb | (u8)~c->ddrb;
+        c->prb = v;
+        if (n == 1 && S.is_a1200)
+            a1200_drive_control(c->prb | (u8)~c->ddrb, old);
+        break;
+    }
     case 2:
         c->ddra = v;
         if (n == 0) {
@@ -999,32 +1335,94 @@ static void cia_write(int n, u32 r, u8 v)
             if (ov != S.overlay) { S.overlay = ov; cd32_map_memory(); }
         }
         break;
-    case 3: c->ddrb = v; break;
+    case 3: {
+        u32 old = c->prb | (u8)~c->ddrb;
+        c->ddrb = v;
+        if (n == 1 && S.is_a1200)
+            a1200_drive_control(c->prb | (u8)~c->ddrb, old);
+        break;
+    }
+    case 4: c->la = (u16)((c->la & 0xFF00u) | v); break;
+    case 5:
+        c->la = (u16)((c->la & 0xFFu) | ((u16)v << 8));
+        if (!(c->cra & 1u)) c->ta = c->la;
+        if (c->cra & 8u) { c->ta = c->la; c->cra |= 1u; }
+        break;
+    case 6: c->lb = (u16)((c->lb & 0xFF00u) | v); break;
+    case 7:
+        c->lb = (u16)((c->lb & 0xFFu) | ((u16)v << 8));
+        if (!(c->crb & 1u)) c->tb = c->lb;
+        if (c->crb & 8u) { c->tb = c->lb; c->crb |= 1u; }
+        break;
+    case 8: case 9: case 10: {
+        u32 sh = ((r & 15u) - 8u) * 8u;
+        u32 *tp = (c->crb & 0x80u) ? &c->alarm : &c->tod;
+        *tp = (*tp & ~(0xFFu << sh)) | ((u32)v << sh);
+        if (!(c->crb & 0x80u))
+            c->tod_run = ((r & 15u) == 8u);
+        break;
+    }
+    case 12: c->sdr = v; break;
     case 13:
         if (v & 0x80u) c->mask |= (v & 0x1Fu);
         else           c->mask &= (u8)~v;
+        cia_check_irq(n);
         break;
-    case 14: c->cra = v; break;
-    case 15: c->crb = v; break;
+    case 14:
+        if (n == 0 && (c->cra & 0x40u) && !(v & 0x40u) && S.kb_wait) {
+            S.kb_wait = 0;
+            S.kb_time = m.clock + 800;
+        }
+        if (v & 0x10u) c->ta = c->la;
+        c->cra = (u8)(v & ~0x10u);
+        break;
+    case 15:
+        if (v & 0x10u) c->tb = c->lb;
+        c->crb = (u8)(v & ~0x10u);
+        break;
     }
+}
+
+static void a1200_hle_doio(void)
+{
+    u32 ior = m.r[9] & 0xFFFFFFu;
+    u16 cmd = CHIPW(ior + 28u);
+    if ((cmd == 2u || cmd == 9u) && S.disk.adf) {
+        u32 len = ((u32)CHIPW(ior + 36u) << 16) | CHIPW(ior + 38u);
+        u32 dst = ((u32)CHIPW(ior + 40u) << 16) | CHIPW(ior + 42u);
+        u32 off = ((u32)CHIPW(ior + 44u) << 16) | CHIPW(ior + 46u);
+        if (cmd == 2u) {
+            for (u32 i = 0; i < len && dst + i < 0x200000u; i++) {
+                u8 b = (off + i < S.disk.size) ? S.disk.adf[off + i] : 0u;
+                u32 a = dst + i;
+                if (a & 1u) CHIPW(a & ~1u) = (u16)((CHIPW(a & ~1u) & 0xFF00u) | b);
+                else        CHIPW(a)       = (u16)((CHIPW(a) & 0x00FFu) | ((u16)b << 8));
+            }
+            CHIPW(ior + 32u) = (u16)(len >> 16);
+            CHIPW(ior + 34u) = (u16)len;
+        }
+    }
+    CHIPW(ior + 30u) = (u16)(CHIPW(ior + 30u) & 0xFF00u);
+    m.r[0] = 0;
 }
 
 static u32 io_read(u32 a, int size)
 {
-    if ((a & 0xFFFF00u) == 0xB80000u) {
-        u32 off = a & 0xFFu;
-        if (off >= 0x80u) {                             /* Direct 1 KB NVRAM window $B80080 / HLE */
-            u8 b = M->nvram[off & 0x7Fu];
-            return (size == 1) ? b : ((u32)b << 8) | M->nvram[(off + 1u) & 0x7Fu];
+    if (!S.is_a1200) {
+        if ((a & 0xFFFF00u) == 0xB80000u) {
+            u32 off = a & 0xFFu;
+            if (off >= 0x80u) {
+                u8 b = M->nvram[off & 0x7Fu];
+                return (size == 1) ? b : ((u32)b << 8) | M->nvram[(off + 1u) & 0x7Fu];
+            }
+            u16 w = (u16)akiko_read16(off & ~1u);
+            return (size == 2) ? w : ((a & 1u) ? (w & 0xFFu) : (w >> 8));
         }
-        u16 w = (u16)akiko_read16(off & ~1u);
-        return (size == 2) ? w : ((a & 1u) ? (w & 0xFFu) : (w >> 8));
-    }
-    /* Map 1 KB NVRAM at $B80400..$B807FF for clean-room / HLE nonvolatile.library & games! */
-    if (a >= 0xB80400u && a < 0xB80800u) {
-        u32 off = a - 0xB80400u;
-        if (size == 1) return M->nvram[off & 0x3FFu];
-        return ((u32)M->nvram[off & 0x3FFu] << 8) | M->nvram[(off + 1u) & 0x3FFu];
+        if (a >= 0xB80400u && a < 0xB80800u) {
+            u32 off = a - 0xB80400u;
+            if (size == 1) return M->nvram[off & 0x3FFu];
+            return ((u32)M->nvram[off & 0x3FFu] << 8) | M->nvram[(off + 1u) & 0x3FFu];
+        }
     }
     if ((a & 0xFF0000u) == 0xBF0000u) {
         u32 r = (a >> 8) & 15u;
@@ -1032,7 +1430,20 @@ static u32 io_read(u32 a, int size)
         u32 lo = (a & 0x1000u) ? 0xFFu : cia_read(0, r);
         return (size == 2) ? ((hi << 8) | lo) : ((a & 1u) ? lo : hi);
     }
-    if (a >= 0xC80000u && a < 0xE00000u) {
+    if (S.is_a1200) {
+        if ((a & 0xFF0000u) == 0xDA0000u)
+            return (a < 0xDA8000u) ? (size == 2 ? 0xFFFFu : 0xFFu) : 0u;
+        if ((a & 0xFFFF00u) == 0xDE1000u) {
+            u32 bit = (S.gayle_id & 0x80u) ? 0x80u : 0x00u;
+            S.gayle_id <<= 1;
+            return (size == 2) ? (bit << 8) : ((a & 1u) ? 0u : bit);
+        }
+        if (a >= 0xDC0000u && a < 0xDF0000u)
+            return 0u;
+        if (a >= 0xE80000u && a < 0xF80000u)
+            return 0u;
+    }
+    if (a >= (S.is_a1200 ? 0xDF0000u : 0xC80000u) && a < 0xE00000u) {
         u16 w = (u16)custom_read(a & 0x1FEu, m.clock);
         return (size == 2) ? w : ((a & 1u) ? (w & 0xFFu) : (w >> 8));
     }
@@ -1041,25 +1452,38 @@ static u32 io_read(u32 a, int size)
 
 static void io_write(u32 a, u32 v, int size)
 {
-    if ((a & 0xFFFF00u) == 0xB80000u) {
-        u32 off = a & 0xFFu;
-        u16 w = (size == 2) ? (u16)v : ((a & 1u) ? (u16)v : (u16)(v << 8));
-        akiko_write16(off & ~1u, w);
-        return;
-    }
-    if (a >= 0xB80400u && a < 0xB80800u) {
-        u32 off = a - 0xB80400u;
-        if (size == 1) {
-            if (M->nvram[off & 0x3FFu] != (u8)v) { M->nvram[off & 0x3FFu] = (u8)v; S.nvram_dirty = 1; }
-        } else {
-            u8 hi = (u8)(v >> 8), lo = (u8)v;
-            if (M->nvram[off & 0x3FFu] != hi || M->nvram[(off + 1u) & 0x3FFu] != lo) {
-                M->nvram[off & 0x3FFu] = hi;
-                M->nvram[(off + 1u) & 0x3FFu] = lo;
-                S.nvram_dirty = 1;
-            }
+    if (!S.is_a1200) {
+        if ((a & 0xFFFF00u) == 0xB80000u) {
+            u32 off = a & 0xFFu;
+            u16 w = (size == 2) ? (u16)v : ((a & 1u) ? (u16)v : (u16)(v << 8));
+            akiko_write16(off & ~1u, w);
+            return;
         }
-        return;
+        if (a >= 0xB80400u && a < 0xB80800u) {
+            u32 off = a - 0xB80400u;
+            if (size == 1) {
+                if (M->nvram[off & 0x3FFu] != (u8)v) { M->nvram[off & 0x3FFu] = (u8)v; S.nvram_dirty = 1; }
+            } else {
+                u8 hi = (u8)(v >> 8), lo = (u8)v;
+                if (M->nvram[off & 0x3FFu] != hi || M->nvram[(off + 1u) & 0x3FFu] != lo) {
+                    M->nvram[off & 0x3FFu] = hi;
+                    M->nvram[(off + 1u) & 0x3FFu] = lo;
+                    S.nvram_dirty = 1;
+                }
+            }
+            return;
+        }
+    } else {
+        if (a == 0xF7FFFEu) {
+            a1200_hle_doio();
+            return;
+        }
+        if ((a & 0xFFFF00u) == 0xDE1000u) {
+            S.gayle_id = 0xD0u;
+            return;
+        }
+        if (a >= 0xDA0000u && a < 0xDF0000u)
+            return;
     }
     if ((a & 0xFF0000u) == 0xBF0000u) {
         u32 r = (a >> 8) & 15u;
@@ -1067,7 +1491,7 @@ static void io_write(u32 a, u32 v, int size)
         if ((size == 2 ||  (a & 1u)) && !(a & 0x1000u)) cia_write(0, r, (u8)(v & 0xFFu));
         return;
     }
-    if (a >= 0xC80000u && a < 0xE00000u) {
+    if (a >= (S.is_a1200 ? 0xDF0000u : 0xC80000u) && a < 0xE00000u) {
         S.now_t = m.clock;
         custom_write(a & 0x1FEu, (size == 2) ? v : ((v & 0xFFu) * 0x101u));
     }
@@ -1387,12 +1811,226 @@ static void build_cleanroom_cd32_boot(void)
     M->kick[0x0080 >> 1] = 0x60FEu;
 }
 
+static u32 load_adf_hunk_file(const u8 *adf, u32 adf_sz, u32 fhdr_sec)
+{
+    /* Read an AmigaDOS OFS or FFS file from its file header block (fhdr_sec) and relocate HUNK_HEADER */
+    if ((fhdr_sec + 1u) * 512u > adf_sz) return 0;
+    const u8 *fh = adf + fhdr_sec * 512u;
+    if (be32_at(fh) != 2u || be32_at(fh + 508u) != 0xFFFFFFFDu) return 0;
+    u32 byte_size = be32_at(fh + 324u);
+    if (byte_size < 32u || byte_size > 0x160000u) return 0;
+    int is_ffs = (adf[3] & 1u) != 0;
+
+    /* Unpack file bytes into temporary upper Chip RAM ($1A0000..$1FFFFF) or $080000 */
+    u32 staging = 0x090000u;
+    u32 rem = byte_size, out_pos = 0;
+    if (is_ffs) {
+        u32 cur_hdr = fhdr_sec;
+        while (cur_hdr && (cur_hdr + 1u) * 512u <= adf_sz && rem > 0u) {
+            const u8 *hb = adf + cur_hdr * 512u;
+            u32 high_seq = be32_at(hb + 8u);
+            if (high_seq > 72u) high_seq = 72u;
+            for (u32 i = 0; i < high_seq && rem > 0u; i++) {
+                u32 dsec = be32_at(hb + 308u - i * 4u);
+                if (!dsec || (dsec + 1u) * 512u > adf_sz) { rem = 0; break; }
+                u32 take = rem < 512u ? rem : 512u;
+                const u8 *sp = adf + dsec * 512u;
+                for (u32 k = 0; k < take && staging + out_pos < 0x1F8000u; k++, out_pos++) {
+                    u32 a = staging + out_pos;
+                    if (a & 1u) CHIPW(a & ~1u) = (u16)((CHIPW(a & ~1u) & 0xFF00u) | sp[k]);
+                    else        CHIPW(a)       = (u16)((CHIPW(a) & 0x00FFu) | ((u16)sp[k] << 8));
+                }
+                rem -= take;
+            }
+            cur_hdr = be32_at(hb + 504u);               /* extension block */
+        }
+    } else {
+        u32 dsec = be32_at(fh + 16u);                   /* first_data */
+        u32 guard = 0;
+        while (dsec && (dsec + 1u) * 512u <= adf_sz && rem > 0u && guard++ < 2000u) {
+            const u8 *db = adf + dsec * 512u;
+            u32 dsz = be32_at(db + 12u);
+            if (dsz > 488u) dsz = 488u;
+            if (dsz > rem) dsz = rem;
+            for (u32 k = 0; k < dsz && staging + out_pos < 0x1F8000u; k++, out_pos++) {
+                u32 a = staging + out_pos;
+                if (a & 1u) CHIPW(a & ~1u) = (u16)((CHIPW(a & ~1u) & 0xFF00u) | db[24u + k]);
+                else        CHIPW(a)       = (u16)((CHIPW(a) & 0x00FFu) | ((u16)db[24u + k] << 8));
+            }
+            rem -= dsz;
+            dsec = be32_at(db + 16u);                   /* next_data */
+        }
+    }
+    if (out_pos < 32u) return 0;
+
+    /* Helper to read big-endian u32 from staged Chip RAM */
+    #define STG_U32(off) ((((u32)CHIPW(staging + (off)) << 16) | CHIPW(staging + (off) + 2u)))
+    if (STG_U32(0) != 0x000003F3u)
+        return 0;
+    u32 pos = 4u;
+    while (pos + 4u <= out_pos) {
+        u32 slen = STG_U32(pos); pos += 4u;
+        if (!slen) break;
+        pos += slen * 4u;
+    }
+    if (pos + 12u > out_pos)
+        return 0;
+    u32 num_hunks = STG_U32(pos); pos += 12u;
+    if (!num_hunks || num_hunks > 64u)
+        return 0;
+    u32 hunk_base[64], alloc_at = 0x010000u;
+    for (u32 h = 0; h < num_hunks && pos + 4u <= out_pos; h++) {
+        u32 bytes = (STG_U32(pos) & 0x3FFFFFFFu) * 4u; pos += 4u;
+        hunk_base[h] = alloc_at;
+        for (u32 z = 0; z < bytes && alloc_at + z < staging; z += 2u)
+            CHIPW(alloc_at + z) = 0;
+        alloc_at = (alloc_at + bytes + 15u) & ~15u;
+    }
+    u32 cur_h = 0;
+    while (cur_h < num_hunks && pos + 4u <= out_pos) {
+        u32 htype = STG_U32(pos) & 0x3FFFFFFFu; pos += 4u;
+        if (htype == 0x3E9u || htype == 0x3EAu) {
+            u32 n_lw = STG_U32(pos); pos += 4u;
+            u32 dst = hunk_base[cur_h];
+            for (u32 i = 0; i < n_lw && pos + 4u <= out_pos; i++, pos += 4u, dst += 4u) {
+                CHIPW(dst)      = CHIPW(staging + pos);
+                CHIPW(dst + 2u) = CHIPW(staging + pos + 2u);
+            }
+        } else if (htype == 0x3EBu) {
+            pos += 4u;
+        } else if (htype == 0x3ECu) {
+            while (pos + 4u <= out_pos) {
+                u32 n_off = STG_U32(pos); pos += 4u;
+                if (!n_off) break;
+                u32 th = STG_U32(pos); pos += 4u;
+                if (th >= num_hunks) break;
+                u32 add = hunk_base[th];
+                for (u32 i = 0; i < n_off && pos + 4u <= out_pos; i++, pos += 4u) {
+                    u32 off = STG_U32(pos);
+                    u32 p = hunk_base[cur_h] + off;
+                    u32 val = (((u32)CHIPW(p) << 16) | CHIPW(p + 2u)) + add;
+                    CHIPW(p) = (u16)(val >> 16);
+                    CHIPW(p + 2u) = (u16)val;
+                }
+            }
+        } else if (htype == 0x3F2u) {
+            cur_h++;
+        } else if (htype == 0x3F0u) {
+            while (pos + 4u <= out_pos) {
+                u32 n_lw = STG_U32(pos); pos += 4u;
+                if (!n_lw) break;
+                pos += (n_lw + 1u) * 4u;
+            }
+        }
+    }
+    #undef STG_U32
+    return hunk_base[0];
+}
+
+static void build_cleanroom_a1200_boot(void)
+{
+    cd32_zero(M->kick, sizeof(M->kick));
+    cd32_zero(M->ext, sizeof(M->ext));
+    S.overlay = 0;
+
+    M->kick[0x0100 >> 1] = 0x4E73u;                     /* RTE */
+    M->kick[0x0102 >> 1] = 0x7000u;                     /* MOVEQ #0,D0 */
+    M->kick[0x0104 >> 1] = 0x4E75u;                     /* RTS */
+    for (u32 v = 2; v < 64; v++) {
+        CHIPW(v * 4u)      = 0x00F8u;
+        CHIPW(v * 4u + 2u) = 0x0100u;
+    }
+
+    /* ExecBase at $00001000 ($4 -> $00001000, AttnFlags +296 = $0003 for 68EC020) */
+    CHIPW(0x0004) = 0x0000u; CHIPW(0x0006) = 0x1000u;
+    CHIPW(0x1000 + 296) = 0x0003u;
+    for (u32 off = 0x0800u; off < 0x1000u; off += 6u) {
+        CHIPW(off)      = 0x7001u;
+        CHIPW(off + 2u) = 0x4E75u;
+        CHIPW(off + 4u) = 0x4E71u;
+    }
+    CHIPW(0x1040) = 0x000Au; CHIPW(0x1042) = 0x0000u;
+    u16 alloc_stub[] = {
+        0x2238, 0x1040, 0x2401, 0xD480,
+        0x5082, 0x0282, 0xFFFF, 0xFFF8,
+        0x21C2, 0x1040, 0x2001, 0x4E75
+    };
+    for (u32 i = 0; i < sizeof(alloc_stub) / 2u; i++)
+        M->kick[(0x0200 >> 1) + i] = alloc_stub[i];
+    CHIPW(0x1000 - 198) = 0x4EF9u; CHIPW(0x1000 - 196) = 0x00F8u; CHIPW(0x1000 - 194) = 0x0200u;
+    CHIPW(0x1000 - 684) = 0x4EF9u; CHIPW(0x1000 - 682) = 0x00F8u; CHIPW(0x1000 - 680) = 0x0200u;
+
+    /* HLE DoIO (-456) & SendIO (-462) -> $F80300: MOVE.W D0,$00F7FFFE; RTS */
+    M->kick[0x0300 >> 1] = 0x33C0u; M->kick[0x0302 >> 1] = 0x00F7u; M->kick[0x0304 >> 1] = 0xFFFEu;
+    M->kick[0x0306 >> 1] = 0x4E75u;
+    CHIPW(0x1000 - 456) = 0x4EF9u; CHIPW(0x1000 - 454) = 0x00F8u; CHIPW(0x1000 - 452) = 0x0300u;
+    CHIPW(0x1000 - 462) = 0x4EF9u; CHIPW(0x1000 - 460) = 0x00F8u; CHIPW(0x1000 - 458) = 0x0300u;
+    /* FindResident (-96) -> 0 so standard AmigaDOS bootblocks return or we boot HUNK directly */
+    CHIPW(0x1000 - 96)  = 0x7000u; CHIPW(0x1000 - 94)  = 0x4E75u;
+
+    u32 entry = 0;
+    if (S.disk.adf && S.disk.size >= 901120u) {
+        /* 1. Try scanning OFS/FFS Root Block (sector 880) & subdirectories for a HUNK_HEADER executable */
+        const u8 *root = S.disk.adf + 880u * 512u;
+        if (be32_at(root) == 2u && be32_at(root + 508u) == 1u) {
+            for (u32 h = 0; h < 72u && !entry; h++) {
+                u32 sec = be32_at(root + 24u + h * 4u);
+                int chain = 0;
+                while (sec && (sec + 1u) * 512u <= S.disk.size && chain++ < 32 && !entry) {
+                    const u8 *blk = S.disk.adf + sec * 512u;
+                    u32 sec_type = be32_at(blk + 508u);
+                    if (sec_type == 0xFFFFFFFDu) {
+                        entry = load_adf_hunk_file(S.disk.adf, S.disk.size, sec);
+                    } else if (sec_type == 2u) {        /* Subdirectory (e.g. C/) */
+                        for (u32 sh = 0; sh < 72u && !entry; sh++) {
+                            u32 s2 = be32_at(blk + 24u + sh * 4u);
+                            if (s2 && (s2 + 1u) * 512u <= S.disk.size)
+                                entry = load_adf_hunk_file(S.disk.adf, S.disk.size, s2);
+                        }
+                    }
+                    sec = be32_at(blk + 496u);          /* hash_chain */
+                }
+            }
+        }
+        /* 2. Otherwise copy custom trackloader bootblock (1024 B) to $070000 and jump to $07000C! */
+        if (!entry && S.disk.adf[0] == 'D' && S.disk.adf[1] == 'O' && S.disk.adf[2] == 'S') {
+            for (u32 i = 0; i < 1024u; i += 2u)
+                CHIPW(0x070000u + i) = (u16)(((u16)S.disk.adf[i] << 8) | S.disk.adf[i + 1u]);
+            entry = 0x07000Cu;
+        }
+    }
+    if (!entry)
+        entry = 0xF80080u;
+
+    M->kick[0] = 0x001Fu; M->kick[1] = 0xFFE0u;
+    M->kick[2] = 0x00F8u; M->kick[3] = 0x0040u;
+    CHIPW(0x0000) = 0x001Fu; CHIPW(0x0002) = 0xFFE0u;
+    CHIPW(0x0004) = 0x0000u; CHIPW(0x0006) = 0x1000u;
+
+    u16 boot_stub[] = {
+        0x2C7C, 0x0000, 0x1000,                         /* MOVEA.L #$1000,A6 (ExecBase) */
+        0x227C, 0x0000, 0x2000,                         /* MOVEA.L #$2000,A1 (trackdisk IOStdReq) */
+        0x33FC, 0x2C81, 0x00DF, 0xF08E,                 /* DIWSTRT */
+        0x33FC, 0x2CC1, 0x00DF, 0xF090,                 /* DIWSTOP */
+        0x33FC, 0x0038, 0x00DF, 0xF092,                 /* DDFSTRT */
+        0x33FC, 0x00D0, 0x00DF, 0xF094,                 /* DDFSTOP */
+        0x4EF9, (u16)(entry >> 16), (u16)entry
+    };
+    for (u32 i = 0; i < sizeof(boot_stub) / 2u; i++)
+        M->kick[(0x0040 >> 1) + i] = boot_stub[i];
+    M->kick[0x0080 >> 1] = 0x60FEu;
+}
+
 /* ---- Public API ---- */
 
 void cd32_reset(void)
 {
     const struct cdrom_toc *saved_cd = S.cd;
+    const u8 *saved_adf = S.disk.adf;
+    u32 saved_adf_sz = S.disk.size;
+    u8 saved_a1200 = S.is_a1200;
     u8 saved_ext = S.ext_roms;
+    u8 saved_has_ext = S.has_ext_rom;
     u32 saved_rate = S.sample_rate;
     char saved_info[96];
     for (int i = 0; i < 96; i++) saved_info[i] = S.info[i];
@@ -1400,10 +2038,23 @@ void cd32_reset(void)
     cd32_zero(&S, sizeof(S));
     cd32_zero(M->chip, sizeof(M->chip));
     S.cd = saved_cd;
+    S.disk.adf = saved_adf;
+    S.disk.size = saved_adf_sz;
+    S.disk.changed = saved_adf ? 0 : 1;
+    S.disk.track_cyl = -1;
+    S.disk.end = NEVER;
+    S.is_a1200 = saved_a1200;
     S.ext_roms = saved_ext;
+    S.has_ext_rom = saved_has_ext;
     S.sample_rate = saved_rate;
+    S.lof = 1;
+    S.gayle_id = 0xD0u;
     for (int i = 0; i < 96; i++) S.info[i] = saved_info[i];
 
+    for (int i = 0; i < 2; i++) {
+        S.cia[i].ta = S.cia[i].tb = S.cia[i].la = S.cia[i].lb = 0xFFFFu;
+        S.cia[i].tod_run = 1;
+    }
     for (u32 n = 0; n < 16u; n++)
         M->nibble[n] = ((n >> 3) & 1u) | (((n >> 2) & 1u) << 8) | (((n >> 1) & 1u) << 16) | ((n & 1u) << 24);
     for (int ch = 0; ch < 4; ch++)
@@ -1416,9 +2067,9 @@ void cd32_reset(void)
         cd32_map_memory();
         cpu_reset();
     } else {
-        build_cleanroom_cd32_boot();
+        if (S.is_a1200) build_cleanroom_a1200_boot();
+        else            build_cleanroom_cd32_boot();
         cd32_map_memory();
-        /* Boot with $000004 = ExecBase intact, PC = $F80040, SP = $001FFFE0 */
         cd32_zero(&m, sizeof(m));
         m.s = 1;
         m.im = 7;
@@ -1444,17 +2095,19 @@ const char *cd32_load(const u8 *kick, u32 kick_sz, const u8 *ext, u32 ext_sz, co
     cpu_init();
 
     S.cd = cd;
+    S.is_a1200 = 0;
     if (kick && kick_sz == 0x80000u && ext && ext_sz == 0x80000u) {
         for (u32 i = 0; i < 0x40000u; i++) {
             M->kick[i] = (u16)(((u16)kick[2u * i] << 8) | kick[2u * i + 1u]);
             M->ext[i]  = (u16)(((u16)ext[2u * i] << 8)  | ext[2u * i + 1u]);
         }
         S.ext_roms = 1;
+        S.has_ext_rom = 1;
     } else {
         S.ext_roms = 0;
+        S.has_ext_rom = 0;
     }
 
-    /* Extract Volume Identifier from ISO-9660 PVD (LBA 16 + 40, 32 bytes) */
     char vol[34];
     int vn = 0;
     if (cd->read_2048(16u, M->sec_buf) == 0 &&
@@ -1480,6 +2133,147 @@ const char *cd32_load(const u8 *kick, u32 kick_sz, const u8 *ext, u32 ext_sz, co
     return 0;
 }
 
+void a1200_interleave_roms(const u8 *u6a, const u8 *u6b, u8 *out_512k)
+{
+    /* Interleave split Amiga 1200 256 KB EPROM pair (.u6a = high word, .u6b = low word, byte-swapped) into 512 KB */
+    for (u32 i = 0; i < 0x20000u; i++) {
+        out_512k[4u * i + 0u] = u6a[2u * i + 1u];
+        out_512k[4u * i + 1u] = u6a[2u * i + 0u];
+        out_512k[4u * i + 2u] = u6b[2u * i + 1u];
+        out_512k[4u * i + 3u] = u6b[2u * i + 0u];
+    }
+}
+
+static char *info_put(char *p, const char *s)
+{
+    while (*s && p < S.info + sizeof(S.info) - 1) *p++ = *s++;
+    *p = 0;
+    return p;
+}
+
+static char *info_put_u32(char *p, u32 v)
+{
+    char d[12];
+    int n = 0;
+    do d[n++] = (char)('0' + (v % 10u)); while ((v /= 10u) != 0u);
+    while (n && p < S.info + sizeof(S.info) - 1) *p++ = d[--n];
+    *p = 0;
+    return p;
+}
+
+const char *a1200_load(const u8 *kick, u32 kick_sz, const u8 *ext, u32 ext_sz,
+                       const u8 *adf, u32 adf_sz, const char *name)
+{
+    (void)name;
+    if (adf && adf_sz != 901120u && adf_sz != 1802240u)
+        return "not an Amiga .adf floppy image (901120 or 1802240 bytes)";
+    if (kick && kick_sz != 0x40000u && kick_sz != 0x80000u)
+        return "Amiga 1200 Kickstart ROM must be 256 or 512 KB";
+
+#ifdef CD32_HOST
+    u32 saved_rate = S.sample_rate;
+#endif
+    cd32_zero(M, sizeof(*M));
+#ifdef CD32_HOST
+    S.sample_rate = saved_rate ? saved_rate : 48000u;
+#else
+    S.sample_rate = 48000u;
+#endif
+    cpu_init();
+
+    S.is_a1200 = 1;
+    S.disk.adf = adf;
+    S.disk.size = adf ? adf_sz : 0u;
+
+    if (kick && (kick_sz == 0x80000u || kick_sz == 0x40000u)) {
+        u32 words = kick_sz >> 1;
+        for (u32 i = 0; i < 0x40000u; i++) {
+            u32 si = i % words;
+            M->kick[i] = (u16)(((u16)kick[2u * si] << 8) | kick[2u * si + 1u]);
+        }
+        S.ext_roms = 1;
+        if (ext && ext_sz == 0x80000u) {
+            for (u32 i = 0; i < 0x40000u; i++)
+                M->ext[i] = (u16)(((u16)ext[2u * i] << 8) | ext[2u * i + 1u]);
+            S.has_ext_rom = 1;
+        }
+    }
+
+    char *p = S.info;
+    *p = 0;
+    p = info_put(p, "Amiga 1200 (68EC020 14.18 MHz, 2 MB AGA, ");
+    if (S.ext_roms && kick) {
+        if (kick_sz == 0x80000u && kick[0x18] == 'A' && kick[0x19] == 'R') {
+            p = info_put(p, "AROS");
+        } else {
+            u32 ver = ((u32)kick[12] << 8) | kick[13];
+            u32 rev = ((u32)kick[14] << 8) | kick[15];
+            if (ver >= 30u && ver <= 50u) {
+                p = info_put(p, "KS ");
+                p = info_put_u32(p, ver);
+                p = info_put(p, ".");
+                p = info_put_u32(p, rev);
+            } else {
+                p = info_put(p, "Diag ROM");
+            }
+        }
+    } else {
+        p = info_put(p, "built-in AGA boot");
+    }
+    p = info_put(p, adf ? ", DF0: .adf)" : ", no floppy)");
+
+    cd32_reset();
+    return 0;
+}
+
+static u32 a1200_char_key(int ch)
+{
+    static const char plain[] = "`1234567890-=\\", shifted[] = "~!@#$%^&*()_+|";
+    static const char qrow[] = "qwertyuiop[]", arow[] = "asdfghjkl;'", zrow[] = "zxcvbnm,./";
+    static const char qrow_s[] = "QWERTYUIOP{}", arow_s[] = "ASDFGHJKL:\"", zrow_s[] = "ZXCVBNM<>?";
+    for (int i = 0; plain[i]; i++) {
+        if (ch == plain[i])   return (u32)i;
+        if (ch == shifted[i]) return 0x80u | (u32)i;
+    }
+    for (int i = 0; qrow[i]; i++) {
+        if (ch == qrow[i])   return 0x10u + (u32)i;
+        if (ch == qrow_s[i]) return 0x90u + (u32)i;
+    }
+    for (int i = 0; arow[i]; i++) {
+        if (ch == arow[i])   return 0x20u + (u32)i;
+        if (ch == arow_s[i]) return 0xA0u + (u32)i;
+    }
+    for (int i = 0; zrow[i]; i++) {
+        if (ch == zrow[i])   return 0x31u + (u32)i;
+        if (ch == zrow_s[i]) return 0xB1u + (u32)i;
+    }
+    switch (ch) {
+    case ' ': return 0x40u;
+    case '\n': case '\r': return 0x44u;
+    case 8: case 127: return 0x41u;
+    case '\t': return 0x42u;
+    case 27: return 0x45u;
+    default: return 0xFFu;
+    }
+}
+
+void a1200_type(const char *text)
+{
+    while (text && *text) {
+        int next = (S.tq_tail + 1) & 255;
+        if (next == S.tq_head) break;
+        S.tq[S.tq_tail] = *text++;
+        S.tq_tail = next;
+    }
+}
+
+void a1200_mouse(int dx, int dy, int buttons)
+{
+    S.mouse_x = (u8)(S.mouse_x + dx);
+    S.mouse_y = (u8)(S.mouse_y + dy);
+    S.mouse_btn = (u8)(buttons & 3);
+}
+
 static void step_events(s32 now)
 {
     if (S.blit_busy && now >= S.blit_end) {
@@ -1487,6 +2281,15 @@ static void step_events(s32 now)
         S.blit_end = NEVER;
         raise_irq(0x0040u);
     }
+    if (S.disk.dma && now >= S.disk.end) {
+        S.disk.dma = 0;
+        S.disk.end = NEVER;
+        R(DSKPTH) = (u16)(S.disk.pt >> 16);
+        R(DSKPTL) = (u16)S.disk.pt;
+        raise_irq(0x0002u);
+    }
+    cia_update(0, now);
+    cia_update(1, now);
     for (int ch = 0; ch < 4; ch++) {
         if (now >= S.aud[ch].next_irq) {
             raise_irq(0x0080u << ch);
@@ -1499,18 +2302,18 @@ static void step_events(s32 now)
     }
 }
 
-void cd32_frame(u16 pad, u16 *picture)
+static void run_aga_frame_common(u16 *picture)
 {
-    S.pad = pad;
     m.clock = 0;
     int need_pal_sync = 1;
+    u32 total_lines = (R(BPLCON0) & 4u) ? (S.lof ? 313u : 312u) : 313u;
 
-    for (u32 line = 0; line < 313u; line++) {
+    for (u32 line = 0; line < total_lines; line++) {
         S.cur_line = line;
         s32 t0 = (s32)(line * LINE_CYCLES);
         if (line == 0u) {
             raise_irq(0x0020u);                         /* VBlank IRQ3 */
-            S.cia[0].tod = (S.cia[0].tod + 1u) & 0xFFFFFFu;
+            cia_tod_tick(0);
             if ((S.dmacon & 0x280u) == 0x280u && S.cop_lc1)
                 copper_jump(S.cop_lc1, t0);
             for (int i = 0; i < 8; i++) {
@@ -1518,8 +2321,10 @@ void cd32_frame(u16 pad, u16 *picture)
                 S.spr[i].armed = 0;
             }
         }
-        S.cia[1].tod = (S.cia[1].tod + 1u) & 0xFFFFFFu;
+        cia_tod_tick(1);
         sprite_dma(line);
+        if (S.is_a1200)
+            a1200_keyboard_poll(t0);
         if (need_pal_sync) {
             for (int i = 0; i < 256; i++)
                 S.line_pal15[i] = S.aga_pal15[i];
@@ -1546,22 +2351,75 @@ void cd32_frame(u16 pad, u16 *picture)
             need_pal_sync = 1;
     }
 
+    s32 f_cyc = (s32)(total_lines * LINE_CYCLES);
+    cia_update(0, m.clock);
+    cia_update(1, m.clock);
+    S.cia[0].last -= f_cyc;
+    S.cia[1].last -= f_cyc;
     if (S.blit_busy && S.blit_end != NEVER)
-        S.blit_end = (S.blit_end > 313 * LINE_CYCLES) ? (S.blit_end - 313 * LINE_CYCLES) : 0;
+        S.blit_end = (S.blit_end > f_cyc) ? (S.blit_end - f_cyc) : 0;
+    if (S.disk.dma && S.disk.end != NEVER)
+        S.disk.end = (S.disk.end > f_cyc) ? (S.disk.end - f_cyc) : 0;
     for (int ch = 0; ch < 4; ch++)
         if (S.aud[ch].next_irq != NEVER)
-            S.aud[ch].next_irq = (S.aud[ch].next_irq > 313 * LINE_CYCLES) ? (S.aud[ch].next_irq - 313 * LINE_CYCLES) : 64;
+            S.aud[ch].next_irq = (S.aud[ch].next_irq > f_cyc) ? (S.aud[ch].next_irq - f_cyc) : 64;
     if (S.cop_t != NEVER)
-        S.cop_t = (S.cop_t > 313 * LINE_CYCLES) ? (S.cop_t - 313 * LINE_CYCLES) : 0;
+        S.cop_t = (S.cop_t > f_cyc) ? (S.cop_t - f_cyc) : 0;
+    S.kb_time -= f_cyc;
+    if (S.kb_time < -0x40000000)
+        S.kb_time = -0x40000000;
+    S.cycles_hi += (u32)f_cyc;
+    S.lof = (R(BPLCON0) & 4u) ? (S.lof ^ 1u) : 1u;
 
     step_audio_frame();
     S.frames++;
+}
+
+void cd32_frame(u16 pad, u16 *picture)
+{
+    S.pad = pad;
+    run_aga_frame_common(picture);
+}
+
+void a1200_frame(u16 pad, const u8 keys[16], u16 *picture)
+{
+    S.pad = pad;
+    u8 now_k[16];
+    for (int i = 0; i < 16; i++)
+        now_k[i] = keys ? keys[i] : 0u;
+    if (S.tq_head != S.tq_tail) {
+        u32 k = a1200_char_key((u8)S.tq[S.tq_head]);
+        if (S.tq_frame < 3 && k != 0xFFu) {
+            now_k[(k & 0x7Fu) >> 3] |= (u8)(1u << (k & 7u));
+            if (k & 0x80u) now_k[0x60 >> 3] |= 1u;
+        }
+        if (++S.tq_frame == 6) {
+            S.tq_frame = 0;
+            S.tq_head = (S.tq_head + 1) & 255;
+        }
+    }
+    if (pad & 0x08u) now_k[0x44 >> 3] |= (u8)(1u << (0x44 & 7)); /* START -> Return */
+    if (pad & 0x04u) now_k[0x40 >> 3] |= (u8)(1u << (0x40 & 7)); /* SELECT -> Space */
+    for (u32 k = 0; k < 128u; k++) {
+        u32 bit = 1u << (k & 7u), down = now_k[k >> 3] & bit;
+        if (down != (S.held_was[k >> 3] & bit))
+            a1200_key_push(down ? k : (k | 0x80u));
+    }
+    for (int i = 0; i < 16; i++)
+        S.held_was[i] = now_k[i];
+
+    run_aga_frame_common(picture);
 }
 
 const char *cd32_info(void) { return S.info; }
 
 u8 *cd32_save_ram(u32 *size, int *battery)
 {
+    if (S.is_a1200) {
+        *size = 0;
+        *battery = 0;
+        return M->nvram;
+    }
     *size = sizeof(M->nvram);
     *battery = 1;
     return M->nvram;
@@ -1569,6 +2427,8 @@ u8 *cd32_save_ram(u32 *size, int *battery)
 
 int cd32_save_changed(void)
 {
+    if (S.is_a1200)
+        return 0;
     int d = S.nvram_dirty;
     S.nvram_dirty = 0;
     return d;
@@ -1595,3 +2455,19 @@ int cd32_audio(s16 *out, int max)
     }
     return n;
 }
+
+#ifdef CD32_HOST
+void cd32_host_dbg(u32 out[10])
+{
+    out[0] = m.pc;
+    out[1] = m.r[15];
+    out[2] = get_sr();
+    out[3] = m.vbr;
+    out[4] = S.overlay;
+    out[5] = S.dmacon;
+    out[6] = S.intena;
+    out[7] = S.intreq;
+    out[8] = S.cop_lc1;
+    out[9] = R(BPLCON0);
+}
+#endif

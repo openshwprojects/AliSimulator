@@ -2682,10 +2682,10 @@ def run(args):
     start = box.sim._vtime()
     while box.sim._vtime() < start + 0.5:
         box.t.read(4096, start + 0.5 - box.sim._vtime())
-    # (12 s: the bootloader checks the main code before it looks for 'c' -- 4.7 s of emulated time for the 588 KB
-    # demo with the Z80 / 2600 players, 8.3 s for the 1.1 MB one with TLS; maciej_uart.py on the real box keeps
-    # sending for up to 90 s)
-    while box.sim._vtime() < start + 26:
+    # (38 s: the bootloader checks the main code before it looks for 'c' -- 4.7 s of emulated time for the 588 KB
+    # demo with the Z80 / 2600 players, 8.3 s for the 1.1 MB one with TLS, ~26.5 s for the 4.6 MB v4; maciej_uart.py
+    # on the real box keeps sending for up to 90 s)
+    while box.sim._vtime() < start + 38:
         box.t.write(b"c")
         nxt = box.sim._vtime() + 1 / 30
         while box.sim._vtime() < nxt:
@@ -2702,7 +2702,7 @@ def run(args):
     check("Version: v4" in box.boot().decode("latin-1"), "and its reboot command starts the demo again")
     box.t.pending.clear()
     mark = len(box.t.received)
-    deadline = box.sim._vtime() + 26                   # (the bootloader's check first: ~16 s for ~2 MB v4)
+    deadline = box.sim._vtime() + 38                   # (the bootloader's check first: ~26.5 s for 4.6 MB v4)
     while box.sim._vtime() < deadline:                 # maciej_uart.capture_boot's pacing, in emulated time
         box.t.write(b"c")
         nxt = min(deadline, box.sim._vtime() + 0.05)

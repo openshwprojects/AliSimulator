@@ -30,4 +30,15 @@ int cd32_jammed(void);
 void cd32_audio_rate(u32 hz);
 int cd32_audio(s16 *out, int max);
 
+/* Amiga 1200 ('a1200': 14.18 MHz 68EC020 + 2 MB AGA Chip RAM + HAM8 + 4-ch Paula + DF0: .adf + keyboard/mouse) */
+void a1200_interleave_roms(const u8 *u6a, const u8 *u6b, u8 *out_512k);
+const char *a1200_load(const u8 *kick, u32 kick_sz, const u8 *ext, u32 ext_sz,
+                       const u8 *adf, u32 adf_sz, const char *name);
+void a1200_frame(u16 pad, const u8 keys[16], u16 *picture);
+void a1200_type(const char *text);
+void a1200_mouse(int dx, int dy, int buttons);
+#ifdef CD32_HOST
+void cd32_host_dbg(u32 out[10]);
+#endif
+
 #endif

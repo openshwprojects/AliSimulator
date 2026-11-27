@@ -71,6 +71,17 @@
 #include "s32x.h"
 #include "cd32.h"
 #include "arcade.h"
+#include "x68k.h"
+#include "threedo.h"
+#include "pc98.h"
+#include "konami.h"
+#include "williams.h"
+#include "irem.h"
+#include "taito.h"
+#include "pico8.h"
+#include "jaguar.h"
+#include "pcfx.h"
+#include "n64.h"
 #include "segacd.h"
 #include "cdrom.h"
 #include "snd.h"
@@ -331,7 +342,7 @@ static const struct machine zx_machine = {ZX_W, ZX_H, 3, 3, ZX_FRAME_US, zx_open
 #define TAP_FRAMES 6                    /* a key typed on the UART: the button held this many frames */
 #define IR_FRAMES  9                    /* a remote's key: until its repeat frame would have come (108 ms) */
 
-#define PICTURE_MAX (640 * 480)          /* up to 640 x 480 (PS1 / hi-res PCE & SNES / Vectrex), in PICTURE_PHYS */
+#define PICTURE_MAX (768 * 512)          /* up to 768 x 512 (Sharp X68000 / PS1 640x480), 1.5 MB in PICTURE_PHYS */
 static u16 *const picture = (u16 *)KSEG0(PICTURE_PHYS);
 static u16 *const before = (u16 *)KSEG0(PICTURE_PHYS + PICTURE_MAX * 2u);
 static u16 colours[256];
@@ -729,6 +740,13 @@ static void __attribute__((optimize("O3"))) show(int all)
             }
             if (same)
                 continue;
+            if (xs == 2 && !(pw & 7) && pw * 2 <= SCREEN_W && !((out_x * 2) & 31)) {
+                /* twice as wide, whole cache lines (the PC-98's 640, the X68000's 512 ...): the PlayStation's writer */
+                int rows = SCREEN_H - (out_y + y * ys);
+                fb_put_row_x2(((u32)(out_y + y * ys) * SCREEN_W + (u32)out_x) * 2u, (const u32 *)line, pw >> 1,
+                              rows < ys ? rows : ys, (u32 *)old);
+                continue;
+            }
             if (xs == 3 && !(pw & 15) && pw * 3 <= SCREEN_W && !((out_x * 2) & 31)) {
                 /* three times as wide, whole cache lines (the Super Nintendo's 256, the Neo Geo's 320 ...): the
                    PlayStation's writer -- converted in registers and written straight to the rows, `before`
@@ -745,20 +763,26 @@ static void __attribute__((optimize("O3"))) show(int all)
                               rows < ys ? rows : ys, (u32 *)old);
                 continue;
             }
-            if (xs == 2 && pw * 2 <= SCREEN_W) {
+            if (xs == 2 && !(pw & 1) && pw * 2 <= SCREEN_W) {
+                const u32 *l32 = (const u32 *)line;
+                u32 *o32 = (u32 *)old;
+                for (int k = 0, wn = pw >> 1, w = 0; k < wn; k++, w += 2) {
+                    u32 c = o32[k] = l32[k], p_, t_;
+                    PSX_PAIR(c, row.pair[w], row.pair[w + 1]);
+                }
+            } else if (xs == 2 && pw * 2 <= SCREEN_W) {
                 for (int x = 0, w = 0; x < pw; x++) {
                     u32 c = old[x] = line[x];
                     u32 p = 0x8000u | (c & 0x1Fu) << 10 | (c & 0x3E0u) | ((c >> 10) & 0x1Fu);
                     row.pair[w++] = p | (p << 16);
                 }
             } else if (xs == 3 && !(pw & 1) && pw * 3 <= SCREEN_W) {
-                for (int x = 0, w = 0; x < pw; x += 2) {
-                    u32 c0 = old[x] = line[x], c1 = old[x + 1] = line[x + 1];
-                    u32 p = 0x8000u | (c0 & 0x1Fu) << 10 | (c0 & 0x3E0u) | ((c0 >> 10) & 0x1Fu);
-                    u32 q = 0x8000u | (c1 & 0x1Fu) << 10 | (c1 & 0x3E0u) | ((c1 >> 10) & 0x1Fu);
-                    row.pair[w++] = p | (p << 16);
-                    row.pair[w++] = p | (q << 16);
-                    row.pair[w++] = q | (q << 16);
+                const u32 *l32 = (const u32 *)line;
+                u32 *o32 = (u32 *)old;
+                for (int k = 0, wn = pw >> 1, w = 0; k < wn; k++, w += 3) {
+                    u32 c = o32[k] = l32[k], p_, t_;
+                    PSX_PAIR(c, row.pair[w], row.pair[w + 2]);
+                    row.pair[w + 1] = p_;
                 }
             } else if (xs == 4 && pw * 4 <= SCREEN_W) {
                 for (int x = 0, w = 0; x < pw; x++) {
@@ -1092,6 +1116,20 @@ static const struct machine s16_machine;
 static const struct machine ti99_machine;
 static const struct machine cd32_machine;
 static const struct machine arcade_machine;
+static const struct machine x68k_machine;
+static const struct machine a1200_machine;
+static const struct machine dos_machine;
+static const struct machine threedo_machine;
+static const struct machine neocd_machine;
+static const struct machine pc98_machine;
+static struct machine konami_machine;
+static struct machine williams_machine;
+static struct machine irem_machine;
+static struct machine taito_machine;
+static const struct machine pico8_machine;
+static struct machine jaguar_machine;
+static struct machine pcfx_machine;
+static const struct machine n64_machine;
 
 /* 'nes' / 'gb' [-f frames] [-k script] <file>: frames 0 = until the player ends it.  0, -1 it could not
    start */
@@ -1101,7 +1139,10 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     u8 *image = (u8 *)KSEG0(MEDIA_PHYS);
     u32 size = 0;
     tv_opening(path, 0);                        /* (on the TV at once: reading a game takes a moment) */
-    int is_cd_only = (m == &pcecd_machine || m == &segacd_machine || m == &cd32_machine);
+    int is_cd_only = (m == &pcecd_machine || m == &segacd_machine || m == &cd32_machine ||
+                      (m == &threedo_machine && *path != 0) ||
+                      (m == &neocd_machine && *path != 0) ||
+                      (m == &pcfx_machine && *path != 0));
     u32 head_lim = (m == &psx_machine) ? 4096u : (is_cd_only ? 16384u : MEDIA_MAX);
     int got = *path ? disk_read_head(path, image, head_lim, &size) : 0;      /* ("": no file -- BASIC) */
     if (m == &psx_machine) {
@@ -1118,7 +1159,9 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     }
     char as[160];                               /* (a game in an archive: its own name, beside the archive) */
     if (got > 0 && size <= MEDIA_MAX && !(is_cd_only && size > 16384u) &&
-        !((m == &cps_machine || m == &s16_machine || m == &arcade_machine || m == &ti99_machine) &&
+        !((m == &cps_machine || m == &s16_machine || m == &arcade_machine || m == &ti99_machine ||
+           m == &a1200_machine || m == &dos_machine || m == &pc98_machine || m == &konami_machine ||
+           m == &williams_machine || m == &irem_machine || m == &taito_machine) &&
           zip_is(image, (u32)got)))
         got = unpack(path, image, (u32)got, as, sizeof(as));
     else
@@ -1180,7 +1223,12 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
     /* The Super Nintendo's and the Game Boy Advance's frame() run without a picture (0) too, the machine going
        on the same: in live play a frame that starts more than a frame late is then not drawn (never two in a
        row) -- the game keeps its speed and its sound, the picture loses that frame */
-    int can_skip = (m == &snes_machine || m == &gba_machine);
+    int can_skip = (m == &snes_machine || m == &gba_machine || m == &x68k_machine ||
+                    m == &cd32_machine || m == &a1200_machine || m == &dos_machine ||
+                    m == &threedo_machine || m == &neocd_machine || m == &pc98_machine ||
+                    m == &konami_machine || m == &williams_machine || m == &irem_machine ||
+                    m == &taito_machine || m == &pico8_machine || m == &jaguar_machine ||
+                    m == &pcfx_machine || m == &n64_machine);
     int skipped = 0;                            /* (the frame before was not drawn: this one is) */
     u32 n_skipped = 0;
     int psx_live = (m == &psx_machine && !frames), psx_pending = 0, psx_flip = 0;
@@ -1259,7 +1307,8 @@ static int play(const struct machine *machine, const char *path, u32 frames, con
                 first = 0;
             }
         } else if (!skip) {
-            show(first);
+            if (first || m != &dos_machine || dos_picture_changed())
+                show(first);
             first = 0;
         }
         u64 t2 = now_ticks();
@@ -1463,9 +1512,78 @@ int amiga_play(const char *path, u32 frames, const char *script)
     return play(&amiga_machine, path, frames, script);
 }
 
-/* a DOS PC (an AT with a VGA): the 320 x 200 picture three times as large (960 x 600).  One program (.exe or
-   .com) runs, with no data files beside it (Magicland Dizzy needs none) */
+/* a 386 DOS PC (real mode + 386 32-bit protected mode / DOS/4GW, 8 MB XMS, VGA Mode 13h / Mode X,
+   48 kHz AdLib YM3812 OPL2 + Sound Blaster 2.0 DMA + PC Speaker, single .exe/.com or multi-file .zip) */
 static u8 dos_keys[32];
+
+static const char dos_doom_default_cfg[] =
+    "mouse_sensitivity\t\t5\r\n"
+    "sfx_volume\t\t8\r\n"
+    "music_volume\t\t8\r\n"
+    "show_messages\t\t1\r\n"
+    "key_right\t\t77\r\n"
+    "key_left\t\t75\r\n"
+    "key_up\t\t72\r\n"
+    "key_down\t\t80\r\n"
+    "key_strafeleft\t\t51\r\n"
+    "key_straferight\t\t52\r\n"
+    "key_fire\t\t29\r\n"
+    "key_use\t\t57\r\n"
+    "key_strafe\t\t56\r\n"
+    "key_speed\t\t54\r\n"
+    "use_mouse\t\t0\r\n"
+    "use_joystick\t\t0\r\n"
+    "screenblocks\t\t10\r\n"
+    "detaillevel\t\t0\r\n"
+    "snd_channels\t\t3\r\n"
+    "snd_musicdevice\t\t3\r\n"
+    "snd_sfxdevice\t\t3\r\n"
+    "snd_sbport\t\t544\r\n"
+    "snd_sbirq\t\t7\r\n"
+    "snd_sbdma\t\t1\r\n"
+    "usegamma\t\t0\r\n";
+
+static int dos_str_eq_ci(const char *a, const char *b)
+{
+    int i = 0;
+    while (a[i] && b[i]) {
+        if ((a[i] | 32) != (b[i] | 32)) return 0;
+        i++;
+    }
+    return a[i] == 0 && b[i] == 0;
+}
+
+static int dos_ends_ci(const char *s, const char *suf)
+{
+    int ls = 0, lf = 0;
+    while (s[ls]) ls++;
+    while (suf[lf]) lf++;
+    if (ls < lf) return 0;
+    for (int i = 0; i < lf; i++)
+        if ((s[ls - lf + i] | 32) != (suf[i] | 32)) return 0;
+    return 1;
+}
+
+static const char *dos_base_of(const char *p)
+{
+    const char *b = p;
+    for (; *p; p++)
+        if (*p == '/' || *p == '\\' || *p == ':')
+            b = p + 1;
+    return b;
+}
+
+static int dos_is_helper_exe(const char *bn)
+{
+    static const char *const helpers[] = {
+        "setup.exe", "install.exe", "sersetup.exe", "ipxsetup.exe",
+        "dm.exe", "dwango.exe", "deice.exe", "dos4gw.exe", "dos32a.exe",
+        "cwsdpmi.exe", "readme.exe", "order.exe", "catalog.exe"
+    };
+    for (unsigned i = 0; i < sizeof(helpers) / sizeof(helpers[0]); i++)
+        if (dos_str_eq_ci(bn, helpers[i])) return 1;
+    return 0;
+}
 
 static const char *dos_open(u8 *image, u32 size, const char *path)
 {
@@ -1473,6 +1591,73 @@ static const char *dos_open(u8 *image, u32 size, const char *path)
         dos_keys[i] = 0;
     dos_clear_files();
     dos_args("");
+
+    if (size > 0 && zip_is(image, size)) {
+        u8 *pool = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+        u32 pool_used = 0;
+        u32 cnt = zip_count(image, size);
+        struct {
+            char name[16];
+            u8 *ptr;
+            u32 sz;
+        } unpacked[96];
+        u32 n_unp = 0;
+        int best_idx = -1, best_score = -1;
+        int has_wad = 0, has_cfg = 0;
+
+        for (u32 i = 0; i < cnt && n_unp < 95u; i++) {
+            char mname[96];
+            u32 msz = 0;
+            if (zip_unpack_at(image, size, i, 0, 0, &msz, mname, sizeof(mname)) != 0)
+                continue;
+            const char *bn = dos_base_of(mname);
+            if (!*bn)
+                continue;
+            u32 aligned = (pool_used + 3u) & ~3u;
+            if (aligned + msz > IMAGE_WORK_SIZE)
+                return "unpacked DOS .zip exceeds 22 MB RAM work buffer";
+            image_poll = unpack_poll;
+            const char *zwhy = zip_unpack_at(image, size, i, pool + aligned, IMAGE_WORK_SIZE - aligned,
+                                             &msz, mname, sizeof(mname));
+            image_poll = 0;
+            if (zwhy)
+                return zwhy;
+            bn = dos_base_of(mname);
+            int k = 0;
+            while (bn[k] && k < 15) { unpacked[n_unp].name[k] = bn[k]; k++; }
+            unpacked[n_unp].name[k] = 0;
+            unpacked[n_unp].ptr = pool + aligned;
+            unpacked[n_unp].sz = msz;
+            pool_used = aligned + msz;
+
+            if (dos_ends_ci(bn, ".wad")) has_wad = 1;
+            if (dos_str_eq_ci(bn, "default.cfg")) has_cfg = 1;
+
+            int is_exe = dos_ends_ci(bn, ".exe");
+            int is_com = dos_ends_ci(bn, ".com");
+            if (is_exe || is_com) {
+                int sc = is_exe ? 1000 : 500;
+                if (dos_is_helper_exe(bn)) sc = 10;
+                sc += (int)(msz >> 10);
+                if (sc > best_score) {
+                    best_score = sc;
+                    best_idx = (int)n_unp;
+                }
+            }
+            n_unp++;
+        }
+        if (best_idx < 0)
+            return "no .exe or .com program found in DOS .zip";
+        for (u32 i = 0; i < n_unp; i++) {
+            if ((int)i == best_idx) continue;
+            (void)dos_add_file(unpacked[i].name, unpacked[i].ptr, unpacked[i].sz);
+        }
+        if (has_wad && !has_cfg)
+            (void)dos_add_file("DEFAULT.CFG", (const u8 *)dos_doom_default_cfg,
+                               (u32)(sizeof(dos_doom_default_cfg) - 1u));
+        return dos_load(unpacked[best_idx].ptr, unpacked[best_idx].sz, unpacked[best_idx].name);
+    }
+
     return dos_load(image, size, path);
 }
 
@@ -1493,11 +1678,11 @@ static void dos_typed(char c)
 }
 
 static const struct machine dos_machine = {DOS_W, DOS_H, 3, 3, DOS_FRAME_US, dos_open, dos_info, dos_one,
-                                           dos_save_ram, dos_save_changed, dos_jammed, 0, 0, "the 286",
+                                           dos_save_ram, dos_save_changed, dos_jammed, 0, 0, "the 386",
                                            dos_keyboard, dos_typed,
                                            "the USB keyboard is the PC's (but Esc, which ends); the remote: arrows, "
-                                           "OK = Up, 0 = Space, MENU = Enter, INFO = Esc; what is typed on this "
-                                           "console is typed on it", 0, 0, 0};
+                                           "OK = Fire/Up, 0 = Space, MENU = Enter, INFO = Esc; what is typed on this "
+                                           "console is typed on it", 0, dos_audio_rate, dos_audio};
 
 int dos_play(const char *path, u32 frames, const char *script)
 {
@@ -4183,4 +4368,687 @@ static const struct machine arcade_machine = {
 int arcade_play(const char *path, u32 frames, const char *script)
 {
     return play(&arcade_machine, path, frames, script);
+}
+
+/* 11. Sharp X68000 ('x68k': .dim, .xdf, .hdm, .2hd, .dup, .hdf, .x) */
+static const char *x68k_open(u8 *image, u32 size, const char *path)
+{
+    u8 *ipl = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *cg  = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x20000u);
+    u32 gipl = rom_find(path, "x68k", "iplrom.dat", ipl, 0x20000u, 0x20000u);
+    u32 gcg  = rom_find(path, "x68k", "cgrom.dat",  cg,  0x40000u, 0xC0000u);
+    x68k_set_roms(gipl == 0x20000u ? ipl : 0, gipl, gcg >= 0x40000u ? cg : 0, gcg);
+    return x68k_load(image, size, path);
+}
+
+static void x68k_one(u16 pad, void *pic_out)
+{
+    x68k_frame(pad, (u16 *)pic_out);
+}
+
+static void x68k_size(int *w, int *h)
+{
+    *w = x68k_width();
+    *h = x68k_height();
+}
+
+static void x68k_typed(char c)
+{
+    char s[2] = {c, 0};
+    x68k_type(s);
+}
+
+static const struct machine x68k_machine = {
+    X68K_W_MAX, X68K_H_MAX, 3, 2, X68K_FRAME_US, x68k_open, x68k_info, x68k_one,
+    x68k_save_ram, x68k_save_changed, x68k_jammed, 0, 0, "the 10 MHz 68000",
+    x68k_keys_from_hid, x68k_typed,
+    "arrows or W A S D, Z/Space = Button 1, X = Button 2, Enter = Return, Tab = XF1, USB keyboard + mouse; Esc ends",
+    x68k_size, x68k_audio_rate, x68k_audio
+};
+
+int x68k_play(const char *path, u32 frames, const char *script)
+{
+    return play(&x68k_machine, path, frames, script);
+}
+
+/* 12. Commodore Amiga 1200 ('a1200': 14.18 MHz 68EC020 + 2 MB AGA + HAM8 + 4-ch Paula + DF0: .adf + keyboard/mouse) */
+static int a1200_ends_ci(const char *s, const char *suf)
+{
+    int ls = 0, lf = 0;
+    while (s[ls]) ls++;
+    while (suf[lf]) lf++;
+    if (ls < lf) return 0;
+    for (int i = 0; i < lf; i++)
+        if ((s[ls - lf + i] | 32) != (suf[i] | 32)) return 0;
+    return 1;
+}
+
+static int a1200_has_ci(const char *s, const char *sub)
+{
+    for (int i = 0; s[i]; i++) {
+        int k = 0;
+        while (sub[k] && (s[i + k] | 32) == (sub[k] | 32)) k++;
+        if (!sub[k]) return 1;
+    }
+    return 0;
+}
+
+static u32 a1200_extract_zip_rom(const u8 *z, u32 zsz, u8 *kick, u8 *u6a, u8 *u6b)
+{
+    u32 cnt = zip_count(z, zsz);
+    char nm[96];
+    u32 msz = 0;
+    /* Pass 1: single 512 KB Kickstart .rom / .a1200 */
+    for (u32 i = 0; i < cnt; i++) {
+        if (zip_unpack_at(z, zsz, i, 0, 0, &msz, nm, sizeof(nm)) == 0 && msz == 0x80000u &&
+            (a1200_ends_ci(nm, ".rom") || a1200_ends_ci(nm, ".a1200"))) {
+            if (zip_unpack_at(z, zsz, i, kick, 0x80000u, &msz, nm, sizeof(nm)) == 0)
+                return 0x80000u;
+        }
+    }
+    /* Pass 2: split 256 KB .u6a + .u6b EPROM pairs (prefer KS 3.1 391773/391774, then KS 3.0 391523/391524, then any) */
+    static const char *const prefs[3] = {"39177", "39152", ""};
+    for (int p = 0; p < 3; p++) {
+        int ia = -1, ib = -1;
+        for (u32 i = 0; i < cnt; i++) {
+            if (zip_unpack_at(z, zsz, i, 0, 0, &msz, nm, sizeof(nm)) == 0 && msz == 0x40000u) {
+                if (prefs[p][0] && !a1200_has_ci(nm, prefs[p])) continue;
+                if (ia < 0 && a1200_ends_ci(nm, ".u6a")) ia = (int)i;
+                if (ib < 0 && a1200_ends_ci(nm, ".u6b")) ib = (int)i;
+            }
+        }
+        if (ia >= 0 && ib >= 0 &&
+            zip_unpack_at(z, zsz, (u32)ia, u6a, 0x40000u, &msz, nm, sizeof(nm)) == 0 &&
+            zip_unpack_at(z, zsz, (u32)ib, u6b, 0x40000u, &msz, nm, sizeof(nm)) == 0) {
+            a1200_interleave_roms(u6a, u6b, kick);
+            return 0x80000u;
+        }
+    }
+    return 0;
+}
+
+static const char *a1200_open(u8 *image, u32 size, const char *path)
+{
+    u8 *kick = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u8 *ext  = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x080000u);
+    u8 *u6a  = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x100000u);
+    u8 *u6b  = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x140000u);
+    u8 *zbuf = (u8 *)KSEG0(IMAGE_WORK_PHYS + 0x180000u);
+    u32 gk = 0, ge = 0;
+
+    if (size > 0 && gz_is(image, size)) {
+        char gname[96];
+        u32 gsz = 0;
+        image_poll = unpack_poll;
+        const char *why = gz_unpack(image, size, zbuf, 0x200000u, &gsz, gname, sizeof(gname));
+        image_poll = 0;
+        if (why) return why;
+        for (u32 i = 0; i < gsz; i++) image[i] = zbuf[i];
+        size = gsz;
+    } else if (size > 0 && zip_is(image, size)) {
+        char zname[96];
+        u32 asz = 0;
+        image_poll = unpack_poll;
+        const char *zwhy = zip_unpack(image, size, ".adf", zbuf, 0x200000u, &asz, zname, sizeof(zname));
+        image_poll = 0;
+        if (!zwhy && (asz == 901120u || asz == 1802240u)) {
+            for (u32 i = 0; i < asz; i++) image[i] = zbuf[i];
+            size = asz;
+        } else {
+            gk = a1200_extract_zip_rom(image, size, kick, u6a, u6b);
+            if (!gk) return zwhy ? zwhy : "no .adf floppy or Amiga 1200 Kickstart ROM found in .zip";
+            size = 0;
+        }
+    } else if (size == 0x80000u && (a1200_ends_ci(path, ".rom") || a1200_ends_ci(path, ".a1200"))) {
+        for (u32 i = 0; i < 0x80000u; i++) kick[i] = image[i];
+        gk = 0x80000u;
+        size = 0;
+    }
+
+    if (!gk) gk = rom_find(path, "a1200", "a1200.rom", kick, 0x80000u, 0x80000u);
+    if (!gk) gk = rom_find(path, "a1200", "kick40068.A1200", kick, 0x80000u, 0x80000u);
+    if (!gk) gk = rom_find(path, "a1200", "kick.rom", kick, 0x40000u, 0x80000u);
+    if (!gk) {
+        u32 ga = rom_find(path, "a1200", "391773-01.u6a", u6a, 0x40000u, 0x40000u);
+        u32 gb = ga ? rom_find(path, "a1200", "391774-01.u6b", u6b, 0x40000u, 0x40000u) : 0u;
+        if (!ga || !gb) {
+            ga = rom_find(path, "a1200", "391523-01.u6a", u6a, 0x40000u, 0x40000u);
+            gb = ga ? rom_find(path, "a1200", "391524-01.u6b", u6b, 0x40000u, 0x40000u) : 0u;
+        }
+        if (ga == 0x40000u && gb == 0x40000u) {
+            a1200_interleave_roms(u6a, u6b, kick);
+            gk = 0x80000u;
+        }
+    }
+    if (!gk) {
+        u32 gz = rom_find(path, "a1200", "a1200.zip", zbuf, 256u, 0x300000u);
+        if (!gz) gz = rom_find(path, "amiga", "a1200.zip", zbuf, 256u, 0x300000u);
+        if (gz) gk = a1200_extract_zip_rom(zbuf, gz, kick, u6a, u6b);
+    }
+    if (!gk) {
+        gk = rom_find(path, "a1200", "aros-rom.bin", kick, 0x80000u, 0x80000u);
+        if (gk) ge = rom_find(path, "a1200", "aros-ext.bin", ext, 0x80000u, 0x80000u);
+        if (!gk) {
+            gk = rom_find(path, "amiga", "aros-rom.bin", kick, 0x80000u, 0x80000u);
+            if (gk) ge = rom_find(path, "amiga", "aros-ext.bin", ext, 0x80000u, 0x80000u);
+        }
+    }
+    if (!gk) gk = rom_find(path, "amiga", "kick.rom", kick, 0x40000u, 0x80000u);
+
+    for (int i = 0; i < 16; i++)
+        amiga_keys[i] = 0;
+    return a1200_load(gk ? kick : 0, gk, ge == 0x80000u ? ext : 0, ge, size ? image : 0, size, path);
+}
+
+static void a1200_one(u16 pad, void *pic_out)
+{
+    a1200_frame(pad, amiga_keys, (u16 *)pic_out);
+}
+
+static void a1200_typed(char c)
+{
+    char s[2] = {c, 0};
+    a1200_type(s);
+}
+
+static const struct machine a1200_machine = {
+    CD32_W, CD32_H, 2, 2, CD32_FRAME_US, a1200_open, cd32_info, a1200_one, cd32_save_ram, cd32_save_changed,
+    cd32_jammed, 0, 0, "the 14 MHz 68EC020 + AGA", amiga_keyboard, a1200_typed,
+    "the USB keyboard is the Amiga's, arrows = joystick (fire: right Ctrl / remote OK), Page Up/Down or remote 0 = "
+    "mouse button, MENU = Return, INFO = Space; Esc ends",
+    0, cd32_audio_rate, cd32_audio
+};
+
+int a1200_play(const char *path, u32 frames, const char *script)
+{
+    return play(&a1200_machine, path, frames, script);
+}
+
+/* 13. 3DO Interactive Multiplayer ('3do': .iso, .cue; "": built-in 3D CEL showcase) */
+static const char *threedo_open(u8 *image, u32 size, const char *path)
+{
+    if (!*path) {
+        threedo_set_bios(0, 0);
+        return threedo_load(0, "");
+    }
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "3do", "panafz10.bin", bios, 0x80000u, 0x100000u);
+    if (!gb) gb = rom_find(path, "3do", "panafz1.bin", bios, 0x80000u, 0x100000u);
+    if (!gb) gb = rom_find(path, "3do", "goldstar.bin", bios, 0x80000u, 0x100000u);
+    threedo_set_bios(gb ? bios : 0, gb);
+    const char *why = threedo_load(toc, path);
+    if (why)
+        cdrom_close_disc();
+    return why;
+}
+
+static void threedo_one(u16 pad, void *pic_out)
+{
+    threedo_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine threedo_machine = {
+    THREEDO_W, THREEDO_H, 3, 3, THREEDO_FRAME_US, threedo_open, threedo_info, threedo_one,
+    threedo_save_ram, threedo_save_changed, threedo_jammed, 0, 0, "the 12.5 MHz ARM60 + Madam CEL", 0, 0,
+    "arrows or W A S D, X = A, Z = B, C = C, Q/E = L/R, Enter = P (Start), Tab = X (Stop); Ctrl-C or Esc ends",
+    0, threedo_audio_rate, threedo_audio
+};
+
+int threedo_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&threedo_machine, path, frames, script);
+    cdrom_close_disc();
+    return r;
+}
+
+/* 14. SNK Neo Geo CD ('neocd': .cue, .iso; "": built-in Neo Geo CD showcase) */
+static const char *neocd_open(u8 *image, u32 size, const char *path)
+{
+    if (!*path) {
+        neocd_set_bios(0, 0);
+        return neocd_load(0, "");
+    }
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "neocd", "neocd.bin", bios, 0x40000u, 0x80000u);
+    if (!gb) gb = rom_find(path, "neocd", "top-sp1.bin", bios, 0x40000u, 0x80000u);
+    if (!gb) gb = rom_find(path, "neocd", "front-sp1.bin", bios, 0x40000u, 0x80000u);
+    if (!gb) gb = rom_find(path, "neocd", "uni-bioscd.rom", bios, 0x40000u, 0x80000u);
+    if (!gb) gb = rom_find(path, "neogeo", "neocd.bin", bios, 0x40000u, 0x80000u);
+    neocd_set_bios(gb ? bios : 0, gb);
+    const char *why = neocd_load(toc, path);
+    if (why)
+        cdrom_close_disc();
+    return why;
+}
+
+static const struct machine neocd_machine = {
+    NEO_W, NEO_H, 3, 3, NEO_FRAME_US, neocd_open, neo_info, neo_one, neo_save_ram, neo_save_changed,
+    neo_jammed, 0, 0, "the 12 MHz 68000 + Z80 (Neo Geo CD)", 0, 0,
+    "arrows or W A S D, X = A, Z = B, C = C, V = D, Enter = Start, Tab = Select; Ctrl-C or Esc ends",
+    0, neo_audio_rate, neo_audio
+};
+
+int neocd_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&neocd_machine, path, frames, script);
+    cdrom_close_disc();
+    return r;
+}
+
+/* 15. NEC PC-9801VM / VX ('pc98': .fdi, .hdi, .d88, .hdm, .xdf, .2hd, .zip; "": built-in showcase) */
+#define PC98_FONT_AT (IMAGE_WORK_PHYS + IMAGE_WORK_SIZE - 0x00080000u)
+#define PC98_POOL_LIM (IMAGE_WORK_SIZE - 0x00080000u)
+
+static int pc98_is_disk_ext(const char *nm)
+{
+    return dos_ends_ci(nm, ".fdi") || dos_ends_ci(nm, ".hdi") || dos_ends_ci(nm, ".d88") ||
+           dos_ends_ci(nm, ".d98") || dos_ends_ci(nm, ".hdm") || dos_ends_ci(nm, ".xdf") ||
+           dos_ends_ci(nm, ".2hd") || dos_ends_ci(nm, ".dup") || dos_ends_ci(nm, ".img");
+}
+
+static const char *pc98_open(u8 *image, u32 size, const char *path)
+{
+    u8 *fbuf = (u8 *)KSEG0(PC98_FONT_AT);
+    u32 gf = rom_find(path, "pc98", "font.rom", fbuf, 0x46800u, 0x80000u);
+    pc98_set_font(gf >= 0x46800u ? fbuf : 0, gf);
+    pc98_clear_files();
+
+    if (size > 0 && zip_is(image, size)) {
+        u32 cnt = zip_count(image, size);
+        /* First check if the .zip wraps a floppy/HDD image (.fdi/.hdm/.d88/.hdi) */
+        for (u32 i = 0; i < cnt; i++) {
+            char mname[96];
+            u32 msz = 0;
+            if (zip_unpack_at(image, size, i, 0, 0, &msz, mname, sizeof(mname)) == 0 &&
+                pc98_is_disk_ext(mname) && msz <= MEDIA_MAX - size) {
+                u8 *top = image + MEDIA_MAX - size;
+                for (u32 b = size; b-- > 0;)
+                    top[b] = image[b];
+                image_poll = unpack_poll;
+                const char *zwhy = zip_unpack_at(top, size, i, image, MEDIA_MAX - size, &msz, mname, sizeof(mname));
+                image_poll = 0;
+                if (zwhy)
+                    return zwhy;
+                return pc98_load(image, msz, mname);
+            }
+        }
+        /* Otherwise unpack multi-file PC-98 DOS game archive into IMAGE_WORK_PHYS */
+        u8 *pool = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+        u32 pool_used = 0;
+        for (u32 i = 0; i < cnt; i++) {
+            char mname[96];
+            u32 msz = 0;
+            if (zip_unpack_at(image, size, i, 0, 0, &msz, mname, sizeof(mname)) != 0)
+                continue;
+            const char *bn = dos_base_of(mname);
+            if (!*bn)
+                continue;
+            u32 aligned = (pool_used + 3u) & ~3u;
+            if (aligned + msz > PC98_POOL_LIM)
+                return "unpacked PC-98 .zip exceeds RAM work buffer";
+            image_poll = unpack_poll;
+            const char *zwhy = zip_unpack_at(image, size, i, pool + aligned, PC98_POOL_LIM - aligned,
+                                             &msz, mname, sizeof(mname));
+            image_poll = 0;
+            if (zwhy)
+                return zwhy;
+            (void)pc98_add_file(dos_base_of(mname), pool + aligned, msz);
+            pool_used = aligned + msz;
+        }
+        return pc98_load(0, 0, path);
+    }
+
+    return pc98_load(size ? image : 0, size, path);
+}
+
+static void pc98_one(u16 pad, void *pic_out)
+{
+    pc98_frame(pad, (u16 *)pic_out);
+}
+
+static void pc98_typed(char c)
+{
+    char s[2] = {c, 0};
+    pc98_type(s);
+}
+
+static const struct machine pc98_machine = {
+    PC98_W, PC98_H, 2, 2, PC98_FRAME_US, pc98_open, pc98_info, pc98_one,
+    pc98_save_ram, pc98_save_changed, pc98_jammed, 0, 0, "the 10 MHz V30/286 + uPD7220 GDC",
+    pc98_keys_from_hid, pc98_typed,
+    "arrows/tenkey = move, Z/Space = Trig 1, X = Trig 2, Enter = Return, USB keyboard; Esc ends",
+    0, pc98_audio_rate, pc98_audio
+};
+
+int pc98_play(const char *path, u32 frames, const char *script)
+{
+    return play(&pc98_machine, path, frames, script);
+}
+
+/* 16. Konami Classic Arcade ('konami': .zip; "": built-in Viper Strike GX) */
+static const char *konami_open(u8 *image, u32 size, const char *path)
+{
+    const char *why = konami_load(size ? image : 0, size, path);
+    if (!why) {
+        int w = konami_width(), h = konami_height();
+        int xs = 1280 / (w > 0 ? w : 304);
+        int ys = 720 / (h > 0 ? h : 224);
+        int s = xs < ys ? xs : ys;
+        if (s < 1) s = 1;
+        konami_machine.w = w;
+        konami_machine.h = h;
+        konami_machine.xs = s;
+        konami_machine.ys = s;
+    }
+    return why;
+}
+
+static void konami_one(u16 pad, void *pic_out)
+{
+    konami_frame(pad, (u16 *)pic_out);
+}
+
+static void konami_size(int *w, int *h)
+{
+    *w = konami_width();
+    *h = konami_height();
+}
+
+static struct machine konami_machine = {
+    304, 224, 3, 3, KONAMI_FRAME_US, konami_open, konami_info, konami_one,
+    konami_save_ram, konami_save_changed, konami_jammed, 0, 0,
+    "the Konami 68000/6809 + Z80", 0, 0,
+    "arrows or W A S D, X = Shot/Attack, Z = Jump/Power, C = Button 3, Tab/Space = Coin, Enter = Start; Ctrl-C or Esc ends",
+    konami_size, konami_audio_rate, konami_audio
+};
+
+int konami_play(const char *path, u32 frames, const char *script)
+{
+    return play(&konami_machine, path, frames, script);
+}
+
+/* 17. Williams & Midway Classic Arcade ('williams': .zip; "": built-in Cybertron: 2084) */
+static const char *williams_open(u8 *image, u32 size, const char *path)
+{
+    const char *why = williams_load(size ? image : 0, size, path);
+    if (!why) {
+        int w = williams_width(), h = williams_height();
+        int xs = 1280 / (w > 0 ? w : 304);
+        int ys = 720 / (h > 0 ? h : 240);
+        int s = xs < ys ? xs : ys;
+        if (s < 1) s = 1;
+        williams_machine.w = w;
+        williams_machine.h = h;
+        williams_machine.xs = s;
+        williams_machine.ys = s;
+    }
+    return why;
+}
+
+static void williams_one(u16 pad, void *pic_out)
+{
+    williams_frame(pad, (u16 *)pic_out);
+}
+
+static void williams_size(int *w, int *h)
+{
+    *w = williams_width();
+    *h = williams_height();
+}
+
+static struct machine williams_machine = {
+    304, 240, 3, 3, WILLIAMS_FRAME_US, williams_open, williams_info, williams_one,
+    williams_save_ram, williams_save_changed, williams_jammed, 0, 0,
+    "the Williams Dual-6809 / Midway TMS34010", 0, 0,
+    "arrows or W A S D, X = Fire/Flap, Z = Bomb/Action, C = Hyper, V = Fire Up, Tab/Space = Coin, Enter = Start; Ctrl-C or Esc ends",
+    williams_size, williams_audio_rate, williams_audio
+};
+
+int williams_play(const char *path, u32 frames, const char *script)
+{
+    return play(&williams_machine, path, frames, script);
+}
+
+/* 18. Irem M72 & M92 Classic Arcade ('irem': .zip; "": built-in R-Force: Bydo Assault) */
+static const char *irem_open(u8 *image, u32 size, const char *path)
+{
+    const char *why = irem_load(size ? image : 0, size, path);
+    if (!why) {
+        int w = irem_width(), h = irem_height();
+        int xs = 1280 / (w > 0 ? w : 384);
+        int ys = 720 / (h > 0 ? h : 240);
+        int s = xs < ys ? xs : ys;
+        if (s < 1) s = 1;
+        irem_machine.w = w;
+        irem_machine.h = h;
+        irem_machine.xs = s;
+        irem_machine.ys = s;
+    }
+    return why;
+}
+
+static void irem_one(u16 pad, void *pic_out)
+{
+    irem_frame(pad, (u16 *)pic_out);
+}
+
+static void irem_size(int *w, int *h)
+{
+    *w = irem_width();
+    *h = irem_height();
+}
+
+static struct machine irem_machine = {
+    384, 240, 3, 3, IREM_FRAME_US, irem_open, irem_info, irem_one,
+    irem_save_ram, irem_save_changed, irem_jammed, 0, 0,
+    "the Irem NEC V30/V33 + Z80", 0, 0,
+    "arrows or W A S D, X = Fire/Beam, Z = Force/Jump, Tab/Space = Coin, Enter = Start; Ctrl-C or Esc ends",
+    irem_size, irem_audio_rate, irem_audio
+};
+
+int irem_play(const char *path, u32 frames, const char *script)
+{
+    return play(&irem_machine, path, frames, script);
+}
+
+/* 19. Taito Classic & F2 / B-System Arcade ('taito': .zip; "": built-in Bubble Dragons F2) */
+static const char *taito_open(u8 *image, u32 size, const char *path)
+{
+    const char *why = taito_load(size ? image : 0, size, path);
+    if (!why) {
+        int w = taito_width(), h = taito_height();
+        int xs = 1280 / (w > 0 ? w : 320);
+        int ys = 720 / (h > 0 ? h : 224);
+        int s = xs < ys ? xs : ys;
+        if (s < 1) s = 1;
+        taito_machine.w = w;
+        taito_machine.h = h;
+        taito_machine.xs = s;
+        taito_machine.ys = s;
+    }
+    return why;
+}
+
+static void taito_one(u16 pad, void *pic_out)
+{
+    taito_frame(pad, (u16 *)pic_out);
+}
+
+static void taito_size(int *w, int *h)
+{
+    *w = taito_width();
+    *h = taito_height();
+}
+
+static struct machine taito_machine = {
+    320, 224, 3, 3, TAITO_FRAME_US, taito_open, taito_info, taito_one,
+    taito_save_ram, taito_save_changed, taito_jammed, 0, 0,
+    "the Taito 68000 / Z80", 0, 0,
+    "arrows or W A S D, X = Bubble/Fire, Z = Jump, Tab/Space = Coin, Enter = Start; Ctrl-C or Esc ends",
+    taito_size, taito_audio_rate, taito_audio
+};
+
+int taito_play(const char *path, u32 frames, const char *script)
+{
+    return play(&taito_machine, path, frames, script);
+}
+
+/* 20. PICO-8 128x128 Fantasy Console ('pico8': .p8, .p8.png; "": built-in CelestePeak-8) */
+static const char *pico8_open(u8 *image, u32 size, const char *path)
+{
+    return pico8_load(size ? image : 0, size, path);
+}
+
+static void pico8_one(u16 pad, void *pic_out)
+{
+    pico8_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine pico8_machine = {
+    PICO8_W, PICO8_H, 5, 5, PICO8_FRAME_US, pico8_open, pico8_info, pico8_one,
+    pico8_save_ram, pico8_save_changed, pico8_jammed, 0, 0,
+    "the PICO-8 Lua VM", 0, 0,
+    "arrows or W A S D, Z = O (Jump/Action 1), X = X (Dash/Action 2); Ctrl-C or Esc ends",
+    0, pico8_audio_rate, pico8_audio
+};
+
+int pico8_play(const char *path, u32 frames, const char *script)
+{
+    return play(&pico8_machine, path, frames, script);
+}
+
+/* 21. Atari Jaguar 64-Bit Console ('jaguar': .j64, .jag, .rom; "": built-in Tempest Jaguar 64) */
+static struct machine jaguar_machine;
+static const char *jaguar_open(u8 *image, u32 size, const char *path)
+{
+    const char *why = jaguar_load(size ? image : 0, size, path);
+    if (!why) {
+        int w = jaguar_width(), h = jaguar_height();
+        int xs = 1280 / (w > 0 ? w : 320);
+        int ys = 720 / (h > 0 ? h : 224);
+        int s = xs < ys ? xs : ys;
+        if (s < 1) s = 1;
+        jaguar_machine.w = w;
+        jaguar_machine.h = h;
+        jaguar_machine.xs = s;
+        jaguar_machine.ys = s;
+    }
+    return why;
+}
+
+static void jaguar_one(u16 pad, void *pic_out)
+{
+    jaguar_frame(pad, (u16 *)pic_out);
+}
+
+static void jaguar_size(int *w, int *h)
+{
+    *w = jaguar_width();
+    *h = jaguar_height();
+}
+
+static struct machine jaguar_machine = {
+    320, 224, 3, 3, JAGUAR_FRAME_US, jaguar_open, jaguar_info, jaguar_one,
+    jaguar_save_ram, jaguar_save_changed, jaguar_jammed, 0, 0,
+    "the Jaguar 68000 + Tom GPU + Jerry DSP", 0, 0,
+    "arrows or W A S D, X = Button A, Z = Button B, C = Button C, Enter = Pause; Ctrl-C or Esc ends",
+    jaguar_size, jaguar_audio_rate, jaguar_audio
+};
+
+int jaguar_play(const char *path, u32 frames, const char *script)
+{
+    return play(&jaguar_machine, path, frames, script);
+}
+
+/* 22. NEC PC-FX 32-Bit CD-ROM Console ('pcfx': .cue, .iso; "": built-in Star Soldier FX-32) */
+static struct machine pcfx_machine;
+static const char *pcfx_open(u8 *image, u32 size, const char *path)
+{
+    if (!*path) {
+        pcfx_set_bios(0, 0);
+        const char *why = pcfx_load(0, "");
+        pcfx_machine.w = pcfx_width();
+        pcfx_machine.h = pcfx_height();
+        pcfx_machine.xs = 3;
+        pcfx_machine.ys = 3;
+        return why;
+    }
+    const char *cd_err = 0;
+    const struct cdrom_toc *toc = cdrom_open_disc(path, image, size, &cd_err);
+    if (!toc)
+        return cd_err;
+    u8 *bios = (u8 *)KSEG0(IMAGE_WORK_PHYS);
+    u32 gb = rom_find(path, "pcfx", "pcfx.rom", bios, 0x80000u, 0x100000u);
+    if (!gb) gb = rom_find(path, "pcfx", "pcfxbios.bin", bios, 0x80000u, 0x100000u);
+    if (!gb) gb = rom_find(path, "pcfx", "fx-scsi.rom", bios, 0x80000u, 0x100000u);
+    pcfx_set_bios(gb ? bios : 0, gb);
+    const char *why = pcfx_load(toc, path);
+    if (why) {
+        cdrom_close_disc();
+        return why;
+    }
+    int w = pcfx_width(), h = pcfx_height();
+    pcfx_machine.w = w;
+    pcfx_machine.h = h;
+    pcfx_machine.xs = (w <= 256) ? 3 : 3;
+    pcfx_machine.ys = 3;
+    return 0;
+}
+
+static void pcfx_one(u16 pad, void *pic_out)
+{
+    pcfx_frame(pad, (u16 *)pic_out);
+}
+
+static void pcfx_size(int *w, int *h)
+{
+    *w = pcfx_width();
+    *h = pcfx_height();
+}
+
+static struct machine pcfx_machine = {
+    PCFX_W, PCFX_H, 3, 3, PCFX_FRAME_US, pcfx_open, pcfx_info, pcfx_one,
+    pcfx_save_ram, pcfx_save_changed, pcfx_jammed, 0, 0,
+    "the 21.5 MHz NEC V810 + HuC6272 KING", 0, 0,
+    "arrows or W A S D, X = I, Z = II, C = III, V = IV, Q/E = V/VI, Enter = Run, Tab = Select; Ctrl-C or Esc ends",
+    pcfx_size, pcfx_audio_rate, pcfx_audio
+};
+
+int pcfx_play(const char *path, u32 frames, const char *script)
+{
+    int r = play(&pcfx_machine, path, frames, script);
+    cdrom_close_disc();
+    return r;
+}
+
+/* 23. Nintendo 64 ('n64': .z64, .n64, .v64; "": built-in Star Wing 64 3D) */
+static const char *n64_open(u8 *image, u32 size, const char *path)
+{
+    return n64_load(size ? image : 0, size, path);
+}
+
+static void n64_one(u16 pad, void *pic_out)
+{
+    n64_frame(pad, (u16 *)pic_out);
+}
+
+static const struct machine n64_machine = {
+    N64_W_MAX, N64_H_MAX, 3, 3, N64_FRAME_US, n64_open, n64_info, n64_one,
+    n64_save_ram, n64_save_changed, n64_jammed, 0, 0,
+    "the 93.75 MHz MIPS VR4300 + RCP/RDP", 0, 0,
+    "arrows or W A S D = Stick / D-Pad, X = A, Z = B, C/Tab = Z-Trigger, Q/E = L/R, Enter = Start; Ctrl-C or Esc ends",
+    0, n64_audio_rate, n64_audio
+};
+
+int n64_play(const char *path, u32 frames, const char *script)
+{
+    return play(&n64_machine, path, frames, script);
 }

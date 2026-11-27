@@ -574,6 +574,19 @@ void s32x_play_region(int region);                                  /* 'J', 'U',
 int cd32_play(const char *path, u32 frames, const char *script);    /* 'cd32': a Commodore Amiga CD32 disc (.cue, .iso) */
 int cps2_play(const char *path, u32 frames, const char *script);    /* 'cps2': a Capcom CPS-2 QSound arcade game (.zip, .cps2) */
 int arcade_play(const char *path, u32 frames, const char *script);  /* 'arcade': a Golden-Age Z80 arcade game (.zip; "": built-in) */
+int x68k_play(const char *path, u32 frames, const char *script);    /* 'x68k': a Sharp X68000 disk or .x (.dim, .xdf, .hdm, .2hd, .hdf) */
+int a1200_play(const char *path, u32 frames, const char *script);   /* 'a1200': a Commodore Amiga 1200 AGA disk (.adf, .zip; "": Kickstart) */
+int threedo_play(const char *path, u32 frames, const char *script); /* '3do': a 3DO Interactive Multiplayer disc (.iso, .cue; "": built-in) */
+int neocd_play(const char *path, u32 frames, const char *script);   /* 'neocd': an SNK Neo Geo CD disc (.cue, .iso; "": built-in) */
+int pc98_play(const char *path, u32 frames, const char *script);    /* 'pc98': an NEC PC-9801 disk or archive (.fdi, .hdi, .d88, .hdm, .zip; "": built-in) */
+int konami_play(const char *path, u32 frames, const char *script);  /* 'konami': a Konami classic arcade game (.zip; "": built-in) */
+int williams_play(const char *path, u32 frames, const char *script);/* 'williams': a Williams or Midway arcade game (.zip; "": built-in) */
+int irem_play(const char *path, u32 frames, const char *script);    /* 'irem': an Irem M72 or M92 arcade game (.zip; "": built-in) */
+int taito_play(const char *path, u32 frames, const char *script);   /* 'taito': a Taito Classic or F2 arcade game (.zip; "": built-in) */
+int pico8_play(const char *path, u32 frames, const char *script);   /* 'pico8': a PICO-8 fantasy console cart (.p8, .p8.png; "": built-in) */
+int jaguar_play(const char *path, u32 frames, const char *script);  /* 'jaguar': an Atari Jaguar 64-bit cart (.j64, .jag, .rom; "": built-in) */
+int pcfx_play(const char *path, u32 frames, const char *script);    /* 'pcfx': an NEC PC-FX CD-ROM disc (.cue, .iso; "": built-in) */
+int n64_play(const char *path, u32 frames, const char *script);     /* 'n64': a Nintendo 64 cartridge (.z64, .n64, .v64; "": built-in) */
 
 /* view.c: the picture viewer (image.c decodes JPEG, PNG, GIF, BMP) */
 #define IMAGE_WORK_PHYS  0x06900000u      /* the picture as shown, and the decoder's memory (a progressive JPEG's */

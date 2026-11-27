@@ -48,6 +48,12 @@ static void idle_branch(u32 at);
 #define HLE_FIX_CLEAR      10
 #define HLE_LSP_1ST        11
 #define HLE_MESS_OUT       12
+#define HLE_CD_UPLOAD      13
+#define HLE_CD_LOADFILE    14
+#define HLE_CD_LOADFILEX   15
+#define HLE_CD_CDDACMD     16
+#define HLE_CD_VIDEOEN     17
+#define HLE_CD_RESETGAME   18
 
 #define SND_RING           8192
 #define WLOG_MAX           2048
@@ -121,12 +127,25 @@ struct neo_mem {
         u32 zcyc;
         u8 part, reg, val;
     } wlog[WLOG_MAX];
+
+    /* Neo Geo CD DRAM / PSRAM (~7.7 MB; total struct neo_mem ~8.67 MB <= 9.5 MB EMU_RAM_SIZE) */
+    u8 cd_bios[0x80000];                /* $C00000..$C7FFFF 512 KB CD system BIOS (host u16 word order) */
+    u8 cd_prgram[0x200000];             /* $000000..$1FFFFF 2 MB 68k Program DRAM (host u16 word order) */
+    u8 cd_sprram[0x400000];             /* 4 MB (4 x 1 MB banks) Sprite Tile DRAM */
+    u8 cd_pcmram[0x100000];             /* 1 MB (2 x 512 KB banks) YM2610 ADPCM-A DRAM */
+    u8 cd_fixram[0x20000];              /* 128 KB Fix Layer PSRAM */
+    u8 cd_z80ram[0x10000];              /* 64 KB Z80 Sound RAM ($0000..$FFFF) */
+    u8 cd_bram[0x2000];                 /* 8 KB Neo Geo CD onboard memory card ($800000..$803FFF odd) */
+    u8 cdda_sec[2352];                  /* Redbook CD-DA stereo sector buffer */
+    u8 iso_sec[2048];                   /* ISO9660 / CDD 2048-byte sector buffer */
+    u8 cdc_ram[0x4000];                 /* Sanyo LC89515 16 KB sector ring buffer */
 };
 
 #ifdef NEO_HOST
 static struct neo_mem neo_host_mem;
 #define M (&neo_host_mem)
 #else
+_Static_assert(sizeof(struct neo_mem) <= EMU_RAM_SIZE, "neo_mem must fit in EMU_RAM_SIZE");
 #define M ((struct neo_mem *)KSEG0(EMU_RAM_PHYS))
 #endif
 
@@ -197,6 +216,32 @@ static struct {
     u32 snd_rate, snd_acc;
     s32 snd_sum, snd_n, snd_lp, snd_lp_was, snd_hp;
     u32 snd_head, snd_tail;
+
+    /* Neo Geo CD state */
+    const struct cdrom_toc *cd;
+    u8 is_cd, is_cd_builtin, has_cd_ext_bios;
+    u32 iso_root_lba, iso_root_len, iso_trk1_lba;
+    u8 cd_trans_area;                   /* 0=SPR, 1=PCM, 4=Z80, 5=FIX */
+    u8 cd_spr_bank, cd_pcm_bank;
+    u8 cd_upload_en, cd_z80_en, cd_irq_en;
+    u8 cd_dis_spr, cd_dis_fix, cd_video_en;
+    u8 cd_irq_flags;                    /* bit 0: vec23($5C), bit 1: vec22($58), bit 2: vec21($54) */
+    u16 cd_ff00[0x100];                 /* $FF0000..$FF01FE register shadow */
+    u32 cd_dma_src, cd_dma_dst, cd_dma_val, cd_dma_cnt;
+    u16 cd_dma_mode, cd_dma_ucode[8];
+    u8 cdd_tx[10], cdd_rx[10], cdd_idx, cdd_ctrl, cdd_status;
+    u32 cdd_cur_lba, cdd_read_lba;
+    u8 cdd_reading;
+    s32 cdd_sec_timer;
+    u8 lc_ar, lc_regs[16];
+    u16 lc_dac, lc_dbc, lc_pt, lc_wa;
+    u8 cdda_playing, cdda_paused, cdda_loop;
+    u8 cdda_track;
+    u32 cdda_lba, cdda_start_lba, cdda_end_lba;
+    u32 cdda_pos;                       /* 0..587 stereo sample index in cdda_sec */
+    u32 cdda_acc;                       /* 44100 -> 55555.56 Hz accumulator */
+    s16 cdda_l, cdda_r;
+    u16 cdda_vu_l, cdda_vu_r;
 
     u8 tables_ready;
     char info[128];
@@ -535,8 +580,214 @@ static void build_hle_bios(void)
     bios_w16(0x1180, 0x4E75);           /* no-op RTS */
 }
 
+static void cd_bios_w16(u32 a, u16 v)
+{
+    *(u16 *)(M->cd_bios + (a & 0x7FFFEu)) = v;
+}
+
+static void cd_bios_w32(u32 a, u32 v)
+{
+    cd_bios_w16(a, (u16)(v >> 16));
+    cd_bios_w16(a + 2, (u16)v);
+}
+
+static void build_cd_hle_bios(void)
+{
+    static const u16 sin_q65[65] = {
+        0, 1608, 3216, 4821, 6424, 8022, 9616, 11204, 12785, 14359, 15924, 17479, 19024,
+        20557, 22078, 23586, 25080, 26558, 28020, 29466, 30893, 32303, 33692, 35062, 36410,
+        37736, 39040, 40320, 41576, 42806, 44011, 45190, 46341, 47464, 48559, 49624, 50660,
+        51665, 52639, 53581, 54491, 55368, 56212, 57022, 57798, 58538, 59244, 59914, 60547,
+        61145, 61705, 62228, 62714, 63162, 63572, 63944, 64277, 64571, 64827, 65043, 65220,
+        65358, 65457, 65516, 1
+    };
+    static const u32 tan_mid[64] = {
+        12869, 38621, 64421, 90298, 116285, 142414, 168717, 195230,
+        221985, 249020, 276373, 304081, 332187, 360734, 389767, 419334,
+        449488, 480283, 511779, 544038, 577130, 611128, 646114, 682174,
+        719404, 757910, 797807, 839223, 882299, 927192, 974077, 1023151,
+        1074633, 1128772, 1185851, 1246189, 1310154, 1378167, 1450715, 1528365,
+        1611777, 1701731, 1799150, 1905137, 2021019, 2148412, 2289299, 2446143,
+        2622042, 2820949, 3047986, 3309914, 3615846, 3978364, 4415346, 4953084,
+        5631892, 6516887, 7720547, 9455327, 12176483, 17067680, 28469017, 85441370
+    };
+
+    for (u32 i = 0; i < 0x80000u; i += 2)
+        *(u16 *)(M->cd_bios + i) = 0x4E75;
+
+    /* Neo Geo CD 68000 exception vectors ($C00000..$C000FF):
+       Note Level 1 ($64) = Timer and Level 2 ($68) = VBlank (swapped vs Cart!) */
+    cd_bios_w32(0x00, 0x0010F300u);
+    cd_bios_w32(0x04, 0x00C00402u);
+    for (u32 v = 2; v < 21; v++)
+        cd_bios_w32(v * 4, 0x00C00426u);
+    cd_bios_w32(0x54, 0x00C004F2u);     /* Vector 21: CD decoder IRQ */
+    cd_bios_w32(0x58, 0x00C004ECu);     /* Vector 22: CDD communication IRQ */
+    cd_bios_w32(0x5C, 0x00C004E6u);     /* Vector 23: CD misc IRQ */
+    cd_bios_w32(0x60, 0x00C004E0u);     /* Spurious */
+    cd_bios_w32(0x64, 0x00C010B0u);     /* Level 1: Timer */
+    cd_bios_w32(0x68, 0x00C00438u);     /* Level 2: VBlank (SYSTEM_INT1) */
+    cd_bios_w32(0x6C, 0x00C00432u);     /* Level 3 */
+    for (u32 v = 28; v < 64; v++)
+        cd_bios_w32(v * 4, 0x00C00426u);
+
+    M->cd_bios[0x400 ^ 1] = 0x00;       /* Home / CD */
+    M->cd_bios[0x401 ^ 1] = 0x01;       /* USA */
+
+    /* Jump table ($C00402..$C006FC) */
+    cd_bios_w16(0x0402, 0x4EF9); cd_bios_w32(0x0404, 0x00C01000u);
+    for (u32 a = 0x0408; a <= 0x0432; a += 6) {
+        cd_bios_w16(a, 0x4EF9); cd_bios_w32(a + 2, 0x00C01080u);
+    }
+    cd_bios_w16(0x0438, 0x4EF9); cd_bios_w32(0x043A, 0x00C01090u); /* SYSTEM_INT1 */
+    cd_bios_w16(0x043E, 0x4E75); cd_bios_w16(0x0440, 0x4E71); cd_bios_w16(0x0442, 0x4E71); /* RTS on CD */
+    cd_bios_w16(0x0444, 0x4EF9); cd_bios_w32(0x0446, 0x00C010D0u); /* SYSTEM_RETURN */
+    cd_bios_w16(0x044A, 0x4EF9); cd_bios_w32(0x044C, 0x00C01100u); /* SYSTEM_IO */
+    cd_bios_w16(0x0450, 0x4EF9); cd_bios_w32(0x0452, 0x00C01150u); /* CREDIT_CHECK */
+    cd_bios_w16(0x0456, 0x4EF9); cd_bios_w32(0x0458, 0x00C01160u); /* CREDIT_DOWN */
+    cd_bios_w16(0x045C, 0x4EF9); cd_bios_w32(0x045E, 0x00C01180u);
+    cd_bios_w16(0x0462, 0x4EF9); cd_bios_w32(0x0464, 0x00C01180u);
+    cd_bios_w16(0x0468, 0x4EF9); cd_bios_w32(0x046A, 0x00C01190u); /* CARD */
+    cd_bios_w16(0x046E, 0x4EF9); cd_bios_w32(0x0470, 0x00C01180u);
+    for (u32 a = 0x0474; a < 0x04C2; a += 6) {
+        cd_bios_w16(a, 0x4EF9); cd_bios_w32(a + 2, 0x00C01180u);
+    }
+    cd_bios_w16(0x04C2, 0x4EF9); cd_bios_w32(0x04C4, 0x00C011B0u); /* FIX_CLEAR */
+    cd_bios_w16(0x04C8, 0x4EF9); cd_bios_w32(0x04CA, 0x00C011C0u); /* LSP_1st */
+    cd_bios_w16(0x04CE, 0x4EF9); cd_bios_w32(0x04D0, 0x00C011D0u); /* MESS_OUT */
+    cd_bios_w16(0x04D4, 0x4EF9); cd_bios_w32(0x04D6, 0x00C01180u); /* CONTROLLER_SETUP */
+    cd_bios_w16(0x04DA, 0x4EF9); cd_bios_w32(0x04DC, 0x00C010B0u); /* HBlank / Timer RTE */
+    for (u32 a = 0x04E0; a <= 0x04F2; a += 6) {
+        cd_bios_w16(a, 0x4EF9); cd_bios_w32(a + 2, 0x00C01070u);   /* CD IRQ ack + RTE */
+    }
+    for (u32 a = 0x04F8; a <= 0x06FC; a += 6) {
+        cd_bios_w16(a, 0x4EF9); cd_bios_w32(a + 2, 0x00C01180u);
+    }
+    /* Neo Geo CD specific BIOS routines */
+    cd_bios_w16(0x0546, 0x4EF9); cd_bios_w32(0x0548, 0x00C01200u); /* BIOSF_UPLOAD */
+    cd_bios_w16(0x0552, 0x4EF9); cd_bios_w32(0x0554, 0x00C01210u); /* BIOSF_LOADFILE */
+    cd_bios_w16(0x055E, 0x4EF9); cd_bios_w32(0x0560, 0x00C01250u); /* BIOSF_CDPLAYER */
+    cd_bios_w16(0x0564, 0x4EF9); cd_bios_w32(0x0566, 0x00C01220u); /* BIOSF_LOADFILEX */
+    cd_bios_w16(0x056A, 0x4EF9); cd_bios_w32(0x056C, 0x00C01230u); /* BIOSF_CDDACMD */
+    cd_bios_w16(0x0570, 0x4EF9); cd_bios_w32(0x0572, 0x00C01240u); /* BIOSF_VIDEOEN */
+    cd_bios_w16(0x0582, 0x4EF9); cd_bios_w32(0x0584, 0x00C01250u); /* BIOSF_RESETGAME */
+
+    /* $C01000: Boot & main USER loop */
+    u32 pc = 0x1000;
+    cd_bios_w16(pc, 0x46FC); cd_bios_w16(pc + 2, 0x2700); pc += 4;
+    cd_bios_w16(pc, 0x4FF9); cd_bios_w32(pc + 2, 0x0010F300u); pc += 6;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, HLE_INIT_HW); cd_bios_w32(pc + 4, HLE_TRAP_PORT); pc += 8;
+    cd_bios_w16(pc, 0x46FC); cd_bios_w16(pc + 2, 0x2000); pc += 4;
+    cd_bios_w16(pc, 0x4EB9); cd_bios_w32(pc + 2, 0x00000122u); pc += 6;
+    u32 loop_pc = pc;
+    cd_bios_w16(pc, 0x46FC); cd_bios_w16(pc + 2, 0x2700); pc += 4;
+    cd_bios_w16(pc, 0x4FF9); cd_bios_w32(pc + 2, 0x0010F300u); pc += 6;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, HLE_SYS_RETURN); cd_bios_w32(pc + 4, HLE_TRAP_PORT); pc += 8;
+    cd_bios_w16(pc, 0x46FC); cd_bios_w16(pc + 2, 0x2000); pc += 4;
+    cd_bios_w16(pc, 0x4EB9); cd_bios_w32(pc + 2, 0x00000122u); pc += 6;
+    cd_bios_w16(pc, (u16)(0x6000u | ((u16)((s32)loop_pc - (s32)(pc + 2)) & 0xFFu))); pc += 2;
+
+    /* $C01070: CD IRQ ack ($FF000F = $38) + RTE */
+    pc = 0x1070;
+    cd_bios_w16(pc, 0x13FC); cd_bios_w16(pc + 2, 0x0038); cd_bios_w32(pc + 4, 0x00FF000Fu); pc += 8;
+    cd_bios_w16(pc, 0x4E73);
+
+    /* $C01080: Generic exception / IRQ3 ack + RTE */
+    pc = 0x1080;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, 0x0001); cd_bios_w32(pc + 4, 0x003C000Cu); pc += 8;
+    cd_bios_w16(pc, 0x4E73);
+
+    /* $C01090: SYSTEM_INT1 (VBlank on Level 2): HLE_SYS_INT1 + SYSTEM_IO + RTE */
+    pc = 0x1090;
+    cd_bios_w16(pc, 0x48E7); cd_bios_w16(pc + 2, 0xFFFE); pc += 4;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, HLE_SYS_INT1); cd_bios_w32(pc + 4, HLE_TRAP_PORT); pc += 8;
+    cd_bios_w16(pc, 0x4EB9); cd_bios_w32(pc + 2, 0x00C01100u); pc += 6;
+    cd_bios_w16(pc, 0x4CDF); cd_bios_w16(pc + 2, 0x7FFF); pc += 4;
+    cd_bios_w16(pc, 0x4E73);
+
+    /* $C010B0: Timer (Level 1 on CD): ack bit 1 ($3C000C = 2), kick watchdog, RTE */
+    pc = 0x10B0;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, 0x0002); cd_bios_w32(pc + 4, 0x003C000Cu); pc += 8;
+    cd_bios_w16(pc, 0x13C0); cd_bios_w32(pc + 2, 0x00300001u); pc += 6;
+    cd_bios_w16(pc, 0x4E73);
+
+    /* $C010D0: SYSTEM_RETURN */
+    cd_bios_w16(0x10D0, 0x4E75);
+
+    /* $C01100: SYSTEM_IO (uses $10FE7E instead of $10FEF8 so BIOS_UPSRC at $10FEF8 is untouched!) */
+    pc = 0x1100;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, HLE_SYS_IO_PRE); cd_bios_w32(pc + 4, HLE_TRAP_PORT); pc += 8;
+    cd_bios_w16(pc, 0x4A39); cd_bios_w32(pc + 2, 0x0010FE7Eu); pc += 6;
+    cd_bios_w16(pc, 0x671C); pc += 2;
+    cd_bios_w16(pc, 0x4239); cd_bios_w32(pc + 2, 0x0010FE7Eu); pc += 6;
+    cd_bios_w16(pc, 0x48E7); cd_bios_w16(pc + 2, 0xFFFE); pc += 4;
+    cd_bios_w16(pc, 0x4EB9); cd_bios_w32(pc + 2, 0x00000128u); pc += 6;
+    cd_bios_w16(pc, 0x4CDF); cd_bios_w16(pc + 2, 0x7FFF); pc += 4;
+    cd_bios_w16(pc, 0x33FC); cd_bios_w16(pc + 2, HLE_SYS_IO_POST); cd_bios_w32(pc + 4, HLE_TRAP_PORT); pc += 8;
+    cd_bios_w16(pc, 0x4E75);
+
+    static const struct { u32 addr; u16 id; } cd_stubs[] = {
+        {0x1150, HLE_CREDIT_CHECK},
+        {0x1160, HLE_CREDIT_DOWN},
+        {0x1190, HLE_CARD},
+        {0x11B0, HLE_FIX_CLEAR},
+        {0x11C0, HLE_LSP_1ST},
+        {0x11D0, HLE_MESS_OUT},
+        {0x1200, HLE_CD_UPLOAD},
+        {0x1210, HLE_CD_LOADFILE},
+        {0x1220, HLE_CD_LOADFILEX},
+        {0x1230, HLE_CD_CDDACMD},
+        {0x1240, HLE_CD_VIDEOEN},
+        {0x1250, HLE_CD_RESETGAME},
+    };
+    for (unsigned i = 0; i < sizeof(cd_stubs) / sizeof(cd_stubs[0]); i++) {
+        u32 a = cd_stubs[i].addr;
+        cd_bios_w16(a, 0x33FC); cd_bios_w16(a + 2, cd_stubs[i].id); cd_bios_w32(a + 4, HLE_TRAP_PORT);
+        cd_bios_w16(a + 8, 0x4E75);
+    }
+    cd_bios_w16(0x1180, 0x4E75);
+
+    /* ROM Math Tables ($C02000 direction, $C03000 hypot length, $C04000 |sin|, $C04200 random) */
+    for (u32 dy = 0; dy < 64u; dy++) {
+        for (u32 dx = 0; dx < 64u; dx++) {
+            u32 idx = dy * 64u + dx;
+            u8 ang = 0;
+            if (dx || dy) {
+                u32 a = 64u;
+                for (u32 k = 0; k < 64u; k++) {
+                    if ((dy << 20) < dx * tan_mid[k]) {
+                        a = k;
+                        break;
+                    }
+                }
+                ang = (u8)a;
+            }
+            M->cd_bios[(0x2000u + idx) ^ 1u] = ang;
+
+            u32 n = dx * dx + dy * dy;
+            u32 r = 0;
+            while (r * r + r < n)
+                r++;
+            M->cd_bios[(0x3000u + idx) ^ 1u] = (u8)r;
+        }
+    }
+    for (u32 i = 0; i < 256u; i++) {
+        u32 q = i & 127u;
+        if (q > 64u)
+            q = 128u - q;
+        cd_bios_w16(0x4000u + i * 2u, sin_q65[q]);
+        M->cd_bios[(0x4200u + i) ^ 1u] = (u8)((i * 173u + 91u) & 0xFFu);
+    }
+}
+
 static void sync_page0_vectors(void)
 {
+    if (S.is_cd) {
+        const u8 *vec_src = S.vectable ? M->cd_prgram : M->cd_bios;
+        for (u32 i = 0; i < 0x80u; i++)
+            M->page0[i] = vec_src[i];
+        return;
+    }
     const u8 *vec_src = S.vectable ? S.p_rom : M->bios;
     u32 limit = (!S.vectable || S.p_size >= 0x80) ? 0x80u : S.p_size;
     for (u32 i = 0; i < limit; i++)
@@ -727,6 +978,15 @@ static void hle_mess_out(void)
 
 static void irq_refresh(void)
 {
+    if (S.is_cd) {
+        u32 lv = (S.cd_irq_en && S.cd_irq_flags) ? 4u :
+                 (S.irq_pending & 4) ? 3u :
+                 (S.irq_pending & 1) ? 2u :
+                 (S.irq_pending & 2) ? 1u : 0u;
+        m.ipl = lv;
+        check_pending();
+        return;
+    }
     u32 lv = (S.irq_pending & 4) ? 3u : (S.irq_pending & 2) ? 2u : (S.irq_pending & 1) ? 1u : 0u;
     m.ipl = lv;
     check_pending();
@@ -734,7 +994,10 @@ static void irq_refresh(void)
 
 static void neo_iack(u32 level)
 {
-    (void)level;
+    if (S.is_cd && level == 4u) {
+        u32 vec = (S.cd_irq_flags & 4u) ? 21u : (S.cd_irq_flags & 2u) ? 22u : 23u;
+        m.pc = rl(vec * 4u);
+    }
 }
 
 static void hle_update_controllers(int check_start)
@@ -774,38 +1037,46 @@ static void hle_update_controllers(int check_start)
     wram_wb(0xFEAD, chg_st);
     wram_wb(0xFDAC, cur_st);
     wram_wb(0xFDAD, chg_st);
+    if (S.is_cd) {
+        wram_wb(0xFEDC, cur_st);
+        wram_wb(0xFEDD, chg_st);
+    }
 
     /* Trigger PLAYER_START ($000128) when Start is pressed during Title/Demo (USER_MODE == 1) */
     if (check_start && wram_rb(0xFDAF) == 1) {
         u8 trig = (u8)((chg_st & 1u) | ((chg_st >> 1) & 2u));
         if (trig) {
             wram_wb(0xFDB4, trig);
-            wram_wb(0xFEF8, 1);
+            wram_wb(S.is_cd ? 0xFE7Eu : 0xFEF8u, 1);
         }
     }
 }
 
 static void z80_send_sound(u8 code);
+static void neocd_cdda_cmd(u16 cmd_trk);
+static void neocd_check_z80_cdda(void);
+static void neocd_hle_upload(void);
+static void neocd_hle_loadfile(u32 list_addr);
+static int neocd_load_ipl(void);
 
 static void hle_trap(u16 id)
 {
     switch (id) {
     case HLE_INIT_HW: {
-        for (u32 i = 0; i < 0x10000; i++)
+        /* On CD, preserve $100000..$10F2FF in case IPL.TXT loaded data there; clear BIOS area $10F300..$10FFFF */
+        for (u32 i = S.is_cd ? 0xF300u : 0u; i < 0x10000u; i++)
             M->wram[i] = 0;
         S.irq_pending = 0;
         irq_refresh();
         S.watchdog_frames = 0;
 
-        /* Switch to cartridge vectors & cartridge FIX/M1 before USER(0) so both
-           commercial carts (which return via SYSTEM_RETURN) and single-entry
-           homebrew (PeterLemon, NeoBitz/NeoThunder) have cart vectors & S-ROM ready! */
+        /* Switch to cartridge / CD game vectors & game FIX/Z80 before USER(0) */
         S.vectable = 1;
         sync_page0_vectors();
         S.crtfix = 1;
 
         wram_wb(0xFD80, 0x80);          /* BIOS_SYSTEM_MODE: Game mode */
-        wram_wb(0xFD82, 0x00);          /* BIOS_MVS_FLAG: 0 (AES home) */
+        wram_wb(0xFD82, 0x00);          /* BIOS_MVS_FLAG: 0 (AES / CD home) */
         wram_wb(0xFD83, 0x01);          /* BIOS_COUNTRY_CODE: 1 (USA) */
         wram_wb(0xFD94, 0x01);          /* P1 connected */
         wram_wb(0xFD9A, 0x01);          /* P2 connected */
@@ -814,13 +1085,19 @@ static void hle_trap(u16 id)
         wram_wb(0xFDB0, 0x01);          /* CREDIT_DEC1 */
         wram_wb(0xFDB1, 0x01);          /* CREDIT_DEC2 */
         wram_wl(0xFDBE, 0x0010FF00u);   /* BIOS_MESS_POINT */
+        if (S.is_cd) {
+            wram_wb(0xF6D9, 0x01);      /* CDDA ready flag (polled by Metal Slug 2 etc.) */
+            wram_wb(0xFE84, 0x01);      /* CD BIOS heartbeat */
+            wram_wb(0xFEBF, 0x01);      /* BRAM present */
+        }
         M->nvram[0x0034 ^ 1] = 0x09;    /* Credits in BCD if checked */
         M->nvram[0x0035 ^ 1] = 0x09;
 
-        /* Load default Soft-DIPs from cartridge's US DIP table pointer ($11A) */
-        if (S.p_size >= 0x122) {
+        /* Load default Soft-DIPs from game's US DIP table pointer ($11A) */
+        u32 max_p = S.is_cd ? 0x200000u : S.p_size;
+        if (max_p >= 0x122u) {
             u32 dip_ptr = rl(0x00011Au) & 0xFFFFFFu;
-            if (dip_ptr && dip_ptr + 32 <= S.p_size) {
+            if (dip_ptr && dip_ptr + 32u <= max_p) {
                 for (int i = 0; i < 6; i++)
                     wram_wb(0xFD84u + (u32)i, (u8)rb(dip_ptr + 16u + (u32)i));
                 for (int i = 0; i < 10; i++)
@@ -852,10 +1129,19 @@ static void hle_trap(u16 id)
         wram_wl(0xFE88, wram_rl(0xFE88) + 1u);
         wram_wl(0xFDD4, wram_rl(0xFDD4) + 1u);
         wram_wb(0xFE8D, 0);
+        if (S.is_cd) {
+            wram_wb(0xF6D9, 1);
+            wram_wb(0xF749, (u8)(wram_rb(0xF749) + 1u));
+            wram_wb(0xFE84, (u8)(wram_rb(0xFE84) ^ 1u));
+        }
         hle_mess_out();
         break;
     case HLE_SYS_IO_PRE:
         hle_update_controllers(1);
+        if (S.is_cd) {
+            wram_wb(0xF6D9, 1);
+            neocd_check_z80_cdda();
+        }
         break;
     case HLE_SYS_IO_POST:
         if (wram_rb(0xFDAF) == 2) {
@@ -898,6 +1184,28 @@ static void hle_trap(u16 id)
         break;
     case HLE_MESS_OUT:
         hle_mess_out();
+        break;
+    case HLE_CD_UPLOAD:
+        neocd_hle_upload();
+        break;
+    case HLE_CD_LOADFILE:
+    case HLE_CD_LOADFILEX:
+        neocd_hle_loadfile(m.r[8] & 0xFFFFFFu);
+        break;
+    case HLE_CD_CDDACMD:
+        neocd_cdda_cmd((u16)m.r[0]);
+        break;
+    case HLE_CD_VIDEOEN: {
+        u8 d0 = (u8)m.r[0];
+        S.cd_dis_fix  = !(d0 & 1u);
+        S.cd_dis_spr  = !(d0 & 2u);
+        S.cd_video_en = (d0 & 4u) != 0;
+        break;
+    }
+    case HLE_CD_RESETGAME:
+        if (S.is_cd && !S.is_cd_builtin)
+            neocd_load_ipl();
+        neo_reset();
         break;
     }
 }
@@ -1557,10 +1865,21 @@ static void ym_silent_eos(u32 n_samples)
     }
 }
 
+static void neocd_cdda_step_one(void);
+
 static void ym_synth(u32 n_samples)
 {
     if (!S.snd_rate) {
         ym_silent_eos(n_samples);
+        if (S.is_cd && S.cdda_playing && !S.cdda_paused) {
+            for (u32 s = 0; s < n_samples; s++) {
+                S.cdda_acc += 44100u * 9u;
+                if (S.cdda_acc >= 500000u) {
+                    S.cdda_acc -= 500000u;
+                    neocd_cdda_step_one();
+                }
+            }
+        }
         return;
     }
     while (n_samples--) {
@@ -1595,6 +1914,14 @@ static void ym_synth(u32 n_samples)
         s32 ssg = ssg_sample();
         s32 mix = (S.ym.fm_cached >> 1) + S.ym.pa_cached * 2 + pb + ssg;
 
+        if (S.is_cd && S.cdda_playing && !S.cdda_paused) {
+            S.cdda_acc += 44100u * 9u;
+            if (S.cdda_acc >= 500000u) {
+                S.cdda_acc -= 500000u;
+                neocd_cdda_step_one();
+            }
+        }
+
         /* Resample 55,555.56 Hz (500,000 / 9) -> S.snd_rate (e.g. 48,000 Hz) */
         S.snd_sum += mix;
         S.snd_n++;
@@ -1607,6 +1934,8 @@ static void ym_synth(u32 n_samples)
             S.snd_hp += S.snd_lp - S.snd_lp_was - (S.snd_hp >> 8) - (S.snd_hp >> 9);
             S.snd_lp_was = S.snd_lp;
             v = S.snd_hp >> 8;
+            if (S.is_cd && S.cdda_playing && !S.cdda_paused)
+                v += ((s32)S.cdda_l + (s32)S.cdda_r) >> 2;
             if (v > 32767) v = 32767;
             else if (v < -32768) v = -32768;
             if (S.snd_head - S.snd_tail < SND_RING)
@@ -1667,6 +1996,11 @@ static const u8 *active_mrom(u32 *sz_out)
 
 static void z_map_banks(void)
 {
+    if (S.is_cd) {
+        for (int p = 0; p < 64; p++)
+            S.z.rd[p] = S.z.wr[p] = M->cd_z80ram + ((u32)p << 10);
+        return;
+    }
     u32 msz = 0;
     u8 *mrom = (u8 *)active_mrom(&msz);
     for (int p = 0; p < 32; p++) {
@@ -1691,6 +2025,8 @@ static void z_map_banks(void)
 static u8 z_mem_rd(struct z80 *c, u16 a)
 {
     (void)c;
+    if (S.is_cd)
+        return M->cd_z80ram[a];
     if (a >= 0xF800u)
         return M->zram[a & 0x7FFu];
     u32 msz = 0;
@@ -1709,6 +2045,10 @@ static u8 z_mem_rd(struct z80 *c, u16 a)
 static void z_mem_wr(struct z80 *c, u16 a, u8 v)
 {
     (void)c;
+    if (S.is_cd) {
+        M->cd_z80ram[a] = v;
+        return;
+    }
     if (a >= 0xF800u)
         M->zram[a & 0x7FFu] = v;
 }
@@ -1821,7 +2161,8 @@ static int z_ram_idle(struct z80 *c)
     const u8 *p = pg + (pc & 0x3FFu);
     /* Pattern A: LD A,($F8xx); CP imm; JP Z,exit; JP pc (NeoBitz M1) or JR Z/NZ,pc */
     if (p[0] == 0x3Au && p[2] >= 0xF8u && p[3] == 0xFEu) {
-        u8 val = M->zram[(((u32)p[2] << 8) | p[1]) & 0x7FFu];
+        u16 za = (u16)(((u32)p[2] << 8) | p[1]);
+        u8 val = S.is_cd ? M->cd_z80ram[za] : M->zram[za & 0x7FFu];
         u8 imm = p[4];
         if (p[5] == 0xCAu && p[8] == 0xC3u && ((u16)p[9] | ((u16)p[10] << 8)) == pc && val != imm)
             return 1;
@@ -1837,8 +2178,10 @@ static int z_ram_idle(struct z80 *c)
         q[4] == 0x3Au && q[6] >= 0xF8u && q[7] == 0xB8u && q[8] == 0x28u) {
         u16 dest = (u16)(pc + ei + 10u + (u16)(s16)(s8)q[9]);
         if (dest == pc) {
-            u8 v1 = M->zram[(((u32)q[2] << 8) | q[1]) & 0x7FFu];
-            u8 v2 = M->zram[(((u32)q[6] << 8) | q[5]) & 0x7FFu];
+            u16 za1 = (u16)(((u32)q[2] << 8) | q[1]);
+            u16 za2 = (u16)(((u32)q[6] << 8) | q[5]);
+            u8 v1 = S.is_cd ? M->cd_z80ram[za1] : M->zram[za1 & 0x7FFu];
+            u8 v2 = S.is_cd ? M->cd_z80ram[za2] : M->zram[za2 & 0x7FFu];
             if (v1 == v2) {
                 if (ei)
                     c->iff1 = c->iff2 = 1, c->ei_block = 0;
@@ -1853,6 +2196,10 @@ static void z80_catch_up(void)
 {
     s32 target = m.clock > 0 ? (m.clock / 3) : 0;
     S.z_target = target;
+    if (S.is_cd && !S.cd_z80_en) {
+        S.z.cycles = S.z_done_cyc = target;
+        return;
+    }
     while (S.z.cycles < target) {
         s32 step_to = target;
         if ((S.ym.mode & 5u) == 5u && S.ym.ta_cnt > 0 && S.z.cycles + S.ym.ta_cnt < step_to)
@@ -1944,8 +2291,33 @@ static u16 p_read_word(u32 off)
     return 0xFFFF;
 }
 
+static u32 neocd_io_read(u32 a, int size);
+static void neocd_io_write(u32 a, u32 v, int size);
+static u32 neocd_upload_read(u32 off, int size);
+static void neocd_upload_write(u32 off, u32 v, int size);
+
 static u32 io_read(u32 a, int size)
 {
+    if (S.is_cd) {
+        if (a < 0x100000u) {
+            const u8 *src = (a < 0x80u && !S.vectable) ? M->cd_bios : M->cd_prgram;
+            if (size == 1)
+                return src[a ^ 1u];
+            return *(const u16 *)(src + (a & ~1u));
+        }
+        if (a >= 0x200000u && a < 0x300000u)
+            return size == 2 ? 0xFFFFu : 0xFFu;
+        if (a >= 0x800000u && a < 0xC00000u) {
+            u8 cb = M->cd_bram[(a >> 1) & 0x1FFFu];
+            if (size == 2)
+                return 0xFF00u | cb;
+            return (a & 1u) ? cb : 0xFFu;
+        }
+        if (a >= 0xE00000u && a < 0xF00000u)
+            return neocd_upload_read(a & 0xFFFFFu, size);
+        if (a >= 0xFF0000u)
+            return neocd_io_read(a, size);
+    }
     if (a < 0x100000u) {
         return size == 1 ? p_read_byte(a) : p_read_word(a);
     }
@@ -2042,6 +2414,45 @@ static u32 io_read(u32 a, int size)
 
 static void io_write(u32 a, u32 v, int size)
 {
+    if (S.is_cd) {
+        if (a < 0x10000u) {
+            if (size == 2) {
+                u32 ea = a & ~1u;
+                *(u16 *)(M->cd_prgram + ea) = (u16)v;
+                if (ea >= 0x80u || S.vectable)
+                    *(u16 *)(M->page0 + ea) = (u16)v;
+            } else {
+                M->cd_prgram[a ^ 1u] = (u8)v;
+                if (a >= 0x80u || S.vectable)
+                    M->page0[a ^ 1u] = (u8)v;
+            }
+            return;
+        }
+        if (a < 0x100000u) {
+            if (size == 2)
+                *(u16 *)(M->cd_prgram + (a & ~1u)) = (u16)v;
+            else
+                M->cd_prgram[a ^ 1u] = (u8)v;
+            return;
+        }
+        if (a >= 0x200000u && a < 0x300000u)
+            return;
+        if (a >= 0x800000u && a < 0xC00000u) {
+            if (size == 2 || (a & 1u)) {
+                M->cd_bram[(a >> 1) & 0x1FFFu] = (u8)v;
+                S.nvram_dirty = 1;
+            }
+            return;
+        }
+        if (a >= 0xE00000u && a < 0xF00000u) {
+            neocd_upload_write(a & 0xFFFFFu, v, size);
+            return;
+        }
+        if (a >= 0xFF0000u) {
+            neocd_io_write(a, v, size);
+            return;
+        }
+    }
     if (a < 0x100000u)
         return;
 
@@ -2257,7 +2668,9 @@ static void idle_branch(u32 at)
     } else {
         return;
     }
-    if (t + len != at || (a & 0xF00000u) != 0x100000u)
+    if (t + len != at)
+        return;
+    if ((a & 0xF00000u) != 0x100000u && !(S.is_cd && a >= 0x80u && a < 0x200000u))
         return;
     m.clock = slice_end_cyc;
 }
@@ -2270,6 +2683,14 @@ INLINE u32 decode_c_half(const u8 *c, u32 base, const u32 *lut)
           (lut[c[base + 2]] << 1) |
           (lut[c[base + 1]] << 2) |
           (lut[c[base + 3]] << 3);
+}
+
+INLINE u32 decode_cd_half(const u8 *c, u32 base, const u32 *lut)
+{
+    return lut[c[base + 1]] |
+          (lut[c[base + 0]] << 1) |
+          (lut[c[base + 3]] << 2) |
+          (lut[c[base + 2]] << 3);
 }
 
 static void rebuild_active_spr(void)
@@ -2291,7 +2712,7 @@ static void rebuild_active_spr(void)
 static void lspc_sprcalc(u32 buf_line)
 {
     u16 *lb = M->linebuf[S.lb_active];
-    if (S.c_size < 128u) {
+    if (S.c_size < 128u || (S.is_cd && S.cd_dis_spr)) {
         S.lb_active ^= 1u;
         return;
     }
@@ -2369,7 +2790,15 @@ static void lspc_sprcalc(u32 buf_line)
         u32 poff = (((u32)w1 >> 4) & 0x0FF0u) + pal_bank_off;
 
         u32 left8, right8;
-        if (w1 & 0x0001u) {             /* H-flip */
+        if (S.is_cd) {
+            if (w1 & 0x0001u) {         /* H-flip */
+                left8  = decode_cd_half(crom, toff + (y << 2), M->c_lut_flip);
+                right8 = decode_cd_half(crom, toff + 64u + (y << 2), M->c_lut_flip);
+            } else {
+                left8  = decode_cd_half(crom, toff + 64u + (y << 2), M->c_lut);
+                right8 = decode_cd_half(crom, toff + (y << 2), M->c_lut);
+            }
+        } else if (w1 & 0x0001u) {      /* H-flip */
             left8  = decode_c_half(crom, toff + (y << 2), M->c_lut_flip);
             right8 = decode_c_half(crom, toff + 64u + (y << 2), M->c_lut_flip);
         } else {
@@ -2502,7 +2931,8 @@ static void lspc_do_scanline(u32 sl)
                 lb[x] = 0;
             }
             lspc_sprcalc(sl - LINE_BUFSTART);
-            lspc_render_fix(sl - LINE_ACTIVE_START, dst, pal);
+            if (!(S.is_cd && S.cd_dis_fix))
+                lspc_render_fix(sl - LINE_ACTIVE_START, dst, pal);
         } else {
             for (u32 x = 0; x < NEO_W; x++)
                 lb[x] = 0;
@@ -2625,21 +3055,55 @@ void neo_set_bios(const u8 *rom, u32 size)
     S.has_ext_bios = 1;
 }
 
+void neocd_set_bios(const u8 *rom, u32 size)
+{
+    build_static_tables();
+    if (!rom || size < 0x40000u) {
+        S.has_cd_ext_bios = 0;
+        return;
+    }
+    u32 n = size > 0x80000u ? 0x80000u : size;
+    for (u32 i = 0; i < 0x80000u; i++)
+        M->cd_bios[i] = rom[i % n];
+    /* Auto-detect big-endian BIOS (00 10 F3 00) vs MAME word-swapped (10 00 00 F3) */
+    if (M->cd_bios[0] == 0x00 && (M->cd_bios[1] == 0x10 || M->cd_bios[1] == 0x11)) {
+        for (u32 i = 0; i + 1u < 0x80000u; i += 2) {
+            u8 t = M->cd_bios[i];
+            M->cd_bios[i] = M->cd_bios[i + 1u];
+            M->cd_bios[i + 1u] = t;
+        }
+    }
+    S.has_cd_ext_bios = 1;
+}
+
+static void neocd_cdd_frame_tick(void);
+
 void neo_reset(void)
 {
     build_static_tables();
 
-    if (S.has_ext_bios) {
-        for (u32 i = 0; i < 0x20000u; i++)
-            M->bios[i] = M->ext_bios[i];
-        S.use_hle_bios = 0;
+    if (S.is_cd) {
+        if (S.has_cd_ext_bios && !S.is_cd_builtin) {
+            S.use_hle_bios = 0;
+        } else {
+            build_cd_hle_bios();
+            S.use_hle_bios = 1;
+        }
+        for (u32 i = 0xF300u; i < 0x10000u; i++)
+            M->wram[i] = 0;
     } else {
-        build_hle_bios();
-        S.use_hle_bios = 1;
+        if (S.has_ext_bios) {
+            for (u32 i = 0; i < 0x20000u; i++)
+                M->bios[i] = M->ext_bios[i];
+            S.use_hle_bios = 0;
+        } else {
+            build_hle_bios();
+            S.use_hle_bios = 1;
+        }
+        for (u32 i = 0; i < 0x10000u; i++)
+            M->wram[i] = 0;
     }
 
-    for (u32 i = 0; i < 0x10000u; i++)
-        M->wram[i] = 0;
     for (u32 i = 0; i < 0x8800u; i++)
         M->vram[i] = 0;
     for (u32 i = 0; i < 0x2000u; i++) {
@@ -2658,16 +3122,24 @@ void neo_reset(void)
             M->memcard[i] = 0;
         M->memcard[0] = 0x80;
     }
+    if (S.is_cd && M->cd_bram[0] != 0x80u) {
+        for (u32 i = 0; i < 0x2000u; i++)
+            M->cd_bram[i] = 0;
+        M->cd_bram[0] = 0x80;
+        M->cd_bram[1] = 0x00;
+    }
 
-    /* Bare-metal cart check: if cart has no "NEO-GEO" header and its reset PC < $100000, boot cart directly */
-    int has_ng_hdr = S.p_size >= 0x108u &&
-                     *(const u16 *)(S.p_rom + 0x100) == 0x4E45u &&
-                     *(const u16 *)(S.p_rom + 0x102) == 0x4F2Du;
-    u32 cart_pc = S.p_size >= 8u ? (((u32)*(const u16 *)(S.p_rom + 4) << 16) | *(const u16 *)(S.p_rom + 6)) : 0x00C00402u;
-    int bare_metal = !has_ng_hdr && cart_pc < 0x100000u && cart_pc >= 0x80u;
+    /* Bare-metal check: if program has no "NEO-GEO" header and its reset PC < $100000, boot directly */
+    const u8 *hdr_src = S.is_cd ? M->cd_prgram : S.p_rom;
+    u32 hdr_sz = S.is_cd ? 0x200000u : S.p_size;
+    int has_ng_hdr = hdr_sz >= 0x108u &&
+                     *(const u16 *)(hdr_src + 0x100) == 0x4E45u &&
+                     *(const u16 *)(hdr_src + 0x102) == 0x4F2Du;
+    u32 cart_pc = hdr_sz >= 8u ? (((u32)*(const u16 *)(hdr_src + 4) << 16) | *(const u16 *)(hdr_src + 6)) : 0x00C00402u;
+    int bare_metal = (!S.is_cd || S.use_hle_bios) && !has_ng_hdr && cart_pc < 0x100000u && cart_pc >= 0x80u;
 
     S.vectable = bare_metal ? 1 : 0;
-    S.crtfix   = (bare_metal || S.use_hle_bios) ? 1 : 0;
+    S.crtfix   = (S.is_cd || bare_metal || S.use_hle_bios) ? 1 : 0;
     S.pal_bank = 0;
     S.shadow   = 0;
     S.sram_lock = 0;
@@ -2679,36 +3151,64 @@ void neo_reset(void)
     S.scb_dirty = 1;
     S.n_active_spr = 0;
     S.scanline  = 0;
-    S.irq_pending = S.has_ext_bios ? 4u : 0u; /* Real BIOS expects cold-reset IRQ3 pending */
+    S.irq_pending = (!S.is_cd && S.has_ext_bios) ? 4u : 0u;
     S.irq2_ctrl = 0;
     S.irq2_reload = S.irq2_counter = S.irq2_rem = 0;
     S.watchdog_frames = 0;
-    S.p2_offset = S.p_size > 0x100000u ? 0x100000u : 0u;
+    S.p2_offset = (!S.is_cd && S.p_size > 0x100000u) ? 0x100000u : 0u;
     S.prot_reg = 0;
     S.cart_reg0 = 0;
 
-    /* Populate page0 ($000000..$00FFFF) and tail page, then set 68000 rmap/wmap */
-    for (u32 i = 0; i < 0x10000u; i++) {
-        M->page0[i]  = S.p_size ? S.p_rom[i % S.p_size] : 0xFFu;
-        u32 tail_base = S.p_size & ~0xFFFFu;
-        M->p_tail[i] = (tail_base + i < S.p_size) ? S.p_rom[tail_base + i] : 0xFFu;
-    }
-    sync_page0_vectors();
+    if (S.is_cd) {
+        S.cd_trans_area = 0;
+        S.cd_spr_bank = S.cd_pcm_bank = 0;
+        S.cd_upload_en = 1;
+        S.cd_z80_en = S.use_hle_bios ? 1 : 0;
+        S.cd_irq_en = 0;
+        S.cd_dis_spr = S.cd_dis_fix = 0;
+        S.cd_video_en = 1;
+        S.cd_irq_flags = 0;
+        for (u32 i = 0; i < 0x10000u; i++)
+            M->page0[i] = M->cd_prgram[i];
+        sync_page0_vectors();
 
-    for (int i = 0; i < 256; i++)
-        rmap[i] = wmap[i] = 0;
-    rmap[0] = M->page0;
-    for (int i = 1; i < 16; i++) {
-        u32 off = ((u32)i << 16) % (S.p_size ? S.p_size : 0x10000u);
-        rmap[i] = (off + 0x10000u <= S.p_size) ? (S.p_rom + off) : M->p_tail;
+        for (int i = 0; i < 256; i++)
+            rmap[i] = wmap[i] = 0;
+        rmap[0] = M->page0;
+        wmap[0] = 0;                    /* io_write syncs cd_prgram & page0 while honoring S.vectable */
+        for (int i = 1; i < 0x10; i++)
+            rmap[i] = wmap[i] = M->cd_prgram + ((u32)i << 16);
+        rmap[0x10] = wmap[0x10] = M->wram;
+        for (int i = 0x11; i < 0x20; i++)
+            rmap[i] = wmap[i] = M->cd_prgram + ((u32)i << 16);
+        for (int i = 0xC0; i < 0xD0; i++)
+            rmap[i] = M->cd_bios + (((u32)i & 7u) << 16);
+        for (int i = 0xD0; i < 0xE0; i++)
+            rmap[i] = M->nvram;
+    } else {
+        /* Populate page0 ($000000..$00FFFF) and tail page, then set 68000 rmap/wmap */
+        for (u32 i = 0; i < 0x10000u; i++) {
+            M->page0[i]  = S.p_size ? S.p_rom[i % S.p_size] : 0xFFu;
+            u32 tail_base = S.p_size & ~0xFFFFu;
+            M->p_tail[i] = (tail_base + i < S.p_size) ? S.p_rom[tail_base + i] : 0xFFu;
+        }
+        sync_page0_vectors();
+
+        for (int i = 0; i < 256; i++)
+            rmap[i] = wmap[i] = 0;
+        rmap[0] = M->page0;
+        for (int i = 1; i < 16; i++) {
+            u32 off = ((u32)i << 16) % (S.p_size ? S.p_size : 0x10000u);
+            rmap[i] = (off + 0x10000u <= S.p_size) ? (S.p_rom + off) : M->p_tail;
+        }
+        for (int i = 0x10; i < 0x20; i++)
+            rmap[i] = wmap[i] = M->wram;
+        update_p2_rmap();
+        for (int i = 0xC0; i < 0xD0; i++)
+            rmap[i] = M->bios + ((i & 1) << 16);
+        for (int i = 0xD0; i < 0xE0; i++)
+            rmap[i] = M->nvram;
     }
-    for (int i = 0x10; i < 0x20; i++)
-        rmap[i] = wmap[i] = M->wram;
-    update_p2_rmap();
-    for (int i = 0xC0; i < 0xD0; i++)
-        rmap[i] = M->bios + ((i & 1) << 16);
-    for (int i = 0xD0; i < 0xE0; i++)
-        rmap[i] = M->nvram;
 
     /* Reset 68000 */
     cpu_reset();
@@ -2749,10 +3249,23 @@ void neo_reset(void)
     S.ym.pb.step    = 127;
     S.wlog_n = 0;
     S.syn_zcyc = S.syn_rem = 0;
+
+    /* On Neo Geo CD HLE boot, let the Z80 sound driver run its power-on init (SP + OUT ($08),A)
+       before the 68000 sends command $03! */
+    if (S.is_cd && S.use_hle_bios) {
+        z80_run(&S.z, 4096);
+        S.z.cycles = S.z_done_cyc = S.z_poll_at = 0;
+        S.wlog_n = 0;
+        S.syn_zcyc = S.syn_rem = 0;
+    }
 }
 
 const char *neo_load(u8 *image, u32 size)
 {
+    S.is_cd = S.is_cd_builtin = 0;
+    S.cd = 0;
+    S.cdda_playing = S.cdda_paused = 0;
+
     if (!image || size <= 4096u)
         return "not a .neo cartridge (too small)";
     if (image[0] != 'N' || image[1] != 'E' || image[2] != 'O' || image[3] != 0x01u)
@@ -2901,6 +3414,8 @@ void neo_frame(u16 pad, u16 *picture)
         lspc_do_scanline(sl);
         if (sl == LINE_ACTIVE_END && (S.irq2_ctrl & TMR_RELOAD_VBL))
             S.irq2_counter = S.irq2_reload;
+        if (S.is_cd && !S.use_hle_bios && sl == 128u)
+            neocd_cdd_frame_tick();
 
         /* Cycle 768: End of scanline + periodic Z80 catch-up */
         run_m68k_segment(line_base + M68K_LINE_CYC);
@@ -2940,6 +3455,11 @@ const char *neo_info(void)
 
 u8 *neo_save_ram(u32 *size, int *battery)
 {
+    if (S.is_cd) {
+        *size = 0x2000u;
+        *battery = S.is_cd_builtin ? 0 : 1;
+        return M->cd_bram;
+    }
     /* Sync big-endian nvram_save <-> host-word M->nvram:
        Note play.c calls neo_save_ram() at start to read .sav into the returned buffer
        (and calls neo_save_changed() right after), then calls neo_save_ram() at exit! */
@@ -2956,6 +3476,12 @@ u8 *neo_save_ram(u32 *size, int *battery)
 
 int neo_save_changed(void)
 {
+    if (S.is_cd) {
+        if (!S.nvram_dirty)
+            return 0;
+        S.nvram_dirty = 0;
+        return 1;
+    }
     /* If play.c just loaded .sav into M->nvram_save (when !S.nvram_dirty), import it into M->nvram! */
     if (!S.nvram_dirty) {
         int any = 0;
@@ -2998,4 +3524,1353 @@ int neo_audio(s16 *out, int max)
         out[k++] = M->snd_ring[S.snd_tail++ & (SND_RING - 1u)];
     return k;
 }
+
+/* ---- SNK Neo Geo CD Subsystem (.cue / .iso + Built-in Showcase) ---- */
+
+static char cd_upper(char c)
+{
+    return (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+}
+
+static void cd_prgram_wb(u32 addr, u8 val)
+{
+    addr &= 0x1FFFFFu;
+    if (addr >= 0x100000u && addr < 0x110000u) {
+        M->wram[(addr & 0xFFFFu) ^ 1u] = val;
+        return;
+    }
+    M->cd_prgram[addr ^ 1u] = val;
+    if (addr < 0x10000u && (addr >= 0x80u || S.vectable))
+        M->page0[addr ^ 1u] = val;
+}
+
+static u8 cd_prgram_rb(u32 addr)
+{
+    addr &= 0x1FFFFFu;
+    if (addr >= 0x100000u && addr < 0x110000u)
+        return M->wram[(addr & 0xFFFFu) ^ 1u];
+    return M->cd_prgram[addr ^ 1u];
+}
+
+static void neocd_apply_pat_chunk(const u8 *buf, u32 len, u8 bank, u32 dest, int *stopped)
+{
+    u32 pat_add = ((((u32)bank & 1u) << 20) | (dest & 0xFFFFFu)) >> 8;
+    for (u32 pos = 0; pos + 10u <= len && !*stopped; pos += 10u) {
+        u16 addr = (u16)(((u32)buf[pos + 0] << 8) | buf[pos + 1]);
+        if (addr == 0) {
+            *stopped = 1;
+            break;
+        }
+        u16 d1 = (u16)(((u32)buf[pos + 2] << 8) | buf[pos + 3]);
+        u16 d2 = (u16)(((u32)buf[pos + 4] << 8) | buf[pos + 5]);
+        u16 d3 = (u16)(((u32)buf[pos + 6] << 8) | buf[pos + 7]);
+        u16 d4 = (u16)(((u32)buf[pos + 8] << 8) | buf[pos + 9]);
+        u16 v1 = (u16)(((u32)d1 + pat_add) >> 1);
+        u16 v2 = (u16)((((u32)d2 + pat_add) >> 1) - 1u);
+        M->cd_z80ram[addr & 0xFFFFu]        = (u8)v1;
+        M->cd_z80ram[(addr + 1u) & 0xFFFFu] = (u8)(v1 >> 8);
+        M->cd_z80ram[(addr + 2u) & 0xFFFFu] = (u8)v2;
+        M->cd_z80ram[(addr + 3u) & 0xFFFFu] = (u8)(v2 >> 8);
+        if (d3 != 0) {
+            u16 v3 = (u16)(((u32)d3 + pat_add) >> 1);
+            u16 v4 = (u16)((((u32)d4 + pat_add) >> 1) - 1u);
+            M->cd_z80ram[(addr + 5u) & 0xFFFFu] = (u8)v3;
+            M->cd_z80ram[(addr + 6u) & 0xFFFFu] = (u8)(v3 >> 8);
+            M->cd_z80ram[(addr + 7u) & 0xFFFFu] = (u8)v4;
+            M->cd_z80ram[(addr + 8u) & 0xFFFFu] = (u8)(v4 >> 8);
+        }
+    }
+}
+
+/* ISO9660 directory lookup on Track 1 */
+static int neocd_iso_find(const char *want, u32 *out_lba, u32 *out_size)
+{
+    if (!S.cd || !S.cd->read_2048 || !S.iso_root_len)
+        return 0;
+    u32 n_sec = (S.iso_root_len + 2047u) >> 11;
+    for (u32 s = 0; s < n_sec; s++) {
+        if (S.cd->read_2048(S.iso_root_lba + s, M->iso_sec) < 0)
+            return 0;
+        u32 pos = 0;
+        while (pos + 34u <= 2048u) {
+            u32 rlen = M->iso_sec[pos];
+            if (!rlen || pos + rlen > 2048u)
+                break;
+            u32 flba = le32(M->iso_sec + pos + 2u);
+            u32 fsz  = le32(M->iso_sec + pos + 10u);
+            u8 flags = M->iso_sec[pos + 25u];
+            u8 nlen  = M->iso_sec[pos + 32u];
+            if (!(flags & 2u) && nlen > 0 && pos + 33u + nlen <= pos + rlen) {
+                const char *nm = (const char *)(M->iso_sec + pos + 33u);
+                u32 k = 0;
+                while (k < nlen && nm[k] != ';')
+                    k++;
+                /* Trim trailing dot when ISO record stores "FILE.;1" */
+                if (k > 0 && nm[k - 1u] == '.' && want[0]) {
+                    int want_has_dot = 0;
+                    for (int wi = 0; want[wi]; wi++)
+                        if (want[wi] == '.') want_has_dot = 1;
+                    if (!want_has_dot)
+                        k--;
+                }
+                u32 wlen = 0;
+                while (want[wlen])
+                    wlen++;
+                if (k == wlen) {
+                    int eq = 1;
+                    for (u32 i = 0; i < k; i++) {
+                        if (cd_upper(nm[i]) != cd_upper(want[i])) {
+                            eq = 0;
+                            break;
+                        }
+                    }
+                    if (eq) {
+                        *out_lba  = S.iso_trk1_lba + flba;
+                        *out_size = fsz;
+                        return 1;
+                    }
+                }
+            }
+            pos += rlen;
+        }
+    }
+    return 0;
+}
+
+/* Classify Neo Geo CD file type from extension:
+   0=PRG, 1=FIX, 2=SPR/OBJ, 3=Z80, 4=PCM, 5=PAT, -1=other */
+static int neocd_ext_type(const char *name)
+{
+    int dot = -1;
+    for (int i = 0; name[i]; i++)
+        if (name[i] == '.')
+            dot = i;
+    if (dot < 0)
+        return 0;
+    char e0 = cd_upper(name[dot + 1]);
+    char e1 = cd_upper(name[dot + 2]);
+    char e2 = cd_upper(name[dot + 3]);
+    if (e0 == 'P' && e1 == 'R' && e2 == 'G') return 0;
+    if (e0 == 'F' && e1 == 'I' && e2 == 'X') return 1;
+    if (e0 == 'S' && e1 == 'P' && e2 == 'R') return 2;
+    if (e0 == 'O' && e1 == 'B' && e2 == 'J') return 2;
+    if (e0 == 'Z' && e1 == '8' && e2 == '0') return 3;
+    if (e0 == 'P' && e1 == 'C' && e2 == 'M') return 4;
+    if (e0 == 'P' && e1 == 'A' && e2 == 'T') return 5;
+    if (e0 == 'P' && e1 == 'A' && e2 == 'L') return 6;
+    return 0;
+}
+
+static int neocd_load_single_file(const char *name, u8 bank, u32 offset)
+{
+    u32 lba = 0, fsz = 0;
+    if (!neocd_iso_find(name, &lba, &fsz))
+        return -1;
+    int kind = neocd_ext_type(name);
+    u32 rem = fsz;
+    u32 cur_pos = 0;
+    u8 pat_rem[10];
+    u32 pat_rem_n = 0;
+    int pat_stopped = 0;
+
+    while (rem > 0) {
+        if (S.cd->read_2048(lba++, M->iso_sec) < 0)
+            return -1;
+        u32 take = rem > 2048u ? 2048u : rem;
+        if (kind == 0) {                /* PRG -> 2 MB 68k DRAM */
+            for (u32 i = 0; i < take; i++) {
+                u32 dst = offset + cur_pos + i;
+                if (dst < 0x200000u)
+                    cd_prgram_wb(dst, M->iso_sec[i]);
+            }
+        } else if (kind == 1) {         /* FIX -> 128 KB Fix PSRAM (offset / 2) */
+            u32 base = (offset >> 1) + cur_pos;
+            for (u32 i = 0; i < take; i++)
+                if (base + i < sizeof(M->cd_fixram))
+                    M->cd_fixram[base + i] = M->iso_sec[i];
+        } else if (kind == 2) {         /* SPR -> 4 MB Sprite DRAM */
+            u32 base = (((u32)bank & 3u) << 20) + offset + cur_pos;
+            for (u32 i = 0; i < take; i++)
+                if (base + i < sizeof(M->cd_sprram))
+                    M->cd_sprram[base + i] = M->iso_sec[i];
+        } else if (kind == 3) {         /* Z80 -> 64 KB Z80 RAM (offset / 2) */
+            u32 base = (offset >> 1) + cur_pos;
+            for (u32 i = 0; i < take; i++)
+                M->cd_z80ram[(base + i) & 0xFFFFu] = M->iso_sec[i];
+        } else if (kind == 4) {         /* PCM -> 1 MB ADPCM-A DRAM (512 KB banks, offset / 2) */
+            u32 base = (((u32)bank & 1u) << 19) + (offset >> 1) + cur_pos;
+            for (u32 i = 0; i < take; i++)
+                if (base + i < sizeof(M->cd_pcmram))
+                    M->cd_pcmram[base + i] = M->iso_sec[i];
+        } else if (kind == 5) {         /* PAT -> Patch Z80 ADPCM tables */
+            u32 si = 0;
+            if (pat_rem_n > 0) {
+                while (pat_rem_n < 10u && si < take)
+                    pat_rem[pat_rem_n++] = M->iso_sec[si++];
+                if (pat_rem_n == 10u) {
+                    neocd_apply_pat_chunk(pat_rem, 10u, bank, offset, &pat_stopped);
+                    pat_rem_n = 0;
+                }
+            }
+            u32 avail = take - si;
+            u32 full = (avail / 10u) * 10u;
+            if (full > 0)
+                neocd_apply_pat_chunk(M->iso_sec + si, full, bank, offset, &pat_stopped);
+            si += full;
+            while (si < take)
+                pat_rem[pat_rem_n++] = M->iso_sec[si++];
+        } else if (kind == 6) {         /* PAL -> Palette RAM */
+            u32 base_idx = ((offset + cur_pos) >> 1) & 0x0FFFu;
+            u32 pb_off = (u32)S.pal_bank << 12;
+            for (u32 i = 0; i + 1u < take; i += 2u) {
+                u32 idx = pb_off + ((base_idx + (i >> 1)) & 0x0FFFu);
+                M->palram[idx] = (u16)(((u32)M->iso_sec[i] << 8) | M->iso_sec[i + 1u]);
+                pal_update_entry(idx);
+            }
+        }
+        cur_pos += take;
+        rem -= take;
+    }
+    return 0;
+}
+
+static int neocd_load_ipl(void)
+{
+    u32 ipl_lba = 0, ipl_sz = 0;
+    if (!neocd_iso_find("IPL.TXT", &ipl_lba, &ipl_sz) || !ipl_sz)
+        return -1;
+
+    /* Read IPL.TXT (up to 2048 bytes; max 32 entries) into a local stack buffer
+       because neocd_load_single_file reuses M->iso_sec! */
+    u8 ipl_buf[2048];
+    u32 n_ipl = ipl_sz > sizeof(ipl_buf) ? sizeof(ipl_buf) : ipl_sz;
+    if (S.cd->read_2048(ipl_lba, ipl_buf) < 0)
+        return -1;
+
+    u32 pos = 0;
+    int loaded = 0;
+    while (pos < n_ipl && loaded < 64) {
+        if (ipl_buf[pos] == 0x1Au || ipl_buf[pos] == 0x00u)
+            break;
+        while (pos < n_ipl && (ipl_buf[pos] == '\r' || ipl_buf[pos] == '\n' || ipl_buf[pos] == ' ' || ipl_buf[pos] == '\t'))
+            pos++;
+        if (pos >= n_ipl || ipl_buf[pos] == 0x1Au || ipl_buf[pos] == 0x00u)
+            break;
+
+        char fname[24];
+        int fn = 0;
+        while (pos < n_ipl && ipl_buf[pos] != ',' && ipl_buf[pos] != '\r' && ipl_buf[pos] != '\n' && ipl_buf[pos] != 0x1Au) {
+            if (ipl_buf[pos] != ' ' && fn < (int)sizeof(fname) - 1)
+                fname[fn++] = (char)ipl_buf[pos];
+            pos++;
+        }
+        fname[fn] = 0;
+        if (pos < n_ipl && ipl_buf[pos] == ',') pos++;
+
+        u32 bank = 0;
+        while (pos < n_ipl && ipl_buf[pos] == ' ') pos++;
+        while (pos < n_ipl && ipl_buf[pos] >= '0' && ipl_buf[pos] <= '9')
+            bank = bank * 10u + (u32)(ipl_buf[pos++] - '0');
+        while (pos < n_ipl && ipl_buf[pos] != ',' && ipl_buf[pos] != '\r' && ipl_buf[pos] != '\n')
+            pos++;
+        if (pos < n_ipl && ipl_buf[pos] == ',') pos++;
+
+        u32 off = 0;
+        while (pos < n_ipl && ipl_buf[pos] == ' ') pos++;
+        while (pos < n_ipl) {
+            char c = cd_upper((char)ipl_buf[pos]);
+            if (c >= '0' && c <= '9') off = (off << 4) | (u32)(c - '0');
+            else if (c >= 'A' && c <= 'F') off = (off << 4) | (u32)(c - 'A' + 10);
+            else break;
+            pos++;
+        }
+        while (pos < n_ipl && ipl_buf[pos] != '\r' && ipl_buf[pos] != '\n' && ipl_buf[pos] != 0x1Au)
+            pos++;
+
+        if (fname[0]) {
+            if (neocd_load_single_file(fname, (u8)bank, off) == 0)
+                loaded++;
+        }
+    }
+    return loaded > 0 ? 0 : -1;
+}
+
+static void neocd_hle_loadfile(u32 p)
+{
+    for (int count = 0; count < 32; count++) {
+        u8 first = (u8)rb(p);
+        if (!first)
+            break;
+        char fname[24];
+        int fn = 0;
+        while (fn < 20) {
+            u8 ch = (u8)rb(p++);
+            if (!ch)
+                break;
+            if (ch != ' ')
+                fname[fn++] = (char)ch;
+        }
+        fname[fn] = 0;
+        u8 bank = (u8)rb(p++);
+        if (p & 1u)
+            p++;
+        u32 dest = rl(p);
+        p += 4u;
+        neocd_load_single_file(fname, bank, dest);
+    }
+    /* Keep Z80 mapped & running if a new .Z80 driver was loaded mid-game */
+    z_map_banks();
+}
+
+static void neocd_hle_upload(void)
+{
+    u32 dst  = wram_rl(0xFEF4) & 0xFFFFFFu;
+    u32 src  = wram_rl(0xFEF8) & 0xFFFFFFu;
+    u32 size = wram_rl(0xFEFC);
+    u8 zone  = wram_rb(0xFEDA) & 0x0Fu;
+    u8 bank  = wram_rb(0xFEDB);
+
+    switch (zone) {
+    case 0x00:
+    case 0x08: {                        /* PRG DRAM */
+        for (u32 i = 0; i < size; i++)
+            cd_prgram_wb(dst + i, (u8)rb(src + i));
+        wram_wl(0xFEF4, dst + size);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x01: {                        /* FIX PSRAM (dest / 2, advances dest by size * 2) */
+        u32 base = dst >> 1;
+        for (u32 i = 0; i < size; i++)
+            if (base + i < sizeof(M->cd_fixram))
+                M->cd_fixram[base + i] = (u8)rb(src + i);
+        wram_wl(0xFEF4, dst + size * 2u);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x02: {                        /* SPR DRAM (4 x 1 MB banks) */
+        u32 linear = (((u32)bank & 3u) << 20) + (dst & 0xFFFFFu);
+        for (u32 i = 0; i < size; i++)
+            M->cd_sprram[(linear + i) & 0x3FFFFFu] = (u8)rb(src + i);
+        u32 end_lin = linear + size;
+        wram_wb(0xFEDB, (u8)((end_lin >> 20) & 3u));
+        wram_wl(0xFEF4, end_lin & 0xFFFFFu);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x03: {                        /* Z80 RAM (dest / 2) */
+        u32 base = dst >> 1;
+        for (u32 i = 0; i < size; i++)
+            M->cd_z80ram[(base + i) & 0xFFFFu] = (u8)rb(src + i);
+        wram_wl(0xFEF4, dst + size * 2u);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x04: {                        /* PCM DRAM (2 x 512 KB banks, dest / 2) */
+        u32 linear = (((u32)bank & 1u) << 19) + ((dst >> 1) & 0x7FFFFu);
+        for (u32 i = 0; i < size; i++)
+            M->cd_pcmram[(linear + i) & 0xFFFFFu] = (u8)rb(src + i);
+        u32 end_lin = linear + size;
+        wram_wb(0xFEDB, (u8)((end_lin >> 19) & 1u));
+        wram_wl(0xFEF4, (end_lin & 0x7FFFFu) << 1);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x05: {                        /* PAT Z80 sample table patch */
+        int stopped = 0;
+        u8 rec[10];
+        for (u32 pos = 0; pos + 10u <= size && !stopped; pos += 10u) {
+            for (u32 k = 0; k < 10u; k++)
+                rec[k] = (u8)rb(src + pos + k);
+            neocd_apply_pat_chunk(rec, 10u, bank, dst, &stopped);
+        }
+        break;
+    }
+    case 0x06: {                        /* Palette words */
+        u32 pb_off = (u32)S.pal_bank << 12;
+        for (u32 i = 0; i + 1u < size; i += 2u) {
+            u32 idx = pb_off + (((dst + i) >> 1) & 0x0FFFu);
+            M->palram[idx] = (u16)rw(src + i);
+            pal_update_entry(idx);
+        }
+        wram_wl(0xFEF4, dst + size);
+        wram_wl(0xFEF8, src + size);
+        break;
+    }
+    case 0x07: {                        /* Zero-RLE compressed SPR longwords */
+        u32 comp_sz = rl(src);
+        u32 sp = src + 4u;
+        u32 sp_end = sp + comp_sz;
+        u32 linear = (((u32)bank & 3u) << 20) + (dst & 0xFFFFFu);
+        while (sp + 4u <= sp_end) {
+            u32 lw = rl(sp);
+            sp += 4u;
+            if (lw == 0u) {
+                if (sp + 4u > sp_end) break;
+                u32 cnt = rl(sp);
+                sp += 4u;
+                for (u32 z = 0; z < cnt * 4u; z++)
+                    M->cd_sprram[(linear++) & 0x3FFFFFu] = 0;
+            } else {
+                M->cd_sprram[(linear++) & 0x3FFFFFu] = (u8)(lw >> 24);
+                M->cd_sprram[(linear++) & 0x3FFFFFu] = (u8)(lw >> 16);
+                M->cd_sprram[(linear++) & 0x3FFFFFu] = (u8)(lw >> 8);
+                M->cd_sprram[(linear++) & 0x3FFFFFu] = (u8)lw;
+            }
+        }
+        wram_wb(0xFEDB, (u8)((linear >> 20) & 3u));
+        wram_wl(0xFEF4, linear & 0xFFFFFu);
+        wram_wl(0xFEF8, sp);
+        break;
+    }
+    }
+}
+
+/* Direct CPU / DMA access to $E00000..$EFFFFF Upload Zone */
+static u32 neocd_upload_read(u32 off, int size)
+{
+    switch (S.cd_trans_area) {
+    case 0: {                           /* SPR (16-bit big-endian stream) */
+        u32 base = (((u32)S.cd_spr_bank & 3u) << 20) + (off & 0xFFFFFu);
+        if (size == 1)
+            return M->cd_sprram[base];
+        return ((u32)M->cd_sprram[base] << 8) | M->cd_sprram[(base + 1u) & 0x3FFFFFu];
+    }
+    case 1: {                           /* PCM (8-bit odd byte) */
+        u8 b = M->cd_pcmram[(((u32)S.cd_pcm_bank & 1u) << 19) + ((off >> 1) & 0x7FFFFu)];
+        return size == 2 ? (0xFF00u | b) : ((off & 1u) ? b : 0xFFu);
+    }
+    case 4: {                           /* Z80 (8-bit odd byte) */
+        u8 b = M->cd_z80ram[(off >> 1) & 0xFFFFu];
+        return size == 2 ? (0xFF00u | b) : ((off & 1u) ? b : 0xFFu);
+    }
+    case 5: {                           /* FIX (8-bit odd byte) */
+        u8 b = M->cd_fixram[(off >> 1) & 0x1FFFFu];
+        return size == 2 ? (0xFF00u | b) : ((off & 1u) ? b : 0xFFu);
+    }
+    }
+    return size == 2 ? 0xFFFFu : 0xFFu;
+}
+
+static void neocd_upload_write(u32 off, u32 v, int size)
+{
+    if (!S.cd_upload_en)
+        return;
+    switch (S.cd_trans_area) {
+    case 0: {                           /* SPR */
+        u32 base = (((u32)S.cd_spr_bank & 3u) << 20) + (off & 0xFFFFFu);
+        if (size == 1) {
+            M->cd_sprram[base] = (u8)v;
+        } else {
+            M->cd_sprram[base] = (u8)(v >> 8);
+            M->cd_sprram[(base + 1u) & 0x3FFFFFu] = (u8)v;
+        }
+        break;
+    }
+    case 1:                             /* PCM (odd byte latched) */
+        if (size == 2 || (off & 1u))
+            M->cd_pcmram[(((u32)S.cd_pcm_bank & 1u) << 19) + ((off >> 1) & 0x7FFFFu)] = (u8)v;
+        break;
+    case 4:                             /* Z80 (odd byte latched) */
+        if (size == 2 || (off & 1u))
+            M->cd_z80ram[(off >> 1) & 0xFFFFu] = (u8)v;
+        break;
+    case 5:                             /* FIX (odd byte latched) */
+        if (size == 2 || (off & 1u))
+            M->cd_fixram[(off >> 1) & 0x1FFFFu] = (u8)v;
+        break;
+    }
+}
+
+/* Sanyo LC8953 ("PUPPET") DMA engine ($FF0061 bit 6 trigger) */
+static u16 neocd_dma_read_word(u32 addr)
+{
+    addr &= 0xFFFFFFu;
+    if (addr >= 0xFF8000u && addr < 0xFFC000u) {
+        u32 o = (addr - 0xFF8000u) & 0x3FFEu;
+        return (u16)(((u32)M->cdc_ram[o] << 8) | M->cdc_ram[o + 1u]);
+    }
+    if (addr == 0xFF0000u || (S.cd_dma_mode == 0xFE6Du && addr < 0x800u && S.lc_regs[1] & 0x02u)) {
+        u32 o = (S.lc_dac + addr) & 0x3FFFu;
+        return (u16)(((u32)M->cdc_ram[o] << 8) | M->cdc_ram[(o + 1u) & 0x3FFFu]);
+    }
+    return (u16)rw(addr & ~1u);
+}
+
+static void neocd_run_dma(void)
+{
+    u16 op0 = S.cd_dma_ucode[0];
+    u32 src = S.cd_dma_src & 0xFFFFFFu;
+    u32 dst = S.cd_dma_dst & 0xFFFFFFu;
+    u32 cnt = S.cd_dma_cnt & 0x1FFFFFu;
+
+    if (op0 == 0xFFDDU) {               /* Word fill at addr1 */
+        u16 val = (u16)S.cd_dma_val;
+        for (u32 i = 0; i < cnt; i++)
+            ww((src + i * 2u) & 0xFFFFFFu, val);
+    } else if (op0 == 0xFEF5u) {        /* Address longword fill at addr1 */
+        for (u32 i = 0; i < cnt; i++) {
+            u32 a = (src + i * 4u) & 0xFFFFFFu;
+            wl(a, a);
+        }
+    } else if (op0 == 0xF2DDu || op0 == 0xE2DDu) { /* Byte-pair copy to 8-bit odd-byte bus */
+        for (u32 i = 0; i < cnt; i++) {
+            u16 w = neocd_dma_read_word(src);
+            ww((dst + 0u) & 0xFFFFFFu, (u16)((w >> 8) | (w << 8)));
+            ww((dst + 2u) & 0xFFFFFFu, w);
+            src += 2u;
+            dst += 4u;
+        }
+        S.cd_dma_src = src;
+        S.cd_dma_dst = dst;
+    } else {                            /* Word copy from addr1 to addr2 */
+        for (u32 i = 0; i < cnt; i++) {
+            u16 w = neocd_dma_read_word(src);
+            ww(dst & 0xFFFFFFu, w);
+            src += 2u;
+            dst += 2u;
+        }
+        S.cd_dma_src = src;
+        S.cd_dma_dst = dst;
+    }
+}
+
+/* 10-nibble CDD command processor (for optional external neocd.bin / top-sp1.bin BIOS) */
+static u8 to_bcd8(u32 v)
+{
+    v %= 100u;
+    return (u8)(((v / 10u) << 4) | (v % 10u));
+}
+
+static void neocd_cdd_set_rx_csum(void)
+{
+    u32 sum = 0;
+    for (int i = 0; i < 9; i++)
+        sum += S.cdd_rx[i] & 0x0Fu;
+    S.cdd_rx[9] = (u8)((~sum) & 0x0Fu);
+}
+
+static void neocd_cdd_exec_cmd(void)
+{
+    u8 cmd = S.cdd_tx[0] & 0x0Fu;
+    for (int i = 0; i < 10; i++)
+        S.cdd_rx[i] = 0;
+
+    switch (cmd) {
+    case 0x0:                           /* Status */
+        S.cdd_rx[0] = S.cdd_status;
+        break;
+    case 0x1:                           /* Stop */
+        S.cdd_status = 0x00;
+        S.cdd_reading = 0;
+        S.cdda_playing = 0;
+        S.cdd_rx[0] = 0x00;
+        break;
+    case 0x2: {                         /* TOC query */
+        u8 sub = S.cdd_tx[3] & 0x0Fu;
+        S.cdd_rx[0] = 0x09;
+        S.cdd_rx[1] = sub;
+        if (sub == 0x00 && S.cd) {      /* Lead-out MSF */
+            u32 tot = S.cd->total_lba + 150u;
+            u8 mm = to_bcd8(tot / 4500u), ss = to_bcd8((tot / 75u) % 60u), ff = to_bcd8(tot % 75u);
+            S.cdd_rx[2] = mm >> 4; S.cdd_rx[3] = mm & 15u;
+            S.cdd_rx[4] = ss >> 4; S.cdd_rx[5] = ss & 15u;
+            S.cdd_rx[6] = ff >> 4; S.cdd_rx[7] = ff & 15u;
+        } else if (sub == 0x02 && S.cd) { /* First & last track numbers */
+            u8 ft = to_bcd8(S.cd->first_track), lt = to_bcd8(S.cd->last_track);
+            S.cdd_rx[2] = ft >> 4; S.cdd_rx[3] = ft & 15u;
+            S.cdd_rx[4] = lt >> 4; S.cdd_rx[5] = lt & 15u;
+        } else if (sub == 0x03 && S.cd) { /* Track N start MSF */
+            u32 tn = (u32)(S.cdd_tx[4] * 10u + S.cdd_tx[5]);
+            if (tn >= 1u && tn <= S.cd->last_track) {
+                u32 msf = S.cd->tracks[tn].lba + 150u;
+                u8 mm = to_bcd8(msf / 4500u), ss = to_bcd8((msf / 75u) % 60u), ff = to_bcd8(msf % 75u);
+                S.cdd_rx[2] = mm >> 4; S.cdd_rx[3] = mm & 15u;
+                S.cdd_rx[4] = ss >> 4; S.cdd_rx[5] = ss & 15u;
+                S.cdd_rx[6] = (u8)((ff >> 4) | (S.cd->tracks[tn].is_audio ? 0u : 8u));
+                S.cdd_rx[7] = ff & 15u;
+                S.cdd_rx[8] = (u8)(tn % 10u);
+            }
+        }
+        break;
+    }
+    case 0x3: {                         /* Play / Read from MSF */
+        u32 mm = (u32)S.cdd_tx[2] * 10u + S.cdd_tx[3];
+        u32 ss = (u32)S.cdd_tx[4] * 10u + S.cdd_tx[5];
+        u32 ff = (u32)S.cdd_tx[6] * 10u + S.cdd_tx[7];
+        u32 frames = (mm * 60u + ss) * 75u + ff;
+        u32 lba = frames >= 150u ? frames - 150u : 0u;
+        S.cdd_read_lba = lba;
+        S.cdd_cur_lba = lba;
+        S.cdd_status = 0x01;
+        S.cdd_reading = 1;
+        S.cdd_rx[0] = 0x01;
+        break;
+    }
+    case 0x4: {                         /* Seek MSF */
+        u32 mm = (u32)S.cdd_tx[2] * 10u + S.cdd_tx[3];
+        u32 ss = (u32)S.cdd_tx[4] * 10u + S.cdd_tx[5];
+        u32 ff = (u32)S.cdd_tx[6] * 10u + S.cdd_tx[7];
+        u32 frames = (mm * 60u + ss) * 75u + ff;
+        S.cdd_cur_lba = frames >= 150u ? frames - 150u : 0u;
+        S.cdd_status = 0x04;
+        S.cdd_reading = 0;
+        S.cdd_rx[0] = 0x04;
+        break;
+    }
+    case 0x6:                           /* Pause */
+        S.cdd_status = 0x04;
+        S.cdd_reading = 0;
+        S.cdda_paused = 1;
+        S.cdd_rx[0] = 0x04;
+        break;
+    case 0x7:                           /* Resume */
+        S.cdd_status = 0x01;
+        S.cdd_reading = 1;
+        S.cdda_paused = 0;
+        S.cdd_rx[0] = 0x01;
+        break;
+    default:
+        S.cdd_rx[0] = S.cdd_status;
+        break;
+    }
+    neocd_cdd_set_rx_csum();
+}
+
+static void neocd_cdd_frame_tick(void)
+{
+    if (!S.cd_irq_en)
+        return;
+    /* Vector 22: 75 Hz CDD status communication tick */
+    if (S.cd_ff00[0x002 >> 1]) {
+        S.cd_irq_flags |= 2u;
+        irq_refresh();
+    }
+    /* Vector 21: LC89515 decoded 2048-byte sector ready */
+    if (S.cdd_reading && S.cd && S.cd->read_2048 && (S.lc_regs[10] & 0x80u)) {
+        u32 lba = S.cdd_read_lba++;
+        S.cdd_cur_lba = lba;
+        if (S.cd->read_2048(lba, M->iso_sec) == 0) {
+            u32 dst = S.lc_wa & 0x3FFFu;
+            u32 msf = lba + 150u;
+            /* 4-byte LC89515 header (M, S, F, Mode=1) followed by 2048-byte user data */
+            M->cdc_ram[(dst + 0u) & 0x3FFFu] = to_bcd8(msf / 4500u);
+            M->cdc_ram[(dst + 1u) & 0x3FFFu] = to_bcd8((msf / 75u) % 60u);
+            M->cdc_ram[(dst + 2u) & 0x3FFFu] = to_bcd8(msf % 75u);
+            M->cdc_ram[(dst + 3u) & 0x3FFFu] = 0x01u;
+            for (u32 i = 0; i < 2048u; i++)
+                M->cdc_ram[(dst + 4u + i) & 0x3FFFu] = M->iso_sec[i];
+            S.lc_pt = (u16)dst;
+            S.lc_wa = (u16)((dst + 2052u) & 0x3FFFu);
+            S.lc_regs[1] &= ~0x20u;     /* ~DECI pending */
+            S.cd_irq_flags |= 4u;
+            irq_refresh();
+        }
+    }
+}
+
+static u32 neocd_io_read(u32 a, int size)
+{
+    if (a >= 0xFF8000u && a < 0xFFC000u) {
+        u32 o = (a - 0xFF8000u) & 0x3FFFu;
+        if (size == 1)
+            return M->cdc_ram[o];
+        return ((u32)M->cdc_ram[o] << 8) | M->cdc_ram[(o + 1u) & 0x3FFFu];
+    }
+    if (a >= 0xFF0200u)
+        return size == 2 ? 0xFFFFu : 0xFFu;
+
+    u32 r = a & 0x1FEu;
+    u16 w = S.cd_ff00[r >> 1];
+
+    switch (r) {
+    case 0x004:
+        w = 0;
+        break;
+    case 0x100:                         /* $FF0101 LC89515 AR */
+        w = S.lc_ar & 0x0Fu;
+        break;
+    case 0x102: {                       /* $FF0103 LC89515 register read */
+        u8 ar = S.lc_ar & 0x0Fu;
+        u8 rv = 0xFFu;
+        if (ar == 1) rv = S.lc_regs[1];
+        else if (ar == 2) rv = (u8)S.lc_dbc;
+        else if (ar == 3) rv = (u8)(S.lc_dbc >> 8);
+        else if (ar >= 4 && ar <= 7) {
+            u32 msf = S.cdd_cur_lba + 150u;
+            rv = (ar == 4) ? to_bcd8(msf / 4500u) :
+                 (ar == 5) ? to_bcd8((msf / 75u) % 60u) :
+                 (ar == 6) ? to_bcd8(msf % 75u) : 0x01u;
+        } else if (ar == 8) rv = (u8)(S.lc_pt + 4u);
+        else if (ar == 9) rv = (u8)((S.lc_pt + 4u) >> 8);
+        else if (ar == 10) rv = (u8)S.lc_wa;
+        else if (ar == 11) rv = (u8)(S.lc_wa >> 8);
+        else if (ar == 12) rv = 0x80u;  /* STAT0: CRCOK */
+        else if (ar == 15) { rv = 0x00u; S.lc_regs[1] |= 0x20u; } /* STAT3 clears DECI */
+        S.lc_ar = (S.lc_ar + 1u) & 0x0Fu;
+        w = rv;
+        break;
+    }
+    case 0x11C:                         /* $FF011C REG_CDCONFIG: Top-Loader, lid closed, USA ($02) */
+        w = 0xC200u;
+        break;
+    case 0x160:                         /* $FF0161 REG_CDDINPUT */
+        w = S.cdd_rx[S.cdd_idx % 10u] & 0x0Fu;
+        break;
+    case 0x188:                         /* $FF0188 REG_CDDALEFTL */
+        w = S.cdda_vu_l;
+        break;
+    case 0x18A:                         /* $FF018A REG_CDDARIGHTL */
+        w = S.cdda_vu_r;
+        break;
+    }
+
+    if (size == 2)
+        return w;
+    return (a & 1u) ? (w & 0xFFu) : (w >> 8);
+}
+
+static void neocd_io_write(u32 a, u32 v, int size)
+{
+    if (a >= 0xFF8000u && a < 0xFFC000u) {
+        u32 o = (a - 0xFF8000u) & 0x3FFFu;
+        if (size == 1) {
+            M->cdc_ram[o] = (u8)v;
+        } else {
+            M->cdc_ram[o] = (u8)(v >> 8);
+            M->cdc_ram[(o + 1u) & 0x3FFFu] = (u8)v;
+        }
+        return;
+    }
+    if (a >= 0xFF0200u)
+        return;
+
+    u32 r = a & 0x1FEu;
+    if (size == 2)
+        S.cd_ff00[r >> 1] = (u16)v;
+    else if (a & 1u)
+        S.cd_ff00[r >> 1] = (u16)((S.cd_ff00[r >> 1] & 0xFF00u) | (v & 0xFFu));
+    else
+        S.cd_ff00[r >> 1] = (u16)((S.cd_ff00[r >> 1] & 0x00FFu) | ((v & 0xFFu) << 8));
+
+    u16 w = S.cd_ff00[r >> 1];
+    u8 b = (u8)v;
+
+    if (r >= 0x080u && r < 0x090u) {
+        S.cd_dma_ucode[(r - 0x080u) >> 1] = w;
+        return;
+    }
+
+    switch (r) {
+    case 0x00E:                         /* $FF000F CD IRQ acknowledge (bits 5:vec21, 4:vec22, 3:vec23) */
+        if (size == 2 || (a & 1u)) {
+            if (b & 0x20u) S.cd_irq_flags &= ~4u;
+            if (b & 0x10u) S.cd_irq_flags &= ~2u;
+            if (b & 0x08u) S.cd_irq_flags &= ~1u;
+            irq_refresh();
+        }
+        break;
+    case 0x060:                         /* $FF0061 LC8953 DMA trigger */
+        if ((size == 2 || (a & 1u)) && (b & 0x40u))
+            neocd_run_dma();
+        break;
+    case 0x064:
+    case 0x066:
+        S.cd_dma_src = ((u32)S.cd_ff00[0x064 >> 1] << 16) | S.cd_ff00[0x066 >> 1];
+        break;
+    case 0x068:
+    case 0x06A:
+        S.cd_dma_dst = ((u32)S.cd_ff00[0x068 >> 1] << 16) | S.cd_ff00[0x06A >> 1];
+        break;
+    case 0x06C:
+    case 0x06E:
+        S.cd_dma_val = ((u32)S.cd_ff00[0x06C >> 1] << 16) | S.cd_ff00[0x06E >> 1];
+        break;
+    case 0x070:
+    case 0x072:
+        S.cd_dma_cnt = ((u32)S.cd_ff00[0x070 >> 1] << 16) | S.cd_ff00[0x072 >> 1];
+        break;
+    case 0x07E:
+        S.cd_dma_mode = w;
+        break;
+    case 0x100:                         /* $FF0101 LC89515 AR */
+        if (size == 2 || (a & 1u))
+            S.lc_ar = b & 0x0Fu;
+        break;
+    case 0x102:                         /* $FF0103 LC89515 data write */
+        if (size == 2 || (a & 1u)) {
+            u8 ar = S.lc_ar & 0x0Fu;
+            S.lc_regs[ar] = b;
+            if (ar == 2) S.lc_dbc = (u16)((S.lc_dbc & 0xFF00u) | b);
+            else if (ar == 3) S.lc_dbc = (u16)((S.lc_dbc & 0x00FFu) | ((u16)b << 8));
+            else if (ar == 4) S.lc_dac = (u16)((S.lc_dac & 0xFF00u) | b);
+            else if (ar == 5) S.lc_dac = (u16)((S.lc_dac & 0x00FFu) | ((u16)b << 8));
+            else if (ar == 6) S.lc_regs[1] |= 0x02u; /* DTTRG -> DTEN */
+            else if (ar == 7) S.lc_regs[1] &= ~0x02u; /* DTACK */
+            else if (ar == 8) S.lc_wa = (u16)((S.lc_wa & 0xFF00u) | b);
+            else if (ar == 9) S.lc_wa = (u16)((S.lc_wa & 0x00FFu) | ((u16)b << 8));
+            else if (ar == 15) { S.lc_regs[1] = 0xFFu; S.lc_wa = 0; S.lc_pt = 0; }
+            S.lc_ar = (S.lc_ar + 1u) & 0x0Fu;
+        }
+        break;
+    case 0x104:                         /* $FF0105 REG_TRANSAREA */
+        if (size == 2 || (a & 1u))
+            S.cd_trans_area = b & 7u;
+        break;
+    case 0x110:                         /* $FF0111 REG_DISBLSPR */
+        if (size == 2 || (a & 1u))
+            S.cd_dis_spr = (b != 0);
+        break;
+    case 0x114:                         /* $FF0115 REG_DISBLFIX */
+        if (size == 2 || (a & 1u))
+            S.cd_dis_fix = (b != 0);
+        break;
+    case 0x118:                         /* $FF0119 REG_ENVIDEO */
+        if (size == 2 || (a & 1u))
+            S.cd_video_en = (b != 0);
+        break;
+    case 0x120: if (size == 2 || (a & 1u)) S.cd_trans_area = 0; break; /* REG_UPMAPSPR */
+    case 0x122: if (size == 2 || (a & 1u)) S.cd_trans_area = 1; break; /* REG_UPMAPPCM */
+    case 0x126: if (size == 2 || (a & 1u)) S.cd_trans_area = 4; break; /* REG_UPMAPZ80 */
+    case 0x128: if (size == 2 || (a & 1u)) S.cd_trans_area = 5; break; /* REG_UPMAPFIX */
+    case 0x162:                         /* $FF0163 REG_CDDOUTPUT */
+        if (size == 2 || (a & 1u))
+            S.cdd_tx[S.cdd_idx % 10u] = b & 0x0Fu;
+        break;
+    case 0x164:                         /* $FF0165 REG_CDDCTRL (clock edge advances nibble index) */
+        if (size == 2 || (a & 1u)) {
+            u8 prev = S.cdd_ctrl;
+            S.cdd_ctrl = b;
+            if (!(b & 2u)) {
+                S.cdd_idx = 0;
+            } else if (!(prev & 1u) && (b & 1u)) {
+                if (++S.cdd_idx >= 10u) {
+                    S.cdd_idx = 0;
+                    neocd_cdd_exec_cmd();
+                }
+            }
+        }
+        break;
+    case 0x16C:                         /* $FF016D MapVectorTable (0xFF -> BIOS, 0x00 -> Game PRG) */
+        if (size == 2 || (a & 1u)) {
+            S.vectable = (b != 0xFFu) ? 1 : 0;
+            sync_page0_vectors();
+        }
+        break;
+    case 0x16E:                         /* $FF016F REG_UPLOAD_EN */
+        if (size == 2 || (a & 1u))
+            S.cd_upload_en = (b != 0);
+        break;
+    case 0x180:                         /* $FF0181 REG_CDIRQ_EN */
+        if (size == 2 || (a & 1u)) {
+            S.cd_irq_en = b;
+            irq_refresh();
+        }
+        break;
+    case 0x182:                         /* $FF0183 REG_Z80RST (0 = reset asserted, non-zero = run) */
+        if (size == 2 || (a & 1u)) {
+            if (!b) {
+                S.cd_z80_en = 0;
+                z80_reset(&S.z);
+            } else if (!S.cd_z80_en) {
+                S.cd_z80_en = 1;
+                z80_reset(&S.z);
+            }
+        }
+        break;
+    case 0x1A0:                         /* $FF01A1 REG_SPRBANK */
+        if (size == 2 || (a & 1u))
+            S.cd_spr_bank = b & 3u;
+        break;
+    case 0x1A2:                         /* $FF01A3 REG_PCMBANK */
+        if (size == 2 || (a & 1u))
+            S.cd_pcm_bank = b & 1u;
+        break;
+    }
+}
+
+/* Redbook CD-DA playback & Z80 CDDA mailbox */
+static void neocd_cdda_cmd(u16 cmd_trk)
+{
+    u8 cmd = (u8)((cmd_trk >> 8) & 7u);
+    u8 bcd = (u8)(cmd_trk & 0xFFu);
+    u32 trk = (u32)((bcd >> 4) * 10u + (bcd & 0x0Fu));
+
+    switch (cmd) {
+    case 0:
+    case 1:
+    case 4:
+    case 5: {
+        u8 loop = (cmd != 1u) ? 1u : 0u;
+        if (S.is_cd_builtin) {
+            S.cdda_playing = 1;
+            S.cdda_paused = 0;
+            S.cdda_loop = loop;
+            S.cdda_track = (u8)(trk ? trk : 2u);
+            S.cdda_start_lba = 0;
+            S.cdda_lba = 0;
+            S.cdda_end_lba = 300;
+            S.cdda_pos = 588;
+            break;
+        }
+        if (S.cd && trk >= S.cd->first_track && trk <= S.cd->last_track && S.cd->tracks[trk].length > 0) {
+            S.cdda_playing = 1;
+            S.cdda_paused = 0;
+            S.cdda_loop = loop;
+            S.cdda_track = (u8)trk;
+            S.cdda_start_lba = S.cd->tracks[trk].lba;
+            S.cdda_lba = S.cdda_start_lba;
+            S.cdda_end_lba = S.cdda_start_lba + S.cd->tracks[trk].length;
+            S.cdda_pos = 588;
+        } else {
+            S.cdda_playing = 0;
+            S.cdda_l = S.cdda_r = 0;
+            S.cdda_vu_l = S.cdda_vu_r = 0;
+        }
+        break;
+    }
+    case 2:
+        S.cdda_paused = 1;
+        break;
+    case 3:
+        S.cdda_paused = 0;
+        break;
+    case 6:
+    case 7:
+        S.cdda_playing = 0;
+        S.cdda_l = S.cdda_r = 0;
+        S.cdda_vu_l = S.cdda_vu_r = 0;
+        break;
+    }
+}
+
+static void neocd_check_z80_cdda(void)
+{
+    u8 flag = cd_prgram_rb(0x000107u) & 0x7Fu;
+    u16 ptr = (u16)(((u32)cd_prgram_rb(0x00013Au) << 8) | cd_prgram_rb(0x00013Bu));
+    u16 zaddr = 0;
+    if (flag <= 1u || ptr == 0xFFFFu)
+        zaddr = 0xFEF8u;
+    else if (ptr != 0)
+        zaddr = ptr;
+    if (!zaddr || zaddr == 0xFFFFu)
+        return;
+
+    u8 lo = M->cd_z80ram[zaddr];
+    u8 hi = M->cd_z80ram[(u16)(zaddr + 1u)];
+    if ((lo | hi) && (hi & 0xF8u) == 0u && lo != 0xFFu) {
+        neocd_cdda_cmd((u16)(((u16)hi << 8) | lo));
+        M->cd_z80ram[zaddr] = 0;
+        M->cd_z80ram[(u16)(zaddr + 1u)] = 0;
+    }
+}
+
+static void neocd_fill_builtin_cdda_sector(u32 lba, u8 *dst)
+{
+    /* Synthesize a lively 44.1 kHz stereo chiptune/synthwave groove for the built-in Neo Geo CD showcase */
+    static const u16 bass_inc[8] = {163, 163, 194, 218, 245, 218, 194, 145};
+    static const u16 lead_inc[8] = {654, 734, 873, 980, 1099, 980, 873, 734};
+    u32 step = (lba / 18u) & 7u;
+    u32 b_inc = bass_inc[step];
+    u32 l_inc = lead_inc[(lba / 9u) & 7u];
+    u32 samp_base = lba * 588u;
+
+    for (u32 i = 0; i < 588u; i++) {
+        u32 t = samp_base + i;
+        u32 bp = (t * b_inc) & 0xFFFFu;
+        u32 lp = (t * l_inc) & 0xFFFFu;
+        s32 bw = (bp < 0x8000u) ? 3600 : -3600;
+        s32 tri = (lp & 0x8000u) ? (s32)(0xFFFFu - lp) : (s32)lp;
+        s32 lw = ((tri - 16384) * 5) >> 4;
+        s32 env = 256 - (s32)(((lba % 9u) * 588u + i) >> 5);
+        if (env < 48) env = 48;
+        lw = (lw * env) >> 8;
+        s16 sl = (s16)(bw + lw);
+        s16 sr = (s16)(bw - (lw >> 1));
+        dst[i * 4u + 0u] = (u8)sl;
+        dst[i * 4u + 1u] = (u8)((u16)sl >> 8);
+        dst[i * 4u + 2u] = (u8)sr;
+        dst[i * 4u + 3u] = (u8)((u16)sr >> 8);
+    }
+}
+
+static void neocd_cdda_step_one(void)
+{
+    if (S.cdda_pos >= 588u) {
+        if (S.cdda_lba >= S.cdda_end_lba) {
+            if (S.cdda_loop) {
+                S.cdda_lba = S.cdda_start_lba;
+            } else {
+                S.cdda_playing = 0;
+                S.cdda_l = S.cdda_r = 0;
+                S.cdda_vu_l = S.cdda_vu_r = 0;
+                return;
+            }
+        }
+        if (S.is_cd_builtin) {
+            neocd_fill_builtin_cdda_sector(S.cdda_lba++, M->cdda_sec);
+        } else if (!S.cd || !S.cd->read_2352 || S.cd->read_2352(S.cdda_lba++, M->cdda_sec) < 0) {
+            S.cdda_playing = 0;
+            S.cdda_l = S.cdda_r = 0;
+            S.cdda_vu_l = S.cdda_vu_r = 0;
+            return;
+        }
+        S.cdda_pos = 0;
+    }
+
+    const u8 *p = M->cdda_sec + S.cdda_pos * 4u;
+    S.cdda_pos++;
+    s16 cl = (s16)((u16)p[0] | ((u16)p[1] << 8));
+    s16 cr = (s16)((u16)p[2] | ((u16)p[3] << 8));
+    S.cdda_l = cl;
+    S.cdda_r = cr;
+    S.cdda_vu_l = (u16)(cl < 0 ? -cl : cl);
+    S.cdda_vu_r = (u16)(cr < 0 ? -cr : cr);
+}
+
+/* Put a 4bpp pixel into a 16x16 Neo Geo CD sprite tile (128 bytes, CD 1/0/3/2 bitplane order) */
+static void neocd_spr_put_px(u8 *tile128, int x, int y, u8 col)
+{
+    u32 half = (x < 8) ? 64u : 0u;
+    u32 base = half + ((u32)(y & 15) << 2);
+    u32 bit  = (u32)(x & 7);
+    u8 mask  = (u8)(1u << bit);
+    /* CD SPR row byte order: [0]=bp1, [1]=bp0, [2]=bp3, [3]=bp2 */
+    if (col & 1u) tile128[base + 1u] |= mask; else tile128[base + 1u] &= (u8)~mask;
+    if (col & 2u) tile128[base + 0u] |= mask; else tile128[base + 0u] &= (u8)~mask;
+    if (col & 4u) tile128[base + 3u] |= mask; else tile128[base + 3u] &= (u8)~mask;
+    if (col & 8u) tile128[base + 2u] |= mask; else tile128[base + 2u] &= (u8)~mask;
+}
+
+static void prg_w16(u32 a, u16 v)
+{
+    cd_prgram_wb(a, (u8)(v >> 8));
+    cd_prgram_wb(a + 1u, (u8)v);
+}
+
+static void prg_w32(u32 a, u32 v)
+{
+    prg_w16(a, (u16)(v >> 16));
+    prg_w16(a + 2u, (u16)v);
+}
+
+static void neocd_build_builtin_disc(void)
+{
+    for (u32 i = 0; i < 0x20000u; i++)
+        M->cd_prgram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_fixram); i++)
+        M->cd_fixram[i] = M->sfix_rom[i];
+    for (u32 i = 0; i < 0x4000u; i++)
+        M->cd_sprram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_z80ram); i++)
+        M->cd_z80ram[i] = (i < sizeof(M->sm1_rom)) ? M->sm1_rom[i] : 0;
+
+    /* Create glowing 16x16 Neo Geo CD orb/emblem sprite tiles (tiles 1..4) in CD 1/0/3/2 format */
+    for (int t = 1; t <= 4; t++) {
+        u8 *sp = &M->cd_sprram[(u32)t * 128u];
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) {
+                int dx = x * 2 - 15, dy = y * 2 - 15;
+                int d2 = dx * dx + dy * dy;
+                u8 c = 0;
+                if (d2 <= 25) c = 5;
+                else if (d2 <= 81) c = 4;
+                else if (d2 <= 145) c = 3;
+                else if (d2 <= 215) c = 2;
+                else if (x == 0 || x == 15 || y == 0 || y == 15) c = (t == 1) ? 1 : 0;
+                neocd_spr_put_px(sp, x, y, c);
+            }
+        }
+    }
+
+    /* 68000 Neo Geo CD program header + Level 2 VBlank ($68) + interactive showcase at $000200 */
+    prg_w32(0x00, 0x0010F300u);
+    prg_w32(0x04, 0x00C00402u);
+    for (u32 v = 2; v < 64; v++)
+        prg_w32(v * 4u, 0x00C00426u);
+    prg_w32(0x64, 0x00C010B0u);         /* Level 1: Timer */
+    prg_w32(0x68, 0x00000400u);         /* Level 2: VBlank handler */
+    prg_w32(0x6C, 0x00C01080u);
+
+    const char *sig = "NEO-GEO";
+    for (int i = 0; i < 7; i++)
+        cd_prgram_wb(0x100u + (u32)i, (u8)sig[i]);
+    prg_w16(0x108, 0x0099);             /* NGH */
+    prg_w16(0x122, 0x4EF9); prg_w32(0x124, 0x00000200u); /* USER */
+    prg_w16(0x128, 0x4E75);             /* PLAYER_START */
+    prg_w16(0x12E, 0x4E75);             /* DEMO_END */
+    prg_w16(0x134, 0x4E75);             /* COIN_SOUND */
+
+    /* Title text stored at $000800 for fix layer HUD (above VBlank handler at $400..$690) */
+    const char *hud1 = "SNK NEO GEO CD  12MHZ 68000 + Z80";
+    const char *hud2 = "LSPC2 SPRITES + YM2610 + CD-DA 48KHZ";
+    const char *hud3 = "ARROWS MOVE ORBS   A/B COLOR BANK";
+    for (int i = 0; hud1[i]; i++) cd_prgram_wb(0x800u + (u32)i, (u8)hud1[i]);
+    for (int i = 0; hud2[i]; i++) cd_prgram_wb(0x840u + (u32)i, (u8)hud2[i]);
+    for (int i = 0; hud3[i]; i++) cd_prgram_wb(0x880u + (u32)i, (u8)hud3[i]);
+
+    /* $000200: USER entry:
+       - Load palettes 0..3 & backdrop ($401FFE)
+       - Draw HUD text into fix map ($7000 + x*32 + y)
+       - Call BIOSF_CDDACMD ($C0056A) with D0 = $0002 (loop CD-DA Track 2!)
+       - Enable interrupts ($2000) and run main frame loop animating 12 Neo Geo CD sprites! */
+    static const u16 pal_init[16] = {
+        /* Palette 0 (Fix HUD): 0=trans, 1=bright gold/white */
+        0x8000, 0x0FF4, 0x00FF, 0x0F44,
+        /* Palette 1 (Player orb): cyan/white core */
+        0x8000, 0x024F, 0x016F, 0x03BF, 0x07FF, 0x0FFF,
+        /* Palette 2 (Orbiting orbs): fiery gold/red */
+        0x8000, 0x0610, 0x0B20, 0x0F60, 0x0FC2, 0x0FF9
+    };
+
+    u32 pc = 0x200u;
+    /* Copy palettes to $400000 (pal 0, 1, 2) and backdrop $401FFE = $0114 (deep midnight blue) */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0FFF); prg_w32(pc + 4, 0x00400002u); pc += 8; /* Pal 0 col 1 = white */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0FE2); prg_w32(pc + 4, 0x00400022u); pc += 8; /* Pal 1 col 1 = gold */
+    for (int c = 1; c <= 5; c++) {
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, pal_init[4 + c]); prg_w32(pc + 4, 0x00400040u + (u32)c * 2u); pc += 8;
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, pal_init[10 + (c < 5 ? c : 5)]); prg_w32(pc + 4, 0x00400060u + (u32)c * 2u); pc += 8;
+    }
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0114); prg_w32(pc + 4, 0x00401FFEu); pc += 8;
+
+    /* Set REG_VRAMMOD ($3C0004) = $0020 (horizontal column step!) and write HUD rows */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0020); prg_w32(pc + 4, 0x003C0004u); pc += 8;
+    static const struct { u16 vaddr; u32 saddr; u16 pal_hi; } lines[3] = {
+        {0x7064, 0x000800u, 0x1300},
+        {0x7046, 0x000840u, 0x0300},
+        {0x7069, 0x000880u, 0x0300},
+    };
+    for (int ln = 0; ln < 3; ln++) {
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, lines[ln].vaddr); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+        prg_w16(pc, 0x41F9); prg_w32(pc + 2, lines[ln].saddr); pc += 6; /* LEA saddr, A0 */
+        u32 ch_loop = pc;
+        prg_w16(pc, 0x7000); pc += 2;                                   /* MOVEQ #0, D0 */
+        prg_w16(pc, 0x1018); pc += 2;                                   /* MOVE.B (A0)+, D0 */
+        prg_w16(pc, 0x670C); pc += 2;                                   /* BEQ.S +12 */
+        prg_w16(pc, 0x0040); prg_w16(pc + 2, lines[ln].pal_hi); pc += 4;/* ORI.W #pal_hi, D0 */
+        prg_w16(pc, 0x33C0); prg_w32(pc + 2, 0x003C0002u); pc += 6;     /* MOVE.W D0, $3C0002 */
+        prg_w16(pc, (u16)(0x6000u | ((u16)((s32)ch_loop - (s32)(pc + 2)) & 0xFFu))); pc += 2;
+    }
+
+    /* Init player coords ($100000 = X=152, $100002 = Y=112, $100004 = frame=0) */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 152); prg_w32(pc + 4, 0x00100000u); pc += 8;
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 112); prg_w32(pc + 4, 0x00100002u); pc += 8;
+    prg_w16(pc, 0x4279); prg_w32(pc + 2, 0x00100004u); pc += 6;
+
+    /* Start CD-DA Track 2 looped via BIOSF_CDDACMD ($C0056A, D0 = $0002) */
+    prg_w16(pc, 0x303C); prg_w16(pc + 2, 0x0002); pc += 4;
+    prg_w16(pc, 0x4EB9); prg_w32(pc + 2, 0x00C0056Au); pc += 6;
+
+    /* Unmask interrupts ($2000) and loop waiting on VBlank flag $100006 */
+    prg_w16(pc, 0x46FC); prg_w16(pc + 2, 0x2000); pc += 4;
+    u32 main_loop = pc;
+    prg_w16(pc, 0x4A39); prg_w32(pc + 2, 0x00100006u); pc += 6;         /* TST.B $100006 */
+    prg_w16(pc, 0x67F8); pc += 2;                                       /* BEQ.S main_loop */
+    prg_w16(pc, 0x4239); prg_w32(pc + 2, 0x00100006u); pc += 6;         /* CLR.B $100006 */
+    prg_w16(pc, (u16)(0x6000u | ((u16)((s32)main_loop - (s32)(pc + 2)) & 0xFFu))); pc += 2;
+
+    /* $000400: Level 2 VBlank handler:
+       - Kick watchdog ($300001), ack VBlank ($3C000C = 4), call SYSTEM_IO ($C0044A)
+       - Move player orb with BIOS_P1CURRENT ($10FD96) and animate 8 orbiting orbs! */
+    pc = 0x400u;
+    prg_w16(pc, 0x48E7); prg_w16(pc + 2, 0xFFFE); pc += 4;              /* MOVEM.L D0-D7/A0-A6, -(SP) */
+    prg_w16(pc, 0x13C0); prg_w32(pc + 2, 0x00300001u); pc += 6;         /* MOVE.B D0, $300001 */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0004); prg_w32(pc + 4, 0x003C000Cu); pc += 8; /* Ack VBL */
+    prg_w16(pc, 0x4EB9); prg_w32(pc + 2, 0x00C0044Au); pc += 6;         /* JSR SYSTEM_IO */
+
+    /* Update X/Y from $10FD96 (bit0=Up, bit1=Down, bit2=Left, bit3=Right) */
+    prg_w16(pc, 0x1039); prg_w32(pc + 2, 0x0010FD96u); pc += 6;         /* MOVE.B $10FD96, D0 */
+    prg_w16(pc, 0x3239); prg_w32(pc + 2, 0x00100000u); pc += 6;         /* MOVE.W $100000, D1 (X) */
+    prg_w16(pc, 0x3439); prg_w32(pc + 2, 0x00100002u); pc += 6;         /* MOVE.W $100002, D2 (Y) */
+    prg_w16(pc, 0x0800); prg_w16(pc + 2, 2); pc += 4;                   /* BTST #2, D0 (Left) */
+    prg_w16(pc, 0x6702); prg_w16(pc + 2, 0x5541); pc += 4;              /* BEQ +2; SUBQ.W #2, D1 */
+    prg_w16(pc, 0x0800); prg_w16(pc + 2, 3); pc += 4;                   /* BTST #3, D0 (Right) */
+    prg_w16(pc, 0x6702); prg_w16(pc + 2, 0x5441); pc += 4;              /* BEQ +2; ADDQ.W #2, D1 */
+    prg_w16(pc, 0x0800); prg_w16(pc + 2, 0); pc += 4;                   /* BTST #0, D0 (Up) */
+    prg_w16(pc, 0x6702); prg_w16(pc + 2, 0x5542); pc += 4;              /* BEQ +2; SUBQ.W #2, D2 */
+    prg_w16(pc, 0x0800); prg_w16(pc + 2, 1); pc += 4;                   /* BTST #1, D0 (Down) */
+    prg_w16(pc, 0x6702); prg_w16(pc + 2, 0x5442); pc += 4;              /* BEQ +2; ADDQ.W #2, D2 */
+    prg_w16(pc, 0x0241); prg_w16(pc + 2, 0x01FF); pc += 4;              /* ANDI.W #$01FF, D1 */
+    prg_w16(pc, 0x0242); prg_w16(pc + 2, 0x00FF); pc += 4;              /* ANDI.W #$00FF, D2 */
+    prg_w16(pc, 0x33C1); prg_w32(pc + 2, 0x00100000u); pc += 6;
+    prg_w16(pc, 0x33C2); prg_w32(pc + 2, 0x00100002u); pc += 6;
+
+    /* Increment frame counter D3 = ++($100004) */
+    prg_w16(pc, 0x5279); prg_w32(pc + 2, 0x00100004u); pc += 6;
+    prg_w16(pc, 0x3639); prg_w32(pc + 2, 0x00100004u); pc += 6;         /* MOVE.W $100004, D3 */
+
+    /*REG_VRAMMOD = 1; write 9 sprites (1..9) into SCB1/SCB2/SCB3/SCB4 */
+    prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0001); prg_w32(pc + 4, 0x003C0004u); pc += 8;
+    for (int s = 1; s <= 9; s++) {
+        u16 scb1 = (u16)(s * 64);
+        u16 pal_attr = (s == 1) ? 0x0200u : ((s & 1) ? 0x0300u : 0x0200u);
+        /* SCB1: tile 1, pal_attr */
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, scb1);     prg_w32(pc + 4, 0x003C0000u); pc += 8;
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0001);   prg_w32(pc + 4, 0x003C0002u); pc += 8;
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, pal_attr); prg_w32(pc + 4, 0x003C0002u); pc += 8;
+        /* SCB2: full zoom $0FFF */
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, (u16)(0x8000u + s)); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+        prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x0FFFu);            prg_w32(pc + 4, 0x003C0002u); pc += 8;
+        if (s == 1) {
+            /* Player sprite at (D1, 496 - D2) */
+            prg_w16(pc, 0x383C); prg_w16(pc + 2, 496); pc += 4;         /* MOVE.W #496, D4 */
+            prg_w16(pc, 0x9842); pc += 2;                               /* SUB.W D2, D4 */
+            prg_w16(pc, 0xEF4C); pc += 2;                               /* LSL.W #7, D4 */
+            prg_w16(pc, 0x0044); prg_w16(pc + 2, 0x0001); pc += 4;      /* ORI.W #1, D4 (height=1) */
+            prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x8201u); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+            prg_w16(pc, 0x33C4); prg_w32(pc + 2, 0x003C0002u); pc += 6;
+            prg_w16(pc, 0x3801); pc += 2;                               /* MOVE.W D1, D4 */
+            prg_w16(pc, 0xEF4C); pc += 2;                               /* LSL.W #7, D4 */
+            prg_w16(pc, 0x33FC); prg_w16(pc + 2, 0x8401u); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+            prg_w16(pc, 0x33C4); prg_w32(pc + 2, 0x003C0002u); pc += 6;
+        } else {
+            /* Orbiting sprite `s`: X = (D3*2 + s*32) % 304, Y = 390 + ((D3 + s*19) & 63) */
+            u16 xphase = (u16)((s - 2) * 36);
+            u16 yphase = (u16)((s - 2) * 19);
+            prg_w16(pc, 0x3803); pc += 2;                               /* MOVE.W D3, D4 */
+            prg_w16(pc, 0xE344); pc += 2;                               /* ASL.W #1, D4 */
+            prg_w16(pc, 0x0644); prg_w16(pc + 2, xphase); pc += 4;      /* ADDI.W #xphase, D4 */
+            prg_w16(pc, 0x0244); prg_w16(pc + 2, 0x00FF); pc += 4;      /* ANDI.W #$00FF, D4 */
+            prg_w16(pc, 0x0644); prg_w16(pc + 2, 24); pc += 4;          /* ADDI.W #24, D4 */
+            prg_w16(pc, 0xEF4C); pc += 2;                               /* LSL.W #7, D4 */
+            prg_w16(pc, 0x33FC); prg_w16(pc + 2, (u16)(0x8400u + s)); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+            prg_w16(pc, 0x33C4); prg_w32(pc + 2, 0x003C0002u); pc += 6;
+
+            prg_w16(pc, 0x3803); pc += 2;                               /* MOVE.W D3, D4 */
+            prg_w16(pc, 0x0644); prg_w16(pc + 2, yphase); pc += 4;
+            prg_w16(pc, 0x0244); prg_w16(pc + 2, 0x003F); pc += 4;
+            prg_w16(pc, 0x0644); prg_w16(pc + 2, 340); pc += 4;
+            prg_w16(pc, 0xEF4C); pc += 2;
+            prg_w16(pc, 0x0044); prg_w16(pc + 2, 0x0001); pc += 4;
+            prg_w16(pc, 0x33FC); prg_w16(pc + 2, (u16)(0x8200u + s)); prg_w32(pc + 4, 0x003C0000u); pc += 8;
+            prg_w16(pc, 0x33C4); prg_w32(pc + 2, 0x003C0002u); pc += 6;
+        }
+    }
+
+    prg_w16(pc, 0x13FC); prg_w16(pc + 2, 0x0001); prg_w32(pc + 4, 0x00100006u); pc += 8; /* Set VBL done */
+    prg_w16(pc, 0x4CDF); prg_w16(pc + 2, 0x7FFF); pc += 4;              /* MOVEM.L (SP)+, D0-D7/A0-A6 */
+    prg_w16(pc, 0x4E73);                                                /* RTE */
+}
+
+const char *neocd_load(const struct cdrom_toc *cd, const char *path)
+{
+    S.tables_ready = 0;
+    build_static_tables();
+
+    S.is_cd = 1;
+    S.cd = cd;
+    S.board = 0;
+    S.fix_banksw = 0;
+    S.p_rom = 0;
+    S.p_size = 0;
+    S.s_rom = M->cd_fixram;
+    S.s_size = sizeof(M->cd_fixram);
+    S.m_rom = M->cd_z80ram;
+    S.m_size = sizeof(M->cd_z80ram);
+    S.v1_rom = M->cd_pcmram;
+    S.v1_size = sizeof(M->cd_pcmram);
+    S.v2_rom = 0;
+    S.v2_size = 0;
+    S.c_rom = M->cd_sprram;
+    S.c_size = sizeof(M->cd_sprram);
+    S.c_tile_mask = (sizeof(M->cd_sprram) >> 7) - 1u;
+
+    for (u32 i = 0; i < 0x10000u; i++)
+        M->wram[i] = M->nvram[i] = M->nvram_save[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_bram); i++)
+        M->cd_bram[i] = 0;
+    M->cd_bram[0] = 0x80;
+    S.nvram_dirty = 0;
+    S.cdda_playing = S.cdda_paused = S.cdda_loop = 0;
+    S.cdda_l = S.cdda_r = 0;
+    S.cdda_vu_l = S.cdda_vu_r = 0;
+    S.cdda_acc = 0;
+    S.cdd_status = 0x00;
+    S.cdd_reading = 0;
+    S.cdd_idx = S.cdd_ctrl = 0;
+    for (int i = 0; i < 0x100; i++)
+        S.cd_ff00[i] = 0;
+    for (int i = 0; i < 16; i++)
+        S.lc_regs[i] = 0xFFu;
+
+    /* Built-in Neo Geo CD showcase when invoked with empty path "" */
+    if (!cd || !path || !*path) {
+        S.is_cd_builtin = 1;
+        neocd_build_builtin_disc();
+        put_str(S.info, "SNK Neo Geo CD Built-in Showcase (68000 + Z80 + LSPC2 + YM2610 + CD-DA)");
+        neo_reset();
+        return 0;
+    }
+
+    S.is_cd_builtin = 0;
+    if (!cd->read_2048 || cd->last_track < 1u)
+        return "invalid Neo Geo CD disc TOC";
+
+    /* Locate ISO9660 Primary Volume Descriptor at Track 1 + 16 */
+    S.iso_trk1_lba = cd->tracks[cd->first_track].lba;
+    if (cd->read_2048(S.iso_trk1_lba + 16u, M->iso_sec) < 0 ||
+        M->iso_sec[0] != 0x01u || M->iso_sec[1] != 'C' || M->iso_sec[2] != 'D' ||
+        M->iso_sec[3] != '0' || M->iso_sec[4] != '0' || M->iso_sec[5] != '1') {
+        if (S.iso_trk1_lba != 0 && cd->read_2048(16u, M->iso_sec) == 0 &&
+            M->iso_sec[0] == 0x01u && M->iso_sec[1] == 'C' && M->iso_sec[2] == 'D') {
+            S.iso_trk1_lba = 0;
+        } else {
+            return "not an ISO9660 Neo Geo CD disc (missing CD001 PVD)";
+        }
+    }
+
+    S.iso_root_lba = S.iso_trk1_lba + le32(M->iso_sec + 156u + 2u);
+    S.iso_root_len = le32(M->iso_sec + 156u + 10u);
+
+    char vol_id[34];
+    int vn = 0;
+    for (int i = 0; i < 32; i++) {
+        char c = (char)M->iso_sec[40 + i];
+        if (c >= 32 && c <= 126)
+            vol_id[vn++] = c;
+    }
+    while (vn > 0 && vol_id[vn - 1] == ' ')
+        vn--;
+    vol_id[vn] = 0;
+
+    /* Clear Neo Geo CD DRAM banks before IPL.TXT load */
+    for (u32 i = 0; i < sizeof(M->cd_prgram); i++)
+        M->cd_prgram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_fixram); i++)
+        M->cd_fixram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_sprram); i++)
+        M->cd_sprram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_pcmram); i++)
+        M->cd_pcmram[i] = 0;
+    for (u32 i = 0; i < sizeof(M->cd_z80ram); i++)
+        M->cd_z80ram[i] = 0;
+
+    if (!S.has_cd_ext_bios) {
+        if (neocd_load_ipl() < 0)
+            return "not a Neo Geo CD disc (missing or invalid IPL.TXT)";
+    } else {
+        /* Even with external BIOS, verify IPL.TXT exists so non-NeoCD ISOs fail cleanly */
+        u32 dummy_lba = 0, dummy_sz = 0;
+        if (!neocd_iso_find("IPL.TXT", &dummy_lba, &dummy_sz))
+            return "not a Neo Geo CD disc (missing IPL.TXT)";
+    }
+
+    u32 n_audio = 0;
+    for (u32 t = cd->first_track; t <= cd->last_track; t++)
+        if (cd->tracks[t].is_audio)
+            n_audio++;
+
+    char *p = put_str(S.info, "Neo Geo CD (");
+    p = put_str(p, vn ? vol_id : "CDROM");
+    p = put_str(p, "), ");
+    p = put_u32(p, (u32)(cd->last_track - cd->first_track + 1u));
+    p = put_str(p, " trk (");
+    p = put_u32(p, n_audio);
+    p = put_str(p, " CD-DA), ");
+    p = put_str(p, S.has_cd_ext_bios ? "BIOS" : "HLE BIOS");
+
+    neo_reset();
+    return 0;
+}
+
 

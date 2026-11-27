@@ -31,6 +31,13 @@
 #include "psx.h"
 #include "cps.h"
 #include "s16.h"
+#include "konami.h"
+#include "williams.h"
+#include "irem.h"
+#include "taito.h"
+#include "pico8.h"
+#include "jaguar.h"
+#include "n64.h"
 #include "a8.h"
 #include "zip.h"
 
@@ -802,6 +809,12 @@ static player_fn cd_player_for(const char *s, int is_cue, int on_disk)
         return pcecd_play;
     if (in_sys_dir(s, "cd32"))
         return cd32_play;
+    if (in_sys_dir(s, "3do"))
+        return threedo_play;
+    if (in_sys_dir(s, "neocd") || in_sys_dir(s, "neogeocd"))
+        return neocd_play;
+    if (in_sys_dir(s, "pcfx"))
+        return pcfx_play;
     if (in_sys_dir(s, "psx"))
         return psx_play;
     if (!on_disk)
@@ -888,20 +901,26 @@ static player_fn cd_player_for(const char *s, int is_cue, int on_disk)
                     }
                     disk_stream_close();
                     if (bgot > 0) {
+                        if (buf_has_str(probe + 8192u, bgot, "\x01ZZZZZ"))
+                            return threedo_play;
                         if (buf_has_str(probe + 8192u, bgot, "SEGADISCSYSTEM") ||
                             buf_has_str(probe + 8192u, bgot, "SEGA DISCSYSTEM"))
                             return segacd_play;
                         if (buf_has_str(probe + 8192u, bgot, "PC Engine CD-ROM SYSTEM"))
                             return pcecd_play;
+                        if (buf_has_str(probe + 8192u, bgot, "PC-FX:Hu_CD-ROM"))
+                            return pcfx_play;
                     }
-                    /* Also probe ISO-9660 PVD at LBA 16 for Amiga CDTV / CD32 System Identifier */
+                    /* Also probe ISO-9660 PVD + root dir around LBA 16..31 for CD32 / Neo Geo CD IPL.TXT */
                     u64 pvd_seek = ((u64)(data_frames + 16u) * (u64)data_ssz) & ~511ULL;
                     if (disk_stream_open(bin_path, &fsz) == 0) {
-                        int pgot = (disk_stream_seek(pvd_seek) == pvd_seek) ? disk_stream_read(probe + 8192u, 4096u) : 0;
+                        int pgot = (disk_stream_seek(pvd_seek) == pvd_seek) ? disk_stream_read(probe + 8192u, 32768u) : 0;
                         disk_stream_close();
                         if (pgot > 0 && (buf_has_str(probe + 8192u, pgot, "CD001\x01\x00" "CDTV") ||
                                          buf_has_str(probe + 8192u, pgot, "CD001\x01\x00" "CD32")))
                             return cd32_play;
+                        if (pgot > 0 && buf_has_ci(probe + 8192u, pgot, "IPL.TXT"))
+                            return neocd_play;
                     }
                 }
             }
@@ -909,15 +928,21 @@ static player_fn cd_player_for(const char *s, int is_cue, int on_disk)
         return psx_play;
     }
 
-    int got = disk_read_head(s, probe, 40960u, &size);
+    int got = disk_read_head(s, probe, 65536u, &size);
     if (got > 0) {
+        if (buf_has_str(probe, got < 8192 ? got : 8192, "\x01ZZZZZ"))
+            return threedo_play;
         if (buf_has_str(probe, got < 8192 ? got : 8192, "SEGADISCSYSTEM") ||
             buf_has_str(probe, got < 8192 ? got : 8192, "SEGA DISCSYSTEM"))
             return segacd_play;
         if (buf_has_str(probe, got < 8192 ? got : 8192, "PC Engine CD-ROM SYSTEM"))
             return pcecd_play;
+        if (buf_has_str(probe, got < 8192 ? got : 8192, "PC-FX:Hu_CD-ROM"))
+            return pcfx_play;
         if (buf_has_str(probe, got, "CD001\x01\x00" "CDTV") || buf_has_str(probe, got, "CD001\x01\x00" "CD32"))
             return cd32_play;
+        if (got > 32768 && buf_has_ci(probe + 32768, got - 32768, "IPL.TXT"))
+            return neocd_play;
     }
     return psx_play;
 }
@@ -992,6 +1017,8 @@ static player_fn player_for(const char *s, int on_disk)
     if (n - dot == 5 && (s[dot + 1] | 32) == 'c' && (s[dot + 2] | 32) == 'a' && (s[dot + 3] | 32) == 'r' &&
         (s[dot + 4] | 32) == 't')
         return scv_play;
+    if (pico8_is_p8_png_name(s))
+        return pico8_play;
     if (n - dot > 4)
         return 0;
     char e[4] = {0, 0, 0, 0};
@@ -1007,13 +1034,36 @@ static player_fn player_for(const char *s, int on_disk)
     if (on_disk && (zip || adz || gz)) {
         char inner[96];
         player_fn pf = archive_name(s, inner, sizeof(inner)) ? player_for(inner, 0) : 0;
-        if (pf)
+        if (pf) {
+            if (pf == amiga_play && in_sys_dir(s, "a1200"))
+                return a1200_play;
+            if (pf == dos_play && in_sys_dir(s, "pc98"))
+                return pc98_play;
             return pf;
+        }
         if (zip) {
+            if (in_sys_dir(s, "pc98"))
+                return pc98_play;
+            if (in_sys_dir(s, "dos"))
+                return dos_play;
+            if (in_sys_dir(s, "a1200"))
+                return a1200_play;
             if (in_sys_dir(s, "ti99"))
                 return ti99_play;
             if (in_sys_dir(s, "arcade"))
                 return arcade_play;
+            if (in_sys_dir(s, "konami"))
+                return konami_play;
+            if (in_sys_dir(s, "williams") || in_sys_dir(s, "midway"))
+                return williams_play;
+            if (in_sys_dir(s, "irem"))
+                return irem_play;
+            if (in_sys_dir(s, "taito"))
+                return taito_play;
+            if (in_sys_dir(s, "jaguar"))
+                return jaguar_play;
+            if (in_sys_dir(s, "n64"))
+                return n64_play;
             if (in_sys_dir(s, "cps2"))
                 return cps2_play;
             u32 size = 0;
@@ -1023,6 +1073,14 @@ static player_fn player_for(const char *s, int on_disk)
                 return cps_play;
             if (got > 0 && size <= MEDIA_MAX && s16_is_zip(all, (u32)got))
                 return s16_play;
+            if (got > 0 && size <= MEDIA_MAX && konami_is_zip(all, (u32)got, s))
+                return konami_play;
+            if (got > 0 && size <= MEDIA_MAX && williams_is_zip(all, (u32)got, s))
+                return williams_play;
+            if (got > 0 && size <= MEDIA_MAX && irem_is_zip(all, (u32)got, s))
+                return irem_play;
+            if (got > 0 && size <= MEDIA_MAX && taito_is_zip(all, (u32)got, s))
+                return taito_play;
         }
         return 0;
     }
@@ -1036,13 +1094,26 @@ static player_fn player_for(const char *s, int on_disk)
         return s32x_play;
     if (e[0] == 'm' && e[1] == 'z' && (e[2] == 't' || e[2] == 'f') && !e[3])
         return mz700_play;
+    if (e[0] == 'p' && e[1] == '8' && !e[2])
+        return pico8_play;
+    if (((e[0] == 'j' && e[1] == '6' && e[2] == '4') ||
+         (e[0] == 'j' && e[1] == 'a' && e[2] == 'g')) && !e[3])
+        return jaguar_play;
+    if (((e[0] == 'z' || e[0] == 'n' || e[0] == 'v') && e[1] == '6' && e[2] == '4') && !e[3])
+        return n64_play;
     if ((e[0] == 'p' && !e[1]) || (e[0] == '8' && e[1] == '1' && !e[2]))
         return zx81_play;
     if (e[0] == '2' && e[1] == 'd' && !e[2])
         return x1_play;
     if (e[0] == 'n' && e[1] == '8' && e[2] == '8' && !e[3])
         return pc88_play;
+    if (((e[0] == 'f' && e[1] == 'd' && e[2] == 'i') ||
+         (e[0] == 'h' && e[1] == 'd' && e[2] == 'i') ||
+         (e[0] == 'd' && e[1] == '9' && e[2] == '8')) && !e[3])
+        return pc98_play;
     if (e[0] == 'd' && e[1] == '8' && e[2] == '8' && !e[3]) {
+        if (in_sys_dir(s, "pc98"))
+            return pc98_play;
         if (in_sys_dir(s, "x1"))
             return x1_play;
         if (in_sys_dir(s, "pc88"))
@@ -1056,6 +1127,24 @@ static player_fn player_for(const char *s, int on_disk)
         }
         return pc88_play;
     }
+    if (((e[0] == 'd' && e[1] == 'i' && e[2] == 'm') ||
+         (e[0] == 'x' && e[1] == 'd' && e[2] == 'f') ||
+         (e[0] == 'h' && e[1] == 'd' && e[2] == 'm') ||
+         (e[0] == '2' && e[1] == 'h' && e[2] == 'd') ||
+         (e[0] == 'd' && e[1] == 'u' && e[2] == 'p') ||
+         (e[0] == 'h' && e[1] == 'd' && e[2] == 'f')) && !e[3]) {
+        if (in_sys_dir(s, "pc98"))
+            return pc98_play;
+        if (!in_sys_dir(s, "x68k") && on_disk && e[0] != 'd' && !(e[0] == 'h' && e[2] == 'f')) {
+            u32 size = 0;
+            int got = disk_read_head(s, head, HEAD_BYTES, &size);
+            if (got >= 4 && (head[0] == 0xEBu || head[0] == 0xE9u))
+                return pc98_play;
+        }
+        return x68k_play;
+    }
+    if (e[0] == 'x' && !e[1])
+        return x68k_play;
     if (e[0] == 'c' && e[1] == 'p' && e[2] == 's' && !e[3])
         return cps_play;
     if (e[0] == 's' && e[1] == '1' && e[2] == '6' && !e[3])
@@ -1157,8 +1246,10 @@ static player_fn player_for(const char *s, int on_disk)
         return c64_play;
     }
     if (e[0] == 'a' && e[1] == 'd' && e[2] == 'f' && !e[3])
-        return amiga_play;
+        return in_sys_dir(s, "a1200") ? a1200_play : amiga_play;
     if (e[0] == 'e' && e[1] == 'x' && e[2] == 'e' && !e[3]) {
+        if (in_sys_dir(s, "pc98"))
+            return pc98_play;
         if (on_disk) {
             u32 size = 0;
             int got = disk_read_head(s, head, HEAD_BYTES, &size);
@@ -1170,6 +1261,8 @@ static player_fn player_for(const char *s, int on_disk)
         return dos_play;
     }
     if (e[0] == 'c' && e[1] == 'o' && e[2] == 'm' && !e[3]) {
+        if (in_sys_dir(s, "pc98"))
+            return pc98_play;
         if (on_disk) {
             u32 size = 0;
             int got = disk_read_head(s, head, HEAD_BYTES, &size);
@@ -1304,6 +1397,12 @@ static player_fn player_for(const char *s, int on_disk)
         int got = disk_read_head(s, head, HEAD_BYTES, &size);
         if (got >= 2 && ((head[0] == 0x55 && head[1] == 0xAA) || (head[0] == 0xAA && head[1] == 0x55)))
             return col_play;
+        if (got > 0 && jaguar_is_rom(head, (u32)got, size))
+            return jaguar_play;
+        if (got > 0 && n64_is_rom(head, (u32)got, size))
+            return n64_play;
+        if (in_sys_dir(s, "jaguar"))
+            return jaguar_play;
         if (got > 0 && intv_is_rom(head, (u32)got, size))
             return intv_play;
         if (got > 0 && msx_is_cart(head, (u32)got, size)) {
@@ -1424,7 +1523,8 @@ static void open_row(int i)
         go(name);
     } else if (e->kind == DISK_DIR) {
         go(e->name);
-    } else if (view_is_picture(e->name) || (video = av_is_video(e->name)) != 0 ||
+    } else if ((!pico8_is_p8_png_name(e->name) && view_is_picture(e->name)) ||
+               (video = av_is_video(e->name)) != 0 ||
                (play = player_for(e->name, 1)) != 0) {  /* (asked once: for a game in an archive player_for
                                                            reads the archive -- three askings were three reads,
                                                            and one that failed the third time called nothing) */

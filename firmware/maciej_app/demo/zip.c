@@ -45,6 +45,8 @@ static int skipped(const u8 *name, u32 len)
                                        ".png", ".gif", ".bmp", ".url", ".sfv", ".xml", ".ini", ".cfg", ".dat", 0};
     if (!len || name[len - 1] == '/' || name[len - 1] == '\\')
         return 1;
+    if (has_ext(name, len, ".p8.png"))
+        return 0;
     for (int i = 0; skip[i]; i++)
         if (has_ext(name, len, skip[i]))
             return 1;

@@ -1,18 +1,24 @@
-/* neo.c: an SNK Neo Geo AES / MVS cartridge system (.neo).
+/* neo.c: SNK Neo Geo AES / MVS cartridge (.neo) and Neo Geo CD (.cue / .iso).
 
    Main CPU: Motorola 68000 (m68k.inc) at 12 MHz with 64 KB work RAM, fixed 1 MB
    P1 window ($000000..$0FFFFF), banked 1 MB P2 window ($200000..$2FFFFF), 64 KB
-   MVS backup SRAM ($D00000..$D0FFFF, kept in .sav), 2 KB memory card ($800000),
-   and a built-in clean-room system BIOS ($C00000..$C1FFFF) with optional
-   external BIOS (neogeo.rom / uni-bios.rom) support.
+   MVS backup SRAM ($D00000..$D0FFFF, kept in .sav), 2 KB / 8 KB memory card
+   ($800000), and a built-in clean-room system BIOS ($C00000) with optional
+   external BIOS (neogeo.rom / uni-bios.rom; neocd.bin / top-sp1.bin) support.
+   Neo Geo CD adds 2 MB 68k PRG DRAM ($000000..$1FFFFF), 4 MB SPR DRAM, 1 MB
+   ADPCM-A DRAM, 128 KB FIX PSRAM, 64 KB Z80 RAM, ISO9660 IPL.TXT + BIOS file /
+   DMA upload engine ($E00000 / $FF0000), swapped VBL/Timer IRQs, and 44.1 kHz
+   Redbook CD-DA mixed at 48 kHz.
    Picture: LSPC2 scanline renderer (320 x 224, 68 KB VRAM, 381 vertical sprite
    strips in SCB1..SCB4 with sticky chaining, 16-bit H/V shrink LUTs, 4/8-frame
-   auto-animation, raster timer IRQ2, S1/SFIX 8x8 fix layer with per-line/tile
+   auto-animation, raster timer IRQ, S1/SFIX 8x8 fix layer with per-line/tile
    banking, 2 x 4096 16-bit palette banks + dark/shadow resistor DAC -> BGR555).
    Sound: Zilog Z80 (z80.c) at 4 MHz + Yamaha YM2610 (4-channel 4-op FM, 3-ch
-   SSG + noise/envelope, 6-channel ADPCM-A, 1-channel ADPCM-B Delta-T) at 48 kHz. */
+   SSG + noise/envelope, 6-channel ADPCM-A, 1-channel ADPCM-B Delta-T) + CD-DA. */
 #ifndef DEMO_NEO_H
 #define DEMO_NEO_H
+
+#include "cdrom.h"
 
 typedef unsigned char u8;
 typedef signed char s8;
@@ -43,7 +49,12 @@ typedef signed int s32;
    Pass 0, 0 to use the built-in clean-room system BIOS. */
 void neo_set_bios(const u8 *rom, u32 size);
 
+/* Optional external 512 KB Neo Geo CD system BIOS (neocd.bin / top-sp1.bin / front-sp1.bin).
+   Pass 0, 0 to use the built-in clean-room Neo Geo CD system BIOS. */
+void neocd_set_bios(const u8 *rom, u32 size);
+
 const char *neo_load(u8 *image, u32 size);
+const char *neocd_load(const struct cdrom_toc *cd, const char *path);
 void neo_reset(void);
 void neo_frame(u16 pad, u16 *picture);
 void neo_pad2(u16 pad);

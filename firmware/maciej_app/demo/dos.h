@@ -18,6 +18,7 @@
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef signed short s16;
 typedef signed int s32;
 
 /* the picture: the 320 x 200 of the graphics modes (an 80-column text screen in it with narrow characters, a
@@ -64,6 +65,10 @@ int dos_save_changed(void);
 u32 dos_cpu_cycles(void);                       /* the CPU's cycles since the reset */
 int dos_jammed(void);                           /* the program ended, or halted with interrupts off */
 int dos_mode(void);                             /* the video mode the BIOS was last asked for (0x13, 0x0D, 3...) */
+int dos_pmode(void);                            /* 1 when running in 80386 protected mode */
+int dos_picture_changed(void);                  /* 1 when the last dos_frame modified picture */
+void dos_audio_rate(u32 hz);                    /* 48 kHz AdLib YM3812 (OPL2) + Sound Blaster 2.0 PCM + PC speaker */
+int dos_audio(s16 *out, int max);
 
 /* for tests: a byte of the PC's memory (its 1 MB); the registers AX CX DX BX SP BP SI DI ES CS SS DS IP FLAGS;
    what the BIOS and DOS were asked that they do not do, the program's own messages (0: not said) */

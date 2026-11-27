@@ -22,7 +22,7 @@ def find_prefix(explicit=None):
     for prefix in ("mipsel-none-elf-", "mipsel-linux-gnu-", "mipsel-unknown-elf-"):
         compiler = shutil.which(prefix + "gcc")
         if compiler:
-            return compiler[:-7] if compiler.endswith("gcc.exe") else compiler[:-3]
+            return compiler[:-7] if compiler.lower().endswith("gcc.exe") else compiler[:-3]
     raise SystemExit("MIPS GCC not found. Set MIPS_CROSS_COMPILE or pass --cross-prefix /path/bin/mipsel-none-elf-")
 
 
@@ -43,12 +43,25 @@ DEMO_SOURCES = ("demo/main.c", "demo/time.c", "demo/uart.c", "demo/gfx.c",
                 "demo/cpc.c", "demo/vic20.c", "demo/apple2.c", "demo/coco.c", "demo/cvm5.c",
                 "demo/z80con.c", "demo/arcadia.c", "demo/scv.c", "demo/vb.c", "demo/segacd.c",
                 "demo/bbc.c", "demo/ti99.c", "demo/oric.c", "demo/ted81.c", "demo/jp8bit.c",
-                "demo/s32x.c", "demo/cd32.c", "demo/arcade.c", "demo/prof.c")
+                "demo/s32x.c", "demo/cd32.c", "demo/arcade.c", "demo/x68k.c", "demo/threedo.c", "demo/pc98.c",
+                "demo/konami.c", "demo/williams.c", "demo/irem.c", "demo/taito.c", "demo/pico8.c",
+                "demo/jaguar.c", "demo/pcfx.c", "demo/n64.c", "demo/prof.c")
 BEARSSL = HERE / "bearssl"                      # BearSSL 0.6's files a TLS client needs (bearssl/README.txt)
 # flags of single files after the common ones: the PlayStation player, whose rasterizer and GTE are the box's
 # busiest code, for the S3811's own CPU (a MIPS 24KEc: MIPS32 release 2's ext / ins / seb / seh, and the 24K's
 # pipeline for scheduling; its recompiler emits release-2 code already)
-FILE_FLAGS = {"demo/psx.c": ["-march=mips32r2", "-mtune=24kc"]}
+FILE_FLAGS = {"demo/psx.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/dos.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/x68k.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/threedo.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/pc98.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/konami.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/williams.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/irem.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/taito.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/jaguar.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/pcfx.c": ["-march=mips32r2", "-mtune=24kc"],
+              "demo/n64.c": ["-march=mips32r2", "-mtune=24kc"]}
 
 
 def _tree_digest(paths):

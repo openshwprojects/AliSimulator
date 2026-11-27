@@ -557,6 +557,19 @@ static void cmd_s32x(int argc, char **argv);
 static void cmd_cd32(int argc, char **argv);
 static void cmd_cps2(int argc, char **argv);
 static void cmd_arcade(int argc, char **argv);
+static void cmd_x68k(int argc, char **argv);
+static void cmd_a1200(int argc, char **argv);
+static void cmd_3do(int argc, char **argv);
+static void cmd_neocd(int argc, char **argv);
+static void cmd_pc98(int argc, char **argv);
+static void cmd_konami(int argc, char **argv);
+static void cmd_williams(int argc, char **argv);
+static void cmd_irem(int argc, char **argv);
+static void cmd_taito(int argc, char **argv);
+static void cmd_pico8(int argc, char **argv);
+static void cmd_jaguar(int argc, char **argv);
+static void cmd_pcfx(int argc, char **argv);
+static void cmd_n64(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_rf(int argc, char **argv);
 static void cmd_history(int argc, char **argv);
@@ -659,7 +672,7 @@ static const struct command commands[] = {
     {"explorer", "[n:][path]", "a file explorer on the TV, in the current directory (cd follows it, it follows cd; "
      "with a path: cd there first): USB keyboard Up/Down/PgUp/PgDn/Home/End, Enter opens (a picture: the viewer, "
      "a game's file -- .nes, .gb, .gbc, .sms, .gg, .sg, .sc, .sna, .z80, .tap, .tzx, .trd, .scl, .a26, .prg, .t64, .d64, .crt, "
-     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .32x, .pce, .sgx, .col, .mx1, .mx2, .dsk, .do, .po, .nib, .ccc, .cas, .cv, .m5, .pv, .ast, .a2k, .vc4, .st2, .scv, .vb, .vboy, .ssd, .dsd, .uef, .rpk, .p, .81, .d88, .2d, .mzt, .mzf, .cpr, .a0, .20, .60, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, any of them in a .zip or a .gz (.adz): the game), "
+     ".adf, .st, .msa, .tos, .atr, .xex, .obx, .car, .a52, .exe, .com, .md, .gen, .smd, a Mega Drive .bin, .32x, .pce, .sgx, .col, .mx1, .mx2, .dsk, .do, .po, .nib, .ccc, .cas, .cv, .m5, .pv, .ast, .a2k, .vc4, .st2, .scv, .vb, .vboy, .ssd, .dsd, .uef, .rpk, .p, .81, .d88, .2d, .mzt, .mzf, .cpr, .a0, .20, .60, .ws, .wsc, .sfc, .smc, .neo, .gba, .a78, .lnx, .lyx, .vec, .fds, .ngp, .ngc, .o2, .int, .ch8, .sc8, .xo8, .chf, .min, .cue, .iso, .psx, .cps, .cps1, .cps2, .s16, .dim, .xdf, .hdf, .x, .fdi, .hdi, .p8, .p8.png, .j64, .jag, .z64, .n64, .v64, any of them in a .zip or a .gz (.adz): the game), "
      "Backspace goes up, "
      "'/' or Tab types a path, Esc: the console again; the mouse clicks, double-clicks, scrolls; on FAT: F2 "
      "renames, F7 makes a directory, Delete / F8 deletes (y), F5 / F6 mark a file to copy / move and Insert "
@@ -715,10 +728,11 @@ static const struct command commands[] = {
      "aros-ext.bin, beside the disk, in amiga/ or at the top of its disk.  The USB keyboard is the Amiga's, its "
      "arrows the joystick (fire: right Ctrl or the remote's OK), Page Up / Down or the remote's 0 the mouse "
      "button; typed on the UART / telnet, characters are typed on it; Esc ends", cmd_amiga},
-    {"dos", "[-f frames] [-k script] <file.exe>", "a DOS PC (a 286 AT with a VGA) on the TV running a DOS "
-     "program (.exe, .com): the BIOS and DOS built in, its own file readable, no sound.  The USB keyboard is "
-     "the PC's (Esc ends the player); the remote: arrows, OK = Up, 0 = Space, MENU = Enter, INFO = Esc; typed "
-     "on the UART / telnet, characters are typed on it", cmd_dos},
+    {"dos", "[-f frames] [-k script] <file.exe|.zip>", "a 386 DOS PC (real mode + 386 32-bit protected mode / "
+     "DOS/4GW, 8 MB XMS, VGA Mode 13h / Mode X, 48 kHz AdLib YM3812 OPL2 + Sound Blaster 2.0 DMA + PC Speaker) "
+     "running a DOS program (.exe, .com, or multi-file .zip such as DOOM).  The USB keyboard is the PC's (Esc "
+     "ends); remote: arrows, OK = Fire/Up, 0 = Space, MENU = Enter, INFO = Esc", cmd_dos},
+    {"pc386", "[-f frames] [-k script] <file.exe|.zip>", "the same as dos", cmd_dos},
     {"megadrive", "[-r j|u|e] [-f frames] [-k script] <file>", "play a Sega Mega Drive / Genesis cartridge file (.md, "
      ".gen, .bin; .smd and copier headers taken apart) on the TV with its sound, at its console's rate (-r: a "
      "Japanese, American or European one; else the header's region): X = B, Z = A, Tab / Space = C, Enter = Start, "
@@ -914,6 +928,58 @@ static const struct command commands[] = {
     {"arcade", "[-f frames] [-k script] [file]", "play a Golden-Age Z80 arcade .zip romset (Namco Pac-Man / Ms. Pac-Man "
      "WSG, Namco Galaxian starfield, Konami Frogger / Scramble dual-Z80 + AY-3-8910, Nintendo Donkey Kong DMA + DAC) "
      "or no file for built-in Maze Chomp on the TV (224 x 288 / 256, 60.6 Hz, 48 kHz sound)", cmd_arcade},
+    {"x68k", "[-f frames] [-k script] <file>", "play a Sharp X68000 disk or program (.dim, .xdf, .hdm, .2hd, .dup, .hdf, "
+     ".x) on the TV (256 x 256 / 512 x 512 / 768 x 512, 55.45 Hz; 10 MHz 68000, 2 MB RAM, 16/256/65536-colour GVRAM, "
+     "Text VRAM, Cynthia 128 sprites + BG0/BG1, 4 MHz YM2151 OPM + MSM6258 ADPCM @ 48 kHz, 16 KB .sav SRAM; built-in "
+     "IPL/IOCS + CGROM or iplrom.dat/cgrom.dat in x68k/)", cmd_x68k},
+    {"a1200", "[-f frames] [-k script] [file]", "a Commodore Amiga 1200 (PAL, 14.18 MHz 68EC020, 2 MB AGA Chip RAM, "
+     "256-colour / HAM8 / Dual Playfield + 2 MB Blitter + Copper, 4-ch Paula @ 48 kHz) on the TV: a floppy (.adf, .adz, "
+     ".zip) or no file for Kickstart (uses a1200.rom / kick.rom / 391773-01.u6a+391774-01.u6b / a1200.zip in a1200/ or "
+     "amiga/, else built-in AGA boot)", cmd_a1200},
+    {"3do", "[-f frames] [-k script] [file]", "play a 3DO Interactive Multiplayer disc (.iso, .cue) or no file for "
+     "built-in 3D CEL showcase on the TV (320 x 240 x3, 59.94 Hz; 12.5 MHz ARM60, 2 MB DRAM + 1 MB VRAM, Madam CEL "
+     "Quad Projector with 1..16-bpp Packed/Unpacked CELs + PIXC shading + SPORT, Clio, DSPP + Redbook CD-DA @ 48 kHz, "
+     "32 KB .sav NVRAM; built-in Opera FS / Portfolio OS 2.5 HLE or panafz10.bin in 3do/)", cmd_3do},
+    {"neocd", "[-f frames] [-k script] [file]", "play an SNK Neo Geo CD disc (.cue, .iso) or no file for built-in "
+     "showcase on the TV (320 x 224 x3, 59.60 Hz; 12 MHz 68000 + 4 MHz Z80, 2 MB PRG + 4 MB SPR + 1 MB PCM + 128 KB "
+     "FIX + 64 KB Z80 RAM, LSPC2 sprites/fix, YM2610 FM/SSG/ADPCM-A + Redbook CD-DA @ 48 kHz, 8 KB .sav BRAM; built-in "
+     "ISO9660/IPL.TXT HLE BIOS or neocd.bin/top-sp1.bin in neocd/)", cmd_neocd},
+    {"pc98", "[-f frames] [-k script] [file]", "an NEC PC-9801VM / VX on the TV: a floppy/hard disk (.fdi, .hdi, .d88, "
+     ".hdm, .xdf, .2hd), a multi-file .zip / .exe, or no file for built-in showcase (640 x 400 x2, 56.42 Hz; 10 MHz "
+     "V30/286/386, dual uPD7220 GDC 16-colour GVRAM + 80x25 Text/KCG, GRCG + EGC, YM2203/YM2608 OPN FM/SSG + PIT beep "
+     "@ 48 kHz; built-in IPL/BIOS + PC-98 DOS HLE, optional font.rom in pc98/)", cmd_pc98},
+    {"konami", "[-f frames] [-k script] [file]", "play a Konami classic arcade .zip romset (TMNT, Turtles in Time, "
+     "Sunset Riders, X-Men, Nemesis / Gradius, Contra) or no file for built-in Viper Strike GX on the TV (68000 / "
+     "MC6809E + Z80, K052109 3-layer tilemaps + K051960/K053245 zoomed sprites + K053251 + GX400 + K007121, YM2151 FM "
+     "+ K053260/K007232 PCM @ 48 kHz)", cmd_konami},
+    {"williams", "[-f frames] [-k script] [file]", "play a Williams or Midway classic arcade .zip romset (Defender, "
+     "Stargate, Robotron: 2084, Joust, Bubbles, Sinistar; Midway Y/T-Unit Smash TV, Mortal Kombat, NBA Jam) or no file "
+     "for built-in Cybertron: 2084 on the TV (dual MC6809E + Special Chip 1/2 Blitter + 8-bit DAC, or 32-bit TMS34010 "
+     "GSP + DMA2 + YM2151 + OKI6295 ADPCM @ 48 kHz, 1 KB .sav CMOS)", cmd_williams},
+    {"midway", "[-f frames] [-k script] [file]", "the same as williams", cmd_williams},
+    {"irem", "[-f frames] [-k script] [file]", "play an Irem M72 or M92 classic arcade .zip romset (R-Type, R-Type II, "
+     "Ninja Spirit, Image Fight, In the Hunt, Undercover Cops, GunForce II) or no file for built-in R-Force: Bydo "
+     "Assault on the TV (NEC V30/V33 + Z80, dual/triple rowscroll tilemaps + multi-cell DMA sprites, YM2151 FM + Irem "
+     "GA20 4-ch PCM / DAC @ 48 kHz, 55 Hz)", cmd_irem},
+    {"taito", "[-f frames] [-k script] [file]", "play a Taito Classic or F2 / B-System arcade .zip romset (Bubble "
+     "Bobble, Rainbow Islands, The NewZealand Story, Rastan, Puzzle Bobble, Liquid Kids, Final Blow) or no file for "
+     "built-in Bubble Dragons F2 on the TV (68000 / Z80, TC0100SCN + TC0200OBJ zoomed sprites / PC080SN + PC090OJ, "
+     "YM2151 / YM2203 / YM2610 ADPCM @ 48 kHz)", cmd_taito},
+    {"pico8", "[-f frames] [-k script] [file]", "play a PICO-8 128 x 128 16-colour fantasy console cartridge (.p8 text "
+     "or .p8.png steganography cart, inside a .zip too) or no file for built-in CelestePeak-8 on the TV (640 x 640, 60 "
+     "Hz; 16.16 fixed-point PICO-8 Lua VM + 4-ch 48 kHz waveform synth, 256 B .sav cartdata): arrows, Z = O, X = X",
+     cmd_pico8},
+    {"jaguar", "[-f frames] [-k script] [file]", "play an Atari Jaguar 64-bit cartridge or homebrew (.j64, .jag, .rom; "
+     "inside a .zip too) or no file for built-in Tempest Jaguar 64 on the TV (13.3 MHz 68000 + 26.6 MHz Tom GPU 32-bit "
+     "RISC + 64-bit Object Processor + 64-bit Blitter + 16-bit Atari CRY + Jerry DSP 48 kHz sound, 128 B .sav EEPROM)",
+     cmd_jaguar},
+    {"pcfx", "[-f frames] [-k script] [file]", "play an NEC PC-FX 32-bit multimedia CD-ROM disc (.cue, .iso; pcfx.rom / "
+     "pcfxbios.bin in pcfx/ if present, else clean-room IPL) or no file for built-in Star Soldier FX-32 on the TV (21.5 "
+     "MHz V810 + KING BG0..BG3 affine/YUV + dual HuC6270 VDC + RAINBOW + HuC6230 PSG / ADPCM / CD-DA @ 48 kHz, 32 KB "
+     ".sav SRAM)", cmd_pcfx},
+    {"n64", "[-f frames] [-k script] [file]", "play a Nintendo 64 64-bit 3D cartridge (.z64, .n64, .v64; inside a .zip "
+     "too, up to 16 MB) or no file for built-in Star Wing 64 on the TV (93.75 MHz VR4300 + COP1 FPU + 8 MB RDRAM + HLE "
+     "Fast3D / F3DEX / F3DEX2 + Z-buffered RDP 3D rasterizer + AI 48 kHz sound, 32 KB .sav MemPak/EEPROM)", cmd_n64},
     {"rf", "<init|tune|status|scan|services|ts|spectrum|live|...>", "the aerial input (DVB-T): init the MxL603 tuner and the "
      "chip's demodulator, tune <MHz|channel> [6|7|8], status (lock, level, quality), scan [vhf|all|<from> <to>], "
      "services (the multiplex's channel names), ts <s> [file] [-p pids] (the stream's PIDs, or recorded to a .ts "
@@ -2217,6 +2283,19 @@ static void cmd_x1(int argc, char **argv)     { cmd_opt_basic(argc, argv, x1_pla
 static void cmd_cd32(int argc, char **argv)   { cmd_game(argc, argv, cd32_play); }
 static void cmd_cps2(int argc, char **argv)   { cmd_game(argc, argv, cps2_play); }
 static void cmd_arcade(int argc, char **argv) { cmd_opt_basic(argc, argv, arcade_play); }
+static void cmd_x68k(int argc, char **argv)   { cmd_game(argc, argv, x68k_play); }
+static void cmd_a1200(int argc, char **argv)  { cmd_opt_basic(argc, argv, a1200_play); }
+static void cmd_3do(int argc, char **argv)    { cmd_opt_basic(argc, argv, threedo_play); }
+static void cmd_neocd(int argc, char **argv)  { cmd_opt_basic(argc, argv, neocd_play); }
+static void cmd_pc98(int argc, char **argv)     { cmd_opt_basic(argc, argv, pc98_play); }
+static void cmd_konami(int argc, char **argv)   { cmd_opt_basic(argc, argv, konami_play); }
+static void cmd_williams(int argc, char **argv) { cmd_opt_basic(argc, argv, williams_play); }
+static void cmd_irem(int argc, char **argv)     { cmd_opt_basic(argc, argv, irem_play); }
+static void cmd_taito(int argc, char **argv)    { cmd_opt_basic(argc, argv, taito_play); }
+static void cmd_pico8(int argc, char **argv)    { cmd_opt_basic(argc, argv, pico8_play); }
+static void cmd_jaguar(int argc, char **argv)   { cmd_opt_basic(argc, argv, jaguar_play); }
+static void cmd_pcfx(int argc, char **argv)     { cmd_opt_basic(argc, argv, pcfx_play); }
+static void cmd_n64(int argc, char **argv)      { cmd_opt_basic(argc, argv, n64_play); }
 
 static void cmd_s32x(int argc, char **argv)
 {
@@ -2805,7 +2884,7 @@ static int search_key(int c)
 }
 
 /* ---- Tab ---- */
-#define CANDIDATES 128
+#define CANDIDATES 192
 static struct disk_entry tab_entries[CANDIDATES];
 static const char *tab_cand[CANDIDATES];
 static u8 tab_dir[CANDIDATES];
@@ -3358,6 +3437,7 @@ void app_main(void)
         update_usb_box();
     }
     history_pos = 0;
+    console_service();
     prompt();
 
     u64 last_poll = now_ms(), last_second = last_poll, last_line_drawn = 0;

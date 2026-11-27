@@ -53,6 +53,9 @@ struct m68k {
 #ifdef M68K_BUS_ERROR
     u32 bus_err, bus_addr, bus_write;
 #endif
+#ifdef M68K_CPU_020
+    u32 vbr, cacr, caar, sfc, dfc, msp;
+#endif
 };
 #ifdef M68K_EXTERNAL_STATE
 M68K_EXTERNAL_STATE
@@ -64,6 +67,7 @@ static u32 io_read(u32 a, int size);
 static void io_write(u32 a, u32 v, int size);
 static void cpu_reset_line(void);       /* RESET: the chips back to their power-on state */
 
+#ifndef M68K_CPU_020
 static u32 odd(u32 a, int write)
 {
     if (!m.fault) {
@@ -72,6 +76,7 @@ static u32 odd(u32 a, int write)
     }
     return 0;
 }
+#endif
 
 INLINE u32 rb(u32 a)
 {
@@ -81,8 +86,13 @@ INLINE u32 rb(u32 a)
 
 INLINE u32 rw(u32 a)
 {
+#ifdef M68K_CPU_020
+    if (a & 1)
+        return (rb(a) << 8) | rb(a + 1);
+#else
     if (a & 1)
         return odd(a, 0);
+#endif
     const u8 *p = rmap[(a >> 16) & 0xFF];
     return p ? *(const u16 *)(p + (a & 0xFFFF)) : io_read(a & 0xFFFFFF, 2);
 }
@@ -104,10 +114,18 @@ INLINE void wb(u32 a, u32 v)
 
 INLINE void ww(u32 a, u32 v)
 {
+#ifdef M68K_CPU_020
+    if (a & 1) {
+        wb(a, v >> 8);
+        wb(a + 1, v);
+        return;
+    }
+#else
     if (a & 1) {
         odd(a, 1);
         return;
     }
+#endif
     u8 *p = wmap[(a >> 16) & 0xFF];
     if (p)
         *(u16 *)(p + (a & 0xFFFF)) = (u16)v;
@@ -227,11 +245,19 @@ static void exception(u32 vector, u32 pc)
 {
     u32 sr = get_sr();
     supervisor();
+#ifdef M68K_CPU_020
+    m.r[15] -= 2;
+    ww(m.r[15], (vector * 4) & 0xFFFu);
+#endif
     m.r[15] -= 4;
     wl(m.r[15], pc);
     m.r[15] -= 2;
     ww(m.r[15], sr);
+#ifdef M68K_CPU_020
+    m.pc = rl(m.vbr + vector * 4);
+#else
     m.pc = rl(vector * 4);
+#endif
     m.clock += 34;
     check_pending();
 }
@@ -303,6 +329,22 @@ static u32 indexed(u32 base)
     u32 x = m.r[ext >> 12];
     if (!(ext & 0x800))
         x = (u32)(s32)(s16)x;
+#ifdef M68K_CPU_020
+    x <<= (ext >> 9) & 3;
+    if (ext & 0x100) {
+        u32 b = (ext & 0x80) ? 0 : base;
+        u32 idx = (ext & 0x40) ? 0 : x;
+        u32 bds = (ext >> 4) & 3;
+        u32 bd = bds == 2 ? (u32)(s32)(s16)fetch() : bds == 3 ? fetch32() : 0;
+        u32 iis = ext & 7;
+        if (!iis)
+            return b + bd + idx;
+        u32 ptr = iis < 4 ? rl(b + bd + idx) : rl(b + bd);
+        u32 ods = iis & 3;
+        u32 od = ods == 2 ? (u32)(s32)(s16)fetch() : ods == 3 ? fetch32() : 0;
+        return iis < 4 ? ptr + od : ptr + idx + od;
+    }
+#endif
     return base + x + (u32)(s32)(s8)ext;
 }
 
@@ -810,6 +852,10 @@ static void op_bcc(void)
     u32 d = (u32)(s32)(s8)OP;
     if (!(OP & 0xFF))
         d = (u32)(s32)(s16)fetch();
+#ifdef M68K_CPU_020
+    else if ((OP & 0xFF) == 0xFF)
+        d = fetch32();
+#endif
     if (cc == 1) {                      /* BSR */
         m.r[15] -= 4;
         wl(m.r[15], m.pc);
@@ -913,7 +959,13 @@ static void op_rte(void)
     }
     u32 sp = m.r[15], sr = rw(sp);
     m.pc = rl(sp + 2);
+#ifdef M68K_CPU_020
+    u32 fmt = rw(sp + 6) >> 12;
+    u32 extra = fmt == 2 ? 6 : fmt == 9 ? 14 : fmt == 10 ? 26 : fmt == 11 ? 86 : 2;
+    m.r[15] = sp + 6 + extra;
+#else
     m.r[15] = sp + 6;
+#endif
     set_sr(sr);
     m.clock += 20;
 }
@@ -1030,6 +1082,12 @@ static void op_exg(void)
 /* MOVE from SR, to CCR, to SR */
 static void op_move_from_sr(void)
 {
+#ifdef M68K_CPU_020
+    if (!m.s) {
+        privileged();
+        return;
+    }
+#endif
     u32 v = get_sr();
     if (MODE == 0) {
         set_dn(RY, v, 2);
@@ -1407,6 +1465,323 @@ static void op_shift_mem(void)
     m.clock += 8;
 }
 
+#ifdef M68K_CPU_020
+static void op_move_from_ccr(void)
+{
+    u32 v = get_sr() & 0xFFu;
+    if (MODE == 0) {
+        set_dn(RY, v, 2);
+        m.clock += 4;
+        return;
+    }
+    ww(ea(MODE, RY, 2), v);
+    m.clock += 8;
+}
+
+static void op_extb_l(void)
+{
+    u32 r = RY, v = (u32)(s32)(s8)m.r[r];
+    m.r[r] = v;
+    logic(v, 4);
+    m.clock += 4;
+}
+
+static void op_link_l(void)
+{
+    u32 r = 8 + RY, v = m.r[r];
+    m.r[15] -= 4;
+    wl(m.r[15], v);
+    m.r[r] = m.r[15];
+    m.r[15] += fetch32();
+    m.clock += 16;
+}
+
+static void op_rtd(void)
+{
+    u32 disp = (u32)(s32)(s16)fetch();
+    m.pc = rl(m.r[15]);
+    m.r[15] += 4 + disp;
+    m.clock += 16;
+}
+
+static void op_movec(void)
+{
+    if (!m.s) {
+        privileged();
+        return;
+    }
+    u32 ext = fetch(), rn = ext >> 12, rc = ext & 0xFFFu;
+    if (OP & 1) {                       /* Rn -> Rc */
+        u32 v = m.r[rn];
+        switch (rc) {
+        case 0x000: m.sfc = v & 7u; break;
+        case 0x001: m.dfc = v & 7u; break;
+        case 0x002: m.cacr = v & 3u; break; /* 68020 I-cache bits only (not 68030/040) */
+        case 0x800: m.other_sp = v; break;
+        case 0x801: m.vbr = v; break;
+        case 0x802: m.caar = v; break;
+        case 0x803: m.msp = v; break;
+        case 0x804: m.r[15] = v; break;
+        default: exception(4, m.pc - 4); return;
+        }
+    } else {                            /* Rc -> Rn */
+        u32 v = 0;
+        switch (rc) {
+        case 0x000: v = m.sfc; break;
+        case 0x001: v = m.dfc; break;
+        case 0x002: v = m.cacr; break;
+        case 0x800: v = m.other_sp; break;
+        case 0x801: v = m.vbr; break;
+        case 0x802: v = m.caar; break;
+        case 0x803: v = m.msp; break;
+        case 0x804: v = m.r[15]; break;
+        default: exception(4, m.pc - 4); return;
+        }
+        m.r[rn] = v;
+    }
+    m.clock += 10;
+}
+
+static void op_moves(void)
+{
+    if (!m.s) {
+        privileged();
+        return;
+    }
+    u32 ext = fetch(), rn = (ext >> 12) & 15u;
+    int s = ((OP >> 6) & 3) == 0 ? 1 : ((OP >> 6) & 3) == 1 ? 2 : 4;
+    u32 a = ea(MODE, RY, s);
+    if (ext & 0x800u) {
+        wr(a, m.r[rn], s);
+    } else {
+        u32 v = rd(a, s);
+        if (rn >= 8u) m.r[rn] = sx(v, s);
+        else          set_dn(rn, v, s);
+    }
+    m.clock += 8;
+}
+
+static void op_chk_l(void)
+{
+    s32 bound = (s32)src(4), v = (s32)m.r[RX];
+    m.clock += 10;
+    m.z = (u32)v;
+    m.v = 0;
+    m.c = 0;
+    m.n = v < 0 ? 0x80 : 0;
+    if (v < 0 || v > bound)
+        exception(6, m.pc);
+}
+
+static void op_trapcc(void)
+{
+    u32 reg = RY;
+    if (reg == 2) (void)fetch();
+    else if (reg == 3) (void)fetch32();
+    m.clock += 4;
+    if (cond(OP >> 8))
+        exception(7, m.pc);
+}
+
+static void op_mull(void)
+{
+    u32 ext = fetch(), dl = (ext >> 12) & 7u, dh = ext & 7u;
+    u32 sv = src(4), dv = m.r[dl];
+    int sgn = (ext & 0x800u) != 0, quad = (ext & 0x400u) != 0;
+    m.c = 0;
+    if (sgn) {
+        signed long long prod = (signed long long)(s32)sv * (signed long long)(s32)dv;
+        u32 lo = (u32)prod, hi = (u32)((unsigned long long)prod >> 32);
+        if (quad) {
+            m.r[dh] = hi;
+            m.r[dl] = lo;
+            m.v = 0;
+            m.n = hi >> 24;
+            m.z = hi | lo;
+        } else {
+            m.r[dl] = lo;
+            m.v = (prod < -(signed long long)0x80000000LL || prod > (signed long long)0x7FFFFFFFLL) ? 0x80 : 0;
+            m.n = lo >> 24;
+            m.z = lo;
+        }
+    } else {
+        unsigned long long prod = (unsigned long long)sv * (unsigned long long)dv;
+        u32 lo = (u32)prod, hi = (u32)(prod >> 32);
+        if (quad) {
+            m.r[dh] = hi;
+            m.r[dl] = lo;
+            m.v = 0;
+            m.n = hi >> 24;
+            m.z = hi | lo;
+        } else {
+            m.r[dl] = lo;
+            m.v = hi ? 0x80 : 0;
+            m.n = lo >> 24;
+            m.z = lo;
+        }
+    }
+    m.clock += 28;
+}
+
+static int divu64_32(u32 hi, u32 lo, u32 d, u32 *qo, u32 *ro)
+{
+    if (hi >= d)
+        return -1;
+    u32 rem = hi, q = 0;
+    for (int i = 31; i >= 0; i--) {
+        u32 top = rem >> 31;
+        rem = (rem << 1) | ((lo >> i) & 1u);
+        if (top || rem >= d) {
+            rem -= d;
+            q |= 1u << i;
+        }
+    }
+    *qo = q;
+    *ro = rem;
+    return 0;
+}
+
+static void op_divl(void)
+{
+    u32 ext = fetch(), dq = (ext >> 12) & 7u, dr = ext & 7u;
+    u32 den = src(4);
+    int sgn = (ext & 0x800u) != 0, quad = (ext & 0x400u) != 0;
+    m.c = 0;
+    if (!den) {
+        exception(5, m.pc);
+        return;
+    }
+    m.clock += 44;
+    if (!sgn) {
+        u32 hi = quad ? m.r[dr] : 0u, lo = m.r[dq], q = 0, rem = 0;
+        if (divu64_32(hi, lo, den, &q, &rem) < 0) {
+            m.v = 0x80;
+            return;
+        }
+        if (quad || dr != dq) m.r[dr] = rem;
+        m.r[dq] = q;
+        logic(q, 4);
+    } else {
+        u32 hi = quad ? m.r[dr] : ((m.r[dq] & 0x80000000u) ? 0xFFFFFFFFu : 0u);
+        u32 lo = m.r[dq];
+        int neg_n = (hi & 0x80000000u) != 0, neg_d = (den & 0x80000000u) != 0;
+        if (neg_n) {
+            lo = ~lo + 1u;
+            hi = ~hi + (lo == 0u ? 1u : 0u);
+        }
+        u32 uden = neg_d ? (~den + 1u) : den, q = 0, rem = 0;
+        if (divu64_32(hi, lo, uden, &q, &rem) < 0) {
+            m.v = 0x80;
+            return;
+        }
+        int neg_q = neg_n ^ neg_d;
+        if (q > (neg_q ? 0x80000000u : 0x7FFFFFFFu)) {
+            m.v = 0x80;
+            return;
+        }
+        u32 sq = neg_q ? (~q + 1u) : q;
+        u32 sr_rem = neg_n ? (~rem + 1u) : rem;
+        if (quad || dr != dq) m.r[dr] = sr_rem;
+        m.r[dq] = sq;
+        logic(sq, 4);
+    }
+}
+
+static void op_bitfield(void)
+{
+    u32 ext = fetch();
+    u32 kind = (OP >> 8) & 7u, dn = (ext >> 12) & 7u;
+    s32 offset = (ext & 0x800u) ? (s32)m.r[(ext >> 6) & 7u] : (s32)((ext >> 6) & 31u);
+    u32 width = (ext & 0x20u) ? (((m.r[ext & 7u] - 1u) & 31u) + 1u) : ((ext & 31u) ? (ext & 31u) : 32u);
+    u32 fmask = width == 32u ? 0xFFFFFFFFu : ((1u << width) - 1u);
+    u32 fld = 0, new_fld = 0;
+    int do_wr = (kind == 2u || kind == 4u || kind == 6u || kind == 7u);
+
+    if (MODE == 0) {
+        u32 bo = (u32)offset & 31u, rv = m.r[RY];
+        u32 rot = bo ? ((rv << bo) | (rv >> (32u - bo))) : rv;
+        fld = (rot >> (32u - width)) & fmask;
+        if (do_wr) {
+            new_fld = kind == 2u ? (~fld & fmask) : kind == 4u ? 0u : kind == 6u ? fmask : (m.r[dn] & fmask);
+            u32 clr = width == 32u ? 0u : (rot & ((1u << (32u - width)) - 1u));
+            u32 nrot = clr | (new_fld << (32u - width));
+            m.r[RY] = bo ? ((nrot >> bo) | (nrot << (32u - bo))) : nrot;
+        }
+    } else {
+        u32 base = ea_ctl(MODE, RY);
+        s32 bdelta = offset >> 3;
+        u32 bo = (u32)offset & 7u;
+        u32 addr = base + (u32)bdelta;
+        int nbytes = (int)((bo + width + 7u) >> 3);
+        unsigned long long buf = 0;
+        for (int i = 0; i < nbytes; i++)
+            buf = (buf << 8) | rb(addr + (u32)i);
+        u32 lsb_sh = (u32)(nbytes * 8) - (bo + width);
+        fld = (u32)((buf >> lsb_sh) & fmask);
+        if (do_wr) {
+            new_fld = kind == 2u ? (~fld & fmask) : kind == 4u ? 0u : kind == 6u ? fmask : (m.r[dn] & fmask);
+            buf = (buf & ~((unsigned long long)fmask << lsb_sh)) | ((unsigned long long)new_fld << lsb_sh);
+            for (int i = nbytes - 1; i >= 0; i--) {
+                wb(addr + (u32)i, (u32)(buf & 0xFFu));
+                buf >>= 8;
+            }
+        }
+    }
+
+    u32 flag_val = (kind == 7u) ? new_fld : fld;
+    m.n = ((flag_val >> (width - 1u)) & 1u) << 7;
+    m.z = flag_val;
+    m.v = 0;
+    m.c = 0;
+
+    if (kind == 1u) {                   /* BFEXTU */
+        m.r[dn] = fld;
+    } else if (kind == 3u) {            /* BFEXTS */
+        u32 sign_b = 1u << (width - 1u);
+        m.r[dn] = (fld & sign_b) ? (fld | ~fmask) : fld;
+    } else if (kind == 5u) {            /* BFFFO */
+        u32 k = width;
+        for (u32 i = 0; i < width; i++) {
+            if (fld & (1u << (width - 1u - i))) { k = i; break; }
+        }
+        m.r[dn] = (u32)(offset + (s32)k);
+    }
+    m.clock += 12;
+}
+
+static void op_cas(void)
+{
+    u32 ext = fetch();
+    int s = ((OP >> 9) & 3u) == 1u ? 1 : ((OP >> 9) & 3u) == 2u ? 2 : 4;
+    u32 dc = ext & 7u, du = (ext >> 6) & 7u;
+    u32 a = ea(MODE, RY, s);
+    u32 mem_v = rd(a, s);
+    sub_flags(m.r[dc] & msk(s), mem_v, s, 0, 0, 1);
+    if (!m.z)                           /* !m.z means Z flag IS set (equal)! */
+        wr(a, m.r[du] & msk(s), s);
+    else
+        set_dn(dc, mem_v, s);
+    m.clock += 12;
+}
+
+static void op_cmp2_chk2(void)
+{
+    u32 ext = fetch(), rn = (ext >> 12) & 15u;
+    int s = ((OP >> 9) & 3u) == 0u ? 1 : ((OP >> 9) & 3u) == 1u ? 2 : 4;
+    u32 a = ea_ctl(MODE, RY);
+    u32 lo = rd(a, s), hi = rd(a + (u32)s, s);
+    u32 rv = rn >= 8u ? m.r[rn] : (m.r[rn] & msk(s));
+    if (rn >= 8u && s < 4) { lo = sx(lo, s); hi = sx(hi, s); s = 4; }
+    int out_u = (rv < lo || rv > hi);
+    int out_s = ((s32)sx(rv, s) < (s32)sx(lo, s) || (s32)sx(rv, s) > (s32)sx(hi, s));
+    m.z = (rv == lo || rv == hi) ? 0u : 1u;
+    m.c = (lo <= hi ? out_u : out_s) ? 0x100u : 0u;
+    m.clock += 18;
+    if ((ext & 0x800u) && m.c)
+        exception(6, m.pc);
+}
+#endif
+
 /* ---- the decoder ---- */
 #define EA_DN    0x001u
 #define EA_AN    0x002u
@@ -1422,6 +1797,14 @@ static int ea_ok(u32 op, u32 allowed)
     u32 mode = (op >> 3) & 7, reg = op & 7, k = mode < 7 ? mode : reg <= 4 ? 7 + reg : 12;
     return k < 12 && (allowed >> k & 1);
 }
+
+#ifdef M68K_CPU_020
+#define HANDLERS_020(X) \
+    X(move_from_ccr) X(extb_l) X(link_l) X(rtd) X(movec) X(moves) X(chk_l) X(trapcc) \
+    X(mull) X(divl) X(bitfield) X(cas) X(cmp2_chk2)
+#else
+#define HANDLERS_020(X)
+#endif
 
 #define HANDLERS(X)                                                                                                 \
     X(illegal) X(move_b) X(move_w) X(move_l) X(moveq)                                                               \
@@ -1440,7 +1823,8 @@ static int ea_ok(u32 op, u32 allowed)
     X(bcc) X(dbcc) X(scc) X(lea) X(pea) X(jmp) X(jsr) X(rts) X(rtr) X(rte) X(nop) X(stop) X(reset) X(trapv)         \
     X(trap) X(link) X(unlk) X(move_usp) X(swap) X(ext_w) X(ext_l) X(exg)                                            \
     X(move_from_sr) X(move_to_ccr) X(move_to_sr) X(movem) X(movep) X(bitop)                                         \
-    X(mulu) X(muls) X(divu) X(divs) X(chk) X(abcd_sbcd) X(nbcd) X(shift_b) X(shift_w) X(shift_l) X(shift_mem)
+    X(mulu) X(muls) X(divu) X(divs) X(chk) X(abcd_sbcd) X(nbcd) X(shift_b) X(shift_w) X(shift_l) X(shift_mem)       \
+    HANDLERS_020(X)
 
 #define ENUM(name) H_##name,
 enum { HANDLERS(ENUM) H_COUNT };
@@ -1461,6 +1845,17 @@ static int decode(u32 op)
                 return H_movep;
             return ea_ok(op, sz == 0 ? (EA_DATA & ~0u) : EA_DA) ? H_bitop : H_illegal;
         }
+#ifdef M68K_CPU_020
+        if (sz == 3) {
+            u32 sub = (op >> 9) & 7;
+            if (sub <= 2)
+                return ea_ok(op, EA_CTL) ? H_cmp2_chk2 : H_illegal;
+            if (sub >= 5 && sub <= 7)
+                return ea_ok(op, EA_MEM) ? H_cas : H_illegal;
+        }
+        if (((op >> 9) & 7) == 7 && sz < 3)
+            return ea_ok(op, EA_MEM) ? H_moves : H_illegal;
+#endif
         switch ((op >> 9) & 7) {
         case 4:                         /* static bit operations */
             if (sz == 0)
@@ -1472,8 +1867,14 @@ static int decode(u32 op)
             /* fall through */
         case 2: case 3: case 6: {
             static const u8 base[8] = {H_ori_b, H_andi_b, H_subi_b, H_addi_b, 0, H_eori_b, H_cmpi_b, 0};
+#ifdef M68K_CPU_020
+            u32 allow = (((op >> 9) & 7) == 6) ? (EA_DATA & ~0x800u) : EA_DA;
+            if (sz == 3 || !ea_ok(op, allow))
+                return H_illegal;
+#else
             if (sz == 3 || !ea_ok(op, EA_DA))
                 return H_illegal;
+#endif
             return base[(op >> 9) & 7] + (int)sz;
         }
         default:
@@ -1492,6 +1893,12 @@ static int decode(u32 op)
     }
     case 0x4:
         if (op & 0x100) {
+#ifdef M68K_CPU_020
+            if (sz == 3 && mode == 0 && ((op >> 9) & 7) == 4)
+                return H_extb_l;
+            if (sz == 1)
+                return ea_ok(op, EA_DATA) ? H_chk_l : H_illegal;
+#endif
             if (sz == 3)
                 return ea_ok(op, EA_CTL) ? H_lea : H_illegal;
             if (sz == 2)
@@ -1504,6 +1911,10 @@ static int decode(u32 op)
                 return ea_ok(op, EA_DA) ? H_move_from_sr : H_illegal;
             return ea_ok(op, EA_DA) ? H_negx_b + (int)sz : H_illegal;
         case 0x2:
+#ifdef M68K_CPU_020
+            if (sz == 3)
+                return ea_ok(op, EA_DA) ? H_move_from_ccr : H_illegal;
+#endif
             return sz < 3 && ea_ok(op, EA_DA) ? H_clr_b + (int)sz : H_illegal;
         case 0x4:
             if (sz == 3)
@@ -1514,8 +1925,13 @@ static int decode(u32 op)
                 return ea_ok(op, EA_DATA) ? H_move_to_sr : H_illegal;
             return ea_ok(op, EA_DA) ? H_not_b + (int)sz : H_illegal;
         case 0x8:
-            if (sz == 0)
+            if (sz == 0) {
+#ifdef M68K_CPU_020
+                if (mode == 1)
+                    return H_link_l;
+#endif
                 return ea_ok(op, EA_DA) ? H_nbcd : H_illegal;
+            }
             if (sz == 1)
                 return mode == 0 ? H_swap : ea_ok(op, EA_CTL) ? H_pea : H_illegal;
             if (mode == 0)
@@ -1526,8 +1942,18 @@ static int decode(u32 op)
                 return H_illegal;
             if (sz == 3)
                 return ea_ok(op, EA_DA) ? H_tas : H_illegal;
+#ifdef M68K_CPU_020
+            return ea_ok(op, sz == 0 ? EA_DATA : EA_ALL) ? H_tst_b + (int)sz : H_illegal;
+#else
             return ea_ok(op, EA_DA) ? H_tst_b + (int)sz : H_illegal;
+#endif
         case 0xC:
+#ifdef M68K_CPU_020
+            if (sz == 0)
+                return ea_ok(op, EA_DATA) ? H_mull : H_illegal;
+            if (sz == 1)
+                return ea_ok(op, EA_DATA) ? H_divl : H_illegal;
+#endif
             if (sz < 2)
                 return H_illegal;
             return ea_ok(op, EA_CTL) || mode == 3 ? H_movem : H_illegal;
@@ -1544,11 +1970,20 @@ static int decode(u32 op)
                     case 1: return H_nop;
                     case 2: return H_stop;
                     case 3: return H_rte;
+#ifdef M68K_CPU_020
+                    case 4: return H_rtd;
+#endif
                     case 5: return H_rts;
                     case 6: return H_trapv;
                     case 7: return H_rtr;
                     default: return H_illegal;
                     }
+#ifdef M68K_CPU_020
+                case 7:
+                    if ((op & 7) == 2 || (op & 7) == 3)
+                        return H_movec;
+                    return H_illegal;
+#endif
                 default: return H_illegal;
                 }
             }
@@ -1564,6 +1999,10 @@ static int decode(u32 op)
         if (sz == 3) {
             if (mode == 1)
                 return H_dbcc;
+#ifdef M68K_CPU_020
+            if (mode == 7 && ((op & 7) >= 2 && (op & 7) <= 4))
+                return H_trapcc;
+#endif
             return ea_ok(op, EA_DA) ? H_scc : H_illegal;
         }
         if (!ea_ok(op, EA_ALT) || (mode == 1 && sz == 0))
@@ -1615,8 +2054,17 @@ static int decode(u32 op)
         return ea_ok(op, EA_DA) ? H_eor_b_ea + (int)(opm - 4) : H_illegal;
     case 0xE:
         if (sz == 3) {
+#ifdef M68K_CPU_020
+            if (op & 0x800) {
+                u32 bfk = (op >> 8) & 7;
+                int wr_bf = (bfk == 2 || bfk == 4 || bfk == 6 || bfk == 7);
+                u32 allow_bf = wr_bf ? (EA_DN | (EA_CTL & ~0x600u)) : (EA_DN | EA_CTL);
+                return ea_ok(op, allow_bf) ? H_bitfield : H_illegal;
+            }
+#else
             if (op & 0x800)
                 return H_illegal;
+#endif
             return ea_ok(op, EA_MEM) ? H_shift_mem : H_illegal;
         }
         return H_shift_b + (int)sz;
@@ -1642,6 +2090,9 @@ static void cpu_reset(void)
 #ifdef M68K_BUS_ERROR
     m.bus_err = 0;
 #endif
+#ifdef M68K_CPU_020
+    m.vbr = m.cacr = m.caar = m.sfc = m.dfc = m.msp = 0;
+#endif
     m.r[15] = rl(0);
     m.pc = rl(4);
     check_pending();
@@ -1654,16 +2105,24 @@ static void take_pending(void)
         u32 level = m.ipl, sr = get_sr();
         supervisor();
         m.im = level;
-        m.r[15] -= 4;
-        wl(m.r[15], m.pc);
-        m.r[15] -= 2;
-        ww(m.r[15], sr);
 #ifdef M68K_INT_VEC
         u32 vec = M68K_INT_VEC(level);
 #else
         u32 vec = 24 + level;
 #endif
+#ifdef M68K_CPU_020
+        m.r[15] -= 2;
+        ww(m.r[15], (vec * 4) & 0xFFFu);
+#endif
+        m.r[15] -= 4;
+        wl(m.r[15], m.pc);
+        m.r[15] -= 2;
+        ww(m.r[15], sr);
+#ifdef M68K_CPU_020
+        m.pc = rl(m.vbr + vec * 4);
+#else
         m.pc = rl(vec * 4);
+#endif
         m.stopped = 0;
         m.clock += 44;
         M68K_IACK(level);
